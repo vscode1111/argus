@@ -10,6 +10,7 @@ export class ChatPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;
+  private readonly outputChannel: vscode.OutputChannel;
   private messages: ChatMessage[] = [];
   private session: AgentSession;
   private disposables: vscode.Disposable[] = [];
@@ -17,7 +18,8 @@ export class ChatPanel {
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
     this.extensionUri = extensionUri;
-    this.session = new AgentSession();
+    this.outputChannel = vscode.window.createOutputChannel('Argus');
+    this.session = new AgentSession(this.outputChannel);
 
     this.panel.webview.html = this.getHtml();
     this.panel.webview.onDidReceiveMessage(this.onWebviewMessage.bind(this), null, this.disposables);
@@ -61,6 +63,11 @@ export class ChatPanel {
       await this.handleUserMessage(msg.text);
     } else if (msg.type === 'stop') {
       this.session.abort();
+    } else if (msg.type === 'forceError') {
+      this.session.abort();
+      this.post({ type: 'error', text: 'Process killed manually' });
+      this.post({ type: 'done' });
+      this.showError('Claude Code process exited with code 3221226505');
     } else if (msg.type === 'newSession') {
       this.newSession();
     }
@@ -110,14 +117,14 @@ export class ChatPanel {
 
           case 'error':
             this.post({ type: 'error', text: event.message });
-            vscode.window.showErrorMessage(`Argus: ${event.message}`);
+            this.showError(event.message);
             break;
         }
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this.post({ type: 'error', text: errMsg });
-      vscode.window.showErrorMessage(`Argus error: ${errMsg}`);
+      this.showError(errMsg);
     }
 
     if (responseText) {
@@ -136,6 +143,12 @@ export class ChatPanel {
       activeFile ? `Active file: ${activeFile}` : '',
       'Be concise. When editing files, prefer Edit over Write for existing files.',
     ].filter(Boolean).join('\n');
+  }
+
+  private showError(message: string): void {
+    this.outputChannel.appendLine(`[Error] ${message}`);
+    vscode.window.showErrorMessage(`Argus: ${message}`, 'View Output')
+      .then(action => { if (action === 'View Output') { this.outputChannel.show(); } });
   }
 
   private post(data: unknown): void {
@@ -162,6 +175,7 @@ export class ChatPanel {
   private dispose(): void {
     ChatPanel.current = undefined;
     this.panel.dispose();
+    this.outputChannel.dispose();
     this.disposables.forEach(d => d.dispose());
     this.disposables = [];
   }

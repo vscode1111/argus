@@ -42,13 +42,17 @@ type CliMessage = SystemInitMessage | AssistantMessage | ToolResultMessage | Res
 
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch'];
 
+import type * as vscode from 'vscode';
+
 export class AgentSession {
   private sessionId: string | undefined;
   private readonly cwd: string | undefined;
   private currentProc: ReturnType<typeof spawn> | undefined;
+  private readonly outputChannel: vscode.OutputChannel | undefined;
 
-  constructor() {
+  constructor(outputChannel?: vscode.OutputChannel) {
     this.cwd = getWorkspaceRoot();
+    this.outputChannel = outputChannel;
   }
 
   reset(): void {
@@ -89,7 +93,11 @@ export class AgentSession {
       proc.stdin.end();
 
       let stderrOutput = '';
-      proc.stderr.on('data', (data: Buffer) => { stderrOutput += data.toString(); });
+      proc.stderr.on('data', (data: Buffer) => {
+        const text = data.toString();
+        stderrOutput += text;
+        this.outputChannel?.append(text);
+      });
 
       const exitCodePromise = new Promise<number | null>((resolve, reject) => {
         proc.on('close', resolve);
