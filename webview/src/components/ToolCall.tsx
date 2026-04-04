@@ -1,8 +1,7 @@
 import React from 'react';
 import { ToolCallData } from '../types';
 import { postMessage } from '../vscode';
-
-const VERBOSE_TOOLS = true;
+import { useSettings } from '../contexts/SettingsContext';
 
 function toolSummary(name: string, input: Record<string, unknown>): string {
   switch (name) {
@@ -33,6 +32,7 @@ interface Props {
 }
 
 export function ToolCall({ call }: Props) {
+  const { verboseTools } = useSettings();
   const { name, input, result, error } = call;
   const isFile = ['Read', 'Write', 'Edit'].includes(name);
   const summary = toolSummary(name, input);
@@ -45,7 +45,7 @@ export function ToolCall({ call }: Props) {
 
   return (
     <div className={`tool-call${error ? ' error' : ''}`}>
-      {VERBOSE_TOOLS ? (
+      {verboseTools ? (
         <pre className="tool-input">
           <span className="tool-name">{name}</span>
           {'\n'}{JSON.stringify(input, null, 2)}

@@ -30,10 +30,40 @@
     body { padding-bottom: 40px; }
   </style>
   <script>
-    // Mock VS Code API - must run before module scripts
-    window.acquireVsCodeApi = () => ({
-      postMessage: (msg) => console.log('[-> ext]', msg),
-    });
+    // Bridge to the argus-agent WebSocket plugin running inside the Vite dev server
+    window.acquireVsCodeApi = () => {
+      const ws = new WebSocket('ws://localhost:5173/agent');
+      const queue = [];
+      let ready = false;
+
+      ws.onopen = () => {
+        ready = true;
+        queue.splice(0).forEach(m => ws.send(JSON.stringify(m)));
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        window.dispatchEvent(new MessageEvent('message', { data }));
+      };
+
+      ws.onerror = (e) => console.error('[argus-ws] error', e);
+
+      ws.onclose = () => {
+        ready = false;
+        console.warn('[argus-ws] disconnected');
+      };
+
+      return {
+        postMessage: (msg) => {
+          console.log('[-> agent]', msg);
+          if (ready) {
+            ws.send(JSON.stringify(msg));
+          } else {
+            queue.push(msg);
+          }
+        },
+      };
+    };
   </script>
 </head>
 <body>

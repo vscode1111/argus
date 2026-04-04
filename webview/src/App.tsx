@@ -1,14 +1,16 @@
 import React, { useEffect, useReducer } from 'react';
 import { UIMessage, StreamingState, ToolCallData } from './types';
-import { Header } from './components/Header';
 import { MessageList } from './components/MessageList';
 import { InputArea } from './components/InputArea';
+import { SettingsProvider } from './contexts/SettingsContext';
+import { postMessage } from './vscode';
 
 type AppState = {
   messages: UIMessage[];
   streaming: StreamingState | null;
   isStreaming: boolean;
   prefill: string;
+  workspacePath: string;
 };
 
 type AppAction =
@@ -21,7 +23,8 @@ type AppAction =
   | { type: 'done' }
   | { type: 'error'; text: string }
   | { type: 'clear' }
-  | { type: 'prefill'; text: string };
+  | { type: 'prefill'; text: string }
+  | { type: 'workspaceInfo'; path: string };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -110,6 +113,9 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'prefill':
       return { ...state, prefill: action.text };
 
+    case 'workspaceInfo':
+      return { ...state, workspacePath: action.path };
+
     default:
       return state;
   }
@@ -120,6 +126,7 @@ const initialState: AppState = {
   streaming: null,
   isStreaming: false,
   prefill: '',
+  workspacePath: '',
 };
 
 export default function App() {
@@ -130,14 +137,16 @@ export default function App() {
       dispatch(event.data as AppAction);
     }
     window.addEventListener('message', handleMessage);
+    postMessage({ type: 'getInfo' });
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   return (
-    <div className="app">
-      <Header />
-      <MessageList messages={state.messages} streaming={state.streaming} />
-      <InputArea isStreaming={state.isStreaming} prefill={state.prefill} />
-    </div>
+    <SettingsProvider>
+      <div className="app">
+        <MessageList messages={state.messages} streaming={state.streaming} />
+        <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} />
+      </div>
+    </SettingsProvider>
   );
 }

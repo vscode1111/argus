@@ -4,13 +4,15 @@ import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
 import { Markdown } from '../utils/markdown';
 import { StreamingTimer } from './StreamingTimer';
+import { useSettings } from '../contexts/SettingsContext';
 
 interface Props {
   streaming: StreamingState;
 }
 
 export function StreamingMessage({ streaming }: Props) {
-  const { thinking, text, toolCalls, startTime } = streaming;
+  const { showTimer } = useSettings();
+  const { thinking, text, toolCalls, startTime, lastEventTime } = streaming;
   const hasText = text.length > 0;
   const isEmpty = !thinking && toolCalls.length === 0 && !hasText;
 
@@ -30,7 +32,7 @@ export function StreamingMessage({ streaming }: Props) {
           </>
         )}
       </div>
-      <StreamingTimer startTime={startTime} />
+      {showTimer && <StreamingTimer startTime={startTime} lastEventTime={lastEventTime} />}
     </div>
   );
 }

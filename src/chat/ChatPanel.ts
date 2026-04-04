@@ -73,6 +73,9 @@ export class ChatPanel {
     } else if (msg.type === 'openFile' && msg.path) {
       const uri = vscode.Uri.file(msg.path);
       vscode.window.showTextDocument(uri, { preview: true, viewColumn: vscode.ViewColumn.One });
+    } else if (msg.type === 'getInfo') {
+      const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+      this.post({ type: 'workspaceInfo', path: root });
     }
   }
 

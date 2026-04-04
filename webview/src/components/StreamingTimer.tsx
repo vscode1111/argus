@@ -3,9 +3,10 @@ import { formatDuration } from '../utils/time';
 
 interface Props {
   startTime: number;
+  lastEventTime: number;
 }
 
-export function StreamingTimer({ startTime }: Props) {
+export function StreamingTimer({ startTime, lastEventTime }: Props) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -13,5 +14,12 @@ export function StreamingTimer({ startTime }: Props) {
     return () => clearInterval(interval);
   }, []);
 
-  return <div className="response-time">{formatDuration(now - startTime)}</div>;
+  const total = formatDuration(now - startTime);
+  const idle = Math.floor((now - lastEventTime) / 1000);
+
+  return (
+    <div className="response-time">
+      {total}{idle > 0 ? ` (${idle}s)` : ''}
+    </div>
+  );
 }

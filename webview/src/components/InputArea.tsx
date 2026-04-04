@@ -1,14 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { postMessage } from '../vscode';
+import { SettingsModal } from './SettingsModal';
 
 interface Props {
   isStreaming: boolean;
   prefill: string;
+  workspacePath: string;
 }
 
-export function InputArea({ isStreaming, prefill }: Props) {
+export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [history, setHistory] = useState<string[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const historyIndex = useRef(-1);
   const savedDraft = useRef('');
 
@@ -84,6 +87,17 @@ export function InputArea({ isStreaming, prefill }: Props) {
           >
             ✕
           </button>
+          <div className="settings-anchor">
+            <button
+              className="btn-icon"
+              title="Settings"
+              aria-label="Settings"
+              onClick={() => setSettingsOpen(v => !v)}
+            >
+              ⚙
+            </button>
+            {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} workspacePath={workspacePath} />}
+          </div>
         </div>
         <button id="btn-send" disabled={isStreaming} onClick={send}>Send</button>
       </div>
