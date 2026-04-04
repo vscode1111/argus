@@ -57,7 +57,7 @@ export class ChatPanel {
     this.post({ type: 'clear' });
   }
 
-  private async onWebviewMessage(msg: { type: string; text?: string }): Promise<void> {
+  private async onWebviewMessage(msg: { type: string; text?: string; path?: string }): Promise<void> {
     console.log('[Argus] onWebviewMessage:', JSON.stringify(msg));
     if (msg.type === 'send' && msg.text) {
       await this.handleUserMessage(msg.text);
@@ -70,6 +70,9 @@ export class ChatPanel {
       this.showError('Claude Code process exited with code 3221226505');
     } else if (msg.type === 'newSession') {
       this.newSession();
+    } else if (msg.type === 'openFile' && msg.path) {
+      const uri = vscode.Uri.file(msg.path);
+      vscode.window.showTextDocument(uri, { preview: true, viewColumn: vscode.ViewColumn.One });
     }
   }
 
@@ -158,8 +161,8 @@ export class ChatPanel {
   private getHtml(): string {
     const webview = this.panel.webview;
     const mediaPath = vscode.Uri.joinPath(this.extensionUri, 'media');
-    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaPath, 'chat.css'));
-    const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaPath, 'chat.js'));
+    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaPath, 'webview.css'));
+    const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaPath, 'webview.js'));
     const nonce = getNonce();
 
     const htmlPath = path.join(this.extensionUri.fsPath, 'media', 'chat.html');

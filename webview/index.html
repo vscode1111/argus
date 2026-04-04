@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Argus - Dev</title>
+  <style>
+    /* VS Code Dark+ theme variables */
+    :root {
+      --vscode-editor-background: #1e1e1e;
+      --vscode-editor-foreground: #d4d4d4;
+      --vscode-panel-border: #474747;
+      --vscode-input-background: #3c3c3c;
+      --vscode-input-foreground: #cccccc;
+      --vscode-button-background: #0e639c;
+      --vscode-button-foreground: #ffffff;
+      --vscode-button-hoverBackground: #1177bb;
+      --vscode-editor-selectionBackground: #264f7870;
+      --vscode-sideBar-background: #252526;
+      --vscode-textCodeBlock-background: #2d2d2d;
+      --vscode-errorForeground: #f48771;
+      --vscode-descriptionForeground: #8c8c8c;
+      --vscode-font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", sans-serif;
+      --vscode-editor-font-family: "Cascadia Code", "Courier New", monospace;
+      --vscode-font-size: 13px;
+      --vscode-focusBorder: #007fd4;
+      --vscode-textLink-foreground: #3794ff;
+      --vscode-symbolIcon-functionForeground: #dcdcaa;
+    }
+    body { padding-bottom: 40px; }
+  </style>
+  <script>
+    // Mock VS Code API - must run before module scripts
+    window.acquireVsCodeApi = () => ({
+      postMessage: (msg) => console.log('[-> ext]', msg),
+    });
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="dev-harness"></div>
+  <script type="module" src="/src/index.dev.tsx"></script>
+</body>
+</html>
