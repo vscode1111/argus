@@ -28,7 +28,7 @@ interface Props {
 }
 
 export function SettingsModal({ onClose, workspacePath }: Props) {
-  const { verboseTools, showTimer, setVerboseTools, setShowTimer } = useSettings();
+  const { verboseTools, showTimer, showOutput, setVerboseTools, setShowTimer, setShowOutput } = useSettings();
   const [infoOpen, setInfoOpen] = useState(false);
 
   useEffect(() => {
@@ -50,6 +50,10 @@ export function SettingsModal({ onClose, workspacePath }: Props) {
         <label className="setting-row" htmlFor="toggle-timer">
           <span className="setting-label">Show timer</span>
           <Toggle id="toggle-timer" checked={showTimer} onChange={setShowTimer} />
+        </label>
+        <label className="setting-row" htmlFor="toggle-output">
+          <span className="setting-label">Show output</span>
+          <Toggle id="toggle-output" checked={showOutput} onChange={setShowOutput} />
         </label>
         <button
           className="settings-info-corner"

@@ -91,6 +91,21 @@ function argusAgentPlugin(): Plugin {
                     type: 'tool_end',
                     call: { id: event.tool_use_id, name: tc?.name ?? '', input: tc?.input ?? {}, result: event.content },
                   }));
+                } else if (event.type === 'user') {
+                  const userMsg = event as { type: 'user'; message?: { content?: Array<Record<string, unknown>> }; content?: Array<Record<string, unknown>> };
+                  const blocks = userMsg.message?.content ?? userMsg.content ?? [];
+                  for (const block of blocks) {
+                    if (block.type === 'tool_result') {
+                      const tc = toolMap.get(block.tool_use_id as string);
+                      const content = typeof block.content === 'string'
+                        ? block.content
+                        : JSON.stringify(block.content);
+                      ws.send(JSON.stringify({
+                        type: 'tool_end',
+                        call: { id: block.tool_use_id, name: tc?.name ?? '', input: tc?.input ?? {}, result: content },
+                      }));
+                    }
+                  }
                 }
               }
             });

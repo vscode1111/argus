@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.5",
+  "version": "0.0.7",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "publisher": "local",
@@ -16,6 +16,34 @@
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run build:webview && npm run compile",
+    "build:webview": "vite build --config webview/vite.config.ts",
+    "watch:webview": "vite build --watch --config webview/vite.config.ts",
+    "dev:webview": "vite --config webview/vite.dev.config.ts",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^4.3.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-markdown": "^9.0.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "typescript": "^5.3.0",
+    "vite": "^6.0.0",
+    "ws": "^8.20.0"
+  },
+  "dependencies": {
+    "remark-gfm": "^4.0.1"
+  },
   "contributes": {
     "commands": [
       {
@@ -115,31 +143,5 @@
         }
       ]
     }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run build:webview && npm run compile",
-    "build:webview": "vite build --config webview/vite.config.ts",
-    "watch:webview": "vite build --watch --config webview/vite.config.ts",
-    "dev:webview": "vite --config webview/vite.dev.config.ts",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
-    "@types/vscode": "^1.85.0",
-    "@types/ws": "^8.18.1",
-    "@vitejs/plugin-react": "^4.3.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
-    "react-markdown": "^9.0.0",
-    "typescript": "^5.3.0",
-    "vite": "^6.0.0",
-    "ws": "^8.20.0"
-  },
-  "dependencies": {
-    "remark-gfm": "^4.0.1"
   }
 }

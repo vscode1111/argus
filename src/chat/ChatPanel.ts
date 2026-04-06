@@ -89,7 +89,7 @@ export class ChatPanel {
     const systemPrompt = this.buildSystemPrompt();
     let responseText = '';
     let thinkingText = '';
-    const toolCalls: { name: string; input?: unknown; result?: string }[] = [];
+    const toolCalls: { id: string; name: string; input?: unknown; result?: string }[] = [];
 
     try {
       for await (const event of this.session.send(text, systemPrompt)) {
@@ -105,14 +105,15 @@ export class ChatPanel {
             break;
 
           case 'tool_start':
-            toolCalls.push({ name: event.name, input: event.input });
-            this.post({ type: 'tool_start', call: { id: String(toolCalls.length), name: event.name, input: event.input ?? {} } });
+            toolCalls.push({ id: event.id, name: event.name, input: event.input });
+            this.post({ type: 'tool_start', call: { id: event.id, name: event.name, input: event.input ?? {} } });
             break;
 
           case 'tool_end': {
-            const last = toolCalls[toolCalls.length - 1];
-            if (last) last.result = event.result;
-            this.post({ type: 'tool_end', call: { id: String(toolCalls.length), name: last?.name ?? '', input: last?.input ?? {}, result: event.result } });
+            const match = toolCalls.find(tc => tc.id === event.id);
+            if (match) match.result = event.result;
+            console.log('[Argus] tool_end id:', event.id, 'match:', !!match, 'result length:', event.result?.length ?? 0);
+            this.post({ type: 'tool_end', call: { id: event.id, name: match?.name ?? '', input: match?.input ?? {}, result: event.result } });
             break;
           }
 

@@ -5,8 +5,8 @@ import { getModel } from '../utils/config';
 export type SessionEvent =
   | { type: 'text'; text: string }
   | { type: 'thinking'; text: string }
-  | { type: 'tool_start'; name: string; input?: unknown }
-  | { type: 'tool_end'; name: string; result?: string }
+  | { type: 'tool_start'; id: string; name: string; input?: unknown }
+  | { type: 'tool_end'; id: string; result?: string }
   | { type: 'result'; text: string }
   | { type: 'error'; message: string };
 
@@ -150,7 +150,7 @@ export class AgentSession {
               } else if (block.type === 'text' && block.text && !receivedDeltas) {
                 yield { type: 'text', text: block.text };
               } else if (block.type === 'tool_use') {
-                yield { type: 'tool_start', name: block.name, input: block.input };
+                yield { type: 'tool_start', id: block.id, name: block.name, input: block.input };
               }
             }
             receivedDeltas = false; // reset for next turn
@@ -159,13 +159,33 @@ export class AgentSession {
 
           if ('type' in msg && msg.type === 'tool_result') {
             const tr = msg as ToolResultMessage;
-            yield { type: 'tool_end', name: '', result: tr.content };
+            yield { type: 'tool_end', id: tr.tool_use_id, result: tr.content };
+            continue;
+          }
+
+          // CLI wraps tool results in a "user" message with content array
+          if ('type' in msg && msg.type === 'user') {
+            const userMsg = msg as { type: 'user'; message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown; is_error?: boolean }>  }; content?: Array<{ type: string; tool_use_id?: string; content?: unknown; is_error?: boolean }> };
+            const blocks = userMsg.message?.content ?? userMsg.content ?? [];
+            console.log('[Argus] user message blocks:', blocks.length, 'raw keys:', Object.keys(msg).join(','), blocks.map(b => `${b.type}:${b.tool_use_id}:${typeof b.content}`).join(', '));
+            for (const block of blocks) {
+              if (block.type === 'tool_result') {
+                const content = typeof block.content === 'string'
+                  ? block.content
+                  : JSON.stringify(block.content);
+                console.log('[Argus] tool_result content preview:', content?.slice(0, 100));
+                yield { type: 'tool_end', id: block.tool_use_id ?? '', result: content ?? '' };
+              }
+            }
             continue;
           }
 
           if ('result' in msg && typeof msg.result === 'string') {
             yield { type: 'result', text: msg.result };
+            continue;
           }
+
+          console.log('[Argus] UNHANDLED msg type:', evtType, 'keys:', Object.keys(msg).join(','), trimmed.slice(0, 200));
         }
       }
 
