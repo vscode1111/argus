@@ -1,11 +1,12 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
-export function Markdown({ children }: { children: string }) {
+export function Markdown({ children, breaks }: { children: string; breaks?: boolean }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={breaks ? [remarkGfm, remarkBreaks] : [remarkGfm]}
       components={{
         pre({ children }) {
           return (

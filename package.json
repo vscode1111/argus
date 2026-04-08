@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "publisher": "local",
@@ -42,7 +42,8 @@
     "ws": "^8.20.0"
   },
   "dependencies": {
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "remark-breaks": "^4.0.0"
   },
   "contributes": {
     "commands": [

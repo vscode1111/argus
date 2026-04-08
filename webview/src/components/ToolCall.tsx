@@ -3,6 +3,7 @@ import { ToolCallData } from '../types';
 import { postMessage } from '../vscode';
 import { useSettings } from '../contexts/SettingsContext';
 import { FileViewerModal } from './FileViewerModal';
+import { DiffViewerModal } from './DiffViewerModal';
 
 function toolSummary(name: string, input: Record<string, unknown>): string {
   switch (name) {
@@ -48,15 +49,24 @@ export function ToolCall({ call }: Props) {
   const limit = name === 'Bash' ? 600 : 200;
   const preview = result ? result.slice(0, limit) + (result.length > limit ? '...' : '') : undefined;
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
   const bashCommand = name === 'Bash' ? (input.command as string) || '' : '';
+  const hasDiff = name === 'Edit' && !!(input.old_string || input.new_string);
+  const oldLines = hasDiff ? String(input.old_string || '').split('\n') : [];
+  const newLines = hasDiff ? String(input.new_string || '').split('\n') : [];
 
-  // For Read: open inline viewer. For Write/Edit: open in VS Code.
-  function handleFileClick(e: React.MouseEvent, path: string) {
+  const fileViewerContent =
+    name === 'Read' ? result :
+    name === 'Write' ? (input.content as string) || undefined :
+    name === 'Edit' ? (input.new_string as string) || undefined :
+    undefined;
+
+  function handleFileClick(e: React.MouseEvent) {
     e.preventDefault();
-    if (name === 'Read' && result) {
+    if (fileViewerContent) {
       setViewerOpen(true);
     } else {
-      postMessage({ type: 'openFile', path });
+      postMessage({ type: 'openFile', path: summary });
     }
   }
 
@@ -76,7 +86,7 @@ export function ToolCall({ call }: Props) {
                 <a
                   className="tool-summary tool-file-link"
                   href="#"
-                  onClick={e => handleFileClick(e, summary)}
+                  onClick={handleFileClick}
                 >
                   {summary}
                 </a>
@@ -93,6 +103,19 @@ export function ToolCall({ call }: Props) {
                 Out
               </a>
             )}
+            {hasDiff && (
+              <>
+                <span className="tool-diff-stats-added">+{newLines.length}</span>
+                <span className="tool-diff-stats-removed">-{oldLines.length}</span>
+                <a
+                  className="tool-out-link"
+                  href="#"
+                  onClick={e => { e.preventDefault(); setDiffOpen(true); }}
+                >
+                  Diff
+                </a>
+              </>
+            )}
           </div>
         )}
         {!verboseTools && name === 'Bash' && bashCommand && summary !== bashCommand && (
@@ -102,14 +125,22 @@ export function ToolCall({ call }: Props) {
           <div className="tool-result">{preview}</div>
         )}
       </div>
-      {viewerOpen && result && (
+      {viewerOpen && (result || fileViewerContent) && (
         <FileViewerModal
           path={name === 'Bash'
             ? (summary !== bashCommand && summary ? `${summary}: ${bashCommand}` : bashCommand || summary)
             : ((input.file_path as string) || summary)}
-          content={result}
+          content={(fileViewerContent ?? result)!}
           copyText={name === 'Bash' ? bashCommand || undefined : undefined}
           onClose={() => setViewerOpen(false)}
+        />
+      )}
+      {diffOpen && hasDiff && (
+        <DiffViewerModal
+          path={(input.file_path as string) || summary}
+          oldString={String(input.old_string || '')}
+          newString={String(input.new_string || '')}
+          onClose={() => setDiffOpen(false)}
         />
       )}
     </>

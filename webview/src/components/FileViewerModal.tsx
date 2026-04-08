@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { postMessage } from '../vscode';
+import { Markdown } from '../utils/markdown';
 
 const EXT_LANG: Record<string, string> = {
   ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
@@ -18,9 +19,12 @@ function detectLanguage(filePath: string): string {
   return EXT_LANG[ext] ?? 'text';
 }
 
-// Strip "     N→" line-number prefix inserted by the Read tool (cat -n format).
+// Strip "     N→" or "     N\t" line-number prefix inserted by the Read tool.
+// The system prompt shows → visually but the actual separator is a tab character.
 function stripLineNumbers(content: string): string {
-  return content.replace(/^\s*\d+→/gm, '');
+  return content
+    .replace(/\r\n/g, '\n')               // normalize Windows line endings
+    .replace(/^\s*\d+[→\t]/gm, '');       // strip "     N→" or "     N\t"
 }
 
 interface Props {
@@ -95,25 +99,31 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
           </div>
         </div>
         <div className="fv-body">
-          <SyntaxHighlighter
-            language={language}
-            style={isDark ? vscDarkPlus : vs}
-            showLineNumbers
-            wrapLongLines={false}
-            customStyle={{
-              margin: 0,
-              borderRadius: 0,
-              flex: 1,
-              overflow: 'auto',
-              fontSize: '13px',
-              lineHeight: '1.5',
-              background: 'var(--tool-bg)',
-              height: '100%',
-            }}
-            codeTagProps={{ style: { fontFamily: 'var(--font-mono)' } }}
-          >
-            {code}
-          </SyntaxHighlighter>
+          {language === 'markdown' ? (
+            <div className="fv-md-body">
+              <Markdown breaks>{code}</Markdown>
+            </div>
+          ) : (
+            <SyntaxHighlighter
+              language={language}
+              style={isDark ? vscDarkPlus : vs}
+              showLineNumbers
+              wrapLongLines={false}
+              customStyle={{
+                margin: 0,
+                borderRadius: 0,
+                flex: 1,
+                overflow: 'auto',
+                fontSize: '13px',
+                lineHeight: '1.5',
+                background: 'var(--tool-bg)',
+                height: '100%',
+              }}
+              codeTagProps={{ style: { fontFamily: 'var(--font-mono)' } }}
+            >
+              {code}
+            </SyntaxHighlighter>
+          )}
         </div>
       </div>
     </div>
