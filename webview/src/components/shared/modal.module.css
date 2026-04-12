@@ -1,0 +1,103 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--assistant-bg);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--thinking-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btnOpen {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 0.82em;
+  padding: 3px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.btnOpen:hover { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
+
+.btnIcon {
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btnIcon:hover { background: var(--hover-bg); color: var(--fg); }
+
+.close {
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 4px;
+  opacity: 0.7;
+}
+.close:hover { opacity: 1; }
+
+.body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.body > * {
+  flex: 1 !important;
+  overflow: auto !important;
+}

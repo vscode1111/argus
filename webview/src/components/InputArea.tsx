@@ -3,6 +3,8 @@ import { ImageAttachment } from '../types';
 import { postMessage } from '../vscode';
 import { SettingsModal } from './SettingsModal';
 import { ImageViewerModal } from './ImageViewerModal';
+import styles from './InputArea.module.css';
+import settings from './SettingsModal.module.css';
 
 interface Props {
   isStreaming: boolean;
@@ -23,6 +25,7 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
   const dragging = useRef(false);
   const dragStartY = useRef(0);
   const dragStartH = useRef(0);
+  const lastHeight = useRef(0);
 
   function adjustHeight() {
     if (wrapperHeight !== null) return; // user has manually resized
@@ -37,7 +40,8 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
     if (!dragging.current) return;
     const delta = dragStartY.current - e.clientY;
     const newH = Math.max(60, Math.min(dragStartH.current + delta, window.innerHeight * 0.7));
-    setWrapperHeight(newH);
+    lastHeight.current = newH;
+    if (wrapperRef.current) wrapperRef.current.style.height = newH + 'px';
   }, []);
 
   const onDragEnd = useCallback(() => {
@@ -46,7 +50,16 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
     document.body.style.userSelect = '';
     window.removeEventListener('mousemove', onDragMove);
     window.removeEventListener('mouseup', onDragEnd);
+    if (lastHeight.current) setWrapperHeight(lastHeight.current);
   }, [onDragMove]);
+
+  // Cleanup drag listeners on unmount
+  useEffect(() => {
+    return () => {
+      window.removeEventListener('mousemove', onDragMove);
+      window.removeEventListener('mouseup', onDragEnd);
+    };
+  }, [onDragMove, onDragEnd]);
 
   function onDragStart(e: React.MouseEvent) {
     e.preventDefault();
@@ -99,7 +112,7 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
       reader.onload = () => {
         const dataUrl = reader.result as string;
         // dataUrl format: "data:image/png;base64,iVBOR..."
-        const match = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+        const match = dataUrl.match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
         if (!match) return;
         setImages(prev => [...prev, { data: match[2], mediaType: match[1] }]);
       };
@@ -134,17 +147,16 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
   }
 
   return (
-    <div id="input-area">
-      <div className="input-resize-handle" onMouseDown={onDragStart} />
+    <div className={styles.inputArea}>
+      <div className={styles.inputResizeHandle} onMouseDown={onDragStart} />
       <div
-        className="input-wrapper"
+        className={styles.inputWrapper}
         ref={wrapperRef}
         style={wrapperHeight !== null ? { height: wrapperHeight } : undefined}
       >
         <textarea
           ref={textareaRef}
-          id="input"
-          className={images.length > 0 ? 'has-images' : ''}
+          className={[styles.textarea, images.length > 0 && styles.hasImages].filter(Boolean).join(' ')}
           placeholder="Ask Argus... (paste images with Ctrl+V)"
           rows={images.length > 0 ? 1 : 3}
           onInput={adjustHeight}
@@ -152,30 +164,30 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
           onPaste={handlePaste}
         />
         {images.length > 0 && (
-          <div className="image-previews">
+          <div className={styles.imagePreviews}>
             {images.map((img, i) => (
-              <div key={i} className="image-preview" onClick={() => setViewerIndex(i)} title="image.png">
+              <div key={i} className={styles.imagePreview} onClick={() => setViewerIndex(i)} title={`image.${img.mediaType.split('/')[1] ?? 'png'}`}>
                 <img src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} />
-                <button className="image-remove" onClick={e => { e.stopPropagation(); removeImage(i); }} title="Remove image">×</button>
+                <button className={styles.imageRemove} aria-label={`Remove attachment ${i + 1}`} onClick={e => { e.stopPropagation(); removeImage(i); }} title="Remove image">×</button>
               </div>
             ))}
-            <button className="image-clear-all" onClick={() => setImages([])} title="Remove all attachments">×</button>
+            <button className={styles.imageClearAll} aria-label="Remove all attachments" onClick={() => setImages([])} title="Remove all attachments">×</button>
           </div>
         )}
       </div>
-      <div id="btn-group">
-        <div id="btn-row">
+      <div className={styles.btnGroup}>
+        <div className={styles.btnRow}>
           {isStreaming && (
-            <button id="btn-stop" onClick={() => postMessage({ type: 'stop' })}>Stop</button>
+            <button className={styles.btnStop} onClick={() => postMessage({ type: 'stop' })}>Stop</button>
           )}
           <button
-            id="btn-kill"
+            className={styles.btnKill}
             title="Kill process (test error)"
             onClick={() => postMessage({ type: 'forceError' })}
           >
             ✕
           </button>
-          <div className="settings-anchor">
+          <div className={settings.anchor}>
             <button
               className="btn-icon"
               title="Settings"
@@ -187,7 +199,7 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
             {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} workspacePath={workspacePath} />}
           </div>
         </div>
-        <button id="btn-send" disabled={isStreaming} onClick={send}>Send</button>
+        <button className={styles.btnSend} disabled={isStreaming} onClick={send}>Send</button>
       </div>
       {viewerIndex !== null && images[viewerIndex] && (
         <ImageViewerModal

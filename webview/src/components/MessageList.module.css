@@ -1,0 +1,13 @@
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)) transparent;
+}
+.messages::-webkit-scrollbar { width: 6px; }
+.messages::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)); border-radius: 3px; }
+.messages::-webkit-scrollbar-track { background: transparent; }

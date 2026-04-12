@@ -1,0 +1,12 @@
+.thinkingBlock {
+  color: var(--thinking-fg);
+  font-size: 0.85em;
+  font-style: italic;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  margin-bottom: 8px;
+  max-height: 120px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.expanded { max-height: none; }

@@ -1,0 +1,31 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.title { font-weight: 600; font-size: 14px; }
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btnNewSession {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btnNewSession:hover { background: var(--btn-bg); color: var(--btn-fg); }

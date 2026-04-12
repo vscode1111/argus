@@ -5,6 +5,8 @@ import { ToolCall } from './ToolCall';
 import { Markdown } from '../utils/markdown';
 import { formatDuration } from '../utils/time';
 import { ImageViewerModal } from './ImageViewerModal';
+import msg from './shared/message.module.css';
+import styles from './ChatMessage.module.css';
 
 interface Props {
   message: UIMessage;
@@ -12,50 +14,56 @@ interface Props {
 
 export function ChatMessage({ message }: Props) {
   const { role, content, thinking, toolCalls, responseTime } = message;
-  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   if (role === 'error') {
     return (
-      <div className="message assistant" style={{ color: 'var(--error-fg)' }}>
+      <div className={[msg.message, msg.assistant].join(' ')} style={{ color: 'var(--error-fg)' }}>
         Error: {content}
       </div>
     );
   }
 
   if (role === 'user') {
-    return (
-      <div className="message user">
-        {message.images && message.images.length > 0 && (
-          <div className="message-images">
-            {message.images.map((img, i) => (
-              <img key={i} src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} className="message-image" onClick={() => setViewerIndex(i)} style={{ cursor: 'pointer' }} />
-            ))}
-          </div>
-        )}
-        {viewerIndex !== null && message.images?.[viewerIndex] && (
-          <ImageViewerModal
-            src={`data:${message.images[viewerIndex].mediaType};base64,${message.images[viewerIndex].data}`}
-            alt={`Attachment ${viewerIndex + 1}`}
-            onClose={() => setViewerIndex(null)}
-          />
-        )}
-        <div className="message-content" style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
-      </div>
-    );
+    return <UserMessage message={message} />;
   }
 
   return (
-    <div className="message assistant">
+    <div className={[msg.message, msg.assistant].join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
       {toolCalls?.map(tc => <ToolCall key={tc.id} call={tc} />)}
       {content && (
-        <div className="message-content">
+        <div className={msg.messageContent}>
           <Markdown>{content}</Markdown>
         </div>
       )}
       {responseTime !== undefined && (
-        <div className="response-time">{formatDuration(responseTime)}</div>
+        <div className={msg.responseTime}>{formatDuration(responseTime)}</div>
       )}
+    </div>
+  );
+}
+
+function UserMessage({ message }: Props) {
+  const { content } = message;
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+  return (
+    <div className={[msg.message, msg.user].join(' ')}>
+      {message.images && message.images.length > 0 && (
+        <div className={styles.messageImages}>
+          {message.images.map((img, i) => (
+            <img key={i} src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} className={styles.messageImage} onClick={() => setViewerIndex(i)} />
+          ))}
+        </div>
+      )}
+      {viewerIndex !== null && message.images?.[viewerIndex] && (
+        <ImageViewerModal
+          src={`data:${message.images[viewerIndex].mediaType};base64,${message.images[viewerIndex].data}`}
+          alt={`Attachment ${viewerIndex + 1}`}
+          onClose={() => setViewerIndex(null)}
+        />
+      )}
+      <div className={msg.messageContent} style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
     </div>
   );
 }

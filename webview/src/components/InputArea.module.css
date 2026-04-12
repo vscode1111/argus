@@ -1,0 +1,185 @@
+.inputArea {
+  display: flex;
+  gap: 8px;
+  padding: 4px 12px 10px;
+  border-top: none;
+  flex-shrink: 0;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.inputResizeHandle {
+  width: 100%;
+  height: 5px;
+  cursor: ns-resize;
+  flex-shrink: 0;
+  position: relative;
+  border-top: 1px solid var(--border);
+}
+.inputResizeHandle::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+}
+.inputResizeHandle:hover,
+.inputResizeHandle:active {
+  border-top-color: var(--vscode-focusBorder);
+}
+
+.inputWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-width: 0;
+}
+.inputWrapper:focus-within { border-color: var(--vscode-focusBorder); }
+
+.textarea {
+  flex: 1;
+  background: transparent;
+  color: var(--input-fg);
+  border: none;
+  border-bottom: 1px solid transparent;
+  padding: 8px;
+  font-family: var(--font);
+  font-size: var(--font-size);
+  resize: none;
+  outline: none;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)) transparent;
+}
+.textarea::-webkit-scrollbar { width: 6px; }
+.textarea::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)); border-radius: 3px; }
+.textarea::-webkit-scrollbar-track { background: transparent; }
+.hasImages {
+  border-bottom-color: var(--border);
+}
+
+.imagePreviews {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  flex-wrap: wrap;
+}
+
+.imagePreview {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.imagePreview img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.imagePreview:hover img {
+  border-color: var(--vscode-focusBorder);
+}
+
+.imageRemove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--vscode-badge-background, #4d4d4d);
+  color: var(--vscode-badge-foreground, #fff);
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.imagePreview:hover .imageRemove { opacity: 1; }
+.imageRemove:hover { background: var(--vscode-errorForeground); }
+
+.imageClearAll {
+  align-self: flex-end;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--thinking-fg);
+  cursor: pointer;
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+.imageClearAll:hover { color: var(--vscode-errorForeground); border-color: var(--vscode-errorForeground); }
+
+.btnGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: flex-end;
+}
+
+.btnRow {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+}
+
+.btnSend {
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: var(--font-size);
+  height: 34px;
+}
+.btnSend:hover { background: var(--btn-hover); }
+.btnSend:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btnStop {
+  background: var(--vscode-errorForeground);
+  color: var(--vscode-editor-background);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: var(--font-size);
+  height: 34px;
+}
+.btnStop:hover { opacity: 0.85; }
+
+.btnKill {
+  background: transparent;
+  border: 1px solid var(--vscode-errorForeground);
+  color: var(--vscode-errorForeground);
+  cursor: pointer;
+  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btnKill:hover { background: var(--vscode-errorForeground); color: var(--vscode-editor-background); }

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import styles from './ImageViewerModal.module.css';
 
 interface Props {
   src: string;
@@ -16,10 +17,10 @@ export function ImageViewerModal({ src, alt, onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div className="iv-overlay" onClick={onClose}>
-      <div className="iv-container" onClick={e => e.stopPropagation()}>
-        <button className="iv-close" aria-label="Close" onClick={onClose}>×</button>
-        <img src={src} alt={alt ?? 'Image'} className="iv-image" />
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.container} role="dialog" aria-modal="true" aria-label="Image viewer" onClick={e => e.stopPropagation()}>
+        <button className={styles.close} aria-label="Close" autoFocus onClick={onClose}>×</button>
+        <img src={src} alt={alt ?? 'Image'} className={styles.image} />
       </div>
     </div>
   );

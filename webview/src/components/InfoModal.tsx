@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import styles from './InfoModal.module.css';
 
 interface Props {
   workspacePath: string;
@@ -15,16 +16,16 @@ export function InfoModal({ workspacePath, onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div className="info-overlay" onClick={onClose} aria-hidden="true">
-      <div className="info-modal" role="dialog" aria-label="Info" onClick={e => e.stopPropagation()}>
-        <div className="info-modal-header">
-          <span className="info-modal-title">Workspace Info</span>
-          <button className="info-modal-close" aria-label="Close" onClick={onClose}>×</button>
+    <div className={styles.overlay} onClick={onClose} aria-hidden="true">
+      <div className={styles.modal} role="dialog" aria-label="Info" onClick={e => e.stopPropagation()}>
+        <div className={styles.header}>
+          <span className={styles.title}>Workspace Info</span>
+          <button className={styles.close} aria-label="Close" onClick={onClose}>×</button>
         </div>
-        <div className="info-modal-body">
-          <div className="info-row">
-            <span className="info-label">Path</span>
-            <span className="info-value">{workspacePath || '(no workspace)'}</span>
+        <div className={styles.body}>
+          <div className={styles.row}>
+            <span className={styles.label}>Path</span>
+            <span className={styles.value}>{workspacePath || '(no workspace)'}</span>
           </div>
         </div>
       </div>

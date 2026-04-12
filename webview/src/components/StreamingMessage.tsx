@@ -5,6 +5,7 @@ import { ToolCall } from './ToolCall';
 import { Markdown } from '../utils/markdown';
 import { StreamingTimer } from './StreamingTimer';
 import { useSettings } from '../contexts/SettingsContext';
+import msg from './shared/message.module.css';
 
 interface Props {
   streaming: StreamingState;
@@ -18,17 +19,19 @@ export function StreamingMessage({ streaming }: Props) {
 
   return (
     <div className={[
-      'message assistant streaming',
-      hasText ? 'has-text' : '',
-      isEmpty ? 'empty' : '',
+      msg.message,
+      msg.assistant,
+      msg.streaming,
+      hasText && msg.hasText,
+      isEmpty && msg.empty,
     ].filter(Boolean).join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
       {toolCalls.map(tc => <ToolCall key={tc.id} call={tc} />)}
-      <div className="message-content">
+      <div className={msg.messageContent}>
         {hasText && (
           <>
             <Markdown>{text}</Markdown>
-            <span className="cursor" />
+            <span className={msg.cursor} />
           </>
         )}
       </div>

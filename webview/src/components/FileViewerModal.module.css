@@ -1,0 +1,18 @@
+.mdBody {
+  padding: 16px 24px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+.mdBody h1, .mdBody h2, .mdBody h3 {
+  margin: 1em 0 0.4em;
+  color: var(--fg);
+}
+.mdBody p { margin: 0.5em 0; }
+.mdBody ul, .mdBody ol { padding-left: 1.4em; margin: 0.4em 0; }
+.mdBody blockquote {
+  border-left: 3px solid var(--border);
+  margin: 0.5em 0;
+  padding: 2px 12px;
+  color: var(--fg-dim);
+}

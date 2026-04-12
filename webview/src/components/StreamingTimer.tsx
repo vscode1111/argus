@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { formatDuration } from '../utils/time';
+import msg from './shared/message.module.css';
 
 interface Props {
   startTime: number;
@@ -18,7 +19,7 @@ export function StreamingTimer({ startTime, lastEventTime }: Props) {
   const idle = Math.floor((now - lastEventTime) / 1000);
 
   return (
-    <div className="response-time">
+    <div className={msg.responseTime}>
       {total}{idle > 0 ? ` (${idle}s)` : ''}
     </div>
   );

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { UIMessage, StreamingState } from '../types';
 import { ChatMessage } from './ChatMessage';
 import { StreamingMessage } from './StreamingMessage';
+import styles from './MessageList.module.css';
 
 interface Props {
   messages: UIMessage[];
@@ -16,7 +17,7 @@ export function MessageList({ messages, streaming }: Props) {
   }, [messages, streaming]);
 
   return (
-    <div id="messages">
+    <div className={styles.messages}>
       {messages.map(msg => (
         <ChatMessage key={msg.id} message={msg} />
       ))}

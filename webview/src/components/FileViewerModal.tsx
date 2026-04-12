@@ -3,6 +3,8 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { postMessage } from '../vscode';
 import { Markdown } from '../utils/markdown';
+import modal from './shared/modal.module.css';
+import styles from './FileViewerModal.module.css';
 
 const EXT_LANG: Record<string, string> = {
   ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
@@ -66,18 +68,18 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
   }
 
   return (
-    <div className="fv-overlay" onClick={onClose} aria-hidden="true">
+    <div className={modal.overlay} onClick={onClose} aria-hidden="true">
       <div
-        className="fv-modal"
+        className={modal.modal}
         role="dialog"
         aria-label={`File viewer: ${filename}`}
         onClick={e => e.stopPropagation()}
       >
-        <div className="fv-header">
-          <div className="fv-title-row">
-            <span className="fv-title" title={path}>{path}</span>
+        <div className={modal.header}>
+          <div className={modal.titleRow}>
+            <span className={modal.title} title={path}>{path}</span>
             {copyText && (
-              <button className="fv-btn-icon" onClick={handleCopy} title="Copy command to clipboard" aria-label="Copy command">
+              <button className={modal.btnIcon} onClick={handleCopy} title="Copy command to clipboard" aria-label="Copy command">
                 {copied ? (
                   <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                     <path d="M2 8L6 12L14 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -91,16 +93,16 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
               </button>
             )}
           </div>
-          <div className="fv-actions">
-            <button className="fv-btn-open" onClick={openInEditor} title="Open in VS Code editor">
+          <div className={modal.actions}>
+            <button className={modal.btnOpen} onClick={openInEditor} title="Open in VS Code editor">
               Open in editor
             </button>
-            <button className="fv-close" aria-label="Close" onClick={onClose}>×</button>
+            <button className={modal.close} aria-label="Close" onClick={onClose}>×</button>
           </div>
         </div>
-        <div className="fv-body">
+        <div className={modal.body}>
           {language === 'markdown' ? (
-            <div className="fv-md-body">
+            <div className={styles.mdBody}>
               <Markdown breaks>{code}</Markdown>
             </div>
           ) : (

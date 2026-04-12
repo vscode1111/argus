@@ -45,7 +45,8 @@ webview/
       ToolCall.tsx         - Tool call visualization (verbose/compact)
       FileViewerModal.tsx  - Modal for viewing file/content with syntax highlighting
       DiffViewerModal.tsx  - Modal for viewing Edit diffs (old vs new string, side-by-side)
-      InputArea.tsx        - Textarea + send/stop/kill, input history
+      ImageViewerModal.tsx - Lightbox modal for viewing pasted/sent images full-size
+      InputArea.tsx        - Textarea + send/stop/kill, input history, image paste, resize handle
     dev/
       DevHarness.tsx    - Fixed bottom toolbar, fires mock extension messages for browser testing
     utils/

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { postMessage } from '../vscode';
 import { SettingsModal } from './SettingsModal';
+import styles from './Header.module.css';
 
 export function Header() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
-    <div id="header">
-      <span className="title">Argus</span>
-      <div className="header-actions">
+    <div className={styles.header}>
+      <span className={styles.title}>Argus</span>
+      <div className={styles.headerActions}>
         <button
           className="btn-icon"
           title="Settings"
@@ -18,7 +19,7 @@ export function Header() {
           ⚙
         </button>
         <button
-          id="btn-new-session"
+          className={styles.btnNewSession}
           title="New session"
           onClick={() => postMessage({ type: 'newSession' })}
         >

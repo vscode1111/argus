@@ -1,0 +1,51 @@
+:root {
+  --bg: var(--vscode-editor-background);
+  --fg: var(--vscode-editor-foreground);
+  --border: var(--vscode-panel-border);
+  --input-bg: var(--vscode-input-background);
+  --input-fg: var(--vscode-input-foreground);
+  --btn-bg: var(--vscode-button-background);
+  --btn-fg: var(--vscode-button-foreground);
+  --btn-hover: var(--vscode-button-hoverBackground);
+  --assistant-bg: var(--vscode-sideBar-background);
+  --tool-bg: var(--vscode-textCodeBlock-background);
+  --error-fg: var(--vscode-errorForeground);
+  --thinking-fg: var(--vscode-descriptionForeground);
+  --font: var(--vscode-font-family);
+  --font-mono: var(--vscode-editor-font-family);
+  --font-size: var(--vscode-font-size);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.btn-icon {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-icon:hover { background: var(--btn-bg); color: var(--btn-fg); }

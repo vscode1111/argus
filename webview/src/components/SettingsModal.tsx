@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
 import { InfoModal } from './InfoModal';
+import styles from './SettingsModal.module.css';
 
 interface ToggleProps {
   id: string;
@@ -10,14 +11,14 @@ interface ToggleProps {
 
 function Toggle({ id, checked, onChange }: ToggleProps) {
   return (
-    <span className="toggle">
+    <span className={styles.toggle}>
       <input
         id={id}
         type="checkbox"
         checked={checked}
         onChange={e => onChange(e.target.checked)}
       />
-      <span className="toggle-track" aria-hidden="true" />
+      <span className={styles.toggleTrack} aria-hidden="true" />
     </span>
   );
 }
@@ -41,22 +42,22 @@ export function SettingsModal({ onClose, workspacePath }: Props) {
 
   return (
     <>
-      <div className="settings-overlay" onClick={onClose} aria-hidden="true" />
-      <div className="settings-dropdown" role="dialog" aria-label="Settings">
-        <label className="setting-row" htmlFor="toggle-verbose">
-          <span className="setting-label">Verbose tools</span>
+      <div className={styles.overlay} onClick={onClose} aria-hidden="true" />
+      <div className={styles.dropdown} role="dialog" aria-label="Settings">
+        <label className={styles.settingRow} htmlFor="toggle-verbose">
+          <span className={styles.settingLabel}>Verbose tools</span>
           <Toggle id="toggle-verbose" checked={verboseTools} onChange={setVerboseTools} />
         </label>
-        <label className="setting-row" htmlFor="toggle-timer">
-          <span className="setting-label">Show timer</span>
+        <label className={styles.settingRow} htmlFor="toggle-timer">
+          <span className={styles.settingLabel}>Show timer</span>
           <Toggle id="toggle-timer" checked={showTimer} onChange={setShowTimer} />
         </label>
-        <label className="setting-row" htmlFor="toggle-output">
-          <span className="setting-label">Show output</span>
+        <label className={styles.settingRow} htmlFor="toggle-output">
+          <span className={styles.settingLabel}>Show output</span>
           <Toggle id="toggle-output" checked={showOutput} onChange={setShowOutput} />
         </label>
         <button
-          className="settings-info-corner"
+          className={styles.infoCorner}
           onClick={() => setInfoOpen(true)}
           aria-label="Workspace info"
           title="Workspace info"

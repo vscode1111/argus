@@ -1,4 +1,7 @@
 import React, { useEffect } from 'react';
+import modal from './shared/modal.module.css';
+import styles from './DiffViewerModal.module.css';
+import tc from './ToolCall.module.css';
 
 interface Props {
   path: string;
@@ -21,35 +24,35 @@ export function DiffViewerModal({ path, oldString, newString, onClose }: Props) 
   const rows = Math.max(oldLines.length, newLines.length);
 
   return (
-    <div className="fv-overlay" onClick={onClose} aria-hidden="true">
+    <div className={modal.overlay} onClick={onClose} aria-hidden="true">
       <div
-        className="fv-modal"
+        className={modal.modal}
         role="dialog"
         aria-label={`Diff: ${path}`}
         onClick={e => e.stopPropagation()}
       >
-        <div className="fv-header">
-          <div className="fv-title-row">
-            <span className="fv-title" title={path}>{path}</span>
-            <span className="dv-stats">
-              <span className="tool-diff-stats-added">+{newLines.length}</span>
-              <span className="tool-diff-stats-removed">-{oldLines.length}</span>
+        <div className={modal.header}>
+          <div className={modal.titleRow}>
+            <span className={modal.title} title={path}>{path}</span>
+            <span className={styles.stats}>
+              <span className={tc.statsAdded}>+{newLines.length}</span>
+              <span className={tc.statsRemoved}>-{oldLines.length}</span>
             </span>
           </div>
-          <div className="fv-actions">
-            <button className="fv-close" aria-label="Close" onClick={onClose}>×</button>
+          <div className={modal.actions}>
+            <button className={modal.close} aria-label="Close" onClick={onClose}>×</button>
           </div>
         </div>
-        <div className="fv-body dv-body">
-          <div className="dv-table">
+        <div className={[modal.body, styles.body].join(' ')}>
+          <div className={styles.table}>
 {Array.from({ length: rows }).map((_, i) => (
               <React.Fragment key={i}>
                 {oldLines[i] !== undefined
-                  ? <div className="dv-line dv-line-removed">{oldLines[i]}</div>
-                  : <div className="dv-line dv-line-empty dv-line-empty-old" />}
+                  ? <div className={[styles.line, styles.lineRemoved].join(' ')}>{oldLines[i]}</div>
+                  : <div className={[styles.line, styles.lineEmpty, styles.lineEmptyOld].join(' ')} />}
                 {newLines[i] !== undefined
-                  ? <div className="dv-line dv-line-added">{newLines[i]}</div>
-                  : <div className="dv-line dv-line-empty" />}
+                  ? <div className={[styles.line, styles.lineAdded].join(' ')}>{newLines[i]}</div>
+                  : <div className={[styles.line, styles.lineEmpty].join(' ')} />}
               </React.Fragment>
             ))}
           </div>

@@ -4,6 +4,7 @@ import { postMessage } from '../vscode';
 import { useSettings } from '../contexts/SettingsContext';
 import { FileViewerModal } from './FileViewerModal';
 import { DiffViewerModal } from './DiffViewerModal';
+import styles from './ToolCall.module.css';
 
 function toolSummary(name: string, input: Record<string, unknown>): string {
   switch (name) {
@@ -72,31 +73,31 @@ export function ToolCall({ call }: Props) {
 
   return (
     <>
-      <div className={`tool-call${error ? ' error' : ''}`}>
+      <div className={[styles.toolCall, error && styles.error].filter(Boolean).join(' ')}>
         {verboseTools ? (
-          <pre className="tool-input">
-            <span className="tool-name">{name}</span>
+          <pre className={styles.toolInput}>
+            <span className={styles.toolName}>{name}</span>
             {'\n'}{JSON.stringify(input, null, 2)}
           </pre>
         ) : (
-          <div className="tool-header">
-            <span className="tool-name">{name}</span>
+          <div className={styles.toolHeader}>
+            <span className={styles.toolName}>{name}</span>
             {summary && (
               isFile ? (
                 <a
-                  className="tool-summary tool-file-link"
+                  className={[styles.toolSummary, styles.toolFileLink].join(' ')}
                   href="#"
                   onClick={handleFileClick}
                 >
                   {summary}
                 </a>
               ) : (
-                <span className="tool-summary">{summary}</span>
+                <span className={styles.toolSummary}>{summary}</span>
               )
             )}
             {name === 'Bash' && result && (
               <a
-                className="tool-out-link"
+                className={styles.toolOutLink}
                 href="#"
                 onClick={e => { e.preventDefault(); setViewerOpen(true); }}
               >
@@ -105,10 +106,10 @@ export function ToolCall({ call }: Props) {
             )}
             {hasDiff && (
               <>
-                <span className="tool-diff-stats-added">+{newLines.length}</span>
-                <span className="tool-diff-stats-removed">-{oldLines.length}</span>
+                <span className={styles.statsAdded}>+{newLines.length}</span>
+                <span className={styles.statsRemoved}>-{oldLines.length}</span>
                 <a
-                  className="tool-out-link"
+                  className={styles.toolOutLink}
                   href="#"
                   onClick={e => { e.preventDefault(); setDiffOpen(true); }}
                 >
@@ -119,10 +120,10 @@ export function ToolCall({ call }: Props) {
           </div>
         )}
         {!verboseTools && name === 'Bash' && bashCommand && summary !== bashCommand && (
-          <div className="tool-command">{bashCommand}</div>
+          <div className={styles.toolCommand}>{bashCommand}</div>
         )}
         {showOutput && preview !== undefined && (
-          <div className="tool-result">{preview}</div>
+          <div className={styles.toolResult}>{preview}</div>
         )}
       </div>
       {viewerOpen && (result || fileViewerContent) && (
