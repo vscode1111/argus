@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UIMessage } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
 import { Markdown } from '../utils/markdown';
 import { formatDuration } from '../utils/time';
+import { ImageViewerModal } from './ImageViewerModal';
 
 interface Props {
   message: UIMessage;
@@ -11,6 +12,7 @@ interface Props {
 
 export function ChatMessage({ message }: Props) {
   const { role, content, thinking, toolCalls, responseTime } = message;
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   if (role === 'error') {
     return (
@@ -26,9 +28,16 @@ export function ChatMessage({ message }: Props) {
         {message.images && message.images.length > 0 && (
           <div className="message-images">
             {message.images.map((img, i) => (
-              <img key={i} src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} className="message-image" />
+              <img key={i} src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} className="message-image" onClick={() => setViewerIndex(i)} style={{ cursor: 'pointer' }} />
             ))}
           </div>
+        )}
+        {viewerIndex !== null && message.images?.[viewerIndex] && (
+          <ImageViewerModal
+            src={`data:${message.images[viewerIndex].mediaType};base64,${message.images[viewerIndex].data}`}
+            alt={`Attachment ${viewerIndex + 1}`}
+            onClose={() => setViewerIndex(null)}
+          />
         )}
         <div className="message-content" style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
       </div>

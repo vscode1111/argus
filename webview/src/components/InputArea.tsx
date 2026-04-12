@@ -1,7 +1,8 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ImageAttachment } from '../types';
 import { postMessage } from '../vscode';
 import { SettingsModal } from './SettingsModal';
+import { ImageViewerModal } from './ImageViewerModal';
 
 interface Props {
   isStreaming: boolean;
@@ -11,17 +12,51 @@ interface Props {
 
 export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [wrapperHeight, setWrapperHeight] = useState<number | null>(null);
   const historyIndex = useRef(-1);
   const savedDraft = useRef('');
+  const dragging = useRef(false);
+  const dragStartY = useRef(0);
+  const dragStartH = useRef(0);
 
   function adjustHeight() {
+    if (wrapperHeight !== null) return; // user has manually resized
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+    const maxH = window.innerHeight * 0.5;
+    el.style.height = Math.min(el.scrollHeight, maxH) + 'px';
+  }
+
+  const onDragMove = useCallback((e: MouseEvent) => {
+    if (!dragging.current) return;
+    const delta = dragStartY.current - e.clientY;
+    const newH = Math.max(60, Math.min(dragStartH.current + delta, window.innerHeight * 0.7));
+    setWrapperHeight(newH);
+  }, []);
+
+  const onDragEnd = useCallback(() => {
+    dragging.current = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    window.removeEventListener('mousemove', onDragMove);
+    window.removeEventListener('mouseup', onDragEnd);
+  }, [onDragMove]);
+
+  function onDragStart(e: React.MouseEvent) {
+    e.preventDefault();
+    dragging.current = true;
+    dragStartY.current = e.clientY;
+    dragStartH.current = wrapperRef.current?.offsetHeight ?? 100;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onDragMove);
+    window.addEventListener('mouseup', onDragEnd);
   }
 
   useEffect(() => {
@@ -100,25 +135,34 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
 
   return (
     <div id="input-area">
-      {images.length > 0 && (
-        <div className="image-previews">
-          {images.map((img, i) => (
-            <div key={i} className="image-preview">
-              <img src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} />
-              <button className="image-remove" onClick={() => removeImage(i)} title="Remove image">x</button>
-            </div>
-          ))}
-        </div>
-      )}
-      <textarea
-        ref={textareaRef}
-        id="input"
-        placeholder="Ask Argus... (paste images with Ctrl+V)"
-        rows={3}
-        onInput={adjustHeight}
-        onKeyDown={handleKeyDown}
-        onPaste={handlePaste}
-      />
+      <div className="input-resize-handle" onMouseDown={onDragStart} />
+      <div
+        className="input-wrapper"
+        ref={wrapperRef}
+        style={wrapperHeight !== null ? { height: wrapperHeight } : undefined}
+      >
+        <textarea
+          ref={textareaRef}
+          id="input"
+          className={images.length > 0 ? 'has-images' : ''}
+          placeholder="Ask Argus... (paste images with Ctrl+V)"
+          rows={images.length > 0 ? 1 : 3}
+          onInput={adjustHeight}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+        />
+        {images.length > 0 && (
+          <div className="image-previews">
+            {images.map((img, i) => (
+              <div key={i} className="image-preview" onClick={() => setViewerIndex(i)} title="image.png">
+                <img src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} />
+                <button className="image-remove" onClick={e => { e.stopPropagation(); removeImage(i); }} title="Remove image">×</button>
+              </div>
+            ))}
+            <button className="image-clear-all" onClick={() => setImages([])} title="Remove all attachments">×</button>
+          </div>
+        )}
+      </div>
       <div id="btn-group">
         <div id="btn-row">
           {isStreaming && (
@@ -145,6 +189,13 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
         </div>
         <button id="btn-send" disabled={isStreaming} onClick={send}>Send</button>
       </div>
+      {viewerIndex !== null && images[viewerIndex] && (
+        <ImageViewerModal
+          src={`data:${images[viewerIndex].mediaType};base64,${images[viewerIndex].data}`}
+          alt={`Attachment ${viewerIndex + 1}`}
+          onClose={() => setViewerIndex(null)}
+        />
+      )}
     </div>
   );
 }

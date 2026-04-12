@@ -65,6 +65,7 @@ webview/
 - Webview message protocol (extension -> webview): `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill`
 - Errors use `showError()` helper in ChatPanel - shows VS Code error notification with "View Output" action
 - AgentSession and ChatPanel use a shared `vscode.OutputChannel` ("Argus") for stderr and error logging
+- Image paste: clipboard images are base64-encoded in the webview, sent via `--input-format stream-json` NDJSON to the Claude CLI with `type: "image"` content blocks
 
 ## Skills
 
