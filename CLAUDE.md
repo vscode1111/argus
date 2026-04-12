@@ -22,8 +22,8 @@ src/
     workspace.ts        - VS Code workspace helpers
 media/
   chat.html             - Webview HTML template (React mount point, placeholders injected by ChatPanel)
-  webview.js            - Bundled React app (output of `npm run build:webview`, do not edit)
-  webview.css           - Bundled styles (output of `npm run build:webview`, do not edit)
+  webview.js            - Bundled React app (gitignored, run `yarn build:webview` to generate)
+  webview.css           - Bundled styles (gitignored, run `yarn build:webview` to generate)
 webview/
   vite.config.ts        - Vite lib-mode build config (IIFE, outputs to media/)
   vite.dev.config.ts    - Vite dev server config (port 5173, HMR)
@@ -43,6 +43,8 @@ webview/
       StreamingTimer.tsx   - Live elapsed time during streaming
       ThinkingBlock.tsx    - Collapsible thinking block
       ToolCall.tsx         - Tool call visualization (verbose/compact)
+      FileViewerModal.tsx  - Modal for viewing file/content with syntax highlighting
+      DiffViewerModal.tsx  - Modal for viewing Edit diffs (old vs new string, side-by-side)
       InputArea.tsx        - Textarea + send/stop/kill, input history
     dev/
       DevHarness.tsx    - Fixed bottom toolbar, fires mock extension messages for browser testing
@@ -57,7 +59,7 @@ webview/
 - Streaming: always use `client.messages.stream()` + `finalMessage()`
 - Tool approval: destructive tools (write_file, bash) require user confirmation via `showWarningMessage`
 - No Python scripts - use Node.js/TypeScript for any tooling
-- Webview UI is React 18 + TypeScript + Vite (lib/IIFE mode). Build with `npm run build:webview`
+- Webview UI is React 18 + TypeScript + Vite (lib/IIFE mode). Build with `yarn build:webview`
 - Webview styling uses VS Code CSS variables (`var(--vscode-*)`) - no Tailwind, auto-adapts to any theme
 - Webview markdown rendered via `react-markdown` in `utils/markdown.tsx`
 - Webview message protocol (extension -> webview): `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill`

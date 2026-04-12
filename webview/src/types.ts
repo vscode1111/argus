@@ -1,3 +1,8 @@
+export type ImageAttachment = {
+  data: string;      // base64 data (without the data:... prefix)
+  mediaType: string;  // e.g. "image/png", "image/jpeg"
+};
+
 export type ToolCallData = {
   id: string;
   name: string;
@@ -10,6 +15,7 @@ export type UIMessage = {
   id: string;
   role: 'user' | 'assistant' | 'error';
   content: string;
+  images?: ImageAttachment[];
   thinking?: string;
   toolCalls?: ToolCallData[];
   responseTime?: number;

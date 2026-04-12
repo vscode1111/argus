@@ -380,6 +380,68 @@ body {
 .message.streaming.has-text .cursor { display: inline-block; }
 @keyframes blink { 50% { opacity: 0; } }
 
+/* Image previews in input area */
+.image-previews {
+  display: flex;
+  gap: 6px;
+  padding: 6px 0;
+  flex-wrap: wrap;
+}
+
+.image-preview {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.image-preview:hover .image-remove { opacity: 1; }
+
+/* Images in sent user messages */
+.message-images {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.message-image {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  object-fit: contain;
+}
+
 #input-area {
   display: flex;
   gap: 8px;
@@ -387,6 +449,7 @@ body {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   align-items: flex-end;
+  flex-wrap: wrap;
 }
 
 #input {

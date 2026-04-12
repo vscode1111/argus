@@ -8,17 +8,23 @@ export interface ToolCall {
   error?: boolean;
 }
 
+export interface ImageAttachment {
+  data: string;
+  mediaType: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
+  images?: ImageAttachment[];
   toolCalls?: ToolCall[];
   thinking?: string;
   timestamp: number;
 }
 
-export function createUserMessage(content: string): ChatMessage {
-  return { id: randomId(), role: 'user', content, timestamp: Date.now() };
+export function createUserMessage(content: string, images?: ImageAttachment[]): ChatMessage {
+  return { id: randomId(), role: 'user', content, images, timestamp: Date.now() };
 }
 
 export function createAssistantMessage(content: string, opts?: { thinking?: string; toolCalls?: ToolCall[] }): ChatMessage {

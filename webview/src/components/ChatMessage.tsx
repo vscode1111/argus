@@ -23,6 +23,13 @@ export function ChatMessage({ message }: Props) {
   if (role === 'user') {
     return (
       <div className="message user">
+        {message.images && message.images.length > 0 && (
+          <div className="message-images">
+            {message.images.map((img, i) => (
+              <img key={i} src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} className="message-image" />
+            ))}
+          </div>
+        )}
         <div className="message-content" style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
       </div>
     );

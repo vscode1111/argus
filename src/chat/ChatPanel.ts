@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { AgentSession } from '../agent/AgentSession';
-import { ChatMessage, createUserMessage, createAssistantMessage } from './ChatMessage';
+import { ChatMessage, ImageAttachment, createUserMessage, createAssistantMessage } from './ChatMessage';
 
 export class ChatPanel {
   public static current: ChatPanel | undefined;
@@ -57,10 +57,10 @@ export class ChatPanel {
     this.post({ type: 'clear' });
   }
 
-  private async onWebviewMessage(msg: { type: string; text?: string; path?: string }): Promise<void> {
-    console.log('[Argus] onWebviewMessage:', JSON.stringify(msg));
-    if (msg.type === 'send' && msg.text) {
-      await this.handleUserMessage(msg.text);
+  private async onWebviewMessage(msg: { type: string; text?: string; path?: string; images?: ImageAttachment[] }): Promise<void> {
+    console.log('[Argus] onWebviewMessage:', JSON.stringify({ ...msg, images: msg.images ? `[${msg.images.length} images]` : undefined }));
+    if (msg.type === 'send' && (msg.text || msg.images?.length)) {
+      await this.handleUserMessage(msg.text ?? '', msg.images);
     } else if (msg.type === 'stop') {
       this.session.abort();
     } else if (msg.type === 'forceError') {
@@ -79,9 +79,9 @@ export class ChatPanel {
     }
   }
 
-  private async handleUserMessage(text: string): Promise<void> {
-    console.log('[Argus] handleUserMessage:', text);
-    const userMsg = createUserMessage(text);
+  private async handleUserMessage(text: string, images?: ImageAttachment[]): Promise<void> {
+    console.log('[Argus] handleUserMessage:', text, images ? `(${images.length} images)` : '');
+    const userMsg = createUserMessage(text, images);
     this.messages.push(userMsg);
     this.post({ type: 'message', message: userMsg });
     this.post({ type: 'thinking_start' });
@@ -92,7 +92,7 @@ export class ChatPanel {
     const toolCalls: { id: string; name: string; input?: unknown; result?: string }[] = [];
 
     try {
-      for await (const event of this.session.send(text, systemPrompt)) {
+      for await (const event of this.session.send(text, systemPrompt, images)) {
         switch (event.type) {
           case 'thinking':
             thinkingText += event.text;

@@ -20,18 +20,25 @@ function argusAgentPlugin(): Plugin {
         let currentProc: ReturnType<typeof spawn> | undefined;
 
         ws.on('message', (data: Buffer) => {
-          const msg = JSON.parse(data.toString()) as { type: string; text?: string };
+          const msg = JSON.parse(data.toString()) as {
+            type: string;
+            text?: string;
+            images?: Array<{ data: string; mediaType: string }>;
+          };
 
-          if (msg.type === 'send' && msg.text) {
-            const text = msg.text;
+          if (msg.type === 'send' && (msg.text || msg.images?.length)) {
+            const text = msg.text ?? '';
+            const images = msg.images;
 
             ws.send(JSON.stringify({
               type: 'message',
-              message: { id: String(Date.now()), role: 'user', content: text },
+              message: { id: String(Date.now()), role: 'user', content: text, images },
             }));
 
             const args = [
-              '--print', '--verbose', '--output-format', 'stream-json',
+              '--print', '--verbose',
+              '--output-format', 'stream-json',
+              '--input-format', 'stream-json',
               '--model', MODEL,
               '--allowedTools', ALLOWED_TOOLS.join(','),
             ];
@@ -44,7 +51,23 @@ function argusAgentPlugin(): Plugin {
               stdio: ['pipe', 'pipe', 'pipe'],
             });
             currentProc = proc;
-            proc.stdin.write(text);
+
+            // Build structured NDJSON message with optional image content blocks
+            const contentBlocks: Array<Record<string, unknown>> = [];
+            if (images && images.length > 0) {
+              for (const img of images) {
+                contentBlocks.push({
+                  type: 'image',
+                  source: { type: 'base64', media_type: img.mediaType, data: img.data },
+                });
+              }
+              console.log(`[argus-agent] Sending ${images.length} image(s)`);
+            }
+            if (text) {
+              contentBlocks.push({ type: 'text', text });
+            }
+            const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: contentBlocks } });
+            proc.stdin.write(stdinMsg + '\n');
             proc.stdin.end();
 
             let buffer = '';

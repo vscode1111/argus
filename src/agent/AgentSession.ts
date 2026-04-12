@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { getWorkspaceRoot } from '../utils/workspace';
 import { getModel } from '../utils/config';
+import type { ImageAttachment } from '../chat/ChatMessage';
 
 export type SessionEvent =
   | { type: 'text'; text: string }
@@ -64,11 +65,13 @@ export class AgentSession {
     this.currentProc = undefined;
   }
 
-  async *send(prompt: string, systemPrompt?: string): AsyncGenerator<SessionEvent> {
+  async *send(prompt: string, systemPrompt?: string, images?: ImageAttachment[]): AsyncGenerator<SessionEvent> {
+    const hasImages = images && images.length > 0;
     const args = [
       '--print',
       '--verbose',
       '--output-format', 'stream-json',
+      '--input-format', 'stream-json',
       '--model', getModel(),
       '--allowedTools', ALLOWED_TOOLS.join(','),
     ];
@@ -89,7 +92,27 @@ export class AgentSession {
       });
       this.currentProc = proc;
 
-      proc.stdin.write(prompt);
+      // Always use stream-json input format (NDJSON)
+      const content: Array<Record<string, unknown>> = [];
+      if (hasImages) {
+        for (const img of images) {
+          content.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: img.mediaType,
+              data: img.data,
+            },
+          });
+        }
+        console.log('[Argus] Sending', images.length, 'image(s), total base64 length:', images.reduce((s, i) => s + i.data.length, 0));
+      }
+      if (prompt) {
+        content.push({ type: 'text', text: prompt });
+      }
+      const msg = JSON.stringify({ type: 'user', message: { role: 'user', content } });
+      console.log('[Argus] stdin message length:', msg.length);
+      proc.stdin.write(msg + '\n');
       proc.stdin.end();
 
       let stderrOutput = '';
