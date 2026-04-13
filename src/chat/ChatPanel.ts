@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { AgentSession } from '../agent/AgentSession';
 import { ChatMessage, ImageAttachment, createUserMessage, createAssistantMessage } from './ChatMessage';
 
@@ -76,6 +77,8 @@ export class ChatPanel {
     } else if (msg.type === 'getInfo') {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
       this.post({ type: 'workspaceInfo', path: root });
+    } else if (msg.type === 'getSkills') {
+      this.post({ type: 'skills', skills: this.getSkills() });
     }
   }
 
@@ -139,6 +142,30 @@ export class ChatPanel {
     }
 
     this.post({ type: 'done' });
+  }
+
+  private getSkills(): { name: string; scope: 'global' | 'project' | 'builtin' }[] {
+    const BUILTIN_COMMANDS = [
+      'clear', 'compact', 'context', 'cost', 'diff', 'doctor',
+      'help', 'hooks', 'ide', 'init', 'login', 'logout', 'memory',
+      'model', 'permissions', 'plan', 'security-review', 'status',
+      'terminal-setup', 'vim',
+    ].map(name => ({ name, scope: 'builtin' as const }));
+
+    const skills: { name: string; scope: 'global' | 'project' | 'builtin' }[] = [...BUILTIN_COMMANDS];
+
+    const readSkillsDir = (dir: string, scope: 'global' | 'project') => {
+      if (!fs.existsSync(dir)) return;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) skills.push({ name: entry.name, scope });
+      }
+    };
+
+    readSkillsDir(path.join(os.homedir(), '.claude', 'skills'), 'global');
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+    if (root) readSkillsDir(path.join(root, '.claude', 'skills'), 'project');
+
+    return skills;
   }
 
   private buildSystemPrompt(): string {

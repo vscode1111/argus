@@ -49,6 +49,7 @@ function UserMessage({ message }: Props) {
 
   return (
     <div className={[msg.message, msg.user].join(' ')}>
+      <div className={msg.messageContent} style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
       {message.images && message.images.length > 0 && (
         <div className={styles.messageImages}>
           {message.images.map((img, i) => (
@@ -63,7 +64,6 @@ function UserMessage({ message }: Props) {
           onClose={() => setViewerIndex(null)}
         />
       )}
-      <div className={msg.messageContent} style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
     </div>
   );
 }

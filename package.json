@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "publisher": "local",
@@ -18,11 +18,11 @@
   "main": "./out/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run build:webview && npm run compile",
-    "build:webview": "vite build --config webview/vite.config.ts",
-    "watch:webview": "vite build --watch --config webview/vite.config.ts",
-    "dev:webview": "vite --config webview/vite.dev.config.ts",
+    "build": "vite build --config webview/vite.config.ts",
+    "watch": "vite build --watch --config webview/vite.config.ts",
+    "dev": "vite --config webview/vite.dev.config.ts",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "watch:tsc": "tsc -watch -p ./",
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {

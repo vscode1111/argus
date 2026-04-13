@@ -2,9 +2,34 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { spawn } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import type { Plugin } from 'vite';
 import type { IncomingMessage } from 'http';
 import type { Duplex } from 'stream';
+
+function readSkillsDir(dir: string, scope: 'global' | 'project') {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter(e => e.isDirectory())
+    .map(e => ({ name: e.name, scope }));
+}
+
+const BUILTIN_COMMANDS = [
+  'clear', 'compact', 'context', 'cost', 'diff', 'doctor',
+  'help', 'hooks', 'ide', 'init', 'login', 'logout', 'memory',
+  'model', 'permissions', 'plan', 'security-review', 'status',
+  'terminal-setup', 'vim',
+].map(name => ({ name, scope: 'builtin' as const }));
+
+function getSkills() {
+  return [
+    ...BUILTIN_COMMANDS,
+    ...readSkillsDir(path.join(os.homedir(), '.claude', 'skills'), 'global'),
+    ...readSkillsDir(path.join(process.cwd(), '.claude', 'skills'), 'project'),
+  ];
+}
 
 const MODEL = process.env.ARGUS_MODEL ?? 'claude-opus-4-6';
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch'];
@@ -154,6 +179,8 @@ function argusAgentPlugin(): Plugin {
               ws.send(JSON.stringify({ type: 'done' }));
             });
 
+          } else if (msg.type === 'getSkills') {
+            ws.send(JSON.stringify({ type: 'skills', skills: getSkills() }));
           } else if (msg.type === 'stop') {
             currentProc?.kill();
           } else if (msg.type === 'newSession') {

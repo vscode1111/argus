@@ -22,8 +22,8 @@ src/
     workspace.ts        - VS Code workspace helpers
 media/
   chat.html             - Webview HTML template (React mount point, placeholders injected by ChatPanel)
-  webview.js            - Bundled React app (gitignored, run `yarn build:webview` to generate)
-  webview.css           - Bundled styles (gitignored, run `yarn build:webview` to generate)
+  webview.js            - Bundled React app (gitignored, run `yarn build` to generate)
+  webview.css           - Bundled styles (gitignored, run `yarn build` to generate)
 webview/
   vite.config.ts        - Vite lib-mode build config (IIFE, outputs to media/)
   vite.dev.config.ts    - Vite dev server config (port 5173, HMR)
@@ -35,18 +35,25 @@ webview/
     App.tsx             - Root component, useReducer state, VS Code message listener
     types.ts            - Shared types (UIMessage, StreamingState, ToolCallData)
     vscode.ts           - acquireVsCodeApi() singleton + postMessage helper
+    global.css          - :root vars, resets, body, .app, .btn-icon utility
+    css-modules.d.ts    - TypeScript ambient declaration for *.module.css
     components/
-      Header.tsx        - Title + new session button
-      MessageList.tsx   - Scrollable messages, auto-scroll
-      ChatMessage.tsx   - Finalized user/assistant/error message
-      StreamingMessage.tsx - Live streaming message with cursor
-      StreamingTimer.tsx   - Live elapsed time during streaming
-      ThinkingBlock.tsx    - Collapsible thinking block
-      ToolCall.tsx         - Tool call visualization (verbose/compact)
-      FileViewerModal.tsx  - Modal for viewing file/content with syntax highlighting
-      DiffViewerModal.tsx  - Modal for viewing Edit diffs (old vs new string, side-by-side)
-      ImageViewerModal.tsx - Lightbox modal for viewing pasted/sent images full-size
-      InputArea.tsx        - Textarea + send/stop/kill, input history, image paste, resize handle
+      shared/
+        message.module.css  - Shared message styles (layout, markdown content, cursor)
+        modal.module.css    - Shared full-screen modal shell (FileViewer/DiffViewer)
+      Header.tsx / .module.css
+      MessageList.tsx / .module.css
+      ChatMessage.tsx / .module.css
+      StreamingMessage.tsx    - Uses shared/message.module.css
+      StreamingTimer.tsx      - Uses shared/message.module.css
+      ThinkingBlock.tsx / .module.css
+      ToolCall.tsx / .module.css
+      FileViewerModal.tsx / .module.css  - Uses shared/modal.module.css
+      DiffViewerModal.tsx / .module.css  - Uses shared/modal.module.css
+      ImageViewerModal.tsx / .module.css
+      InfoModal.tsx / .module.css
+      SettingsModal.tsx / .module.css
+      InputArea.tsx / .module.css
     dev/
       DevHarness.tsx    - Fixed bottom toolbar, fires mock extension messages for browser testing
     utils/
@@ -60,13 +67,16 @@ webview/
 - Streaming: always use `client.messages.stream()` + `finalMessage()`
 - Tool approval: destructive tools (write_file, bash) require user confirmation via `showWarningMessage`
 - No Python scripts - use Node.js/TypeScript for any tooling
-- Webview UI is React 18 + TypeScript + Vite (lib/IIFE mode). Build with `yarn build:webview`
-- Webview styling uses VS Code CSS variables (`var(--vscode-*)`) - no Tailwind, auto-adapts to any theme
+- Webview UI is React 18 + TypeScript + Vite (lib/IIFE mode). Build with `yarn build`
+- Webview styling uses CSS Modules (co-located `.module.css` files) with VS Code CSS variables (`var(--vscode-*)`) - no Tailwind, auto-adapts to any theme
+- CSS Modules: camelCase class names for dot access (`styles.toolCall`), conditional classes via `.filter(Boolean).join(' ')`, shared modules in `components/shared/`
 - Webview markdown rendered via `react-markdown` in `utils/markdown.tsx`
-- Webview message protocol (extension -> webview): `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill`
+- Webview message protocol (extension -> webview): `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills`
+- Webview message protocol (webview -> extension): `send | stop | forceError | newSession | openFile | getInfo | getSkills`
 - Errors use `showError()` helper in ChatPanel - shows VS Code error notification with "View Output" action
 - AgentSession and ChatPanel use a shared `vscode.OutputChannel` ("Argus") for stderr and error logging
 - Image paste: clipboard images are base64-encoded in the webview, sent via `--input-format stream-json` NDJSON to the Claude CLI with `type: "image"` content blocks
+- Slash commands: InputArea shows a dropdown when "/" is typed; sends `getSkills` to extension, receives `skills` response with `{ name, scope: 'builtin' | 'global' | 'project' }[]`; skills read from `~/.claude/skills/` (global) and `<workspace>/.claude/skills/` (project); built-in commands hardcoded in `ChatPanel.getSkills()` and `vite.dev.config.ts`
 
 ## Skills
 
@@ -77,11 +87,11 @@ webview/
 ## Development
 
 ```sh
-yarn dev:webview     # browser dev server at http://localhost:5173 (HMR, DevHarness mock panel)
-yarn build:webview   # bundle React webview to media/webview.js + media/webview.css
-yarn watch:webview   # watch + rebuild webview on save (for VS Code Extension Host testing)
-yarn compile         # compile extension TypeScript
-yarn watch           # watch mode for extension TypeScript
+yarn dev          # browser dev server at http://localhost:5173 (HMR, DevHarness mock panel)
+yarn build        # bundle React webview to media/webview.js + media/webview.css
+yarn watch        # watch + rebuild webview on save (for VS Code Extension Host testing)
+yarn compile      # compile extension TypeScript
+yarn watch:tsc    # watch mode for extension TypeScript
 # Press F5 in VS Code to launch Extension Development Host
 ```
 
