@@ -29,7 +29,7 @@ interface Props {
 }
 
 export function SettingsModal({ onClose, workspacePath }: Props) {
-  const { verboseTools, showTimer, showOutput, setVerboseTools, setShowTimer, setShowOutput } = useSettings();
+  const { verboseTools, showTimer, showOutput, showLogs, setVerboseTools, setShowTimer, setShowOutput, setShowLogs } = useSettings();
   const [infoOpen, setInfoOpen] = useState(false);
 
   useEffect(() => {
@@ -55,6 +55,10 @@ export function SettingsModal({ onClose, workspacePath }: Props) {
         <label className={styles.settingRow} htmlFor="toggle-output">
           <span className={styles.settingLabel}>Show output</span>
           <Toggle id="toggle-output" checked={showOutput} onChange={setShowOutput} />
+        </label>
+        <label className={styles.settingRow} htmlFor="toggle-logs">
+          <span className={styles.settingLabel}>Show logs</span>
+          <Toggle id="toggle-logs" checked={showLogs} onChange={setShowLogs} />
         </label>
         <button
           className={styles.infoCorner}

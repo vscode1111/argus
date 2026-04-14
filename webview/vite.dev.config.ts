@@ -44,6 +44,10 @@ function argusAgentPlugin(): Plugin {
         let sessionId: string | undefined;
         let currentProc: ReturnType<typeof spawn> | undefined;
 
+        const sendLog = (level: 'debug' | 'info' | 'warn' | 'error', text: string) => {
+          ws.send(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
+        };
+
         ws.on('message', (data: Buffer) => {
           const msg = JSON.parse(data.toString()) as {
             type: string;
@@ -69,6 +73,7 @@ function argusAgentPlugin(): Plugin {
             ];
             if (sessionId) args.push('--resume', sessionId);
 
+            sendLog('info', `Spawning claude: ${args.join(' ')}`);
             ws.send(JSON.stringify({ type: 'thinking_start' }));
 
             const proc = spawn('claude', args, {
@@ -77,7 +82,6 @@ function argusAgentPlugin(): Plugin {
             });
             currentProc = proc;
 
-            // Build structured NDJSON message with optional image content blocks
             const contentBlocks: Array<Record<string, unknown>> = [];
             if (images && images.length > 0) {
               for (const img of images) {
@@ -86,12 +90,13 @@ function argusAgentPlugin(): Plugin {
                   source: { type: 'base64', media_type: img.mediaType, data: img.data },
                 });
               }
-              console.log(`[argus-agent] Sending ${images.length} image(s)`);
+              sendLog('debug', `Attaching ${images.length} image(s)`);
             }
             if (text) {
               contentBlocks.push({ type: 'text', text });
             }
             const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: contentBlocks } });
+            sendLog('debug', `stdin: ${stdinMsg.length} bytes`);
             proc.stdin.write(stdinMsg + '\n');
             proc.stdin.end();
 
@@ -109,6 +114,8 @@ function argusAgentPlugin(): Plugin {
                 if (!trimmed) continue;
                 let event: Record<string, unknown>;
                 try { event = JSON.parse(trimmed); } catch { continue; }
+
+                sendLog('debug', `event: ${event.type} ${trimmed.slice(0, 120)}`);
 
                 if (event.type === 'system' && event.subtype === 'init') {
                   sessionId = event.session_id as string;
@@ -128,6 +135,7 @@ function argusAgentPlugin(): Plugin {
                     } else if (block.type === 'text' && block.text && !receivedDeltas) {
                       ws.send(JSON.stringify({ type: 'text_chunk', text: block.text }));
                     } else if (block.type === 'tool_use') {
+                      sendLog('info', `tool_start: ${block.name} (${block.id})`);
                       toolMap.set(block.id as string, { name: block.name as string, input: block.input });
                       ws.send(JSON.stringify({ type: 'tool_start', call: { id: block.id, name: block.name, input: block.input } }));
                     }
@@ -142,12 +150,14 @@ function argusAgentPlugin(): Plugin {
                 } else if (event.type === 'user') {
                   const userMsg = event as { type: 'user'; message?: { content?: Array<Record<string, unknown>> }; content?: Array<Record<string, unknown>> };
                   const blocks = userMsg.message?.content ?? userMsg.content ?? [];
+                  sendLog('debug', `user message: ${blocks.length} block(s)`);
                   for (const block of blocks) {
                     if (block.type === 'tool_result') {
                       const tc = toolMap.get(block.tool_use_id as string);
                       const content = typeof block.content === 'string'
                         ? block.content
                         : JSON.stringify(block.content);
+                      sendLog('debug', `tool_result ${block.tool_use_id}: ${String(content).slice(0, 100)}`);
                       ws.send(JSON.stringify({
                         type: 'tool_end',
                         call: { id: block.tool_use_id, name: tc?.name ?? '', input: tc?.input ?? {}, result: content },
@@ -159,11 +169,14 @@ function argusAgentPlugin(): Plugin {
             });
 
             proc.stderr.on('data', (chunk: Buffer) => {
-              console.error('[argus-agent]', chunk.toString().trim());
+              const stderrText = chunk.toString().trim();
+              console.error('[argus-agent]', stderrText);
+              sendLog('warn', `stderr: ${stderrText}`);
             });
 
             proc.on('close', (code) => {
               currentProc = undefined;
+              sendLog('info', `claude exited with code ${code}`);
               if (code !== 0 && code !== null) {
                 ws.send(JSON.stringify({ type: 'error', text: `claude exited with code ${code}` }));
               }
@@ -172,6 +185,7 @@ function argusAgentPlugin(): Plugin {
 
             proc.on('error', (err) => {
               currentProc = undefined;
+              sendLog('error', `spawn error: ${err.message}`);
               const errText = err.message.includes('ENOENT')
                 ? 'Claude Code CLI not found. Install with: npm install -g @anthropic/claude-code'
                 : err.message;
@@ -179,6 +193,9 @@ function argusAgentPlugin(): Plugin {
               ws.send(JSON.stringify({ type: 'done' }));
             });
 
+          } else if (msg.type === 'forceError') {
+            currentProc?.kill();
+            ws.send(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));
           } else if (msg.type === 'getSkills') {
             ws.send(JSON.stringify({ type: 'skills', skills: getSkills() }));
           } else if (msg.type === 'stop') {

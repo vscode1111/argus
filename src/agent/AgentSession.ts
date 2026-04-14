@@ -50,10 +50,18 @@ export class AgentSession {
   private readonly cwd: string | undefined;
   private currentProc: ReturnType<typeof spawn> | undefined;
   private readonly outputChannel: vscode.OutputChannel | undefined;
+  private readonly onLog: ((level: 'debug' | 'info' | 'warn' | 'error', text: string) => void) | undefined;
 
-  constructor(outputChannel?: vscode.OutputChannel) {
+  constructor(outputChannel?: vscode.OutputChannel, onLog?: (level: 'debug' | 'info' | 'warn' | 'error', text: string) => void) {
     this.cwd = getWorkspaceRoot();
     this.outputChannel = outputChannel;
+    this.onLog = onLog;
+  }
+
+  private log(level: 'debug' | 'info' | 'warn' | 'error', text: string): void {
+    const line = `[${level.toUpperCase()}] ${text}`;
+    this.outputChannel?.appendLine(line);
+    this.onLog?.(level, text);
   }
 
   reset(): void {
@@ -84,7 +92,7 @@ export class AgentSession {
     }
 
     try {
-      console.log('[Argus] Spawning claude with args:', args.join(' '));
+      this.log('info', `Spawning claude: ${args.join(' ')}`);
 
       const proc = spawn('claude', args, {
         cwd: this.cwd,
@@ -105,13 +113,14 @@ export class AgentSession {
             },
           });
         }
-        console.log('[Argus] Sending', images.length, 'image(s), total base64 length:', images.reduce((s, i) => s + i.data.length, 0));
+        const totalBytes = images.reduce((s, i) => s + i.data.length, 0);
+        this.log('debug', `Attaching ${images.length} image(s), total base64: ${totalBytes} bytes`);
       }
       if (prompt) {
         content.push({ type: 'text', text: prompt });
       }
       const msg = JSON.stringify({ type: 'user', message: { role: 'user', content } });
-      console.log('[Argus] stdin message length:', msg.length);
+      this.log('debug', `stdin: ${msg.length} bytes`);
       proc.stdin.write(msg + '\n');
       proc.stdin.end();
 
@@ -120,6 +129,7 @@ export class AgentSession {
         const text = data.toString();
         stderrOutput += text;
         this.outputChannel?.append(text);
+        this.onLog?.('warn', `stderr: ${text.trim()}`);
       });
 
       const exitCodePromise = new Promise<number | null>((resolve, reject) => {
@@ -146,7 +156,7 @@ export class AgentSession {
           }
 
           const evtType = 'type' in msg ? String(msg.type) : 'unknown';
-          console.log('[Argus] Event type:', evtType, trimmed.slice(0, 120));
+          this.log('debug', `event: ${evtType} ${trimmed.slice(0, 120)}`);
 
           if ('type' in msg && msg.type === 'system' && 'subtype' in msg && msg.subtype === 'init') {
             this.sessionId = (msg as SystemInitMessage).session_id;
@@ -173,6 +183,7 @@ export class AgentSession {
               } else if (block.type === 'text' && block.text && !receivedDeltas) {
                 yield { type: 'text', text: block.text };
               } else if (block.type === 'tool_use') {
+                this.log('info', `tool_start: ${block.name} (${block.id})`);
                 yield { type: 'tool_start', id: block.id, name: block.name, input: block.input };
               }
             }
@@ -190,13 +201,13 @@ export class AgentSession {
           if ('type' in msg && msg.type === 'user') {
             const userMsg = msg as { type: 'user'; message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown; is_error?: boolean }>  }; content?: Array<{ type: string; tool_use_id?: string; content?: unknown; is_error?: boolean }> };
             const blocks = userMsg.message?.content ?? userMsg.content ?? [];
-            console.log('[Argus] user message blocks:', blocks.length, 'raw keys:', Object.keys(msg).join(','), blocks.map(b => `${b.type}:${b.tool_use_id}:${typeof b.content}`).join(', '));
+            this.log('debug', `user message: ${blocks.length} block(s) [${blocks.map(b => `${b.type}:${b.tool_use_id}`).join(', ')}]`);
             for (const block of blocks) {
               if (block.type === 'tool_result') {
                 const content = typeof block.content === 'string'
                   ? block.content
                   : JSON.stringify(block.content);
-                console.log('[Argus] tool_result content preview:', content?.slice(0, 100));
+                this.log('debug', `tool_result ${block.tool_use_id}: ${content?.slice(0, 100)}`);
                 yield { type: 'tool_end', id: block.tool_use_id ?? '', result: content ?? '' };
               }
             }
@@ -208,17 +219,19 @@ export class AgentSession {
             continue;
           }
 
-          console.log('[Argus] UNHANDLED msg type:', evtType, 'keys:', Object.keys(msg).join(','), trimmed.slice(0, 200));
+          this.log('warn', `unhandled event type: ${evtType} keys: ${Object.keys(msg).join(',')} ${trimmed.slice(0, 200)}`);
         }
       }
 
       this.currentProc = undefined;
       const exitCode = await exitCodePromise;
+      this.log('info', `claude exited with code ${exitCode}`);
       if (exitCode !== 0 && exitCode !== null) {
         yield { type: 'error', message: stderrOutput || `claude exited with code ${exitCode}` };
       }
     } catch (err) {
-      console.error('[Argus] Query error:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.log('error', `spawn error: ${errMsg}`);
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('ENOENT')) {
         yield { type: 'error', message: 'Claude Code CLI not found. Install it with: npm install -g @anthropic/claude-code' };

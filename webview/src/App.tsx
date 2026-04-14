@@ -1,8 +1,9 @@
 import React, { useEffect, useReducer } from 'react';
-import { UIMessage, StreamingState, ToolCallData } from './types';
+import { UIMessage, StreamingState, ToolCallData, LogLevel, LogEntry } from './types';
 import { MessageList } from './components/MessageList';
 import { InputArea } from './components/InputArea';
-import { SettingsProvider } from './contexts/SettingsContext';
+import { LogPanel } from './components/LogPanel';
+import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { postMessage } from './vscode';
 
 type AppState = {
@@ -11,6 +12,7 @@ type AppState = {
   isStreaming: boolean;
   prefill: string;
   workspacePath: string;
+  logs: LogEntry[];
 };
 
 type AppAction =
@@ -24,7 +26,9 @@ type AppAction =
   | { type: 'error'; text: string }
   | { type: 'clear' }
   | { type: 'prefill'; text: string }
-  | { type: 'workspaceInfo'; path: string };
+  | { type: 'workspaceInfo'; path: string }
+  | { type: 'log'; level: LogLevel; text: string; timestamp: string }
+  | { type: 'clearLogs' };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -108,13 +112,19 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'clear':
-      return { ...state, messages: [], streaming: null, isStreaming: false };
+      return { ...state, messages: [], streaming: null, isStreaming: false, logs: [] };
 
     case 'prefill':
       return { ...state, prefill: action.text };
 
     case 'workspaceInfo':
       return { ...state, workspacePath: action.path };
+
+    case 'log':
+      return { ...state, logs: [...state.logs, { level: action.level, text: action.text, timestamp: action.timestamp }] };
+
+    case 'clearLogs':
+      return { ...state, logs: [] };
 
     default:
       return state;
@@ -127,10 +137,16 @@ const initialState: AppState = {
   isStreaming: false,
   prefill: '',
   workspacePath: '',
+  logs: [],
 };
 
-export default function App() {
+function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const { showLogs } = useSettings();
+  const [logWidth, setLogWidth] = React.useState(320);
+  const dragging = React.useRef(false);
+  const dragStartX = React.useRef(0);
+  const dragStartW = React.useRef(0);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
@@ -141,12 +157,54 @@ export default function App() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
+  function onDividerMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    dragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartW.current = logWidth;
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMouseMove(ev: MouseEvent) {
+      if (!dragging.current) return;
+      const delta = dragStartX.current - ev.clientX;
+      setLogWidth(Math.max(160, Math.min(dragStartW.current + delta, window.innerWidth * 0.7)));
+    }
+    function onMouseUp() {
+      dragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  return (
+    <div className="app">
+      <div className="content">
+        <div className="chatPane">
+          <MessageList messages={state.messages} streaming={state.streaming} />
+          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} />
+        </div>
+        {showLogs && (
+          <>
+            <div className="logDivider" onMouseDown={onDividerMouseDown} />
+            <div className="logPane" style={{ width: logWidth }}>
+              <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
   return (
     <SettingsProvider>
-      <div className="app">
-        <MessageList messages={state.messages} streaming={state.streaming} />
-        <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} />
-      </div>
+      <AppInner />
     </SettingsProvider>
   );
 }

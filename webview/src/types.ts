@@ -1,3 +1,11 @@
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export type LogEntry = {
+  level: LogLevel;
+  text: string;
+  timestamp: string;
+};
+
 export type ImageAttachment = {
   data: string;      // base64 data (without the data:... prefix)
   mediaType: string;  // e.g. "image/png", "image/jpeg"

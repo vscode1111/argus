@@ -20,7 +20,9 @@ export class ChatPanel {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.outputChannel = vscode.window.createOutputChannel('Argus');
-    this.session = new AgentSession(this.outputChannel);
+    this.session = new AgentSession(this.outputChannel, (level, text) => {
+      this.post({ type: 'log', level, text, timestamp: new Date().toISOString() });
+    });
 
     this.panel.webview.html = this.getHtml();
     this.panel.webview.onDidReceiveMessage(this.onWebviewMessage.bind(this), null, this.disposables);

@@ -1,0 +1,119 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border, var(--border));
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.clearBtn {
+  background: none;
+  border: 1px solid var(--vscode-button-border, transparent);
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  background-color: var(--vscode-button-secondaryBackground, transparent);
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.clearBtn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground));
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+.list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)) transparent;
+}
+
+.list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.list::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4));
+  border-radius: 3px;
+}
+
+.list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.empty {
+  padding: 16px 12px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  font-family: var(--vscode-font-family, inherit);
+}
+
+.entry {
+  display: flex;
+  gap: 8px;
+  padding: 1px 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.entry:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.timestamp {
+  color: var(--vscode-descriptionForeground);
+  min-width: 86px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.level {
+  min-width: 44px;
+  flex-shrink: 0;
+  font-weight: bold;
+}
+
+.debug {
+  color: var(--vscode-descriptionForeground);
+}
+
+.info {
+  color: var(--vscode-textLink-foreground);
+}
+
+.warn {
+  color: var(--vscode-list-warningForeground, #cca700);
+}
+
+.error {
+  color: var(--vscode-errorForeground);
+}
+
+.text {
+  flex: 1;
+  color: var(--vscode-foreground);
+}

@@ -4,11 +4,41 @@ function send(data: object) {
   window.dispatchEvent(new MessageEvent('message', { data }));
 }
 
+function log(level: 'debug' | 'info' | 'warn' | 'error', text: string) {
+  send({ type: 'log', level, text, timestamp: new Date().toISOString() });
+}
+
 function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function simulateLogs() {
+  log('info', 'Spawning claude: --print --verbose --output-format stream-json --input-format stream-json --model claude-opus-4-6 --allowedTools Read,Write,Edit,Bash,Glob,Grep');
+  await delay(50);
+  log('debug', 'stdin: 421 bytes');
+  await delay(300);
+  log('debug', 'event: system {"type":"system","subtype":"init","session_id":"sess_abc123"}');
+  await delay(100);
+  log('debug', 'event: content_block_start {"type":"content_block_start","index":0}');
+  await delay(200);
+  log('debug', 'event: content_block_delta {"type":"content_block_delta","index":0}');
+  await delay(150);
+  log('info', 'tool_start: Read (toolu_abc123)');
+  await delay(600);
+  log('debug', 'user message: 1 block(s) [tool_result:toolu_abc123]');
+  log('debug', 'tool_result toolu_abc123: import React from "react";\nimport { useReducer } from "react";');
+  await delay(200);
+  log('debug', 'event: content_block_delta {"type":"content_block_delta","index":2}');
+  await delay(300);
+  log('warn', 'stderr: [DEBUG] OAuth token check starting');
+  await delay(100);
+  log('info', 'claude exited with code 0');
+}
+
 async function simulateStream() {
+  log('info', 'Spawning claude: --print --verbose --output-format stream-json --input-format stream-json --model claude-opus-4-6');
+  await delay(100);
+  log('debug', 'stdin: 312 bytes');
   send({ type: 'thinking_start' });
   await delay(200);
   send({ type: 'thinking_chunk', text: 'Analyzing the request...' });
@@ -21,26 +51,37 @@ async function simulateStream() {
   await delay(150);
   send({ type: 'text_chunk', text: '\n\nAnd a table:\n\n| Column A | Column B |\n|----------|----------|\n| foo | bar |\n| baz | qux |' });
   await delay(200);
+  log('info', 'claude exited with code 0');
   send({ type: 'done' });
 }
 
 async function simulateTools() {
+  log('info', 'Spawning claude: --print --verbose --output-format stream-json --input-format stream-json --model claude-opus-4-6');
+  await delay(80);
+  log('debug', 'stdin: 512 bytes');
   send({ type: 'thinking_start' });
   await delay(300);
+  log('info', 'tool_start: Read (toolu_001)');
   send({ type: 'tool_start', call: { id: '1', name: 'Read', input: { file_path: '/src/App.tsx' } } });
   await delay(600);
+  log('debug', 'tool_result toolu_001: import React from "react";');
   send({ type: 'tool_end', call: { id: '1', name: 'Read', input: { file_path: '/src/App.tsx' }, result: 'import React from "react";\nimport { useReducer } from "react";\n// ... 120 more lines' } });
   await delay(200);
+  log('info', 'tool_start: Bash (toolu_002)');
   send({ type: 'tool_start', call: { id: '2', name: 'Bash', input: { command: 'find src -type f -name "*.ts" | head -20', description: 'List TypeScript files' } } });
   await delay(800);
+  log('debug', 'tool_result toolu_002: src/index.ts src/common/config.ts ...');
   send({ type: 'tool_end', call: { id: '2', name: 'Bash', input: { command: 'find src -type f -name "*.ts" | head -20' }, result: 'src/index.ts\nsrc/common/config.ts\nsrc/common/types.ts\nsrc/common/converts.ts\nsrc/common/files.ts\nsrc/scripts/index.ts\nsrc/scripts/constants.ts\nsrc/scripts/changeProject.ts\nsrc/scripts/cleaningComputer.ts\nsrc/scripts/gitUpdate.ts', error: false } });
   await delay(200);
+  log('info', 'tool_start: Edit (toolu_003)');
   send({ type: 'tool_start', call: { id: '3', name: 'Edit', input: { file_path: '/src/common/config.ts', old_string: '  version: "0.0.9",', new_string: '  version: "0.0.10",' } } });
   await delay(400);
+  log('debug', 'tool_result toolu_003: File edited successfully');
   send({ type: 'tool_end', call: { id: '3', name: 'Edit', input: { file_path: '/src/common/config.ts', old_string: '  version: "0.0.9",', new_string: '  version: "0.0.10",' }, result: 'File edited successfully' } });
   await delay(200);
   send({ type: 'text_chunk', text: 'I read the file and ran the tests. Everything looks good!' });
   await delay(100);
+  log('info', 'claude exited with code 0');
   send({ type: 'done' });
 }
 
@@ -190,6 +231,7 @@ export function DevHarness() {
           <Btn label="stream" onClick={simulateStream} />
           <Btn label="tools" onClick={simulateTools} />
           <Btn label="reads" onClick={simulateReads} bg="#2d6a4f" />
+          <Btn label="logs" onClick={simulateLogs} bg="#5a3e7a" />
           <Btn label="error" onClick={simulateError} bg="#7a2020" />
           <Btn label="clear" onClick={() => send({ type: 'clear' })} bg="#444" />
           <Btn label="prefill" onClick={() => send({ type: 'prefill', text: 'Explain this function' })} bg="#444" />
