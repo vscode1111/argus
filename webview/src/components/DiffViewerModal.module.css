@@ -45,13 +45,13 @@
   border-right: 1px solid var(--border);
 }
 .lineRemoved {
-  background: rgba(255, 80, 80, 0.15);
-  color: #f97583;
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed);
   border-right: 1px solid var(--border);
 }
 .lineAdded {
-  background: rgba(80, 200, 120, 0.15);
-  color: #85e89d;
+  background: var(--diff-added-bg);
+  color: var(--diff-added);
 }
 .lineEmpty {
   background: repeating-linear-gradient(

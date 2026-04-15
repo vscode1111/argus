@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import styles from './InfoModal.module.css';
 
 interface Props {
@@ -7,13 +8,7 @@ interface Props {
 }
 
 export function InfoModal({ workspacePath, onClose }: Props) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   return (
     <div className={styles.overlay} onClick={onClose} aria-hidden="true">

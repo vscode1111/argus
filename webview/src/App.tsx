@@ -86,7 +86,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!state.streaming) return { ...state, isStreaming: false };
       const responseTime = Date.now() - state.streaming.startTime;
       const msg: UIMessage = {
-        id: String(Date.now()),
+        id: generateId(),
         role: 'assistant',
         content: state.streaming.text,
         thinking: state.streaming.thinking || undefined,
@@ -102,7 +102,7 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'error': {
-      const errorMsg: UIMessage = { id: String(Date.now()), role: 'error', content: action.text };
+      const errorMsg: UIMessage = { id: generateId(), role: 'error', content: action.text };
       return {
         ...state,
         messages: [...state.messages, errorMsg],
@@ -131,6 +131,9 @@ function reducer(state: AppState, action: AppAction): AppState {
   }
 }
 
+let nextMsgId = 0;
+function generateId(): string { return `msg-${++nextMsgId}-${Date.now()}`; }
+
 const initialState: AppState = {
   messages: [],
   streaming: null,
@@ -149,8 +152,16 @@ function AppInner() {
   const dragStartW = React.useRef(0);
 
   useEffect(() => {
+    const VALID_TYPES = new Set<AppAction['type']>([
+      'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
+      'tool_start', 'tool_end', 'done', 'error', 'clear',
+      'prefill', 'workspaceInfo', 'log', 'clearLogs',
+    ]);
     function handleMessage(event: MessageEvent) {
-      dispatch(event.data as AppAction);
+      const data = event.data;
+      if (data && typeof data.type === 'string' && VALID_TYPES.has(data.type)) {
+        dispatch(data as AppAction);
+      }
     }
     window.addEventListener('message', handleMessage);
     postMessage({ type: 'getInfo' });

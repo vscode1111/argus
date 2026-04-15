@@ -46,6 +46,8 @@ function isFunctionOrClassStart(line: string, langId: string): boolean {
   return matchers.some(re => re.test(trimmed));
 }
 
+const MAX_BLOCK_LINES = 30;
+
 function extractBlock(lines: string[], startLine: number): string {
-  return lines.slice(startLine, Math.min(startLine + 30, lines.length)).join('\n');
+  return lines.slice(startLine, Math.min(startLine + MAX_BLOCK_LINES, lines.length)).join('\n');
 }

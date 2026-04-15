@@ -11,6 +11,11 @@
   --tool-bg: var(--vscode-textCodeBlock-background);
   --error-fg: var(--vscode-errorForeground);
   --thinking-fg: var(--vscode-descriptionForeground);
+  --diff-added: #85e89d;
+  --diff-removed: #f97583;
+  --diff-added-bg: rgba(80, 200, 120, 0.15);
+  --diff-removed-bg: rgba(255, 80, 80, 0.15);
+  --user-msg-bg: var(--vscode-textBlockQuote-background, #2ea04370);
   --font: var(--vscode-font-family);
   --font-mono: var(--vscode-editor-font-family);
   --font-size: var(--vscode-font-size);

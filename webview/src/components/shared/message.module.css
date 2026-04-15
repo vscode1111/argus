@@ -6,7 +6,7 @@
 }
 
 .user {
-  background: #2ea04370;
+  background: var(--user-msg-bg);
   align-self: flex-start;
   max-width: 85%;
   padding: 4px 8px;
@@ -62,5 +62,5 @@
 
 .responseTimeSuccess {
   composes: responseTime;
-  color: #85e89d;
+  color: var(--diff-added);
 }

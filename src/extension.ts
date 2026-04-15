@@ -12,25 +12,28 @@ export function activate(context: vscode.ExtensionContext): void {
 
   function registerCodeLens(): void {
     codeLensDisposable?.dispose();
+    codeLensDisposable = undefined;
     if (isCodeLensEnabled()) {
       codeLensDisposable = vscode.languages.registerCodeLensProvider('*', codeLensProvider);
-      context.subscriptions.push(codeLensDisposable);
     }
   }
 
   function registerInlineCompletions(): void {
     inlineSuggestDisposable?.dispose();
+    inlineSuggestDisposable = undefined;
     if (isInlineCompletionsEnabled()) {
       inlineSuggestDisposable = vscode.languages.registerInlineCompletionItemProvider(
         { pattern: '**' },
         new InlineSuggestProvider()
       );
-      context.subscriptions.push(inlineSuggestDisposable);
     }
   }
 
   registerCodeLens();
   registerInlineCompletions();
+
+  // Clean up dynamic disposables on deactivation
+  context.subscriptions.push({ dispose: () => { codeLensDisposable?.dispose(); inlineSuggestDisposable?.dispose(); } });
 
   // Re-register when settings change
   vscode.workspace.onDidChangeConfiguration((e) => {

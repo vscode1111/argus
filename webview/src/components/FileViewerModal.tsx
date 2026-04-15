@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { postMessage } from '../vscode';
@@ -41,13 +42,7 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
   const isDark = !document.body.classList.contains('vscode-light');
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const language = detectLanguage(path);
   const code = stripLineNumbers(content);

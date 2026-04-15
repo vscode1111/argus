@@ -247,18 +247,3 @@
   height: 34px;
 }
 .btnStop:hover { opacity: 0.85; }
-
-.btnKill {
-  background: transparent;
-  border: 1px solid var(--vscode-errorForeground);
-  color: var(--vscode-errorForeground);
-  cursor: pointer;
-  font-size: 12px;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.btnKill:hover { background: var(--vscode-errorForeground); color: var(--vscode-editor-background); }

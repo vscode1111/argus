@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ToolCallData } from '../types';
 import { postMessage } from '../vscode';
 import { useSettings } from '../contexts/SettingsContext';
@@ -52,6 +52,10 @@ export function ToolCall({ call }: Props) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const bashCommand = name === 'Bash' ? (input.command as string) || '' : '';
+  const resultLineCount = useMemo(
+    () => result ? result.trim().split('\n').filter(Boolean).length : 0,
+    [result]
+  );
   const hasDiff = name === 'Edit' && !!(input.old_string || input.new_string);
   const oldLines = hasDiff ? String(input.old_string || '').split('\n') : [];
   const newLines = hasDiff ? String(input.new_string || '').split('\n') : [];
@@ -113,7 +117,7 @@ export function ToolCall({ call }: Props) {
                 href="#"
                 onClick={e => { e.preventDefault(); setViewerOpen(true); }}
               >
-                {result.trim().split('\n').filter(Boolean).length} {name === 'Glob' ? 'files' : 'lines of output'}
+                {resultLineCount} {name === 'Glob' ? 'files' : 'lines of output'}
               </a>
             )}
             {hasDiff && (

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import modal from './shared/modal.module.css';
 import styles from './DiffViewerModal.module.css';
 import tc from './ToolCall.module.css';
@@ -15,9 +16,16 @@ type DiffRow =
   | { type: 'remove'; old: string }
   | { type: 'add'; new: string };
 
+const MAX_LCS_LINES = 2000;
+
 function computeDiff(oldLines: string[], newLines: string[]): DiffRow[] {
   const m = oldLines.length;
   const n = newLines.length;
+
+  // Fall back to simple sequential diff for very large files
+  if (m > MAX_LCS_LINES || n > MAX_LCS_LINES) {
+    return computeSimpleDiff(oldLines, newLines);
+  }
 
   // Build LCS table
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
@@ -48,14 +56,24 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffRow[] {
   return rows;
 }
 
-export function DiffViewerModal({ path, oldString, newString, onClose }: Props) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+function computeSimpleDiff(oldLines: string[], newLines: string[]): DiffRow[] {
+  const rows: DiffRow[] = [];
+  const max = Math.max(oldLines.length, newLines.length);
+  for (let i = 0; i < max; i++) {
+    const oldLine = i < oldLines.length ? oldLines[i] : undefined;
+    const newLine = i < newLines.length ? newLines[i] : undefined;
+    if (oldLine === newLine && oldLine !== undefined) {
+      rows.push({ type: 'equal', old: oldLine, new: newLine! });
+    } else {
+      if (oldLine !== undefined) rows.push({ type: 'remove', old: oldLine });
+      if (newLine !== undefined) rows.push({ type: 'add', new: newLine });
     }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }
+  return rows;
+}
+
+export function DiffViewerModal({ path, oldString, newString, onClose }: Props) {
+  useEscapeKey(onClose);
 
   const oldLines = oldString.split('\n');
   const newLines = newString.split('\n');

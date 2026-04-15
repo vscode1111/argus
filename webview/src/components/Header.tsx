@@ -3,7 +3,11 @@ import { postMessage } from '../vscode';
 import { SettingsModal } from './SettingsModal';
 import styles from './Header.module.css';
 
-export function Header() {
+interface Props {
+  workspacePath: string;
+}
+
+export function Header({ workspacePath }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
@@ -26,7 +30,7 @@ export function Header() {
           +
         </button>
       </div>
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} workspacePath={workspacePath} />}
     </div>
   );
 }

@@ -9,15 +9,28 @@ interface Props {
   streaming: StreamingState | null;
 }
 
+const SCROLL_THRESHOLD = 80;
+
 export function MessageList({ messages, streaming }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const userScrolledUp = useRef(false);
+
+  function handleScroll() {
+    const el = containerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUp.current = distanceFromBottom > SCROLL_THRESHOLD;
+  }
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+    if (!userScrolledUp.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+    }
   }, [messages, streaming]);
 
   return (
-    <div className={styles.messages}>
+    <div className={styles.messages} ref={containerRef} onScroll={handleScroll}>
       {messages.map(msg => (
         <ChatMessage key={msg.id} message={msg} />
       ))}

@@ -1,9 +1,25 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { AgentSession } from '../agent/AgentSession';
 import { ChatMessage, ImageAttachment, createUserMessage, createAssistantMessage } from './ChatMessage';
+
+type WebviewMessage =
+  | { type: 'message'; message: ChatMessage }
+  | { type: 'thinking_start' }
+  | { type: 'thinking_chunk'; text: string }
+  | { type: 'text_chunk'; text: string }
+  | { type: 'tool_start'; call: { id: string; name: string; input: unknown } }
+  | { type: 'tool_end'; call: { id: string; name: string; input: unknown; result?: string } }
+  | { type: 'done' }
+  | { type: 'error'; text: string }
+  | { type: 'clear' }
+  | { type: 'prefill'; text: string }
+  | { type: 'workspaceInfo'; path: string }
+  | { type: 'skills'; skills: { name: string; scope: 'global' | 'project' | 'builtin' }[] }
+  | { type: 'log'; level: string; text: string; timestamp: string };
 
 export class ChatPanel {
   public static current: ChatPanel | undefined;
@@ -189,7 +205,7 @@ export class ChatPanel {
       .then(action => { if (action === 'View Output') { this.outputChannel.show(); } });
   }
 
-  private post(data: unknown): void {
+  private post(data: WebviewMessage): void {
     this.panel.webview.postMessage(data);
   }
 
@@ -220,8 +236,5 @@ export class ChatPanel {
 }
 
 function getNonce(): string {
-  let text = '';
-  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  for (let i = 0; i < 32; i++) text += possible[Math.floor(Math.random() * possible.length)];
-  return text;
+  return crypto.randomBytes(16).toString('hex');
 }

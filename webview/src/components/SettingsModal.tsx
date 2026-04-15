@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useSettings } from '../contexts/SettingsContext';
 import { InfoModal } from './InfoModal';
 import styles from './SettingsModal.module.css';
@@ -32,13 +33,7 @@ export function SettingsModal({ onClose, workspacePath }: Props) {
   const { verboseTools, showTimer, showOutput, showLogs, setVerboseTools, setShowTimer, setShowOutput, setShowLogs } = useSettings();
   const [infoOpen, setInfoOpen] = useState(false);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   return (
     <>

@@ -69,8 +69,13 @@ export class AgentSession {
   }
 
   abort(): void {
-    this.currentProc?.kill();
+    const proc = this.currentProc;
+    if (!proc) return;
     this.currentProc = undefined;
+    proc.kill('SIGTERM');
+    setTimeout(() => {
+      if (!proc.killed) proc.kill('SIGKILL');
+    }, 3000);
   }
 
   async *send(prompt: string, systemPrompt?: string, images?: ImageAttachment[]): AsyncGenerator<SessionEvent> {

@@ -1,6 +1,10 @@
 import { spawn } from 'child_process';
 import * as vscode from 'vscode';
-import { getInlineDebounceMs } from '../utils/config';
+import { getInlineDebounceMs, getInlineModel } from '../utils/config';
+
+const PREFIX_LINES = 40;
+const SUFFIX_LINES = 10;
+const MIN_PREFIX_LENGTH = 5;
 
 export class InlineSuggestProvider implements vscode.InlineCompletionItemProvider {
   private debounceTimer: NodeJS.Timeout | undefined;
@@ -31,15 +35,16 @@ export class InlineSuggestProvider implements vscode.InlineCompletionItemProvide
     token: vscode.CancellationToken
   ): Promise<vscode.InlineCompletionList | null> {
     const prefix = document.getText(new vscode.Range(
-      new vscode.Position(Math.max(0, position.line - 40), 0),
+      new vscode.Position(Math.max(0, position.line - PREFIX_LINES), 0),
       position
     ));
+    const endLine = Math.min(document.lineCount - 1, position.line + SUFFIX_LINES);
     const suffix = document.getText(new vscode.Range(
       position,
-      new vscode.Position(Math.min(document.lineCount - 1, position.line + 10), 10000)
+      document.lineAt(endLine).range.end
     ));
 
-    if (prefix.trim().length < 5) { return Promise.resolve(null); }
+    if (prefix.trim().length < MIN_PREFIX_LENGTH) { return Promise.resolve(null); }
 
     const prompt =
       `You are a code completion engine. Complete the code at the cursor position. ` +
@@ -49,7 +54,7 @@ export class InlineSuggestProvider implements vscode.InlineCompletionItemProvide
       `Complete the code at the cursor (between prefix and suffix):`;
 
     return new Promise((resolve) => {
-      const proc = spawn('claude', ['--print', '--output-format', 'text', '--model', 'claude-haiku-4-5'], {
+      const proc = spawn('claude', ['--print', '--output-format', 'text', '--model', getInlineModel()], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 

@@ -48,6 +48,7 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
   const dragStartH = useRef(0);
   const lastHeight = useRef(0);
   const skillsLoaded = useRef(false);
+  const measureCanvas = useRef<HTMLCanvasElement | null>(null);
   const hasImagesRef = useRef(false);
   hasImagesRef.current = images.length > 0;
 
@@ -173,8 +174,8 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
     const areaEl = inputAreaRef.current;
     if (!el || !areaEl) return DEFAULT_SLASH_MENU_LEFT;
     const computed = window.getComputedStyle(el);
-    const canvas = document.createElement('canvas');
-    const ctx2d = canvas.getContext('2d');
+    if (!measureCanvas.current) measureCanvas.current = document.createElement('canvas');
+    const ctx2d = measureCanvas.current.getContext('2d');
     if (!ctx2d) return DEFAULT_SLASH_MENU_LEFT;
     ctx2d.font = `${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`;
     const textBefore = el.value.slice(0, slashIndex);
@@ -325,13 +326,6 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
           {isStreaming && (
             <button className={styles.btnStop} onClick={() => postMessage({ type: 'stop' })}>Stop</button>
           )}
-          <button
-            className={styles.btnKill}
-            title="Kill process (test error)"
-            onClick={() => postMessage({ type: 'forceError' })}
-          >
-            ✕
-          </button>
           <div className={settings.anchor}>
             <button
               className="btn-icon"

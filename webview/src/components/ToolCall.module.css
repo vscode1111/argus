@@ -35,17 +35,6 @@
 }
 .toolFileLink:hover { text-decoration: underline; }
 
-.toolCommand {
-  color: var(--thinking-fg);
-  font-family: var(--font-mono);
-  margin-left: 4px;
-  margin-top: 1px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.75;
-}
-
 .toolOutLink {
   color: var(--thinking-fg);
   font-family: var(--font-mono);
@@ -83,8 +72,8 @@
   background: var(--tool-bg);
   border-bottom: 1px solid var(--border);
 }
-.statsAdded { color: #85e89d; }
-.statsRemoved { color: #f97583; }
+.statsAdded { color: var(--diff-added); }
+.statsRemoved { color: var(--diff-removed); }
 .toolDiffTable {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -95,8 +84,8 @@
 .toolDiffColOld { border-right: 1px solid var(--border); overflow: hidden; }
 .toolDiffColNew { overflow: hidden; }
 .toolDiffLineRemoved {
-  background: rgba(255, 80, 80, 0.15);
-  color: #f97583;
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed);
   padding: 0 6px;
   white-space: pre;
   overflow: hidden;
@@ -104,8 +93,8 @@
   min-height: 1.4em;
 }
 .toolDiffLineAdded {
-  background: rgba(80, 200, 120, 0.15);
-  color: #85e89d;
+  background: var(--diff-added-bg);
+  color: var(--diff-added);
   padding: 0 6px;
   white-space: pre;
   overflow: hidden;
