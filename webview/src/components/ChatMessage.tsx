@@ -37,7 +37,7 @@ export function ChatMessage({ message }: Props) {
         </div>
       )}
       {responseTime !== undefined && (
-        <div className={msg.responseTime}>{formatDuration(responseTime)}</div>
+        <div className={msg.responseTimeSuccess}>{formatDuration(responseTime)}</div>
       )}
     </div>
   );

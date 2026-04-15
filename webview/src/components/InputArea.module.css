@@ -109,6 +109,7 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   min-width: 0;
+  overflow: hidden;
 }
 .inputWrapper:focus-within { border-color: var(--vscode-focusBorder); }
 
@@ -140,6 +141,12 @@
   gap: 6px;
   padding: 6px 8px;
   flex-wrap: wrap;
+  flex-shrink: 0;
+  min-height: 78px;
+  max-height: 160px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)) transparent;
 }
 
 .imagePreview {

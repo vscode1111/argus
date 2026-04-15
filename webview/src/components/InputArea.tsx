@@ -6,6 +6,17 @@ import { ImageViewerModal } from './ImageViewerModal';
 import styles from './InputArea.module.css';
 import settings from './SettingsModal.module.css';
 
+const DEFAULT_SLASH_MENU_LEFT = 12;
+const DEFAULT_FALLBACK_PADDING = 8;
+const DEFAULT_FALLBACK_HEIGHT = 100;
+const MIN_HEIGHT_WITH_IMAGES = 120;
+const MIN_HEIGHT_DEFAULT = 66;
+const MAX_HEIGHT_RATIO_AUTO = 0.5;
+const MAX_HEIGHT_RATIO_DRAG = 0.7;
+const TEXTAREA_ROWS_DEFAULT = 3;
+const TEXTAREA_ROWS_WITH_IMAGES = 1;
+const PLACEHOLDER_TEXT = 'Ask Argus... (paste images with Ctrl+V)';
+
 interface Skill {
   name: string;
   scope: 'global' | 'project' | 'builtin';
@@ -28,7 +39,7 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
   const [wrapperHeight, setWrapperHeight] = useState<number | null>(null);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
-  const [slashMenuLeft, setSlashMenuLeft] = useState(12);
+  const [slashMenuLeft, setSlashMenuLeft] = useState(DEFAULT_SLASH_MENU_LEFT);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const historyIndex = useRef(-1);
   const savedDraft = useRef('');
@@ -37,13 +48,15 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
   const dragStartH = useRef(0);
   const lastHeight = useRef(0);
   const skillsLoaded = useRef(false);
+  const hasImagesRef = useRef(false);
+  hasImagesRef.current = images.length > 0;
 
   function adjustHeight() {
     if (wrapperHeight !== null) return; // user has manually resized
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    const maxH = window.innerHeight * 0.5;
+    const maxH = window.innerHeight * MAX_HEIGHT_RATIO_AUTO;
     el.style.height = Math.min(el.scrollHeight, maxH) + 'px';
   }
 
@@ -59,7 +72,8 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
   const onDragMove = useCallback((e: MouseEvent) => {
     if (!dragging.current) return;
     const delta = dragStartY.current - e.clientY;
-    const newH = Math.max(60, Math.min(dragStartH.current + delta, window.innerHeight * 0.7));
+    const minH = hasImagesRef.current ? MIN_HEIGHT_WITH_IMAGES : MIN_HEIGHT_DEFAULT;
+    const newH = Math.max(minH, Math.min(dragStartH.current + delta, window.innerHeight * MAX_HEIGHT_RATIO_DRAG));
     lastHeight.current = newH;
     if (wrapperRef.current) wrapperRef.current.style.height = newH + 'px';
   }, []);
@@ -85,7 +99,7 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
     e.preventDefault();
     dragging.current = true;
     dragStartY.current = e.clientY;
-    dragStartH.current = wrapperRef.current?.offsetHeight ?? 100;
+    dragStartH.current = wrapperRef.current?.offsetHeight ?? DEFAULT_FALLBACK_HEIGHT;
     document.body.style.cursor = 'ns-resize';
     document.body.style.userSelect = 'none';
     window.addEventListener('mousemove', onDragMove);
@@ -157,18 +171,18 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
   function calcSlashMenuLeft(slashIndex: number): number {
     const el = textareaRef.current;
     const areaEl = inputAreaRef.current;
-    if (!el || !areaEl) return 12;
+    if (!el || !areaEl) return DEFAULT_SLASH_MENU_LEFT;
     const computed = window.getComputedStyle(el);
     const canvas = document.createElement('canvas');
     const ctx2d = canvas.getContext('2d');
-    if (!ctx2d) return 12;
+    if (!ctx2d) return DEFAULT_SLASH_MENU_LEFT;
     ctx2d.font = `${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`;
     const textBefore = el.value.slice(0, slashIndex);
     const lineText = textBefore.slice(textBefore.lastIndexOf('\n') + 1);
     const textWidth = ctx2d.measureText(lineText).width;
     const elRect = el.getBoundingClientRect();
     const areaRect = areaEl.getBoundingClientRect();
-    const elPaddingLeft = parseFloat(computed.paddingLeft) || 8;
+    const elPaddingLeft = parseFloat(computed.paddingLeft) || DEFAULT_FALLBACK_PADDING;
     return (elRect.left - areaRect.left) + elPaddingLeft + textWidth;
   }
 
@@ -287,8 +301,8 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
         <textarea
           ref={textareaRef}
           className={[styles.textarea, images.length > 0 && styles.hasImages].filter(Boolean).join(' ')}
-          placeholder="Ask Argus... (paste images with Ctrl+V)"
-          rows={images.length > 0 ? 1 : 3}
+          placeholder={PLACEHOLDER_TEXT}
+          rows={images.length > 0 ? TEXTAREA_ROWS_WITH_IMAGES : TEXTAREA_ROWS_DEFAULT}
           onInput={() => { adjustHeight(); updateSlashState(); }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}

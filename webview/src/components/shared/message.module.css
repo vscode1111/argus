@@ -59,3 +59,8 @@
   text-align: left;
   margin-top: 6px;
 }
+
+.responseTimeSuccess {
+  composes: responseTime;
+  color: #85e89d;
+}
