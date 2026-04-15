@@ -92,7 +92,7 @@ export function ToolCall({ call }: Props) {
                   {summary}
                 </a>
               ) : (
-                <span className={styles.toolSummary}>{summary}</span>
+                <span className={[styles.toolSummary, name === 'Bash' && styles.toolSummaryBash].filter(Boolean).join(' ')}>{summary}</span>
               )
             )}
             {name === 'Bash' && result && (
@@ -102,6 +102,15 @@ export function ToolCall({ call }: Props) {
                 onClick={e => { e.preventDefault(); setViewerOpen(true); }}
               >
                 Out
+              </a>
+            )}
+            {(name === 'Glob' || name === 'Grep') && result && (
+              <a
+                className={styles.toolResultCount}
+                href="#"
+                onClick={e => { e.preventDefault(); setViewerOpen(true); }}
+              >
+                {result.trim().split('\n').filter(Boolean).length} {name === 'Glob' ? 'files' : 'lines of output'}
               </a>
             )}
             {hasDiff && (

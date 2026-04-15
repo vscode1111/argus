@@ -220,7 +220,7 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
         setHighlightIndex(i => Math.min(filteredSkills.length - 1, i + 1));
         return;
       }
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         selectSkill(filteredSkills[highlightIndex].name);
         return;
@@ -266,6 +266,7 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
           {filteredSkills.map((skill, i) => (
             <div
               key={skill.scope + ':' + skill.name}
+              ref={i === highlightIndex ? el => el?.scrollIntoView({ block: 'nearest' }) : undefined}
               className={[styles.slashMenuItem, i === highlightIndex ? styles.slashMenuItemActive : ''].filter(Boolean).join(' ')}
               onMouseDown={e => e.preventDefault()}
               onClick={() => selectSkill(skill.name)}

@@ -157,6 +157,12 @@ function AppInner() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
+  useEffect(() => {
+    if (!state.workspacePath) return;
+    const name = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
+    document.title = name ? `${name}` : 'Argus';
+  }, [state.workspacePath]);
+
   function onDividerMouseDown(e: React.MouseEvent) {
     e.preventDefault();
     dragging.current = true;

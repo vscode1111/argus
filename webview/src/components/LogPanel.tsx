@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LogEntry } from '../types';
+import { useSettings } from '../contexts/SettingsContext';
 import styles from './LogPanel.module.css';
 
 function formatTime(iso: string): string {
@@ -11,6 +12,21 @@ function formatTime(iso: string): string {
   return `${hh}:${mm}:${ss}.${ms}`;
 }
 
+interface ToggleProps {
+  id: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}
+
+function Toggle({ id, checked, onChange }: ToggleProps) {
+  return (
+    <span className={styles.toggle}>
+      <input id={id} type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
+      <span className={styles.toggleTrack} aria-hidden="true" />
+    </span>
+  );
+}
+
 interface LogPanelProps {
   logs: LogEntry[];
   onClear: () => void;
@@ -18,6 +34,11 @@ interface LogPanelProps {
 
 export function LogPanel({ logs, onClear }: LogPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { showLogTime, showLogType, setShowLogTime, setShowLogType } = useSettings();
+
+  const hasMeta = showLogTime || showLogType;
+  const metaColWidth = showLogTime ? '100px' : '44px';
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'instant' });
@@ -26,17 +47,41 @@ export function LogPanel({ logs, onClear }: LogPanelProps) {
   return (
     <div className={styles.panel}>
       <div className={styles.toolbar}>
-        <span className={styles.title}>Debug Log</span>
-        <button className={styles.clearBtn} onClick={onClear}>Clear</button>
+        <span className={styles.title}>Debug Log{logs.length > 0 && ` (${logs.length})`}</span>
+        <div className={styles.toolbarActions}>
+          <div className={styles.settingsAnchor}>
+            <button className={styles.clearBtn} onClick={() => setSettingsOpen(o => !o)} title="Log settings">⚙</button>
+            {settingsOpen && (
+              <>
+                <div className={styles.overlay} onClick={() => setSettingsOpen(false)} />
+                <div className={styles.dropdown}>
+                  <label className={styles.settingRow} htmlFor="log-toggle-time">
+                    <span className={styles.settingLabel}>Show time</span>
+                    <Toggle id="log-toggle-time" checked={showLogTime} onChange={setShowLogTime} />
+                  </label>
+                  <label className={styles.settingRow} htmlFor="log-toggle-type">
+                    <span className={styles.settingLabel}>Show type</span>
+                    <Toggle id="log-toggle-type" checked={showLogType} onChange={setShowLogType} />
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+          <button className={styles.clearBtn} onClick={onClear}>Clear</button>
+        </div>
       </div>
       <div className={styles.list}>
         {logs.length === 0 && (
           <div className={styles.empty}>No log entries yet. Send a message to see communication logs.</div>
         )}
         {logs.map((entry, i) => (
-          <div key={i} className={styles.entry}>
-            <span className={styles.timestamp}>{formatTime(entry.timestamp)}</span>
-            <span className={[styles.level, styles[entry.level]].join(' ')}>{entry.level.toUpperCase()}</span>
+          <div key={i} className={hasMeta ? styles.entry : styles.entryNoMeta} style={hasMeta ? { gridTemplateColumns: `${metaColWidth} 1fr` } : undefined}>
+            {hasMeta && (
+              <div className={styles.meta}>
+                {showLogTime && <span className={styles.timestamp}>{formatTime(entry.timestamp)}</span>}
+                {showLogType && <span className={[styles.level, styles[entry.level]].join(' ')}>{entry.level.toUpperCase()}</span>}
+              </div>
+            )}
             <span className={styles.text}>{entry.text}</span>
           </div>
         ))}

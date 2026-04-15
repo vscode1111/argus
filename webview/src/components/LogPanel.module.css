@@ -15,6 +15,98 @@
   flex-shrink: 0;
 }
 
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settingsAnchor {
+  position: relative;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--vscode-editorWidget-background, var(--assistant-bg));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 0;
+  z-index: 100;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.settingRow:hover { background: rgba(128,128,128,0.1); }
+
+.settingLabel {
+  font-size: 12px;
+  user-select: none;
+  color: var(--vscode-foreground);
+}
+
+.toggle {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.toggle input[type="checkbox"] {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggleTrack {
+  position: absolute;
+  inset: 0;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  transition: background 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+
+.toggleTrack::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--fg);
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.15s;
+}
+
+.toggle input:checked + .toggleTrack {
+  background: var(--btn-bg);
+  border-color: var(--btn-bg);
+}
+
+.toggle input:checked + .toggleTrack::after {
+  transform: translateX(14px);
+  background: var(--btn-fg);
+}
+
 .title {
   font-size: 11px;
   font-weight: 600;
@@ -41,10 +133,12 @@
 .list {
   flex: 1;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
   font-size: 13px;
   line-height: 1.5;
-  padding: 4px 0;
+  padding: 0;
 }
 
 .list {
@@ -73,22 +167,47 @@
 }
 
 .entry {
-  display: flex;
-  gap: 8px;
-  padding: 1px 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 0 8px;
+  padding: 2px 12px;
+  margin: 0;
+  border-top: 1px solid rgba(128, 128, 128, 0.15);
 }
 
-.entry:hover {
+.entryNoMeta {
+  padding: 2px 12px;
+  margin: 0;
+  border-top: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+
+.entry:nth-child(odd),
+.entryNoMeta:nth-child(odd) {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.entry:hover,
+.entryNoMeta:hover {
   background: var(--vscode-list-hoverBackground);
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.text {
+  white-space: pre-wrap;
+  word-break: break-all;
+  align-self: start;
+  color: var(--vscode-foreground);
 }
 
 .timestamp {
   color: var(--vscode-descriptionForeground);
-  min-width: 86px;
-  flex-shrink: 0;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .level {
@@ -113,7 +232,3 @@
   color: var(--vscode-errorForeground);
 }
 
-.text {
-  flex: 1;
-  color: var(--vscode-foreground);
-}

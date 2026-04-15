@@ -16,7 +16,16 @@
   --font-size: var(--vscode-font-size);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)) transparent;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
 
 html, body, #root { height: 100%; }
 
@@ -52,7 +61,7 @@ body {
 }
 
 .logDivider {
-  width: 5px;
+  width: 2px;
   flex-shrink: 0;
   cursor: ew-resize;
   background: transparent;
@@ -63,7 +72,7 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 2px;
+  left: 1px;
   width: 1px;
   background: var(--border);
   transition: background 0.15s;

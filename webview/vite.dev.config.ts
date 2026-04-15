@@ -193,6 +193,8 @@ function argusAgentPlugin(): Plugin {
               ws.send(JSON.stringify({ type: 'done' }));
             });
 
+          } else if (msg.type === 'getInfo') {
+            ws.send(JSON.stringify({ type: 'workspaceInfo', path: process.cwd() }));
           } else if (msg.type === 'forceError') {
             currentProc?.kill();
             ws.send(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));

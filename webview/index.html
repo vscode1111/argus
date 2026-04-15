@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -27,7 +28,10 @@
       --vscode-textLink-foreground: #3794ff;
       --vscode-symbolIcon-functionForeground: #dcdcaa;
     }
-    body { padding-bottom: 40px; }
+
+    body {
+      padding-bottom: 30px;
+    }
   </style>
   <script>
     // Bridge to the argus-agent WebSocket plugin running inside the Vite dev server
@@ -66,9 +70,11 @@
     };
   </script>
 </head>
+
 <body class="vscode-dark">
   <div id="root"></div>
   <div id="dev-harness"></div>
   <script type="module" src="/src/index.dev.tsx"></script>
 </body>
+
 </html>

@@ -47,9 +47,11 @@
   cursor: pointer;
   gap: 10px;
 }
-.slashMenuItem:hover,
+.slashMenuItem:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.05));
+}
 .slashMenuItemActive {
-  background: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground));
+  background: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground, rgba(255,255,255,0.1)));
   color: var(--vscode-list-activeSelectionForeground);
 }
 
