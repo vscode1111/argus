@@ -55,7 +55,11 @@ function argusAgentPlugin(): Plugin {
             images?: Array<{ data: string; mediaType: string }>;
           };
 
-          if (msg.type === 'send' && (msg.text || msg.images?.length)) {
+          if (msg.type === 'send' && msg.text?.trim() === '/clear') {
+            sessionId = undefined;
+            currentProc?.kill();
+            ws.send(JSON.stringify({ type: 'clear' }));
+          } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
             const text = msg.text ?? '';
             const images = msg.images;
 

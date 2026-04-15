@@ -71,12 +71,14 @@ webview/
 - Webview styling uses CSS Modules (co-located `.module.css` files) with VS Code CSS variables (`var(--vscode-*)`) - no Tailwind, auto-adapts to any theme
 - CSS Modules: camelCase class names for dot access (`styles.toolCall`), conditional classes via `.filter(Boolean).join(' ')`, shared modules in `components/shared/`
 - Webview markdown rendered via `react-markdown` in `utils/markdown.tsx`
-- Webview message protocol (extension -> webview): `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills`
+- Webview message protocol (extension -> webview): `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills | workspaceInfo | log | clearLogs`
 - Webview message protocol (webview -> extension): `send | stop | forceError | newSession | openFile | getInfo | getSkills`
 - Errors use `showError()` helper in ChatPanel - shows VS Code error notification with "View Output" action
 - AgentSession and ChatPanel use a shared `vscode.OutputChannel` ("Argus") for stderr and error logging
 - Image paste: clipboard images are base64-encoded in the webview, sent via `--input-format stream-json` NDJSON to the Claude CLI with `type: "image"` content blocks
-- Slash commands: InputArea shows a dropdown when "/" is typed; sends `getSkills` to extension, receives `skills` response with `{ name, scope: 'builtin' | 'global' | 'project' }[]`; skills read from `~/.claude/skills/` (global) and `<workspace>/.claude/skills/` (project); built-in commands hardcoded in `ChatPanel.getSkills()` and `vite.dev.config.ts`
+- Slash commands: InputArea shows a dropdown when "/" is typed; sends `getSkills` to extension, receives `skills` response with `{ name, scope: 'builtin' | 'global' | 'project' }[]`; skills read from `~/.claude/skills/` (global) and `<workspace>/.claude/skills/` (project); built-in commands hardcoded in `ChatPanel.getSkills()` and `vite.dev.config.ts`; Tab or Enter selects highlighted skill
+- Log panel: has its own settings dropdown (gear icon) with toggles for show time / show type; settings persisted via `SettingsContext` to localStorage (`argus.showLogTime`, `argus.showLogType`)
+- Global scrollbar styling: thin scrollbars via `scrollbar-width: thin` and `::-webkit-scrollbar` rules in `global.css`
 
 ## Skills
 

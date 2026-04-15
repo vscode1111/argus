@@ -7,14 +7,8 @@
 
 .body {
   padding: 0 !important;
-  overflow-y: auto !important;
+  overflow: auto !important;
   flex: 1 !important;
-}
-
-.body > .table {
-  flex: 0 0 auto !important;
-  overflow: visible !important;
-  min-width: 100%;
 }
 
 .table {
@@ -23,6 +17,8 @@
   font-family: var(--font-mono);
   font-size: 13px;
   align-content: start;
+  min-width: 100%;
+  width: max-content;
 }
 
 .colHeaderOld,
@@ -44,6 +40,9 @@
   white-space: pre;
   line-height: 1.5;
   min-height: 1.5em;
+}
+.lineUnchangedOld {
+  border-right: 1px solid var(--border);
 }
 .lineRemoved {
   background: rgba(255, 80, 80, 0.15);

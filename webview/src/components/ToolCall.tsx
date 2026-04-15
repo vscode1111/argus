@@ -92,8 +92,11 @@ export function ToolCall({ call }: Props) {
                   {summary}
                 </a>
               ) : (
-                <span className={[styles.toolSummary, name === 'Bash' && styles.toolSummaryBash].filter(Boolean).join(' ')}>{summary}</span>
+                <span className={[styles.toolSummary, name === 'Bash' && summary === bashCommand && styles.toolSummaryBash].filter(Boolean).join(' ')}>{summary}</span>
               )
+            )}
+            {name === 'Bash' && bashCommand && summary !== bashCommand && (
+              <span className={[styles.toolSummary, styles.toolSummaryBash].join(' ')}>{bashCommand}</span>
             )}
             {name === 'Bash' && result && (
               <a
@@ -127,9 +130,6 @@ export function ToolCall({ call }: Props) {
               </>
             )}
           </div>
-        )}
-        {!verboseTools && name === 'Bash' && bashCommand && summary !== bashCommand && (
-          <div className={styles.toolCommand}>{bashCommand}</div>
         )}
         {showOutput && preview !== undefined && (
           <div className={styles.toolResult}>{preview}</div>

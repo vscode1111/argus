@@ -62,7 +62,9 @@ export class ChatPanel {
 
   private async onWebviewMessage(msg: { type: string; text?: string; path?: string; images?: ImageAttachment[] }): Promise<void> {
     console.log('[Argus] onWebviewMessage:', JSON.stringify({ ...msg, images: msg.images ? `[${msg.images.length} images]` : undefined }));
-    if (msg.type === 'send' && (msg.text || msg.images?.length)) {
+    if (msg.type === 'send' && msg.text?.trim() === '/clear') {
+      this.newSession();
+    } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
       await this.handleUserMessage(msg.text ?? '', msg.images);
     } else if (msg.type === 'stop') {
       this.session.abort();
