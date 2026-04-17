@@ -129,7 +129,7 @@ function ErrorMessage({ message, login }: Props) {
 }
 
 export function ChatMessage({ message, login }: Props) {
-  const { role, content, thinking, toolCalls, responseTime } = message;
+  const { role, content, thinking, blocks, responseTime } = message;
 
   if (role === 'error') {
     return <ErrorMessage message={message} login={login} />;
@@ -142,8 +142,13 @@ export function ChatMessage({ message, login }: Props) {
   return (
     <div className={[msg.message, msg.assistant].join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
-      {toolCalls?.map(tc => <ToolCall key={tc.id} call={tc} />)}
-      {content && (
+      {blocks ? blocks.map((block, i) =>
+        block.type === 'tool'
+          ? <ToolCall key={block.call.id} call={block.call} />
+          : <div key={`text-${i}`} className={msg.messageContent}>
+              <Markdown>{block.text}</Markdown>
+            </div>
+      ) : content && (
         <div className={msg.messageContent}>
           <Markdown>{content}</Markdown>
         </div>

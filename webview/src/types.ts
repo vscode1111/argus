@@ -29,21 +29,24 @@ export type LoginState =
   | { phase: 'success' }
   | { phase: 'error'; message: string };
 
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool'; call: ToolCallData };
+
 export type UIMessage = {
   id: string;
   role: 'user' | 'assistant' | 'error';
   content: string;
   images?: ImageAttachment[];
   thinking?: string;
-  toolCalls?: ToolCallData[];
+  blocks?: ContentBlock[];
   responseTime?: number;
   errorKind?: ErrorKind;
 };
 
 export type StreamingState = {
   thinking: string;
-  text: string;
-  toolCalls: ToolCallData[];
+  blocks: ContentBlock[];
   startTime: number;
   lastEventTime: number;
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useReducer } from 'react';
-import { UIMessage, StreamingState, ToolCallData, LogLevel, LogEntry, LoginState } from './types';
+import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState } from './types';
 import { MessageList } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
@@ -44,7 +44,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         isStreaming: true,
-        streaming: { thinking: '', text: '', toolCalls: [], startTime: Date.now(), lastEventTime: Date.now() },
+        streaming: { thinking: '', blocks: [], startTime: Date.now(), lastEventTime: Date.now() },
       };
 
     case 'thinking_chunk':
@@ -54,12 +54,17 @@ function reducer(state: AppState, action: AppAction): AppState {
         streaming: { ...state.streaming, thinking: state.streaming.thinking + action.text, lastEventTime: Date.now() },
       };
 
-    case 'text_chunk':
+    case 'text_chunk': {
       if (!state.streaming) return state;
-      return {
-        ...state,
-        streaming: { ...state.streaming, text: state.streaming.text + action.text, lastEventTime: Date.now() },
-      };
+      const blocks = [...state.streaming.blocks];
+      const last = blocks[blocks.length - 1];
+      if (last && last.type === 'text') {
+        blocks[blocks.length - 1] = { type: 'text', text: last.text + action.text };
+      } else {
+        blocks.push({ type: 'text', text: action.text });
+      }
+      return { ...state, streaming: { ...state.streaming, blocks, lastEventTime: Date.now() } };
+    }
 
     case 'tool_start':
       if (!state.streaming) return state;
@@ -67,35 +72,41 @@ function reducer(state: AppState, action: AppAction): AppState {
         ...state,
         streaming: {
           ...state.streaming,
-          toolCalls: [...state.streaming.toolCalls, action.call],
+          blocks: [...state.streaming.blocks, { type: 'tool', call: action.call }],
           lastEventTime: Date.now(),
         },
       };
 
-    case 'tool_end':
+    case 'tool_end': {
       if (!state.streaming) return state;
       return {
         ...state,
         streaming: {
           ...state.streaming,
-          toolCalls: state.streaming.toolCalls.map(tc =>
-            tc.id === action.call.id
-              ? { ...tc, result: action.call.result, error: action.call.error }
-              : tc
+          blocks: state.streaming.blocks.map(b =>
+            b.type === 'tool' && b.call.id === action.call.id
+              ? { type: 'tool' as const, call: { ...b.call, result: action.call.result, error: action.call.error } }
+              : b
           ),
           lastEventTime: Date.now(),
         },
       };
+    }
 
     case 'done': {
       if (!state.streaming) return { ...state, isStreaming: false };
       const responseTime = Date.now() - state.streaming.startTime;
+      const { blocks } = state.streaming;
+      const content = blocks
+        .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
+        .map(b => b.text)
+        .join('');
       const msg: UIMessage = {
         id: generateId(),
         role: 'assistant',
-        content: state.streaming.text,
+        content,
         thinking: state.streaming.thinking || undefined,
-        toolCalls: state.streaming.toolCalls.length > 0 ? state.streaming.toolCalls : undefined,
+        blocks: blocks.length > 0 ? blocks : undefined,
         responseTime,
       };
       return {

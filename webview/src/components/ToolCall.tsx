@@ -34,6 +34,10 @@ function toolSummary(name: string, input: Record<string, unknown>): string {
     case 'Agent':
     case 'Task':
       return (input.description as string) || '';
+    case 'AskUserQuestion': {
+      const qs = input.questions as Array<{ header: string }> | undefined;
+      return qs?.[0]?.header || '';
+    }
     default: {
       const first = Object.values(input).find(v => typeof v === 'string' && (v as string).length > 0);
       return (first as string) || '';
@@ -77,6 +81,53 @@ export function ToolCall({ call }: Props) {
     } else {
       postMessage({ type: 'openFile', path: summary });
     }
+  }
+
+  if (name === 'AskUserQuestion') {
+    const questions = (input.questions as Array<{
+      question: string;
+      header: string;
+      multiSelect?: boolean;
+      options: Array<{ label: string; description?: string }>;
+    }>) || [];
+
+    let answers: Record<string, string> = {};
+    if (result) {
+      try {
+        const parsed = JSON.parse(result);
+        if (parsed.answers) answers = parsed.answers;
+      } catch { /* not JSON */ }
+    }
+
+    return (
+      <div className={styles.askQuestion}>
+        {questions.map((q, i) => (
+          <div key={i} className={styles.questionCard}>
+            <div className={styles.questionHeader}>
+              <span className={styles.questionHeaderText}>{q.header}</span>
+            </div>
+            <div className={styles.questionText}>{q.question}</div>
+            <div className={styles.questionOptions}>
+              {q.options.map((opt, j) => {
+                const selected = answers[q.question] === opt.label || answers[q.header] === opt.label;
+                return (
+                  <div
+                    key={j}
+                    className={[styles.questionOption, selected && styles.questionOptionSelected].filter(Boolean).join(' ')}
+                  >
+                    <span className={[styles.questionOptionDot, selected && styles.questionOptionDotSelected].filter(Boolean).join(' ')} aria-hidden="true" />
+                    <div>
+                      <div className={styles.questionOptionLabel}>{opt.label}</div>
+                      {opt.description && <div className={styles.questionOptionDesc}>{opt.description}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   if (name === 'TodoWrite') {

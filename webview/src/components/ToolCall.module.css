@@ -144,6 +144,87 @@
 
 .error .toolResult { color: var(--error-fg); }
 
+/* AskUserQuestion */
+
+.askQuestion {
+  margin: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.questionCard {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--tool-bg);
+  overflow: hidden;
+}
+
+.questionHeader {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.questionHeaderText {
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--vscode-foreground);
+}
+
+.questionText {
+  padding: 8px 10px 4px;
+  font-size: 0.92em;
+  color: var(--vscode-foreground);
+}
+
+.questionOptions {
+  padding: 4px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.questionOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 3px;
+}
+
+.questionOptionSelected {
+  background: var(--vscode-list-activeSelectionBackground, rgba(0, 120, 212, 0.15));
+}
+
+.questionOptionDot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  margin-top: 3px;
+  background: transparent;
+}
+
+.questionOptionDotSelected {
+  border-color: var(--vscode-textLink-foreground, #4fc1ff);
+  background: var(--vscode-textLink-foreground, #4fc1ff);
+}
+
+.questionOptionLabel {
+  font-size: 0.92em;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+}
+
+.questionOptionDesc {
+  font-size: 0.82em;
+  color: var(--thinking-fg);
+  opacity: 0.8;
+  margin-top: 1px;
+  line-height: 1.4;
+}
+
 .todoList {
   margin: 4px 0 4px 4px;
   font-size: 1em;

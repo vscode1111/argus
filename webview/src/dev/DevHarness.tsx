@@ -227,6 +227,29 @@ async function simulateTodos() {
   send({ type: 'done' });
 }
 
+async function simulateAskUser() {
+  const questions = [
+    {
+      question: 'What is the goal of the Electron refactoring? Which approach do you prefer?',
+      header: 'Migration scope',
+      multiSelect: false,
+      options: [
+        { label: 'Standalone app', description: 'Replace VS Code extension entirely - Electron window with native menus, file dialogs, tray icon. No VS Code dependency.' },
+        { label: 'Dual mode', description: 'Keep VS Code extension working AND add Electron as an alternative standalone build. Share the webview/React code between both.' },
+        { label: 'Electron shell only', description: 'Just wrap the current webview in an Electron BrowserWindow (minimal changes). Keep the same React UI and agent backend.' },
+      ],
+    },
+  ];
+  send({ type: 'thinking_start' });
+  await delay(300);
+  send({ type: 'tool_start', call: { id: 'ask1', name: 'AskUserQuestion', input: { questions } } });
+  await delay(800);
+  send({ type: 'tool_end', call: { id: 'ask1', name: 'AskUserQuestion', input: { questions }, result: JSON.stringify({ answers: { 'Migration scope': 'Dual mode' } }) } });
+  await delay(200);
+  send({ type: 'text_chunk', text: 'Got it - I\'ll plan for the dual-mode approach.' });
+  send({ type: 'done' });
+}
+
 async function simulateLoginUrl() {
   send({ type: 'loginUrl', url: 'https://claude.ai/oauth/authorize?code=true&client_id=9d1c5a3e-example' });
 }
@@ -305,6 +328,7 @@ export function DevHarness() {
           <Btn label="reads" onClick={simulateReads} bg="#2d6a4f" />
           <Btn label="todos" onClick={simulateTodos} bg="#5a5a2f" />
           <Btn label="agent" onClick={simulateAgent} bg="#5a5a2f" />
+          <Btn label="ask" onClick={simulateAskUser} bg="#3a5a7a" />
           <Btn label="todos" onClick={simulateTodos} bg="#2d5a6a" />
           <Btn label="logs" onClick={simulateLogs} bg="#5a3e7a" />
           <Btn label="err:auth" onClick={() => simulateError('auth')} bg="#7a2020" />
