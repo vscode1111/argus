@@ -173,6 +173,60 @@ async function simulateReads() {
   send({ type: 'done' });
 }
 
+async function simulateAgent() {
+  send({ type: 'thinking_start' });
+  await delay(300);
+  send({ type: 'tool_start', call: { id: 'a1', name: 'Agent', input: { description: 'Search for auth patterns', prompt: 'Find all authentication-related code in the codebase', subagent_type: 'Explore' } } });
+  await delay(2000);
+  send({ type: 'tool_end', call: { id: 'a1', name: 'Agent', input: { description: 'Search for auth patterns', prompt: 'Find all authentication-related code in the codebase', subagent_type: 'Explore' }, result: 'Found 3 auth-related files:\n- src/auth/login.ts\n- src/auth/middleware.ts\n- src/auth/oauth.ts' } });
+  await delay(300);
+  send({ type: 'tool_start', call: { id: 'a2', name: 'Agent', input: { description: 'Review migration safety', prompt: 'Review migration 0042 for safety under concurrent writes', subagent_type: 'code-reviewer' } } });
+  await delay(1500);
+  send({ type: 'tool_end', call: { id: 'a2', name: 'Agent', input: { description: 'Review migration safety', prompt: 'Review migration 0042 for safety under concurrent writes', subagent_type: 'code-reviewer' }, result: 'The migration is safe. The backfill uses a default value and does not lock the table.' } });
+  await delay(200);
+  send({ type: 'text_chunk', text: 'I delegated two sub-tasks to specialized agents. Both completed successfully.' });
+  await delay(100);
+  send({ type: 'done' });
+}
+
+async function simulateTodos() {
+  const todos = [
+    { id: '1', content: 'Read types.ts', status: 'pending' },
+    { id: '2', content: 'Update ToolCall component', status: 'pending' },
+    { id: '3', content: 'Build webview bundle', status: 'pending' },
+  ];
+
+  send({ type: 'thinking_start' });
+  await delay(400);
+
+  // Step 1: start working on first item
+  send({ type: 'tool_start', call: { id: 't1', name: 'TodoWrite', input: { todos: [{ ...todos[0], status: 'in_progress' }, todos[1], todos[2]] } } });
+  await delay(100);
+  send({ type: 'tool_end', call: { id: 't1', name: 'TodoWrite', input: { todos: [{ ...todos[0], status: 'in_progress' }, todos[1], todos[2]] } } });
+  await delay(1200);
+
+  // Step 2: first done, second in progress
+  send({ type: 'tool_start', call: { id: 't2', name: 'TodoWrite', input: { todos: [{ ...todos[0], status: 'completed' }, { ...todos[1], status: 'in_progress' }, todos[2]] } } });
+  await delay(100);
+  send({ type: 'tool_end', call: { id: 't2', name: 'TodoWrite', input: { todos: [{ ...todos[0], status: 'completed' }, { ...todos[1], status: 'in_progress' }, todos[2]] } } });
+  await delay(1200);
+
+  // Step 3: second done, third in progress
+  send({ type: 'tool_start', call: { id: 't3', name: 'TodoWrite', input: { todos: [{ ...todos[0], status: 'completed' }, { ...todos[1], status: 'completed' }, { ...todos[2], status: 'in_progress' }] } } });
+  await delay(100);
+  send({ type: 'tool_end', call: { id: 't3', name: 'TodoWrite', input: { todos: [{ ...todos[0], status: 'completed' }, { ...todos[1], status: 'completed' }, { ...todos[2], status: 'in_progress' }] } } });
+  await delay(1200);
+
+  // Step 4: all done
+  send({ type: 'tool_start', call: { id: 't4', name: 'TodoWrite', input: { todos: todos.map(t => ({ ...t, status: 'completed' })) } } });
+  await delay(100);
+  send({ type: 'tool_end', call: { id: 't4', name: 'TodoWrite', input: { todos: todos.map(t => ({ ...t, status: 'completed' })) } } });
+  await delay(300);
+
+  send({ type: 'text_chunk', text: 'All tasks completed.' });
+  send({ type: 'done' });
+}
+
 async function simulateLoginUrl() {
   send({ type: 'loginUrl', url: 'https://claude.ai/oauth/authorize?code=true&client_id=9d1c5a3e-example' });
 }
@@ -249,6 +303,9 @@ export function DevHarness() {
           <Btn label="stream" onClick={simulateStream} />
           <Btn label="tools" onClick={simulateTools} />
           <Btn label="reads" onClick={simulateReads} bg="#2d6a4f" />
+          <Btn label="todos" onClick={simulateTodos} bg="#5a5a2f" />
+          <Btn label="agent" onClick={simulateAgent} bg="#5a5a2f" />
+          <Btn label="todos" onClick={simulateTodos} bg="#2d5a6a" />
           <Btn label="logs" onClick={simulateLogs} bg="#5a3e7a" />
           <Btn label="err:auth" onClick={() => simulateError('auth')} bg="#7a2020" />
           <Btn label="err:session" onClick={() => simulateError('session')} bg="#7a2020" />

@@ -143,3 +143,54 @@
 }
 
 .error .toolResult { color: var(--error-fg); }
+
+.todoList {
+  margin: 4px 0 4px 4px;
+  font-size: 1em;
+}
+
+.todoTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.todoDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--diff-added);
+  flex-shrink: 0;
+}
+
+.todoItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0 1px 16px;
+  font-family: var(--font-mono);
+  font-size: 1em;
+}
+
+.todoIcon {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  font-size: 0.85em;
+}
+
+.todoCompleted {
+  color: var(--diff-added);
+  opacity: 0.6;
+}
+
+.todoInProgress {
+  color: var(--vscode-symbolIcon-keywordForeground, #c586c0);
+}
+
+.todoPending {
+  color: var(--thinking-fg);
+  opacity: 0.5;
+}

@@ -33,7 +33,7 @@ webview/
     index.tsx           - React entry point (production)
     index.dev.tsx       - React entry point (dev, mounts App + DevHarness)
     App.tsx             - Root component, useReducer state, VS Code message listener
-    types.ts            - Shared types (UIMessage, StreamingState, ToolCallData)
+    types.ts            - Shared types (UIMessage, StreamingState, ToolCallData, ErrorKind, LoginState)
     vscode.ts           - acquireVsCodeApi() singleton + postMessage helper
     global.css          - :root vars, resets, body, .app, .btn-icon utility
     css-modules.d.ts    - TypeScript ambient declaration for *.module.css
@@ -74,14 +74,18 @@ webview/
 - CSS Modules: camelCase class names for dot access (`styles.toolCall`), conditional classes via `.filter(Boolean).join(' ')`, shared modules in `components/shared/`, `composes:` for reuse
 - CSS color tokens: diff/semantic colors defined as CSS variables in `global.css` (`--diff-added`, `--diff-removed`, `--user-msg-bg`, etc.) - never hardcode color literals in component CSS
 - Webview markdown rendered via `react-markdown` in `utils/markdown.tsx`
-- Webview message protocol (extension -> webview): typed as `WebviewMessage` union in `ChatPanel.ts` - `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills | workspaceInfo | log | clearLogs`
-- Webview message protocol (webview -> extension): `send | stop | forceError | newSession | openFile | getInfo | getSkills`
+- Webview message protocol (extension -> webview): typed as `WebviewMessage` union in `ChatPanel.ts` - `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills | workspaceInfo | log | clearLogs | loginUrl | loginResult`
+- Webview message protocol (webview -> extension): `send | stop | forceError | newSession | openFile | openUrl | getInfo | getSkills | retry | login | loginCode`
 - Modal Escape handling: use `useEscapeKey(onClose)` hook from `hooks/useEscapeKey.ts` - do not duplicate keydown listeners
 - Errors use `showError()` helper in ChatPanel - shows VS Code error notification with "View Output" action
 - AgentSession and ChatPanel use a shared `vscode.OutputChannel` ("Argus") for stderr and error logging
 - Image paste: clipboard images are base64-encoded in the webview, sent via `--input-format stream-json` NDJSON to the Claude CLI with `type: "image"` content blocks
 - Slash commands: InputArea shows a dropdown when "/" is typed; sends `getSkills` to extension, receives `skills` response with `{ name, scope: 'builtin' | 'global' | 'project' }[]`; skills read from `~/.claude/skills/` (global) and `<workspace>/.claude/skills/` (project); built-in commands hardcoded in `ChatPanel.getSkills()` and `vite.dev.config.ts`; Tab or Enter selects highlighted skill
 - Log panel: has its own settings dropdown (gear icon) with toggles for show time / show type; settings persisted via `SettingsContext` to localStorage (`argus.showLogTime`, `argus.showLogType`)
+- Error handling: errors classified into `ErrorKind` (`auth | not_found | session | generic`) via `classifyError()` in `AgentSession.ts`; webview shows structured error blocks with contextual actions (Login, Retry, New session)
+- Login flow: `AgentSession.startLogin()` spawns `claude auth login`, captures OAuth URL, accepts auth code via stdin; webview `LoginPanel` in `ChatMessage.tsx` manages the UI; `LoginState` tracks phases (`idle | starting | url | submitting | success | error`)
+- Retry: ChatPanel stores last user text/images; webview sends `retry` message to re-run the last prompt
+- Sound on complete: `playCompletionSound()` in `App.tsx` via AudioContext; toggled by `soundOnComplete` setting in `SettingsContext`
 - Global scrollbar styling: thin scrollbars via `scrollbar-width: thin` and `::-webkit-scrollbar` rules in `global.css`
 
 ## Skills

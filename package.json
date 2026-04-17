@@ -23,7 +23,8 @@
     "dev": "vite --config webview/vite.dev.config.ts",
     "compile": "tsc -p ./",
     "watch:tsc": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "dev:stop": "node scripts/dev-stop.js"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

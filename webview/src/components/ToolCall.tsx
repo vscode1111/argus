@@ -29,6 +29,8 @@ function toolSummary(name: string, input: Record<string, unknown>): string {
       return (input.query as string) || '';
     case 'WebFetch':
       return (input.url as string) || '';
+    case 'TodoWrite':
+      return '';
     case 'Agent':
     case 'Task':
       return (input.description as string) || '';
@@ -77,6 +79,34 @@ export function ToolCall({ call }: Props) {
     }
   }
 
+  if (name === 'TodoWrite') {
+    const todos = (input.todos as Array<{ id: string; content: string; status: string }>) || [];
+    return (
+      <div className={styles.todoList}>
+        <div className={styles.todoTitle}>
+          <span className={styles.todoDot} />
+          Update Todos
+        </div>
+        {todos.map(t => (
+          <div
+            key={t.id}
+            className={[
+              styles.todoItem,
+              t.status === 'completed' && styles.todoCompleted,
+              t.status === 'in_progress' && styles.todoInProgress,
+              t.status === 'pending' && styles.todoPending,
+            ].filter(Boolean).join(' ')}
+          >
+            <span className={styles.todoIcon}>
+              {t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '✱' : '☐'}
+            </span>
+            {t.content}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <>
       <div className={[styles.toolCall, error && styles.error].filter(Boolean).join(' ')}>
@@ -88,6 +118,9 @@ export function ToolCall({ call }: Props) {
         ) : (
           <div className={styles.toolHeader}>
             <span className={styles.toolName}>{name}</span>
+            {name === 'Agent' && agentType && (
+              <span className={styles.toolAgentType}>{agentType}</span>
+            )}
             {summary && (
               isFile ? (
                 <a
@@ -100,9 +133,6 @@ export function ToolCall({ call }: Props) {
               ) : (
                 <span className={[styles.toolSummary, name === 'Bash' && summary === bashCommand && styles.toolSummaryBash].filter(Boolean).join(' ')}>{summary}</span>
               )
-            )}
-            {name === 'Agent' && agentType && (
-              <span className={styles.toolAgentType}>{agentType}</span>
             )}
             {name === 'Bash' && bashCommand && summary !== bashCommand && (
               <span className={[styles.toolSummary, styles.toolSummaryBash].join(' ')}>{bashCommand}</span>

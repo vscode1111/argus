@@ -13,10 +13,10 @@
 }
 
 .assistant {
-  background: var(--assistant-bg);
+  background: none;
   align-self: flex-start;
   width: 100%;
-  padding: 4px 8px;
+  padding: 0;
 }
 
 .streaming { opacity: 0.9; }
