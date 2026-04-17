@@ -58,6 +58,7 @@ export function ToolCall({ call }: Props) {
   const preview = result ? result.slice(0, limit) + (result.length > limit ? '...' : '') : undefined;
   const [viewerOpen, setViewerOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const bashCommand = name === 'Bash' ? (input.command as string) || '' : '';
   const agentType = name === 'Agent' ? (input.subagent_type as string) || '' : '';
   const resultLineCount = useMemo(
@@ -91,41 +92,81 @@ export function ToolCall({ call }: Props) {
       options: Array<{ label: string; description?: string }>;
     }>) || [];
 
-    let answers: Record<string, string> = {};
+    const isPending = !result;
+
+    let answeredMap: Record<string, string> = {};
     if (result) {
       try {
         const parsed = JSON.parse(result);
-        if (parsed.answers) answers = parsed.answers;
+        if (parsed.answers) answeredMap = parsed.answers;
       } catch { /* not JSON */ }
+    }
+
+    const allAnswered = questions.every(q => selectedAnswers[q.question]);
+
+    function handleOptionClick(questionText: string, optionLabel: string) {
+      setSelectedAnswers(prev => ({ ...prev, [questionText]: optionLabel }));
+    }
+
+    function handleSubmit() {
+      postMessage({ type: 'toolAnswer', id: call.id, answers: selectedAnswers });
+    }
+
+    function handleCancel() {
+      postMessage({ type: 'toolAnswer', id: call.id, answers: {} });
     }
 
     return (
       <div className={styles.askQuestion}>
-        {questions.map((q, i) => (
-          <div key={i} className={styles.questionCard}>
-            <div className={styles.questionHeader}>
-              <span className={styles.questionHeaderText}>{q.header}</span>
-            </div>
-            <div className={styles.questionText}>{q.question}</div>
-            <div className={styles.questionOptions}>
-              {q.options.map((opt, j) => {
-                const selected = answers[q.question] === opt.label || answers[q.header] === opt.label;
-                return (
-                  <div
-                    key={j}
-                    className={[styles.questionOption, selected && styles.questionOptionSelected].filter(Boolean).join(' ')}
-                  >
-                    <span className={[styles.questionOptionDot, selected && styles.questionOptionDotSelected].filter(Boolean).join(' ')} aria-hidden="true" />
-                    <div>
-                      <div className={styles.questionOptionLabel}>{opt.label}</div>
-                      {opt.description && <div className={styles.questionOptionDesc}>{opt.description}</div>}
+        {questions.map((q, i) => {
+          const selected = isPending
+            ? selectedAnswers[q.question]
+            : answeredMap[q.question] || answeredMap[q.header];
+          return (
+            <div key={i} className={styles.questionCard}>
+              <div className={styles.questionHeader}>
+                <span className={styles.questionHeaderText}>{q.header}</span>
+                {isPending && i === 0 && (
+                  <button className={styles.askCloseBtn} onClick={handleCancel} aria-label="Cancel">✕</button>
+                )}
+              </div>
+              <div className={styles.questionText}>{q.question}</div>
+              <div className={styles.questionOptions}>
+                {q.options.map((opt, j) => {
+                  const isSelected = selected === opt.label;
+                  return (
+                    <div
+                      key={j}
+                      className={[
+                        styles.questionOption,
+                        isSelected && styles.questionOptionSelected,
+                        isPending && styles.questionOptionClickable,
+                      ].filter(Boolean).join(' ')}
+                      onClick={isPending ? () => handleOptionClick(q.question, opt.label) : undefined}
+                    >
+                      <span className={[styles.questionOptionDot, isSelected && styles.questionOptionDotSelected].filter(Boolean).join(' ')} aria-hidden="true" />
+                      <div>
+                        <div className={styles.questionOptionLabel}>{opt.label}</div>
+                        {opt.description && <div className={styles.questionOptionDesc}>{opt.description}</div>}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              {isPending && i === questions.length - 1 && (
+                <div className={styles.askActions}>
+                  <button
+                    className={styles.askSubmitBtn}
+                    onClick={handleSubmit}
+                    disabled={!allAnswered}
+                  >
+                    Submit answers
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   }

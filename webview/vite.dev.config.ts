@@ -290,6 +290,24 @@ function argusAgentPlugin(): Plugin {
                 ws.send(JSON.stringify({ type: 'loginResult', success: code === 0, message: code === 0 ? undefined : 'Authentication failed. Check the code and try again.' }));
               });
             }
+          } else if (msg.type === 'toolAnswer') {
+            const answerId = (msg as { id?: string }).id ?? '';
+            const answers = (msg as { answers?: unknown }).answers as Record<string, string> | undefined;
+            // If no active process (DevHarness simulation), echo tool_end + continue
+            if (!currentProc) {
+              ws.send(JSON.stringify({
+                type: 'tool_end',
+                call: { id: answerId, name: 'AskUserQuestion', input: {}, result: JSON.stringify({ answers }) },
+              }));
+              const firstAnswer = answers ? Object.values(answers)[0] : undefined;
+              const reply = firstAnswer
+                ? `Got it - I'll proceed with the **${firstAnswer}** approach.`
+                : 'Understood, proceeding without a selection.';
+              setTimeout(() => {
+                ws.send(JSON.stringify({ type: 'text_chunk', text: reply }));
+                ws.send(JSON.stringify({ type: 'done' }));
+              }, 300);
+            }
           } else if (msg.type === 'stop') {
             currentProc?.kill();
           } else if (msg.type === 'newSession') {

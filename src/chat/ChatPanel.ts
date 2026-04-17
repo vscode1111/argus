@@ -108,6 +108,8 @@ export class ChatPanel {
       this.post({ type: 'skills', skills: this.getSkills() });
     } else if (msg.type === 'retry' && this.lastUserText) {
       await this.handleUserMessage(this.lastUserText, this.lastUserImages);
+    } else if (msg.type === 'toolAnswer') {
+      // TODO: forward answer to Claude CLI stdin when interactive tool support is implemented
     } else if (msg.type === 'login') {
       await this.handleLogin();
     } else if (msg.type === 'loginCode' && msg.text) {

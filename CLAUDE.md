@@ -33,13 +33,13 @@ webview/
     index.tsx           - React entry point (production)
     index.dev.tsx       - React entry point (dev, mounts App + DevHarness)
     App.tsx             - Root component, useReducer state, VS Code message listener
-    types.ts            - Shared types (UIMessage, StreamingState, ToolCallData, ErrorKind, LoginState)
+    types.ts            - Shared types (UIMessage, StreamingState, ToolCallData, ContentBlock, ErrorKind, LoginState)
     vscode.ts           - acquireVsCodeApi() singleton + postMessage helper
     global.css          - :root vars, resets, body, .app, .btn-icon utility
     css-modules.d.ts    - TypeScript ambient declaration for *.module.css
     components/
       shared/
-        message.module.css  - Shared message styles (layout, markdown content, cursor)
+        message.module.css  - Shared message styles (layout, markdown content)
         modal.module.css    - Shared full-screen modal shell (FileViewer/DiffViewer)
       Header.tsx / .module.css
       MessageList.tsx / .module.css
@@ -87,6 +87,8 @@ webview/
 - Retry: ChatPanel stores last user text/images; webview sends `retry` message to re-run the last prompt
 - Sound on complete: `playCompletionSound()` in `App.tsx` via AudioContext; toggled by `soundOnComplete` setting in `SettingsContext`
 - Global scrollbar styling: thin scrollbars via `scrollbar-width: thin` and `::-webkit-scrollbar` rules in `global.css`
+- Content blocks: streaming and completed messages use `ContentBlock[]` (interleaved `{ type: 'text' }` and `{ type: 'tool' }` blocks) instead of separate text/toolCalls fields - preserves tool-call ordering relative to text
+- AskUserQuestion: rendered as a card with header, question text, and radio-button options; selected answer highlighted from parsed JSON result; styles in `ToolCall.module.css`
 
 ## Skills
 

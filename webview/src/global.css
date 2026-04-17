@@ -91,6 +91,36 @@ body {
   overflow: hidden;
 }
 
+.content:has(.logPaneTop) {
+  flex-direction: column;
+}
+
+.logPaneTop {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.logDividerH {
+  height: 5px;
+  flex-shrink: 0;
+  cursor: ns-resize;
+  background: transparent;
+  position: relative;
+}
+.logDividerH::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  height: 1px;
+  background: var(--border);
+  transition: background 0.15s;
+}
+.logDividerH:hover::after { background: var(--vscode-focusBorder, var(--btn-bg)); }
+
 .btn-icon {
   background: transparent;
   border: 1px solid var(--border);

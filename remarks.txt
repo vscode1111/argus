@@ -3,3 +3,5 @@ Can you analyze the project at D:\_Projects\vscode1111\common-scripts?
 Create plan for refactoring to use Electron
 
 D:\_Projects\vscode1111\common-scripts\package.json change version to upper
+
+I am testing the dialog rendering in the webview. Ask me something to get a dialogue, and wait for my response

@@ -193,10 +193,14 @@ function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { showLogs, soundOnComplete } = useSettings();
   const wasStreaming = React.useRef(false);
+  const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [logWidth, setLogWidth] = React.useState(320);
+  const [logHeight, setLogHeight] = React.useState(180);
   const dragging = React.useRef(false);
   const dragStartX = React.useRef(0);
+  const dragStartY = React.useRef(0);
   const dragStartW = React.useRef(0);
+  const dragStartH = React.useRef(0);
 
   useEffect(() => {
     const VALID_TYPES = new Set<AppAction['type']>([
@@ -222,6 +226,12 @@ function AppInner() {
     }
     wasStreaming.current = state.isStreaming;
   }, [state.isStreaming, soundOnComplete]);
+
+  useEffect(() => {
+    function onResize() { setIsNarrow(window.innerWidth < 650); }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     if (!state.workspacePath) return;
@@ -253,18 +263,50 @@ function AppInner() {
     window.addEventListener('mouseup', onMouseUp);
   }
 
+  function onTopDividerMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    dragging.current = true;
+    dragStartY.current = e.clientY;
+    dragStartH.current = logHeight;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMouseMove(ev: MouseEvent) {
+      if (!dragging.current) return;
+      const delta = ev.clientY - dragStartY.current;
+      setLogHeight(Math.max(60, Math.min(dragStartH.current + delta, window.innerHeight * 0.7)));
+    }
+    function onMouseUp() {
+      dragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  const logPanel = <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} />;
+
   return (
     <div className="app">
       <div className="content">
+        {showLogs && isNarrow && (
+          <>
+            <div className="logPaneTop" style={{ height: logHeight }}>{logPanel}</div>
+            <div className="logDividerH" onMouseDown={onTopDividerMouseDown} />
+          </>
+        )}
         <div className="chatPane">
           <MessageList messages={state.messages} streaming={state.streaming} login={state.login} />
           <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} />
         </div>
-        {showLogs && (
+        {showLogs && !isNarrow && (
           <>
             <div className="logDivider" onMouseDown={onDividerMouseDown} />
             <div className="logPane" style={{ width: logWidth }}>
-              <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} />
+              {logPanel}
             </div>
           </>
         )}
