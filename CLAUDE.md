@@ -54,6 +54,8 @@ webview/
       InfoModal.tsx / .module.css
       SettingsModal.tsx / .module.css
       InputArea.tsx / .module.css
+    hooks/
+      useEscapeKey.ts   - Shared hook for Escape-to-close on modals
     dev/
       DevHarness.tsx    - Fixed bottom toolbar, fires mock extension messages for browser testing
     utils/
@@ -69,10 +71,12 @@ webview/
 - No Python scripts - use Node.js/TypeScript for any tooling
 - Webview UI is React 18 + TypeScript + Vite (lib/IIFE mode). Build with `yarn build`
 - Webview styling uses CSS Modules (co-located `.module.css` files) with VS Code CSS variables (`var(--vscode-*)`) - no Tailwind, auto-adapts to any theme
-- CSS Modules: camelCase class names for dot access (`styles.toolCall`), conditional classes via `.filter(Boolean).join(' ')`, shared modules in `components/shared/`
+- CSS Modules: camelCase class names for dot access (`styles.toolCall`), conditional classes via `.filter(Boolean).join(' ')`, shared modules in `components/shared/`, `composes:` for reuse
+- CSS color tokens: diff/semantic colors defined as CSS variables in `global.css` (`--diff-added`, `--diff-removed`, `--user-msg-bg`, etc.) - never hardcode color literals in component CSS
 - Webview markdown rendered via `react-markdown` in `utils/markdown.tsx`
-- Webview message protocol (extension -> webview): `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills | workspaceInfo | log | clearLogs`
+- Webview message protocol (extension -> webview): typed as `WebviewMessage` union in `ChatPanel.ts` - `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills | workspaceInfo | log | clearLogs`
 - Webview message protocol (webview -> extension): `send | stop | forceError | newSession | openFile | getInfo | getSkills`
+- Modal Escape handling: use `useEscapeKey(onClose)` hook from `hooks/useEscapeKey.ts` - do not duplicate keydown listeners
 - Errors use `showError()` helper in ChatPanel - shows VS Code error notification with "View Output" action
 - AgentSession and ChatPanel use a shared `vscode.OutputChannel` ("Argus") for stderr and error logging
 - Image paste: clipboard images are base64-encoded in the webview, sent via `--input-format stream-json` NDJSON to the Claude CLI with `type: "image"` content blocks
@@ -115,3 +119,4 @@ yarn watch:tsc    # watch mode for extension TypeScript
 | argus.inlineCompletions.enabled | false | Enable inline completions |
 | argus.codeLens.enabled | true | Show code lens |
 | argus.bash.useIntegratedTerminal | true | Run bash in terminal |
+| argus.inlineCompletions.model | claude-haiku-4-5 | Model for inline completions |

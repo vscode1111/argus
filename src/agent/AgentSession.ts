@@ -3,13 +3,15 @@ import { getWorkspaceRoot } from '../utils/workspace';
 import { getModel } from '../utils/config';
 import type { ImageAttachment } from '../chat/ChatMessage';
 
+export type ErrorKind = 'auth' | 'not_found' | 'session' | 'generic';
+
 export type SessionEvent =
   | { type: 'text'; text: string }
   | { type: 'thinking'; text: string }
   | { type: 'tool_start'; id: string; name: string; input?: unknown }
   | { type: 'tool_end'; id: string; result?: string }
   | { type: 'result'; text: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; errorKind: ErrorKind };
 
 interface SystemInitMessage {
   type: 'system';
@@ -43,12 +45,40 @@ type CliMessage = SystemInitMessage | AssistantMessage | ToolResultMessage | Res
 
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch'];
 
+const AUTH_PATTERNS = [/auth/i, /login/i, /token/i, /unauthorized/i, /401/i, /403/i, /credential/i, /oauth/i, /api[_ ]?key/i];
+const SESSION_PATTERNS = [/session/i, /resume/i, /expired/i, /not found.*session/i];
+
+function classifyError(stderr: string, exitCode: number | null): { message: string; errorKind: ErrorKind } {
+  const text = stderr.trim();
+
+  if (text) {
+    if (AUTH_PATTERNS.some(p => p.test(text))) {
+      return { message: text, errorKind: 'auth' };
+    }
+    if (SESSION_PATTERNS.some(p => p.test(text))) {
+      return { message: text, errorKind: 'session' };
+    }
+  }
+
+  // Exit code 1 typically means auth issue with Claude CLI
+  if (exitCode === 1) {
+    return { message: text || 'Claude exited unexpectedly. This usually means authentication is required.', errorKind: 'auth' };
+  }
+
+  return { message: text || `claude exited with code ${exitCode}`, errorKind: 'generic' };
+}
+
 import type * as vscode from 'vscode';
+
+export type LoginResult =
+  | { phase: 'url'; url: string; submitCode: (code: string) => Promise<boolean> }
+  | { phase: 'error'; message: string };
 
 export class AgentSession {
   private sessionId: string | undefined;
   private readonly cwd: string | undefined;
   private currentProc: ReturnType<typeof spawn> | undefined;
+  private loginProc: ReturnType<typeof spawn> | undefined;
   private readonly outputChannel: vscode.OutputChannel | undefined;
   private readonly onLog: ((level: 'debug' | 'info' | 'warn' | 'error', text: string) => void) | undefined;
 
@@ -76,6 +106,92 @@ export class AgentSession {
     setTimeout(() => {
       if (!proc.killed) proc.kill('SIGKILL');
     }, 3000);
+  }
+
+  abortLogin(): void {
+    if (this.loginProc) {
+      this.loginProc.kill('SIGTERM');
+      this.loginProc = undefined;
+    }
+  }
+
+  async startLogin(): Promise<LoginResult> {
+    this.abortLogin();
+    this.log('info', 'Starting claude login');
+
+    return new Promise((resolve) => {
+      const proc = spawn('claude', ['auth', 'login'], {
+        cwd: this.cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      this.loginProc = proc;
+
+      let output = '';
+      let resolved = false;
+      let closed = false;
+      let closedCode: number | null = null;
+
+      const checkForUrl = (data: string) => {
+        output += data;
+        this.log('debug', `login output: ${data.trim()}`);
+        const urlMatch = output.match(/(https:\/\/[^\s"]+oauth[^\s"]*)/i)
+          ?? output.match(/(https:\/\/claude\.ai\/[^\s"]+)/i)
+          ?? output.match(/(https:\/\/console\.anthropic\.com\/[^\s"]+)/i)
+          ?? output.match(/(https:\/\/[^\s"]+anthropic[^\s"]*)/i);
+        if (urlMatch && !resolved) {
+          resolved = true;
+          const url = urlMatch[1];
+          this.log('info', `Login URL captured: ${url}`);
+          resolve({
+            phase: 'url',
+            url,
+            submitCode: (code: string) => {
+              return new Promise<boolean>((res) => {
+                if (closed) {
+                  this.log('warn', `Login process already exited (code ${closedCode}) before code was submitted`);
+                  res(false);
+                  return;
+                }
+                proc.stdin.write(code + '\n', (err) => {
+                  if (err) {
+                    this.log('error', `Failed to write login code: ${err.message}`);
+                    res(false);
+                  }
+                });
+                proc.on('close', (exitCode) => {
+                  this.loginProc = undefined;
+                  this.log('info', `Login process exited with code ${exitCode}`);
+                  res(exitCode === 0);
+                });
+              });
+            },
+          });
+        }
+      };
+
+      proc.stdout.on('data', (data: Buffer) => checkForUrl(data.toString()));
+      proc.stderr.on('data', (data: Buffer) => checkForUrl(data.toString()));
+
+      proc.on('close', (exitCode) => {
+        closed = true;
+        closedCode = exitCode;
+        this.loginProc = undefined;
+        if (!resolved) {
+          resolved = true;
+          this.log('warn', `Login process exited (code ${exitCode}) without producing a URL`);
+          resolve({ phase: 'error', message: output.trim() || `claude login exited with code ${exitCode}` });
+        }
+      });
+
+      proc.on('error', (err) => {
+        this.loginProc = undefined;
+        if (!resolved) {
+          resolved = true;
+          this.log('error', `Login spawn error: ${err.message}`);
+          resolve({ phase: 'error', message: err.message });
+        }
+      });
+    });
   }
 
   async *send(prompt: string, systemPrompt?: string, images?: ImageAttachment[]): AsyncGenerator<SessionEvent> {
@@ -232,16 +348,17 @@ export class AgentSession {
       const exitCode = await exitCodePromise;
       this.log('info', `claude exited with code ${exitCode}`);
       if (exitCode !== 0 && exitCode !== null) {
-        yield { type: 'error', message: stderrOutput || `claude exited with code ${exitCode}` };
+        const classified = classifyError(stderrOutput, exitCode);
+        yield { type: 'error', ...classified };
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this.log('error', `spawn error: ${errMsg}`);
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('ENOENT')) {
-        yield { type: 'error', message: 'Claude Code CLI not found. Install it with: npm install -g @anthropic/claude-code' };
+        yield { type: 'error', message: 'Claude Code CLI not found. Install it with: npm install -g @anthropic/claude-code', errorKind: 'not_found' as ErrorKind };
       } else {
-        yield { type: 'error', message };
+        yield { type: 'error', message, errorKind: 'generic' as ErrorKind };
       }
     }
   }

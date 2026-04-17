@@ -19,6 +19,16 @@ export type ToolCallData = {
   error?: boolean;
 };
 
+export type ErrorKind = 'auth' | 'not_found' | 'session' | 'generic';
+
+export type LoginState =
+  | { phase: 'idle' }
+  | { phase: 'starting' }
+  | { phase: 'url'; url: string }
+  | { phase: 'submitting' }
+  | { phase: 'success' }
+  | { phase: 'error'; message: string };
+
 export type UIMessage = {
   id: string;
   role: 'user' | 'assistant' | 'error';
@@ -27,6 +37,7 @@ export type UIMessage = {
   thinking?: string;
   toolCalls?: ToolCallData[];
   responseTime?: number;
+  errorKind?: ErrorKind;
 };
 
 export type StreamingState = {

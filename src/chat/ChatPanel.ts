@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { AgentSession } from '../agent/AgentSession';
+import { AgentSession, ErrorKind, LoginResult } from '../agent/AgentSession';
 import { ChatMessage, ImageAttachment, createUserMessage, createAssistantMessage } from './ChatMessage';
 
 type WebviewMessage =
@@ -14,12 +14,14 @@ type WebviewMessage =
   | { type: 'tool_start'; call: { id: string; name: string; input: unknown } }
   | { type: 'tool_end'; call: { id: string; name: string; input: unknown; result?: string } }
   | { type: 'done' }
-  | { type: 'error'; text: string }
+  | { type: 'error'; text: string; errorKind?: ErrorKind }
   | { type: 'clear' }
   | { type: 'prefill'; text: string }
   | { type: 'workspaceInfo'; path: string }
   | { type: 'skills'; skills: { name: string; scope: 'global' | 'project' | 'builtin' }[] }
-  | { type: 'log'; level: string; text: string; timestamp: string };
+  | { type: 'log'; level: string; text: string; timestamp: string }
+  | { type: 'loginUrl'; url: string }
+  | { type: 'loginResult'; success: boolean; message?: string };
 
 export class ChatPanel {
   public static current: ChatPanel | undefined;
@@ -31,6 +33,9 @@ export class ChatPanel {
   private messages: ChatMessage[] = [];
   private session: AgentSession;
   private disposables: vscode.Disposable[] = [];
+  private lastUserText: string = '';
+  private lastUserImages: ImageAttachment[] | undefined;
+  private loginSubmitCode: ((code: string) => Promise<boolean>) | undefined;
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
@@ -76,7 +81,7 @@ export class ChatPanel {
     this.post({ type: 'clear' });
   }
 
-  private async onWebviewMessage(msg: { type: string; text?: string; path?: string; images?: ImageAttachment[] }): Promise<void> {
+  private async onWebviewMessage(msg: { type: string; text?: string; path?: string; url?: string; images?: ImageAttachment[] }): Promise<void> {
     console.log('[Argus] onWebviewMessage:', JSON.stringify({ ...msg, images: msg.images ? `[${msg.images.length} images]` : undefined }));
     if (msg.type === 'send' && msg.text?.trim() === '/clear') {
       this.newSession();
@@ -86,7 +91,7 @@ export class ChatPanel {
       this.session.abort();
     } else if (msg.type === 'forceError') {
       this.session.abort();
-      this.post({ type: 'error', text: 'Process killed manually' });
+      this.post({ type: 'error', text: 'Process killed manually', errorKind: 'generic' });
       this.post({ type: 'done' });
       this.showError('Claude Code process exited with code 3221226505');
     } else if (msg.type === 'newSession') {
@@ -94,16 +99,26 @@ export class ChatPanel {
     } else if (msg.type === 'openFile' && msg.path) {
       const uri = vscode.Uri.file(msg.path);
       vscode.window.showTextDocument(uri, { preview: true, viewColumn: vscode.ViewColumn.One });
+    } else if (msg.type === 'openUrl' && msg.url) {
+      vscode.env.openExternal(vscode.Uri.parse(msg.url));
     } else if (msg.type === 'getInfo') {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
       this.post({ type: 'workspaceInfo', path: root });
     } else if (msg.type === 'getSkills') {
       this.post({ type: 'skills', skills: this.getSkills() });
+    } else if (msg.type === 'retry' && this.lastUserText) {
+      await this.handleUserMessage(this.lastUserText, this.lastUserImages);
+    } else if (msg.type === 'login') {
+      await this.handleLogin();
+    } else if (msg.type === 'loginCode' && msg.text) {
+      await this.handleLoginCode(msg.text);
     }
   }
 
   private async handleUserMessage(text: string, images?: ImageAttachment[]): Promise<void> {
     console.log('[Argus] handleUserMessage:', text, images ? `(${images.length} images)` : '');
+    this.lastUserText = text;
+    this.lastUserImages = images;
     const userMsg = createUserMessage(text, images);
     this.messages.push(userMsg);
     this.post({ type: 'message', message: userMsg });
@@ -146,7 +161,7 @@ export class ChatPanel {
             break;
 
           case 'error':
-            this.post({ type: 'error', text: event.message });
+            this.post({ type: 'error', text: event.message, errorKind: event.errorKind });
             this.showError(event.message);
             break;
         }
@@ -186,6 +201,27 @@ export class ChatPanel {
     if (root) readSkillsDir(path.join(root, '.claude', 'skills'), 'project');
 
     return skills;
+  }
+
+  private async handleLogin(): Promise<void> {
+    const result = await this.session.startLogin();
+    if (result.phase === 'url') {
+      this.loginSubmitCode = result.submitCode;
+      this.post({ type: 'loginUrl', url: result.url });
+      vscode.env.openExternal(vscode.Uri.parse(result.url));
+    } else {
+      this.post({ type: 'loginResult', success: false, message: result.message });
+    }
+  }
+
+  private async handleLoginCode(code: string): Promise<void> {
+    if (!this.loginSubmitCode) {
+      this.post({ type: 'loginResult', success: false, message: 'No login process active' });
+      return;
+    }
+    const success = await this.loginSubmitCode(code);
+    this.loginSubmitCode = undefined;
+    this.post({ type: 'loginResult', success, message: success ? undefined : 'Authentication failed. Check the code and try again.' });
   }
 
   private buildSystemPrompt(): string {

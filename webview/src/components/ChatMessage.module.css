@@ -13,3 +13,134 @@
   object-fit: contain;
   cursor: pointer;
 }
+
+.errorBlock {
+  border-left: 3px solid var(--error-fg);
+}
+
+.errorTitle {
+  font-weight: 600;
+  color: var(--error-fg);
+  margin-bottom: 4px;
+}
+
+.errorDetail {
+  color: var(--fg);
+  opacity: 0.8;
+  font-size: 0.9em;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.errorHint {
+  color: var(--thinking-fg);
+  font-size: 0.85em;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+.errorActions {
+  display: flex;
+  gap: 8px;
+}
+
+.errorBtn {
+  background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2));
+  color: var(--vscode-button-secondaryForeground, var(--fg));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.errorBtn:hover {
+  background: var(--vscode-button-secondaryHoverBackground, rgba(128,128,128,0.35));
+}
+
+/* Login panel */
+
+.loginPanel {
+  margin-top: 8px;
+}
+
+.loginTitle {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.loginHint {
+  color: var(--thinking-fg);
+  font-size: 0.85em;
+  margin-bottom: 4px;
+}
+
+.loginUrlRow {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.loginUrlInput {
+  flex: 1;
+  background: var(--vscode-input-background, rgba(0,0,0,0.2));
+  color: var(--vscode-input-foreground, var(--fg));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.85em;
+  font-family: monospace;
+}
+
+.loginCopyBtn {
+  background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2));
+  color: var(--vscode-button-secondaryForeground, var(--fg));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.loginCopyBtn:hover {
+  background: var(--vscode-button-secondaryHoverBackground, rgba(128,128,128,0.35));
+}
+
+.loginCodeInput {
+  width: 100%;
+  background: var(--vscode-input-background, rgba(0,0,0,0.2));
+  color: var(--vscode-input-foreground, var(--fg));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 0.9em;
+  font-family: monospace;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.loginContinueBtn {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 14px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.loginContinueBtn:hover {
+  background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.loginContinueBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.loginSuccess {
+  color: var(--diff-added, #4ec9b0);
+  font-weight: 600;
+  margin-bottom: 8px;
+}

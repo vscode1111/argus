@@ -34,6 +34,28 @@ function getSkills() {
 const MODEL = process.env.ARGUS_MODEL ?? 'claude-opus-4-6';
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch'];
 
+const AUTH_PATTERNS = [/auth/i, /login/i, /token/i, /unauthorized/i, /401/i, /403/i, /credential/i, /oauth/i, /api[_ ]?key/i];
+const SESSION_PATTERNS = [/session/i, /resume/i, /expired/i, /not found.*session/i];
+
+type ErrorKind = 'auth' | 'not_found' | 'session' | 'generic';
+
+function classifyError(stderr: string, exitCode: number | null): { message: string; errorKind: ErrorKind } {
+  const text = stderr.trim();
+  if (text) {
+    if (AUTH_PATTERNS.some(p => p.test(text))) return { message: text, errorKind: 'auth' };
+    if (SESSION_PATTERNS.some(p => p.test(text))) return { message: text, errorKind: 'session' };
+  }
+  if (exitCode === 1) return { message: text || 'Claude exited unexpectedly. This usually means authentication is required.', errorKind: 'auth' };
+  return { message: text || `claude exited with code ${exitCode}`, errorKind: 'generic' };
+}
+
+const URL_PATTERNS = [
+  /(https:\/\/[^\s"]+oauth[^\s"]*)/i,
+  /(https:\/\/claude\.ai\/[^\s"]+)/i,
+  /(https:\/\/console\.anthropic\.com\/[^\s"]+)/i,
+  /(https:\/\/[^\s"]+anthropic[^\s"]*)/i,
+];
+
 function argusAgentPlugin(): Plugin {
   return {
     name: 'argus-agent',
@@ -43,6 +65,10 @@ function argusAgentPlugin(): Plugin {
       wss.on('connection', (ws: WebSocket) => {
         let sessionId: string | undefined;
         let currentProc: ReturnType<typeof spawn> | undefined;
+        let loginProc: ReturnType<typeof spawn> | undefined;
+        let loginSubmitCode: ((code: string) => void) | undefined;
+        let loginClosed = false;
+        let loginExitCode: number | null = null;
 
         const sendLog = (level: 'debug' | 'info' | 'warn' | 'error', text: string) => {
           ws.send(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
@@ -105,6 +131,7 @@ function argusAgentPlugin(): Plugin {
             proc.stdin.end();
 
             let buffer = '';
+            let stderrOutput = '';
             let receivedDeltas = false;
             const toolMap = new Map<string, { name: string; input: unknown }>();
 
@@ -173,16 +200,18 @@ function argusAgentPlugin(): Plugin {
             });
 
             proc.stderr.on('data', (chunk: Buffer) => {
-              const stderrText = chunk.toString().trim();
-              console.error('[argus-agent]', stderrText);
-              sendLog('warn', `stderr: ${stderrText}`);
+              const text = chunk.toString();
+              stderrOutput += text;
+              console.error('[argus-agent]', text.trim());
+              sendLog('warn', `stderr: ${text.trim()}`);
             });
 
             proc.on('close', (code) => {
               currentProc = undefined;
               sendLog('info', `claude exited with code ${code}`);
               if (code !== 0 && code !== null) {
-                ws.send(JSON.stringify({ type: 'error', text: `claude exited with code ${code}` }));
+                const { message, errorKind } = classifyError(stderrOutput, code);
+                ws.send(JSON.stringify({ type: 'error', text: message, errorKind }));
               }
               ws.send(JSON.stringify({ type: 'done' }));
             });
@@ -204,6 +233,63 @@ function argusAgentPlugin(): Plugin {
             ws.send(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));
           } else if (msg.type === 'getSkills') {
             ws.send(JSON.stringify({ type: 'skills', skills: getSkills() }));
+          } else if (msg.type === 'login') {
+            loginProc?.kill();
+            sendLog('info', 'Starting claude login');
+            const lp = spawn('claude', ['auth', 'login'], { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] });
+            loginProc = lp;
+            let loginOutput = '';
+            let loginResolved = false;
+            loginClosed = false;
+            loginExitCode = null;
+
+            const checkForUrl = (data: string) => {
+              loginOutput += data;
+              sendLog('debug', `login output: ${data.trim()}`);
+              for (const pattern of URL_PATTERNS) {
+                const m = loginOutput.match(pattern);
+                if (m && !loginResolved) {
+                  loginResolved = true;
+                  loginSubmitCode = (code: string) => {
+                    lp.stdin.write(code + '\n');
+                  };
+                  sendLog('info', `Login URL: ${m[1]}`);
+                  ws.send(JSON.stringify({ type: 'loginUrl', url: m[1] }));
+                  return;
+                }
+              }
+            };
+
+            lp.stdout.on('data', (chunk: Buffer) => checkForUrl(chunk.toString()));
+            lp.stderr.on('data', (chunk: Buffer) => checkForUrl(chunk.toString()));
+            lp.on('close', (code) => {
+              loginClosed = true;
+              loginExitCode = code;
+              loginProc = undefined;
+              if (!loginResolved) {
+                ws.send(JSON.stringify({ type: 'loginResult', success: false, message: loginOutput.trim() || `claude login exited with code ${code}` }));
+              }
+            });
+            lp.on('error', (err) => {
+              loginClosed = true;
+              loginProc = undefined;
+              ws.send(JSON.stringify({ type: 'loginResult', success: false, message: err.message }));
+            });
+          } else if (msg.type === 'loginCode' && msg.text) {
+            if (!loginSubmitCode) {
+              ws.send(JSON.stringify({ type: 'loginResult', success: false, message: 'No login process active' }));
+            } else if (loginClosed) {
+              sendLog('warn', `Login process already exited (code ${loginExitCode}) before code was submitted`);
+              loginSubmitCode = undefined;
+              ws.send(JSON.stringify({ type: 'loginResult', success: false, message: 'Login process exited before code was submitted. Try again.' }));
+            } else {
+              loginSubmitCode(msg.text);
+              loginSubmitCode = undefined;
+              loginProc?.on('close', (code) => {
+                loginProc = undefined;
+                ws.send(JSON.stringify({ type: 'loginResult', success: code === 0, message: code === 0 ? undefined : 'Authentication failed. Check the code and try again.' }));
+              });
+            }
           } else if (msg.type === 'stop') {
             currentProc?.kill();
           } else if (msg.type === 'newSession') {

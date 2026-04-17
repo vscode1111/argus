@@ -30,7 +30,7 @@ interface Props {
 }
 
 export function SettingsModal({ onClose, workspacePath }: Props) {
-  const { verboseTools, showTimer, showOutput, showLogs, setVerboseTools, setShowTimer, setShowOutput, setShowLogs } = useSettings();
+  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete } = useSettings();
   const [infoOpen, setInfoOpen] = useState(false);
 
   useEscapeKey(onClose);
@@ -54,6 +54,10 @@ export function SettingsModal({ onClose, workspacePath }: Props) {
         <label className={styles.settingRow} htmlFor="toggle-logs">
           <span className={styles.settingLabel}>Show logs</span>
           <Toggle id="toggle-logs" checked={showLogs} onChange={setShowLogs} />
+        </label>
+        <label className={styles.settingRow} htmlFor="toggle-sound">
+          <span className={styles.settingLabel}>Sound on complete</span>
+          <Toggle id="toggle-sound" checked={soundOnComplete} onChange={setSoundOnComplete} />
         </label>
         <button
           className={styles.infoCorner}

@@ -28,6 +28,13 @@
 }
 .toolSummaryBash { color: var(--vscode-symbolIcon-variableForeground, #dcdcaa); }
 
+.toolAgentType {
+  color: var(--vscode-symbolIcon-enumeratorForeground, #b5cea8);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  white-space: nowrap;
+}
+
 .toolFileLink {
   color: var(--vscode-textLink-foreground);
   text-decoration: none;

@@ -173,10 +173,28 @@ async function simulateReads() {
   send({ type: 'done' });
 }
 
-async function simulateError() {
+async function simulateLoginUrl() {
+  send({ type: 'loginUrl', url: 'https://claude.ai/oauth/authorize?code=true&client_id=9d1c5a3e-example' });
+}
+
+async function simulateLoginSuccess() {
+  send({ type: 'loginResult', success: true });
+}
+
+async function simulateLoginFail() {
+  send({ type: 'loginResult', success: false, message: 'Invalid authorization code' });
+}
+
+async function simulateError(errorKind: string = 'generic') {
   send({ type: 'thinking_start' });
   await delay(400);
-  send({ type: 'error', text: 'API rate limit exceeded. Please try again in a moment.' });
+  const messages: Record<string, string> = {
+    auth: 'claude exited with code 1',
+    not_found: 'Claude Code CLI not found. Install it with: npm install -g @anthropic-ai/claude-code',
+    session: 'Session sess_abc123 not found or expired.',
+    generic: 'API rate limit exceeded. Please try again in a moment.',
+  };
+  send({ type: 'error', text: messages[errorKind] ?? messages.generic, errorKind });
 }
 
 const BTN_STYLES: React.CSSProperties = {
@@ -232,7 +250,12 @@ export function DevHarness() {
           <Btn label="tools" onClick={simulateTools} />
           <Btn label="reads" onClick={simulateReads} bg="#2d6a4f" />
           <Btn label="logs" onClick={simulateLogs} bg="#5a3e7a" />
-          <Btn label="error" onClick={simulateError} bg="#7a2020" />
+          <Btn label="err:auth" onClick={() => simulateError('auth')} bg="#7a2020" />
+          <Btn label="err:session" onClick={() => simulateError('session')} bg="#7a2020" />
+          <Btn label="err:generic" onClick={() => simulateError('generic')} bg="#7a2020" />
+          <Btn label="login:url" onClick={simulateLoginUrl} bg="#5a6a2f" />
+          <Btn label="login:ok" onClick={simulateLoginSuccess} bg="#2d6a4f" />
+          <Btn label="login:fail" onClick={simulateLoginFail} bg="#7a2020" />
           <Btn label="clear" onClick={() => send({ type: 'clear' })} bg="#444" />
           <Btn label="prefill" onClick={() => send({ type: 'prefill', text: 'Explain this function' })} bg="#444" />
           <button

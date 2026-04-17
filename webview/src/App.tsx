@@ -1,5 +1,5 @@
 import React, { useEffect, useReducer } from 'react';
-import { UIMessage, StreamingState, ToolCallData, LogLevel, LogEntry } from './types';
+import { UIMessage, StreamingState, ToolCallData, LogLevel, LogEntry, LoginState } from './types';
 import { MessageList } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
@@ -13,6 +13,7 @@ type AppState = {
   prefill: string;
   workspacePath: string;
   logs: LogEntry[];
+  login: LoginState;
 };
 
 type AppAction =
@@ -23,12 +24,16 @@ type AppAction =
   | { type: 'tool_start'; call: ToolCallData }
   | { type: 'tool_end'; call: ToolCallData }
   | { type: 'done' }
-  | { type: 'error'; text: string }
+  | { type: 'error'; text: string; errorKind?: string }
   | { type: 'clear' }
   | { type: 'prefill'; text: string }
   | { type: 'workspaceInfo'; path: string }
   | { type: 'log'; level: LogLevel; text: string; timestamp: string }
-  | { type: 'clearLogs' };
+  | { type: 'clearLogs' }
+  | { type: 'loginStart' }
+  | { type: 'loginUrl'; url: string }
+  | { type: 'loginSubmitting' }
+  | { type: 'loginResult'; success: boolean; message?: string };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -102,7 +107,7 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'error': {
-      const errorMsg: UIMessage = { id: generateId(), role: 'error', content: action.text };
+      const errorMsg: UIMessage = { id: generateId(), role: 'error', content: action.text, errorKind: action.errorKind as UIMessage['errorKind'] };
       return {
         ...state,
         messages: [...state.messages, errorMsg],
@@ -126,6 +131,18 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'clearLogs':
       return { ...state, logs: [] };
 
+    case 'loginStart':
+      return { ...state, login: { phase: 'starting' } };
+
+    case 'loginUrl':
+      return { ...state, login: { phase: 'url', url: action.url } };
+
+    case 'loginSubmitting':
+      return { ...state, login: { phase: 'submitting' } };
+
+    case 'loginResult':
+      return { ...state, login: action.success ? { phase: 'success' } : { phase: 'error', message: action.message ?? 'Login failed' } };
+
     default:
       return state;
   }
@@ -134,6 +151,23 @@ function reducer(state: AppState, action: AppAction): AppState {
 let nextMsgId = 0;
 function generateId(): string { return `msg-${++nextMsgId}-${Date.now()}`; }
 
+function playCompletionSound(): void {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.2);
+    osc.onended = () => ctx.close();
+  } catch {}
+}
+
 const initialState: AppState = {
   messages: [],
   streaming: null,
@@ -141,11 +175,13 @@ const initialState: AppState = {
   prefill: '',
   workspacePath: '',
   logs: [],
+  login: { phase: 'idle' },
 };
 
 function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { showLogs } = useSettings();
+  const { showLogs, soundOnComplete } = useSettings();
+  const wasStreaming = React.useRef(false);
   const [logWidth, setLogWidth] = React.useState(320);
   const dragging = React.useRef(false);
   const dragStartX = React.useRef(0);
@@ -156,6 +192,7 @@ function AppInner() {
       'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
       'tool_start', 'tool_end', 'done', 'error', 'clear',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
+      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult',
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;
@@ -167,6 +204,13 @@ function AppInner() {
     postMessage({ type: 'getInfo' });
     return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  useEffect(() => {
+    if (wasStreaming.current && !state.isStreaming && soundOnComplete) {
+      playCompletionSound();
+    }
+    wasStreaming.current = state.isStreaming;
+  }, [state.isStreaming, soundOnComplete]);
 
   useEffect(() => {
     if (!state.workspacePath) return;
@@ -202,7 +246,7 @@ function AppInner() {
     <div className="app">
       <div className="content">
         <div className="chatPane">
-          <MessageList messages={state.messages} streaming={state.streaming} />
+          <MessageList messages={state.messages} streaming={state.streaming} login={state.login} />
           <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} />
         </div>
         {showLogs && (

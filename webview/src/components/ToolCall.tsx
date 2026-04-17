@@ -29,6 +29,7 @@ function toolSummary(name: string, input: Record<string, unknown>): string {
       return (input.query as string) || '';
     case 'WebFetch':
       return (input.url as string) || '';
+    case 'Agent':
     case 'Task':
       return (input.description as string) || '';
     default: {
@@ -52,6 +53,7 @@ export function ToolCall({ call }: Props) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const bashCommand = name === 'Bash' ? (input.command as string) || '' : '';
+  const agentType = name === 'Agent' ? (input.subagent_type as string) || '' : '';
   const resultLineCount = useMemo(
     () => result ? result.trim().split('\n').filter(Boolean).length : 0,
     [result]
@@ -98,6 +100,9 @@ export function ToolCall({ call }: Props) {
               ) : (
                 <span className={[styles.toolSummary, name === 'Bash' && summary === bashCommand && styles.toolSummaryBash].filter(Boolean).join(' ')}>{summary}</span>
               )
+            )}
+            {name === 'Agent' && agentType && (
+              <span className={styles.toolAgentType}>{agentType}</span>
             )}
             {name === 'Bash' && bashCommand && summary !== bashCommand && (
               <span className={[styles.toolSummary, styles.toolSummaryBash].join(' ')}>{bashCommand}</span>

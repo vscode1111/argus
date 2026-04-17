@@ -7,12 +7,14 @@ interface SettingsContextValue {
   showLogs: boolean;
   showLogTime: boolean;
   showLogType: boolean;
+  soundOnComplete: boolean;
   setVerboseTools: (v: boolean) => void;
   setShowTimer: (v: boolean) => void;
   setShowOutput: (v: boolean) => void;
   setShowLogs: (v: boolean) => void;
   setShowLogTime: (v: boolean) => void;
   setShowLogType: (v: boolean) => void;
+  setSoundOnComplete: (v: boolean) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
@@ -22,12 +24,14 @@ const SettingsContext = createContext<SettingsContextValue>({
   showLogs: false,
   showLogTime: true,
   showLogType: true,
+  soundOnComplete: false,
   setVerboseTools: () => {},
   setShowTimer: () => {},
   setShowOutput: () => {},
   setShowLogs: () => {},
   setShowLogTime: () => {},
   setShowLogType: () => {},
+  setSoundOnComplete: () => {},
 });
 
 function readBool(key: string, defaultVal: boolean): boolean {
@@ -46,6 +50,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [showLogs, setShowLogsState] = useState(() => readBool('argus.showLogs', false));
   const [showLogTime, setShowLogTimeState] = useState(() => readBool('argus.showLogTime', true));
   const [showLogType, setShowLogTypeState] = useState(() => readBool('argus.showLogType', true));
+  const [soundOnComplete, setSoundOnCompleteState] = useState(() => readBool('argus.soundOnComplete', false));
 
   function setVerboseTools(v: boolean) {
     setVerboseToolsState(v);
@@ -77,8 +82,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('argus.showLogType', String(v)); } catch {}
   }
 
+  function setSoundOnComplete(v: boolean) {
+    setSoundOnCompleteState(v);
+    try { localStorage.setItem('argus.soundOnComplete', String(v)); } catch {}
+  }
+
   return (
-    <SettingsContext.Provider value={{ verboseTools, showTimer, showOutput, showLogs, showLogTime, showLogType, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setShowLogTime, setShowLogType }}>
+    <SettingsContext.Provider value={{ verboseTools, showTimer, showOutput, showLogs, showLogTime, showLogType, soundOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setShowLogTime, setShowLogType, setSoundOnComplete }}>
       {children}
     </SettingsContext.Provider>
   );

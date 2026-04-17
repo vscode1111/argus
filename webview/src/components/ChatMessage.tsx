@@ -1,26 +1,138 @@
 import React, { useState } from 'react';
-import { UIMessage } from '../types';
+import { UIMessage, ErrorKind, LoginState } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
 import { Markdown } from '../utils/markdown';
 import { formatDuration } from '../utils/time';
 import { ImageViewerModal } from './ImageViewerModal';
+import { postMessage } from '../vscode';
 import msg from './shared/message.module.css';
 import styles from './ChatMessage.module.css';
 
-interface Props {
-  message: UIMessage;
+function dispatchLocal(data: object) {
+  window.dispatchEvent(new MessageEvent('message', { data }));
 }
 
-export function ChatMessage({ message }: Props) {
+interface Props {
+  message: UIMessage;
+  login?: LoginState;
+}
+
+const ERROR_HINTS: Record<ErrorKind, { title: string; hint: string }> = {
+  auth: {
+    title: 'Authentication required',
+    hint: 'Run `claude login` in your terminal to authenticate, then retry.',
+  },
+  not_found: {
+    title: 'Claude CLI not found',
+    hint: 'Install it with: npm install -g @anthropic-ai/claude-code',
+  },
+  session: {
+    title: 'Session expired',
+    hint: 'The previous session could not be restored. Start a new session or retry.',
+  },
+  generic: {
+    title: 'Something went wrong',
+    hint: 'Check the log panel for details.',
+  },
+};
+
+function LoginPanel({ login }: { login: LoginState }) {
+  const [code, setCode] = useState('');
+  const phase = login.phase;
+
+  if (phase === 'starting') {
+    return <div className={styles.loginPanel}><div className={styles.loginHint}>Starting login...</div></div>;
+  }
+
+  if (phase === 'url') {
+    return (
+      <div className={styles.loginPanel}>
+        <div className={styles.loginTitle}>Continue in browser</div>
+        <div className={styles.loginHint}>If the browser didn't open, visit this URL:</div>
+        <div className={styles.loginUrlRow}>
+          <input className={styles.loginUrlInput} value={login.url} readOnly onClick={e => (e.target as HTMLInputElement).select()} />
+          <button className={styles.loginCopyBtn} onClick={() => navigator.clipboard.writeText(login.url)} title="Copy URL">&#128203;</button>
+          <button className={styles.loginCopyBtn} onClick={() => { postMessage({ type: 'openUrl', url: login.url }); window.open(login.url, '_blank'); }} title="Open in browser">&#8599;</button>
+        </div>
+        <div className={styles.loginHint}>Or, paste your authorization code manually:</div>
+        <input
+          className={styles.loginCodeInput}
+          placeholder="012345"
+          value={code}
+          onChange={e => setCode(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && code.trim()) { dispatchLocal({ type: 'loginSubmitting' }); postMessage({ type: 'loginCode', text: code.trim() }); } }}
+        />
+        <div className={styles.errorActions}>
+          <button className={styles.loginContinueBtn} disabled={!code.trim()} onClick={() => { dispatchLocal({ type: 'loginSubmitting' }); postMessage({ type: 'loginCode', text: code.trim() }); }}>Continue</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'submitting') {
+    return <div className={styles.loginPanel}><div className={styles.loginHint}>Authenticating...</div></div>;
+  }
+
+  if (phase === 'success') {
+    return (
+      <div className={styles.loginPanel}>
+        <div className={styles.loginSuccess}>Login successful</div>
+        <div className={styles.errorActions}>
+          <button className={styles.errorBtn} onClick={() => postMessage({ type: 'retry' })}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'error') {
+    return (
+      <div className={styles.loginPanel}>
+        <div className={styles.errorTitle}>{login.message}</div>
+        <div className={styles.errorActions}>
+          <button className={styles.errorBtn} onClick={() => { dispatchLocal({ type: 'loginStart' }); postMessage({ type: 'login' }); }}>Try again</button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function ErrorMessage({ message, login }: Props) {
+  const { content, errorKind = 'generic' } = message;
+  const { title, hint } = ERROR_HINTS[errorKind];
+  const showLoginPanel = errorKind === 'auth' && login && login.phase !== 'idle';
+
+  return (
+    <div className={[msg.message, msg.assistant, styles.errorBlock].join(' ')}>
+      <div className={styles.errorTitle}>{title}</div>
+      {content && <div className={styles.errorDetail}>{content}</div>}
+      {showLoginPanel ? (
+        <LoginPanel login={login} />
+      ) : (
+        <>
+          <div className={styles.errorHint}>{hint}</div>
+          <div className={styles.errorActions}>
+            {errorKind === 'auth' && (
+              <button className={styles.loginContinueBtn} onClick={() => { dispatchLocal({ type: 'loginStart' }); postMessage({ type: 'login' }); }}>Login</button>
+            )}
+            <button className={styles.errorBtn} onClick={() => postMessage({ type: 'retry' })}>Retry</button>
+            {errorKind === 'session' && (
+              <button className={styles.errorBtn} onClick={() => postMessage({ type: 'newSession' })}>New session</button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function ChatMessage({ message, login }: Props) {
   const { role, content, thinking, toolCalls, responseTime } = message;
 
   if (role === 'error') {
-    return (
-      <div className={[msg.message, msg.assistant].join(' ')} style={{ color: 'var(--error-fg)' }}>
-        Error: {content}
-      </div>
-    );
+    return <ErrorMessage message={message} login={login} />;
   }
 
   if (role === 'user') {
