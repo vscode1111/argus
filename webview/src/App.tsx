@@ -6,6 +6,8 @@ import { LogPanel } from './components/LogPanel';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { postMessage } from './vscode';
 
+type ContextUsage = { percent: number; inputTokens: number; outputTokens: number };
+
 type AppState = {
   messages: UIMessage[];
   streaming: StreamingState | null;
@@ -14,6 +16,7 @@ type AppState = {
   workspacePath: string;
   logs: LogEntry[];
   login: LoginState;
+  contextUsage: ContextUsage | null;
 };
 
 type AppAction =
@@ -33,7 +36,8 @@ type AppAction =
   | { type: 'loginStart' }
   | { type: 'loginUrl'; url: string }
   | { type: 'loginSubmitting' }
-  | { type: 'loginResult'; success: boolean; message?: string };
+  | { type: 'loginResult'; success: boolean; message?: string }
+  | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -128,7 +132,7 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'clear':
-      return { ...state, messages: [], streaming: null, isStreaming: false, logs: [] };
+      return { ...state, messages: [], streaming: null, isStreaming: false, logs: [], contextUsage: null };
 
     case 'prefill':
       return { ...state, prefill: action.text };
@@ -153,6 +157,9 @@ function reducer(state: AppState, action: AppAction): AppState {
 
     case 'loginResult':
       return { ...state, login: action.success ? { phase: 'success' } : { phase: 'error', message: action.message ?? 'Login failed' } };
+
+    case 'contextUsage':
+      return { ...state, contextUsage: { percent: action.percent, inputTokens: action.inputTokens, outputTokens: action.outputTokens } };
 
     default:
       return state;
@@ -187,6 +194,7 @@ const initialState: AppState = {
   workspacePath: '',
   logs: [],
   login: { phase: 'idle' },
+  contextUsage: null,
 };
 
 function AppInner() {
@@ -207,7 +215,7 @@ function AppInner() {
       'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
       'tool_start', 'tool_end', 'done', 'error', 'clear',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
-      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult',
+      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage',
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;
@@ -300,7 +308,7 @@ function AppInner() {
         )}
         <div className="chatPane">
           <MessageList messages={state.messages} streaming={state.streaming} login={state.login} />
-          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} />
+          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} contextUsage={state.contextUsage} />
         </div>
         {showLogs && !isNarrow && (
           <>

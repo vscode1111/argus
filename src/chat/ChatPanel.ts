@@ -20,6 +20,7 @@ type WebviewMessage =
   | { type: 'workspaceInfo'; path: string }
   | { type: 'skills'; skills: { name: string; scope: 'global' | 'project' | 'builtin' }[] }
   | { type: 'log'; level: string; text: string; timestamp: string }
+  | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number }
   | { type: 'loginUrl'; url: string }
   | { type: 'loginResult'; success: boolean; message?: string };
 
@@ -37,6 +38,8 @@ export class ChatPanel {
   private lastUserImages: ImageAttachment[] | undefined;
   private loginSubmitCode: ((code: string) => Promise<boolean>) | undefined;
   private activeToolCalls: { id: string; name: string; input?: unknown; result?: string }[] = [];
+  private turnInputTokens = 0;
+  private turnOutputTokens = 0;
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
@@ -79,6 +82,8 @@ export class ChatPanel {
   public newSession(): void {
     this.messages = [];
     this.session.reset();
+    this.turnInputTokens = 0;
+    this.turnOutputTokens = 0;
     this.post({ type: 'clear' });
   }
 
@@ -135,6 +140,7 @@ export class ChatPanel {
     this.post({ type: 'thinking_start' });
 
     const systemPrompt = this.buildSystemPrompt();
+    const MAX_CONTEXT = 200_000;
     let responseText = '';
     let thinkingText = '';
     this.activeToolCalls = [];
@@ -162,6 +168,15 @@ export class ChatPanel {
             if (match) match.result = event.result;
             console.log('[Argus] tool_end id:', event.id, 'match:', !!match, 'result length:', event.result?.length ?? 0);
             this.post({ type: 'tool_end', call: { id: event.id, name: match?.name ?? '', input: match?.input ?? {}, result: event.result } });
+            break;
+          }
+
+          case 'usage': {
+            if (event.inputTokens > 0) this.turnInputTokens = event.inputTokens;
+            if (event.outputTokens > 0) this.turnOutputTokens = event.outputTokens;
+            const total = this.turnInputTokens + this.turnOutputTokens;
+            const percent = Math.min(100, Math.round(total / MAX_CONTEXT * 100));
+            this.post({ type: 'contextUsage', percent, inputTokens: this.turnInputTokens, outputTokens: this.turnOutputTokens });
             break;
           }
 

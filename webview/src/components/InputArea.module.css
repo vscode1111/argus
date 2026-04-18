@@ -247,3 +247,21 @@
   height: 34px;
 }
 .btnStop:hover { opacity: 0.85; }
+
+.contextPill {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--vscode-badge-background, rgba(255,255,255,0.08));
+  white-space: nowrap;
+  user-select: none;
+  cursor: default;
+  line-height: 1.4;
+}
+.contextMedium {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+.contextHigh {
+  color: var(--vscode-errorForeground, #f48771);
+}

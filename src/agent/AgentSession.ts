@@ -11,6 +11,7 @@ export type SessionEvent =
   | { type: 'tool_start'; id: string; name: string; input?: unknown }
   | { type: 'tool_end'; id: string; result?: string }
   | { type: 'result'; text: string }
+  | { type: 'usage'; inputTokens: number; outputTokens: number }
   | { type: 'error'; message: string; errorKind: ErrorKind };
 
 interface SystemInitMessage {
@@ -316,6 +317,14 @@ export class AgentSession {
 
           if ('type' in msg && msg.type === 'assistant') {
             const assistantMsg = msg as AssistantMessage;
+            const usage = (assistantMsg.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
+            if (usage) {
+              const inputTokens = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+              const outputTokens = usage.output_tokens ?? 0;
+              if (inputTokens > 0 || outputTokens > 0) {
+                yield { type: 'usage', inputTokens, outputTokens };
+              }
+            }
             for (const block of assistantMsg.message?.content ?? []) {
               if (block.type === 'thinking' && block.thinking) {
                 yield { type: 'thinking', text: block.thinking };

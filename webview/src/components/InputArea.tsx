@@ -26,9 +26,10 @@ interface Props {
   isStreaming: boolean;
   prefill: string;
   workspacePath: string;
+  contextUsage: { percent: number; inputTokens: number; outputTokens: number } | null;
 }
 
-export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
+export function InputArea({ isStreaming, prefill, workspacePath, contextUsage }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -325,6 +326,14 @@ export function InputArea({ isStreaming, prefill, workspacePath }: Props) {
         <div className={styles.btnRow}>
           {isStreaming && (
             <button className={styles.btnStop} onClick={() => postMessage({ type: 'stop' })}>Stop</button>
+          )}
+          {contextUsage && (
+            <span
+              className={[styles.contextPill, contextUsage.percent >= 80 ? styles.contextHigh : contextUsage.percent >= 50 ? styles.contextMedium : ''].filter(Boolean).join(' ')}
+              title={`Input: ${contextUsage.inputTokens.toLocaleString()} tokens\nOutput: ${contextUsage.outputTokens.toLocaleString()} tokens`}
+            >
+              {contextUsage.percent}% used
+            </span>
           )}
           <div className={settings.anchor}>
             <button

@@ -73,6 +73,9 @@ function argusAgentPlugin(): Plugin {
         const answeredTools = new Set<string>();
         const pendingAskTools = new Set<string>();
         let cliDone = false;
+        let turnInputTokens = 0;
+        let turnOutputTokens = 0;
+        const MAX_CONTEXT = 200_000;
 
         const sendLog = (level: 'debug' | 'info' | 'warn' | 'error', text: string) => {
           ws.send(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
@@ -181,6 +184,18 @@ function argusAgentPlugin(): Plugin {
                     }
                   }
                   receivedDeltas = false;
+                  const usage = (event.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
+                  if (usage) {
+                    const newInput = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+                    const newOutput = usage.output_tokens ?? 0;
+                    if (newInput > 0 || newOutput > 0) {
+                      turnInputTokens = newInput;
+                      turnOutputTokens = newOutput;
+                      const total = turnInputTokens + turnOutputTokens;
+                      const percent = Math.min(100, Math.round(total / MAX_CONTEXT * 100));
+                      ws.send(JSON.stringify({ type: 'contextUsage', percent, inputTokens: turnInputTokens, outputTokens: turnOutputTokens }));
+                    }
+                  }
                 } else if (event.type === 'tool_result') {
                   const toolId = event.tool_use_id as string;
                   if (pendingAskTools.has(toolId) || answeredTools.has(toolId)) {
