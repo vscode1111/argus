@@ -33,6 +33,7 @@ function getSkills() {
 
 const MODEL = process.env.ARGUS_MODEL ?? 'claude-opus-4-6';
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
+const PLAN_BLOCKED_TOOLS = ['Write', 'Edit'];
 
 const AUTH_PATTERNS = [/auth/i, /login/i, /token/i, /unauthorized/i, /401/i, /403/i, /credential/i, /oauth/i, /api[_ ]?key/i];
 const SESSION_PATTERNS = [/session/i, /resume/i, /expired/i, /not found.*session/i];
@@ -86,6 +87,7 @@ function argusAgentPlugin(): Plugin {
             type: string;
             text?: string;
             images?: Array<{ data: string; mediaType: string }>;
+            mode?: 'plan' | 'edit';
           };
 
           if (msg.type === 'send' && msg.text?.trim() === '/clear') {
@@ -101,13 +103,22 @@ function argusAgentPlugin(): Plugin {
               message: { id: String(Date.now()), role: 'user', content: text, images },
             }));
 
+            const isPlan = msg.mode === 'plan';
+            const tools = isPlan
+              ? ALLOWED_TOOLS.filter(t => !PLAN_BLOCKED_TOOLS.includes(t))
+              : ALLOWED_TOOLS;
             const args = [
               '--print', '--verbose',
               '--output-format', 'stream-json',
               '--input-format', 'stream-json',
               '--model', MODEL,
-              '--allowedTools', ALLOWED_TOOLS.join(','),
+              '--tools', tools.join(','),
+              '--allowedTools', tools.join(','),
             ];
+            if (isPlan) {
+              args.push('--permission-mode', 'plan');
+              args.push('--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
+            }
             if (sessionId) args.push('--resume', sessionId);
 
             sendLog('info', `Spawning claude: ${args.join(' ')}`);

@@ -45,6 +45,7 @@ interface ResultMessage {
 type CliMessage = SystemInitMessage | AssistantMessage | ToolResultMessage | ResultMessage | Record<string, unknown>;
 
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
+const PLAN_BLOCKED_TOOLS = ['Write', 'Edit'];
 
 const AUTH_PATTERNS = [/auth/i, /login/i, /token/i, /unauthorized/i, /401/i, /403/i, /credential/i, /oauth/i, /api[_ ]?key/i];
 const SESSION_PATTERNS = [/session/i, /resume/i, /expired/i, /not found.*session/i];
@@ -84,6 +85,7 @@ export class AgentSession {
   private readonly onLog: ((level: 'debug' | 'info' | 'warn' | 'error', text: string) => void) | undefined;
   private pendingToolResolvers = new Map<string, (result: string) => void>();
   private skipNextToolEnd = new Set<string>();
+  public mode: 'plan' | 'edit' = 'edit';
 
   constructor(outputChannel?: vscode.OutputChannel, onLog?: (level: 'debug' | 'info' | 'warn' | 'error', text: string) => void) {
     this.cwd = getWorkspaceRoot();
@@ -213,14 +215,24 @@ export class AgentSession {
 
   async *send(prompt: string, systemPrompt?: string, images?: ImageAttachment[]): AsyncGenerator<SessionEvent> {
     const hasImages = images && images.length > 0;
+    const isPlan = this.mode === 'plan';
+    const tools = isPlan
+      ? ALLOWED_TOOLS.filter(t => !PLAN_BLOCKED_TOOLS.includes(t))
+      : ALLOWED_TOOLS;
     const args = [
       '--print',
       '--verbose',
       '--output-format', 'stream-json',
       '--input-format', 'stream-json',
       '--model', getModel(),
-      '--allowedTools', ALLOWED_TOOLS.join(','),
+      '--tools', tools.join(','),
+      '--allowedTools', tools.join(','),
     ];
+
+    if (isPlan) {
+      args.push('--permission-mode', 'plan');
+      args.push('--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
+    }
 
     if (this.sessionId) {
       args.push('--resume', this.sessionId);

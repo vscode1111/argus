@@ -248,6 +248,27 @@
 }
 .btnStop:hover { opacity: 0.85; }
 
+.modePill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--vscode-badge-background, rgba(255,255,255,0.08));
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  color: var(--vscode-descriptionForeground);
+  transition: border-color 0.15s, color 0.15s;
+}
+.modePill:hover {
+  border-color: var(--vscode-focusBorder);
+}
+.modePlan {
+  color: var(--vscode-terminal-ansiYellow, #cca700);
+  border-color: var(--vscode-terminal-ansiYellow, #cca700);
+}
+
 .contextPill {
   font-size: 11px;
   color: var(--vscode-descriptionForeground);

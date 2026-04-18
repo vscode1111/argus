@@ -42,6 +42,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, contextUsage }:
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [slashMenuLeft, setSlashMenuLeft] = useState(DEFAULT_SLASH_MENU_LEFT);
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [mode, setMode] = useState<'plan' | 'edit'>('edit');
   const historyIndex = useRef(-1);
   const savedDraft = useRef('');
   const dragging = useRef(false);
@@ -128,7 +129,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, contextUsage }:
     el.value = '';
     el.style.height = 'auto';
     setSlashQuery(null);
-    postMessage({ type: 'send', text, images: images.length > 0 ? images : undefined });
+    postMessage({ type: 'send', text, images: images.length > 0 ? images : undefined, mode });
     setImages([]);
   }
 
@@ -327,6 +328,13 @@ export function InputArea({ isStreaming, prefill, workspacePath, contextUsage }:
           {isStreaming && (
             <button className={styles.btnStop} onClick={() => postMessage({ type: 'stop' })}>Stop</button>
           )}
+          <button
+            className={[styles.modePill, mode === 'plan' ? styles.modePlan : ''].filter(Boolean).join(' ')}
+            onClick={() => setMode(m => m === 'edit' ? 'plan' : 'edit')}
+            title={mode === 'edit' ? 'Switch to Plan mode' : 'Switch to Edit mode'}
+          >
+            {mode === 'edit' ? 'Edit' : 'Plan'}
+          </button>
           {contextUsage && (
             <span
               className={[styles.contextPill, contextUsage.percent >= 80 ? styles.contextHigh : contextUsage.percent >= 50 ? styles.contextMedium : ''].filter(Boolean).join(' ')}

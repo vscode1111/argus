@@ -87,11 +87,12 @@ export class ChatPanel {
     this.post({ type: 'clear' });
   }
 
-  private async onWebviewMessage(msg: { type: string; text?: string; path?: string; url?: string; images?: ImageAttachment[] }): Promise<void> {
+  private async onWebviewMessage(msg: { type: string; text?: string; path?: string; url?: string; images?: ImageAttachment[]; mode?: 'plan' | 'edit' }): Promise<void> {
     console.log('[Argus] onWebviewMessage:', JSON.stringify({ ...msg, images: msg.images ? `[${msg.images.length} images]` : undefined }));
     if (msg.type === 'send' && msg.text?.trim() === '/clear') {
       this.newSession();
     } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
+      this.session.mode = msg.mode ?? 'edit';
       await this.handleUserMessage(msg.text ?? '', msg.images);
     } else if (msg.type === 'stop') {
       this.session.abort();
