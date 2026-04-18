@@ -36,6 +36,7 @@ export class ChatPanel {
   private lastUserText: string = '';
   private lastUserImages: ImageAttachment[] | undefined;
   private loginSubmitCode: ((code: string) => Promise<boolean>) | undefined;
+  private activeToolCalls: { id: string; name: string; input?: unknown; result?: string }[] = [];
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
@@ -109,7 +110,14 @@ export class ChatPanel {
     } else if (msg.type === 'retry' && this.lastUserText) {
       await this.handleUserMessage(this.lastUserText, this.lastUserImages);
     } else if (msg.type === 'toolAnswer') {
-      // TODO: forward answer to Claude CLI stdin when interactive tool support is implemented
+      const { id, answers } = msg as unknown as { id: string; answers: Record<string, string> };
+      const content = JSON.stringify({ answers });
+      const tc = this.activeToolCalls.find(t => t.id === id);
+      if (tc) {
+        tc.result = content;
+        this.post({ type: 'tool_end', call: { id, name: tc.name, input: tc.input ?? {}, result: content } });
+      }
+      this.session.sendToolResult(id, content);
     } else if (msg.type === 'login') {
       await this.handleLogin();
     } else if (msg.type === 'loginCode' && msg.text) {
@@ -129,7 +137,7 @@ export class ChatPanel {
     const systemPrompt = this.buildSystemPrompt();
     let responseText = '';
     let thinkingText = '';
-    const toolCalls: { id: string; name: string; input?: unknown; result?: string }[] = [];
+    this.activeToolCalls = [];
 
     try {
       for await (const event of this.session.send(text, systemPrompt, images)) {
@@ -145,12 +153,12 @@ export class ChatPanel {
             break;
 
           case 'tool_start':
-            toolCalls.push({ id: event.id, name: event.name, input: event.input });
+            this.activeToolCalls.push({ id: event.id, name: event.name, input: event.input });
             this.post({ type: 'tool_start', call: { id: event.id, name: event.name, input: event.input ?? {} } });
             break;
 
           case 'tool_end': {
-            const match = toolCalls.find(tc => tc.id === event.id);
+            const match = this.activeToolCalls.find(tc => tc.id === event.id);
             if (match) match.result = event.result;
             console.log('[Argus] tool_end id:', event.id, 'match:', !!match, 'result length:', event.result?.length ?? 0);
             this.post({ type: 'tool_end', call: { id: event.id, name: match?.name ?? '', input: match?.input ?? {}, result: event.result } });

@@ -104,7 +104,8 @@ yarn build        # bundle React webview to media/webview.js + media/webview.css
 yarn watch        # watch + rebuild webview on save (for VS Code Extension Host testing)
 yarn compile      # compile extension TypeScript
 yarn watch:tsc    # watch mode for extension TypeScript
-# Press F5 in VS Code to launch Extension Development Host
+# Primary UI testing: use `yarn dev` + browser refresh - do not suggest reloading VS Code extension
+# Press F5 in VS Code to launch Extension Development Host (for extension-side code only)
 ```
 
 ## Commands

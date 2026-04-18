@@ -43,7 +43,7 @@ interface ResultMessage {
 
 type CliMessage = SystemInitMessage | AssistantMessage | ToolResultMessage | ResultMessage | Record<string, unknown>;
 
-const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch'];
+const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 
 const AUTH_PATTERNS = [/auth/i, /login/i, /token/i, /unauthorized/i, /401/i, /403/i, /credential/i, /oauth/i, /api[_ ]?key/i];
 const SESSION_PATTERNS = [/session/i, /resume/i, /expired/i, /not found.*session/i];
@@ -81,6 +81,8 @@ export class AgentSession {
   private loginProc: ReturnType<typeof spawn> | undefined;
   private readonly outputChannel: vscode.OutputChannel | undefined;
   private readonly onLog: ((level: 'debug' | 'info' | 'warn' | 'error', text: string) => void) | undefined;
+  private pendingToolResolvers = new Map<string, (result: string) => void>();
+  private skipNextToolEnd = new Set<string>();
 
   constructor(outputChannel?: vscode.OutputChannel, onLog?: (level: 'debug' | 'info' | 'warn' | 'error', text: string) => void) {
     this.cwd = getWorkspaceRoot();
@@ -194,6 +196,20 @@ export class AgentSession {
     });
   }
 
+  sendToolResult(toolUseId: string, content: string): void {
+    const resolver = this.pendingToolResolvers.get(toolUseId);
+    if (resolver) {
+      this.pendingToolResolvers.delete(toolUseId);
+      this.log('info', `Resolving interactive tool ${toolUseId}: ${content.slice(0, 100)}`);
+      resolver(content);
+    }
+    const proc = this.currentProc;
+    if (!proc?.stdin?.writable) return;
+    const msg = JSON.stringify({ type: 'tool_result', tool_use_id: toolUseId, content });
+    this.log('info', `Sending tool result for ${toolUseId}: ${content.slice(0, 100)}`);
+    proc.stdin.write(msg + '\n');
+  }
+
   async *send(prompt: string, systemPrompt?: string, images?: ImageAttachment[]): AsyncGenerator<SessionEvent> {
     const hasImages = images && images.length > 0;
     const args = [
@@ -211,6 +227,9 @@ export class AgentSession {
     if (systemPrompt) {
       args.push('--system-prompt', systemPrompt);
     }
+
+    this.pendingToolResolvers.clear();
+    this.skipNextToolEnd.clear();
 
     try {
       this.log('info', `Spawning claude: ${args.join(' ')}`);
@@ -243,7 +262,6 @@ export class AgentSession {
       const msg = JSON.stringify({ type: 'user', message: { role: 'user', content } });
       this.log('debug', `stdin: ${msg.length} bytes`);
       proc.stdin.write(msg + '\n');
-      proc.stdin.end();
 
       let stderrOutput = '';
       proc.stderr.on('data', (data: Buffer) => {
@@ -306,6 +324,14 @@ export class AgentSession {
               } else if (block.type === 'tool_use') {
                 this.log('info', `tool_start: ${block.name} (${block.id})`);
                 yield { type: 'tool_start', id: block.id, name: block.name, input: block.input };
+                if (block.name === 'AskUserQuestion') {
+                  const userResult = await new Promise<string>(resolve => {
+                    this.pendingToolResolvers.set(block.id, resolve);
+                  });
+                  this.log('info', `AskUserQuestion ${block.id} answered: ${userResult.slice(0, 100)}`);
+                  this.skipNextToolEnd.add(block.id);
+                  yield { type: 'tool_end', id: block.id, result: userResult };
+                }
               }
             }
             receivedDeltas = false; // reset for next turn
@@ -325,11 +351,17 @@ export class AgentSession {
             this.log('debug', `user message: ${blocks.length} block(s) [${blocks.map(b => `${b.type}:${b.tool_use_id}`).join(', ')}]`);
             for (const block of blocks) {
               if (block.type === 'tool_result') {
+                const toolId = block.tool_use_id ?? '';
                 const content = typeof block.content === 'string'
                   ? block.content
                   : JSON.stringify(block.content);
-                this.log('debug', `tool_result ${block.tool_use_id}: ${content?.slice(0, 100)}`);
-                yield { type: 'tool_end', id: block.tool_use_id ?? '', result: content ?? '' };
+                this.log('debug', `tool_result ${toolId}: ${content?.slice(0, 100)}`);
+                if (this.skipNextToolEnd.has(toolId)) {
+                  this.skipNextToolEnd.delete(toolId);
+                  this.log('info', `Skipping CLI auto-result for ${toolId} (answered interactively)`);
+                  continue;
+                }
+                yield { type: 'tool_end', id: toolId, result: content ?? '' };
               }
             }
             continue;

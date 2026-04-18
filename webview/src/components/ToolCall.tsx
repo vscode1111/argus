@@ -65,6 +65,7 @@ export function ToolCall({ call }: Props) {
     () => result ? result.trim().split('\n').filter(Boolean).length : 0,
     [result]
   );
+  const pending = !result && !error;
   const hasDiff = name === 'Edit' && !!(input.old_string || input.new_string);
   const oldLines = hasDiff ? String(input.old_string || '').split('\n') : [];
   const newLines = hasDiff ? String(input.new_string || '').split('\n') : [];
@@ -160,7 +161,7 @@ export function ToolCall({ call }: Props) {
                     onClick={handleSubmit}
                     disabled={!allAnswered}
                   >
-                    Submit answers
+                    Submit
                   </button>
                 </div>
               )}
@@ -204,12 +205,12 @@ export function ToolCall({ call }: Props) {
       <div className={[styles.toolCall, error && styles.error].filter(Boolean).join(' ')}>
         {verboseTools ? (
           <pre className={styles.toolInput}>
-            <span className={styles.toolName}>{name}</span>
+            <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
             {'\n'}{JSON.stringify(input, null, 2)}
           </pre>
         ) : (
           <div className={styles.toolHeader}>
-            <span className={styles.toolName}>{name}</span>
+            <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
             {name === 'Agent' && agentType && (
               <span className={styles.toolAgentType}>{agentType}</span>
             )}
