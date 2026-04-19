@@ -82,19 +82,35 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
 
     case 'tool_end': {
-      if (!state.streaming) return state;
-      return {
-        ...state,
-        streaming: {
-          ...state.streaming,
-          blocks: state.streaming.blocks.map(b =>
+      if (state.streaming) {
+        return {
+          ...state,
+          streaming: {
+            ...state.streaming,
+            blocks: state.streaming.blocks.map(b =>
+              b.type === 'tool' && b.call.id === action.call.id
+                ? { type: 'tool' as const, call: { ...b.call, result: action.call.result, error: action.call.error } }
+                : b
+            ),
+            lastEventTime: Date.now(),
+          },
+        };
+      }
+      // Update tool block in completed messages (e.g. late AskUserQuestion answer)
+      const updated = state.messages.map(msg => {
+        if (!msg.blocks) return msg;
+        const hasMatch = msg.blocks.some(b => b.type === 'tool' && b.call.id === action.call.id);
+        if (!hasMatch) return msg;
+        return {
+          ...msg,
+          blocks: msg.blocks.map(b =>
             b.type === 'tool' && b.call.id === action.call.id
               ? { type: 'tool' as const, call: { ...b.call, result: action.call.result, error: action.call.error } }
               : b
           ),
-          lastEventTime: Date.now(),
-        },
-      };
+        };
+      });
+      return { ...state, messages: updated };
     }
 
     case 'done': {

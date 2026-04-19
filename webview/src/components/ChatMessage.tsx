@@ -139,16 +139,24 @@ export function ChatMessage({ message, login }: Props) {
     return <UserMessage message={message} />;
   }
 
+  // Hide text blocks after a pending AskUserQuestion so the AI appears to wait
+  const firstPendingAskIdx = blocks?.findIndex(
+    b => b.type === 'tool' && b.call.name === 'AskUserQuestion' && !b.call.result
+  ) ?? -1;
+
   return (
     <div className={[msg.message, msg.assistant].join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
-      {blocks ? blocks.map((block, i) =>
-        block.type === 'tool'
+      {blocks ? blocks.map((block, i) => {
+        if (firstPendingAskIdx >= 0 && i > firstPendingAskIdx && block.type === 'text') {
+          return null;
+        }
+        return block.type === 'tool'
           ? <ToolCall key={block.call.id} call={block.call} />
           : <div key={`text-${i}`} className={msg.messageContent}>
               <Markdown>{block.text}</Markdown>
-            </div>
-      ) : content && (
+            </div>;
+      }) : content && (
         <div className={msg.messageContent}>
           <Markdown>{content}</Markdown>
         </div>

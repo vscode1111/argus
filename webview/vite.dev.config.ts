@@ -33,7 +33,7 @@ function getSkills() {
 
 const MODEL = process.env.ARGUS_MODEL ?? 'claude-opus-4-6';
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
-const PLAN_BLOCKED_TOOLS = ['Write', 'Edit'];
+const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
 
 const AUTH_PATTERNS = [/auth/i, /login/i, /token/i, /unauthorized/i, /401/i, /403/i, /credential/i, /oauth/i, /api[_ ]?key/i];
 const SESSION_PATTERNS = [/session/i, /resume/i, /expired/i, /not found.*session/i];
@@ -74,6 +74,7 @@ function argusAgentPlugin(): Plugin {
         const answeredTools = new Set<string>();
         const pendingAskTools = new Set<string>();
         let cliDone = false;
+        let suppressCliOutput = false;
         let turnInputTokens = 0;
         let turnOutputTokens = 0;
         const MAX_CONTEXT = 200_000;
@@ -88,6 +89,7 @@ function argusAgentPlugin(): Plugin {
             text?: string;
             images?: Array<{ data: string; mediaType: string }>;
             mode?: 'plan' | 'edit';
+            _silent?: boolean;
           };
 
           if (msg.type === 'send' && msg.text?.trim() === '/clear') {
@@ -98,10 +100,12 @@ function argusAgentPlugin(): Plugin {
             const text = msg.text ?? '';
             const images = msg.images;
 
-            ws.send(JSON.stringify({
-              type: 'message',
-              message: { id: String(Date.now()), role: 'user', content: text, images },
-            }));
+            if (!msg._silent) {
+              ws.send(JSON.stringify({
+                type: 'message',
+                message: { id: String(Date.now()), role: 'user', content: text, images },
+              }));
+            }
 
             const isPlan = msg.mode === 'plan';
             const tools = isPlan
@@ -122,7 +126,9 @@ function argusAgentPlugin(): Plugin {
             if (sessionId) args.push('--resume', sessionId);
 
             sendLog('info', `Spawning claude: ${args.join(' ')}`);
-            ws.send(JSON.stringify({ type: 'thinking_start' }));
+            if (!msg._silent) {
+              ws.send(JSON.stringify({ type: 'thinking_start' }));
+            }
 
             const proc = spawn('claude', args, {
               cwd: process.cwd(),
@@ -150,6 +156,7 @@ function argusAgentPlugin(): Plugin {
             let buffer = '';
             let stderrOutput = '';
             let receivedDeltas = false;
+            suppressCliOutput = false;
             cliDone = false;
             toolMap.clear();
             answeredTools.clear();
@@ -171,6 +178,7 @@ function argusAgentPlugin(): Plugin {
                 if (event.type === 'system' && event.subtype === 'init') {
                   sessionId = event.session_id as string;
                 } else if (event.type === 'content_block_delta') {
+                  if (suppressCliOutput) continue;
                   const delta = event.delta as Record<string, unknown> | undefined;
                   if (delta?.type === 'text_delta' && delta.text) {
                     receivedDeltas = true;
@@ -179,6 +187,10 @@ function argusAgentPlugin(): Plugin {
                     ws.send(JSON.stringify({ type: 'thinking_chunk', text: delta.thinking }));
                   }
                 } else if (event.type === 'assistant') {
+                  if (suppressCliOutput) {
+                    receivedDeltas = false;
+                    continue;
+                  }
                   const content = (event.message as { content: Array<Record<string, unknown>> })?.content ?? [];
                   for (const block of content) {
                     if (block.type === 'thinking' && block.thinking) {
@@ -208,10 +220,16 @@ function argusAgentPlugin(): Plugin {
                     }
                   }
                 } else if (event.type === 'tool_result') {
+                  if (suppressCliOutput) continue;
                   const toolId = event.tool_use_id as string;
-                  if (pendingAskTools.has(toolId) || answeredTools.has(toolId)) {
+                  if (answeredTools.has(toolId)) {
                     answeredTools.delete(toolId);
-                    sendLog('info', `Suppressing CLI auto-result for ${toolId} (interactive tool)`);
+                    sendLog('info', `Suppressing CLI echo for ${toolId} (already answered)`);
+                  } else if (pendingAskTools.has(toolId)) {
+                    // CLI auto-resolved AskUserQuestion (non-interactive stdin) - suppress it
+                    // so the card stays pending for the user to answer interactively
+                    suppressCliOutput = true;
+                    sendLog('info', `Suppressing CLI auto-result for AskUserQuestion ${toolId}`);
                   } else {
                     const tc = toolMap.get(toolId);
                     ws.send(JSON.stringify({
@@ -220,15 +238,22 @@ function argusAgentPlugin(): Plugin {
                     }));
                   }
                 } else if (event.type === 'user') {
+                  if (suppressCliOutput) continue;
                   const userMsg = event as { type: 'user'; message?: { content?: Array<Record<string, unknown>> }; content?: Array<Record<string, unknown>> };
                   const blocks = userMsg.message?.content ?? userMsg.content ?? [];
                   sendLog('debug', `user message: ${blocks.length} block(s)`);
                   for (const block of blocks) {
                     if (block.type === 'tool_result') {
                       const toolId = block.tool_use_id as string;
-                      if (pendingAskTools.has(toolId) || answeredTools.has(toolId)) {
+                      if (answeredTools.has(toolId)) {
                         answeredTools.delete(toolId);
-                        sendLog('info', `Suppressing CLI auto-result for ${toolId} (interactive tool)`);
+                        sendLog('info', `Suppressing CLI echo for ${toolId} (already answered)`);
+                        continue;
+                      }
+                      if (pendingAskTools.has(toolId)) {
+                        // CLI auto-resolved AskUserQuestion (non-interactive stdin) - suppress it
+                        suppressCliOutput = true;
+                        sendLog('info', `Suppressing CLI auto-result for AskUserQuestion ${toolId}`);
                         continue;
                       }
                       const tc = toolMap.get(toolId);
@@ -259,13 +284,21 @@ function argusAgentPlugin(): Plugin {
             });
 
             proc.on('close', (code) => {
-              currentProc = undefined;
+              const isActiveProc = currentProc === proc;
+              if (isActiveProc) {
+                currentProc = undefined;
+              }
               sendLog('info', `claude exited with code ${code}`);
               if (code !== 0 && code !== null) {
                 const { message, errorKind } = classifyError(stderrOutput, code);
-                ws.send(JSON.stringify({ type: 'error', text: message, errorKind }));
+                if (pendingAskTools.size > 0) {
+                  // Don't send error to webview - it would clear streaming and lose the pending question
+                  sendLog('warn', `CLI exited (${errorKind}) with ${pendingAskTools.size} pending question(s): ${message}`);
+                } else if (isActiveProc) {
+                  ws.send(JSON.stringify({ type: 'error', text: message, errorKind }));
+                }
               }
-              if (pendingAskTools.size === 0) {
+              if (isActiveProc && pendingAskTools.size === 0) {
                 ws.send(JSON.stringify({ type: 'done' }));
               }
             });
@@ -351,6 +384,7 @@ function argusAgentPlugin(): Plugin {
             const tc = toolMap.get(answerId);
 
             pendingAskTools.delete(answerId);
+            answeredTools.add(answerId);
             if (currentProc?.stdin?.writable && !cliDone) {
               // Real CLI process still active - send tool result to it
               ws.send(JSON.stringify({
@@ -361,26 +395,44 @@ function argusAgentPlugin(): Plugin {
               sendLog('info', `Sending tool answer for ${answerId}: ${content.slice(0, 100)}`);
               currentProc.stdin.write(toolResult + '\n');
             } else {
-              // CLI already finished or no process - send fallback response
+              // CLI already finished - complete the ask card, end streaming,
+              // then resume the session with a follow-up containing the answers
               sendLog('info', `Tool answer (fallback) for ${answerId}: ${content.slice(0, 100)}`);
               if (currentProc?.stdin?.writable) {
                 currentProc.stdin.end();
               }
-              // DevHarness simulation (no active process)
+              const tc2 = toolMap.get(answerId);
               ws.send(JSON.stringify({
                 type: 'tool_end',
-                call: { id: answerId, name: 'AskUserQuestion', input: {}, result: content },
+                call: { id: answerId, name: tc2?.name ?? 'AskUserQuestion', input: tc2?.input ?? {}, result: content },
               }));
-              const firstAnswer = answers ? Object.values(answers)[0] : undefined;
-              const reply = firstAnswer
-                ? `Got it - I'll proceed with the **${firstAnswer}** approach.`
-                : 'Understood, proceeding without a selection.';
-              setTimeout(() => {
-                ws.send(JSON.stringify({ type: 'text_chunk', text: reply }));
-                ws.send(JSON.stringify({ type: 'done' }));
-              }, 300);
+              const willResume = pendingAskTools.size === 0 && sessionId && answers && Object.keys(answers).length > 0;
+              if (pendingAskTools.size === 0 && !willResume) {
+                setTimeout(() => ws.send(JSON.stringify({ type: 'done' })), 100);
+              }
+              // Resume session seamlessly (no visible user message, no done gap)
+              if (willResume) {
+                const answerLines = Object.entries(answers!)
+                  .map(([q, a]) => `- ${q}: ${a}`)
+                  .join('\n');
+                const followUp = `Here are my answers:\n${answerLines}`;
+                setTimeout(() => {
+                  suppressCliOutput = false;
+                  const synthetic = JSON.stringify({ type: 'send', text: followUp, mode: msg.mode, _silent: true });
+                  ws.emit('message', Buffer.from(synthetic));
+                }, 200);
+              }
             }
           } else if (msg.type === 'stop') {
+            // Cancel pending questions so the session can end cleanly
+            for (const toolId of pendingAskTools) {
+              const tc = toolMap.get(toolId);
+              ws.send(JSON.stringify({
+                type: 'tool_end',
+                call: { id: toolId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: JSON.stringify({ cancelled: true }) },
+              }));
+            }
+            pendingAskTools.clear();
             currentProc?.kill();
           } else if (msg.type === 'newSession') {
             sessionId = undefined;

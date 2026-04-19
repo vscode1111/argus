@@ -229,13 +229,35 @@ async function simulateTodos() {
 
 const ASK_QUESTIONS = [
   {
-    question: 'What is the goal of the Electron refactoring? Which approach do you prefer?',
-    header: 'Migration scope',
+    question: 'Which context menu entries do you want to add?',
+    header: 'Menu entries',
+    multiSelect: true,
+    options: [
+      { label: 'Open folder (background)', description: 'Right-click on empty area inside a folder -> "Open with Argus"' },
+      { label: 'Open folder (item)', description: 'Right-click on a folder in Explorer -> "Open with Argus"' },
+      { label: 'Open file', description: 'Right-click on any file -> "Open with Argus"' },
+      { label: 'Other' },
+    ],
+  },
+  {
+    question: 'How should the registry entries be created?',
+    header: 'Format',
     multiSelect: false,
     options: [
-      { label: 'Standalone app', description: 'Replace VS Code extension entirely - Electron window with native menus, file dialogs, tray icon. No VS Code dependency.' },
-      { label: 'Dual mode', description: 'Keep VS Code extension working AND add Electron as an alternative standalone build. Share the webview/React code between both.' },
-      { label: 'Electron shell only', description: 'Just wrap the current webview in an Electron BrowserWindow (minimal changes). Keep the same React UI and agent backend.' },
+      { label: '.reg file (Recommended)', description: 'Standalone .reg file - double-click to import into registry. Simple, portable, easy to review.' },
+      { label: 'Node.js script', description: 'Script that adds/removes registry entries programmatically via "reg add" commands.' },
+      { label: 'PowerShell script', description: 'PowerShell script using New-Item/Set-ItemProperty for registry manipulation.' },
+      { label: 'Other' },
+    ],
+  },
+  {
+    question: 'What is the name and path of your wrapper application?',
+    header: 'Exe path',
+    multiSelect: false,
+    options: [
+      { label: 'I\'ll provide details', description: 'I\'ll type the app name and executable path' },
+      { label: 'Use "Argus" as name', description: 'Context menu will say "Open with Argus", path TBD' },
+      { label: 'Other' },
     ],
   },
 ];

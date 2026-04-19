@@ -45,7 +45,7 @@ interface ResultMessage {
 type CliMessage = SystemInitMessage | AssistantMessage | ToolResultMessage | ResultMessage | Record<string, unknown>;
 
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
-const PLAN_BLOCKED_TOOLS = ['Write', 'Edit'];
+const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
 
 const AUTH_PATTERNS = [/auth/i, /login/i, /token/i, /unauthorized/i, /401/i, /403/i, /credential/i, /oauth/i, /api[_ ]?key/i];
 const SESSION_PATTERNS = [/session/i, /resume/i, /expired/i, /not found.*session/i];
@@ -107,6 +107,11 @@ export class AgentSession {
     const proc = this.currentProc;
     if (!proc) return;
     this.currentProc = undefined;
+    // Resolve pending interactive tool promises to unblock the generator
+    for (const [, resolver] of this.pendingToolResolvers) {
+      resolver(JSON.stringify({ cancelled: true }));
+    }
+    this.pendingToolResolvers.clear();
     proc.kill('SIGTERM');
     setTimeout(() => {
       if (!proc.killed) proc.kill('SIGKILL');
@@ -285,7 +290,14 @@ export class AgentSession {
       });
 
       const exitCodePromise = new Promise<number | null>((resolve, reject) => {
-        proc.on('close', resolve);
+        proc.on('close', (code) => {
+          // Resolve any pending interactive tool promises to unblock the generator
+          for (const [, resolver] of this.pendingToolResolvers) {
+            resolver(JSON.stringify({ cancelled: true }));
+          }
+          this.pendingToolResolvers.clear();
+          resolve(code);
+        });
         proc.on('error', reject);
       });
 

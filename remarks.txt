@@ -4,4 +4,11 @@ Create plan for refactoring to use Electron
 
 D:\_Projects\vscode1111\common-scripts\package.json change version to upper
 
-I am testing the dialog rendering in the webview. Ask me something to get a dialogue, and wait for my response
+I'm verifying how dialogs render in the webview. Please prompt me with a question, then relay my answer back to me.
+Do you have connection to Playwright MCP ?
+
+package.json up version
+
+Which directory are we currently working in?
+
+ У меня есть небольшое приложение-обёртка, которое запускает этот проект. Хотелось бы добавить его в контекстное меню Windows - по аналогии с VS Code. Дай оптиции в виде диалогового окна.

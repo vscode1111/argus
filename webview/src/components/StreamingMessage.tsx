@@ -16,6 +16,11 @@ export function StreamingMessage({ streaming }: Props) {
   const { thinking, blocks, startTime, lastEventTime } = streaming;
   const isEmpty = !thinking && blocks.length === 0;
 
+  // Hide text blocks after a pending AskUserQuestion so the AI appears to wait
+  const firstPendingAskIdx = blocks.findIndex(
+    b => b.type === 'tool' && b.call.name === 'AskUserQuestion' && !b.call.result
+  );
+
   return (
     <div className={[
       msg.message,
@@ -24,13 +29,16 @@ export function StreamingMessage({ streaming }: Props) {
       isEmpty && msg.empty,
     ].filter(Boolean).join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
-      {blocks.map((block, i) =>
-        block.type === 'tool'
+      {blocks.map((block, i) => {
+        if (firstPendingAskIdx >= 0 && i > firstPendingAskIdx && block.type === 'text') {
+          return null;
+        }
+        return block.type === 'tool'
           ? <ToolCall key={block.call.id} call={block.call} />
           : <div key={`text-${i}`} className={msg.messageContent}>
               <Markdown>{block.text}</Markdown>
-            </div>
-      )}
+            </div>;
+      })}
       {showTimer && <StreamingTimer startTime={startTime} lastEventTime={lastEventTime} />}
     </div>
   );

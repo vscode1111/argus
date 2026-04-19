@@ -58,7 +58,9 @@ export function ToolCall({ call }: Props) {
   const preview = result ? result.slice(0, limit) + (result.length > limit ? '...' : '') : undefined;
   const [viewerOpen, setViewerOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string | string[]>>({});
+  const [otherText, setOtherText] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState(0);
   const bashCommand = name === 'Bash' ? (input.command as string) || '' : '';
   const agentType = name === 'Agent' ? (input.subagent_type as string) || '' : '';
   const resultLineCount = useMemo(
@@ -96,78 +98,165 @@ export function ToolCall({ call }: Props) {
     const isPending = !result;
 
     let answeredMap: Record<string, string> = {};
+    let isCancelled = false;
     if (result) {
       try {
         const parsed = JSON.parse(result);
+        if (parsed.cancelled) isCancelled = true;
         if (parsed.answers) answeredMap = parsed.answers;
       } catch { /* not JSON */ }
     }
 
-    const allAnswered = questions.every(q => selectedAnswers[q.question]);
+    const allAnswered = questions.every(q => {
+      const val = selectedAnswers[q.question];
+      if (q.multiSelect) {
+        if (!Array.isArray(val) || val.length === 0) return false;
+        if (val.includes('Other') && !otherText[q.question]?.trim()) return false;
+        return true;
+      }
+      if (typeof val !== 'string' || val.length === 0) return false;
+      if (val === 'Other' && !otherText[q.question]?.trim()) return false;
+      return true;
+    });
 
-    function handleOptionClick(questionText: string, optionLabel: string) {
-      setSelectedAnswers(prev => ({ ...prev, [questionText]: optionLabel }));
+    function handleOptionClick(questionText: string, optionLabel: string, multiSelect?: boolean) {
+      if (multiSelect) {
+        setSelectedAnswers(prev => {
+          const current = (prev[questionText] as string[]) || [];
+          const next = current.includes(optionLabel)
+            ? current.filter(l => l !== optionLabel)
+            : [...current, optionLabel];
+          return { ...prev, [questionText]: next };
+        });
+      } else {
+        setSelectedAnswers(prev => ({ ...prev, [questionText]: optionLabel }));
+      }
     }
 
     function handleSubmit() {
-      postMessage({ type: 'toolAnswer', id: call.id, answers: selectedAnswers });
+      const formatted: Record<string, string> = {};
+      for (const q of questions) {
+        const val = selectedAnswers[q.question];
+        const other = otherText[q.question]?.trim() || '';
+        if (q.multiSelect && Array.isArray(val)) {
+          const resolved = val.map(v => v === 'Other' ? other : v);
+          formatted[q.question] = resolved.join(', ');
+        } else if (typeof val === 'string') {
+          formatted[q.question] = val === 'Other' ? other : val;
+        }
+      }
+      postMessage({ type: 'toolAnswer', id: call.id, answers: formatted });
     }
 
     function handleCancel() {
       postMessage({ type: 'toolAnswer', id: call.id, answers: {} });
     }
 
+    const q = questions[activeTab] || questions[0];
+    const selectedVal = isPending
+      ? selectedAnswers[q?.question]
+      : answeredMap[q?.question] || answeredMap[q?.header];
+
+    // "Other" option support
+    const knownLabels = q?.options.filter(o => o.label !== 'Other').map(o => o.label) ?? [];
+    const isOtherActive = isPending
+      ? (q?.multiSelect
+          ? Array.isArray(selectedVal) && selectedVal.includes('Other')
+          : selectedVal === 'Other')
+      : (q?.multiSelect
+          ? typeof selectedVal === 'string' && selectedVal.split(', ').some(v => !knownLabels.includes(v))
+          : typeof selectedVal === 'string' && selectedVal !== '' && !knownLabels.includes(selectedVal));
+    const completedOtherValue = !isPending && isOtherActive && typeof selectedVal === 'string'
+      ? (q?.multiSelect
+          ? selectedVal.split(', ').filter(v => !knownLabels.includes(v)).join(', ')
+          : selectedVal)
+      : '';
+
     return (
-      <div className={styles.askQuestion}>
-        {questions.map((q, i) => {
-          const selected = isPending
-            ? selectedAnswers[q.question]
-            : answeredMap[q.question] || answeredMap[q.header];
-          return (
-            <div key={i} className={styles.questionCard}>
-              <div className={styles.questionHeader}>
-                <span className={styles.questionHeaderText}>{q.header}</span>
-                {isPending && i === 0 && (
-                  <button className={styles.askCloseBtn} onClick={handleCancel} aria-label="Cancel">✕</button>
-                )}
-              </div>
-              <div className={styles.questionText}>{q.question}</div>
-              <div className={styles.questionOptions}>
-                {q.options.map((opt, j) => {
-                  const isSelected = selected === opt.label;
-                  return (
-                    <div
-                      key={j}
-                      className={[
-                        styles.questionOption,
-                        isSelected && styles.questionOptionSelected,
-                        isPending && styles.questionOptionClickable,
-                      ].filter(Boolean).join(' ')}
-                      onClick={isPending ? () => handleOptionClick(q.question, opt.label) : undefined}
-                    >
-                      <span className={[styles.questionOptionDot, isSelected && styles.questionOptionDotSelected].filter(Boolean).join(' ')} aria-hidden="true" />
-                      <div>
-                        <div className={styles.questionOptionLabel}>{opt.label}</div>
-                        {opt.description && <div className={styles.questionOptionDesc}>{opt.description}</div>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {isPending && i === questions.length - 1 && (
-                <div className={styles.askActions}>
-                  <button
-                    className={styles.askSubmitBtn}
-                    onClick={handleSubmit}
-                    disabled={!allAnswered}
+      <div className={styles.askDialog}>
+        {/* Tab bar */}
+        <div className={styles.askTabBar}>
+          {questions.map((tab, i) => (
+            <button
+              key={i}
+              className={[styles.askTab, activeTab === i && styles.askTabActive].filter(Boolean).join(' ')}
+              onClick={() => setActiveTab(i)}
+            >
+              {tab.header}
+            </button>
+          ))}
+          {isPending && (
+            <button className={styles.askCloseBtn} onClick={handleCancel} aria-label="Cancel">✕</button>
+          )}
+        </div>
+
+        {/* Active tab content */}
+        {q && (
+          <div className={styles.askTabContent}>
+            <div className={styles.questionText}>{q.question}</div>
+            <div className={styles.questionOptions}>
+              {q.options.map((opt, j) => {
+                const isMulti = q.multiSelect;
+                const isOther = opt.label === 'Other';
+                const isSelected = isOther
+                  ? isOtherActive
+                  : isMulti
+                    ? (Array.isArray(selectedVal)
+                        ? selectedVal.includes(opt.label)
+                        : typeof selectedVal === 'string' && selectedVal.split(', ').includes(opt.label))
+                    : selectedVal === opt.label;
+                return (
+                  <div
+                    key={j}
+                    className={[
+                      styles.questionOption,
+                      isSelected && styles.questionOptionSelected,
+                      isPending && styles.questionOptionClickable,
+                    ].filter(Boolean).join(' ')}
+                    onClick={isPending ? () => handleOptionClick(q.question, opt.label, isMulti) : undefined}
                   >
-                    Submit
-                  </button>
-                </div>
-              )}
+                    {isMulti ? (
+                      <span className={[styles.questionCheckbox, isSelected && styles.questionCheckboxChecked].filter(Boolean).join(' ')} aria-hidden="true" />
+                    ) : (
+                      <span className={[styles.questionOptionDot, isSelected && styles.questionOptionDotSelected].filter(Boolean).join(' ')} aria-hidden="true" />
+                    )}
+                    <div>
+                      <div className={styles.questionOptionLabel}>{opt.label}</div>
+                      {opt.description && <div className={styles.questionOptionDesc}>{opt.description}</div>}
+                      {isOther && !isPending && isSelected && completedOtherValue && (
+                        <div className={styles.questionOptionDesc}>{completedOtherValue}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+            {isPending && isOtherActive && (
+              <div className={styles.otherInputWrap}>
+                <input
+                  className={styles.otherInput}
+                  placeholder="Type your answer..."
+                  value={otherText[q.question] || ''}
+                  onChange={e => setOtherText(prev => ({ ...prev, [q.question]: e.target.value }))}
+                  onClick={e => e.stopPropagation()}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        {isPending && (
+          <div className={styles.askFooter}>
+            <button className={styles.askSubmitBtn} onClick={handleSubmit} disabled={!allAnswered}>
+              Submit answers
+            </button>
+            <span className={styles.askEscHint}>Esc to cancel</span>
+          </div>
+        )}
+        {isCancelled && (
+          <div className={styles.askCancelled}>Session ended</div>
+        )}
       </div>
     );
   }
