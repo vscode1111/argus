@@ -3,6 +3,7 @@ out/
 *.vsix
 .argus/
 .playwright-mcp/
+test-results/
 yarn-error.log
 media/webview.js
 media/webview.css

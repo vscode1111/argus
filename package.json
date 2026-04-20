@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "publisher": "local",
@@ -24,9 +24,11 @@
     "compile": "tsc -p ./",
     "watch:tsc": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
-    "dev:stop": "node scripts/dev-stop.js"
+    "dev:stop": "node scripts/dev-stop.js",
+    "test:e2e": "node node_modules/@playwright/test/cli.js test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
