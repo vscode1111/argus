@@ -1,0 +1,13 @@
+.encodingSelect {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 0.82em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.encodingSelect:hover { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
+.encodingSelect option { background: var(--bg); color: var(--fg); }

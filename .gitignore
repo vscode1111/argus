@@ -4,6 +4,7 @@ out/
 .argus/
 .playwright-mcp/
 test-results/
+playwright-report/
 yarn-error.log
 media/webview.js
 media/webview.css

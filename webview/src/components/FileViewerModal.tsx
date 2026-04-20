@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useEncoding } from '../hooks/useEncoding';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { postMessage } from '../vscode';
 import { Markdown } from '../utils/markdown';
+import { EncodingSelect } from './shared/EncodingSelect';
 import modal from './shared/modal.module.css';
 import styles from './FileViewerModal.module.css';
 
@@ -45,7 +47,8 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
   useEscapeKey(onClose);
 
   const language = detectLanguage(path);
-  const code = stripLineNumbers(content);
+  const rawCode = stripLineNumbers(content);
+  const { encoding, setEncoding, decoded: code } = useEncoding(rawCode);
   const filename = path.split(/[\\/]/).pop() ?? path;
 
   function openInEditor(e: React.MouseEvent) {
@@ -89,6 +92,7 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
             )}
           </div>
           <div className={modal.actions}>
+            <EncodingSelect value={encoding} onChange={setEncoding} />
             <button className={modal.btnOpen} onClick={openInEditor} title="Open in VS Code editor">
               Open in editor
             </button>

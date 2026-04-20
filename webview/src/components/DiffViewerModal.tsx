@@ -1,5 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { tryDecode } from '../utils/encoding';
+import { EncodingSelect } from './shared/EncodingSelect';
 import modal from './shared/modal.module.css';
 import styles from './DiffViewerModal.module.css';
 import tc from './ToolCall.module.css';
@@ -75,9 +77,13 @@ function computeSimpleDiff(oldLines: string[], newLines: string[]): DiffRow[] {
 export function DiffViewerModal({ path, oldString, newString, onClose }: Props) {
   useEscapeKey(onClose);
 
-  const oldLines = oldString.split('\n');
-  const newLines = newString.split('\n');
-  const rows = useMemo(() => computeDiff(oldLines, newLines), [oldString, newString]);
+  const [encoding, setEncoding] = useState('');
+  const decodedOld = useMemo(() => tryDecode(oldString, encoding), [oldString, encoding]);
+  const decodedNew = useMemo(() => tryDecode(newString, encoding), [newString, encoding]);
+
+  const oldLines = decodedOld.split('\n');
+  const newLines = decodedNew.split('\n');
+  const rows = useMemo(() => computeDiff(oldLines, newLines), [decodedOld, decodedNew]);
 
   const addedCount = rows.filter(r => r.type === 'add').length;
   const removedCount = rows.filter(r => r.type === 'remove').length;
@@ -99,6 +105,7 @@ export function DiffViewerModal({ path, oldString, newString, onClose }: Props) 
             </span>
           </div>
           <div className={modal.actions}>
+            <EncodingSelect value={encoding} onChange={setEncoding} />
             <button className={modal.close} aria-label="Close" onClick={onClose}>×</button>
           </div>
         </div>
