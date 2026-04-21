@@ -41,6 +41,7 @@ webview/
       shared/
         message.module.css  - Shared message styles (layout, markdown content)
         modal.module.css    - Shared full-screen modal shell (FileViewer/DiffViewer)
+        EncodingSelect.tsx / encoding.module.css - Encoding dropdown for re-decoding garbled text
       Header.tsx / .module.css
       MessageList.tsx / .module.css
       ChatMessage.tsx / .module.css
@@ -56,11 +57,13 @@ webview/
       InputArea.tsx / .module.css
     hooks/
       useEscapeKey.ts   - Shared hook for Escape-to-close on modals
+      useEncoding.ts    - Shared hook for encoding state + memoized decode
     dev/
       DevHarness.tsx    - Fixed bottom toolbar, fires mock extension messages for browser testing
     utils/
       markdown.tsx      - react-markdown wrapper with VS Code CSS variable styling
       time.ts           - formatDuration helper
+      encoding.ts       - ENCODINGS list and tryDecode() for charset re-interpretation
 ```
 
 ## Key Conventions

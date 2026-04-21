@@ -32,7 +32,8 @@
 ::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)); border-radius: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-html, body, #root { height: 100%; }
+html { height: 100%; background: var(--bg); overflow: hidden; }
+body, #root { height: 100%; }
 
 body {
   background: var(--bg);

@@ -29,6 +29,10 @@
       --vscode-symbolIcon-functionForeground: #dcdcaa;
     }
 
+    html, body {
+      background: var(--vscode-editor-background, #1e1e1e);
+      overflow: hidden;
+    }
     body {
       padding-bottom: 30px;
     }
@@ -72,7 +76,25 @@
 </head>
 
 <body class="vscode-dark">
-  <div id="root"></div>
+  <div id="root"><div class="app-loader"><div class="app-spinner"></div></div></div>
+  <style>
+    .app-loader {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: var(--vscode-editor-background, #1e1e1e);
+    }
+    .app-spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--vscode-panel-border, #474747);
+      border-top-color: var(--vscode-button-background, #0e639c);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
   <div id="dev-harness"></div>
   <script type="module" src="/src/index.dev.tsx"></script>
 </body>
