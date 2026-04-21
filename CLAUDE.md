@@ -20,8 +20,11 @@ src/
   utils/
     config.ts           - Extension settings helpers
     workspace.ts        - VS Code workspace helpers
+scripts/
+  context-menu.js       - Windows context menu install/uninstall (reg import)
 media/
   chat.html             - Webview HTML template (React mount point, placeholders injected by ChatPanel)
+  argus-icon.ico        - App icon for context menu and favicon
   webview.js            - Bundled React app (gitignored, run `yarn build` to generate)
   webview.css           - Bundled styles (gitignored, run `yarn build` to generate)
 webview/
@@ -91,7 +94,7 @@ webview/
 - Sound on complete: `playCompletionSound()` in `App.tsx` via AudioContext; toggled by `soundOnComplete` setting in `SettingsContext`
 - Global scrollbar styling: thin scrollbars via `scrollbar-width: thin` and `::-webkit-scrollbar` rules in `global.css`
 - Content blocks: streaming and completed messages use `ContentBlock[]` (interleaved `{ type: 'text' }` and `{ type: 'tool' }` blocks) instead of separate text/toolCalls fields - preserves tool-call ordering relative to text
-- AskUserQuestion: tabbed dialog UI - multiple questions shown as tabs, supports single-select (radio dots) and multi-select (checkboxes via `multiSelect` flag), includes automatic "Other" option with free-text input; text blocks after a pending AskUserQuestion are hidden so the AI appears to wait; cancelled dialogs show "Session ended"; `tool_end` events can update completed messages (not just streaming) for late answers; `AskUserQuestion` blocked in plan mode. Answers sent back to CLI via `AgentSession.sendToolResult()` - stdin kept open until all interactive tools resolve; `pendingToolResolvers` map tracks in-flight prompts and are resolved with `{ cancelled: true }` on stop/close; `skipNextToolEnd` prevents duplicate tool_end events
+- AskUserQuestion: tabbed dialog UI - multiple questions shown as tabs, supports single-select (radio dots) and multi-select (checkboxes via `multiSelect` flag), includes automatic "Other" option with free-text input (injected client-side in ToolCall.tsx); text blocks after a pending AskUserQuestion are hidden so the AI appears to wait; cancelled dialogs show "Session ended"; completed answers show a result summary strip (`askResultSummary`); `tool_end` events can update completed messages (not just streaming) for late answers; `AskUserQuestion` blocked in plan mode. Answers sent back to CLI via `AgentSession.sendToolResult()` - stdin kept open until all interactive tools resolve; `pendingToolResolvers` map tracks in-flight prompts and are resolved with `{ cancelled: true }` on stop/close; `skipNextToolEnd` prevents duplicate tool_end events
 - Pending tool animation: tool names pulse (green, `toolNamePending` class) while awaiting result; `pending` flag derived from `!result && !error`
 - Context usage indicator: pill in InputArea (`contextPill`) shows "X% used" of 200k context window; extracted from CLI `assistant` event's `message.usage` (sums `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens`); color-coded: default <50%, yellow (`contextMedium`) 50-80%, red (`contextHigh`) 80%+; tooltip shows token breakdown; persists across messages (instance-scoped counters in ChatPanel), resets on clear/new session; ignores synthetic events (zero usage) from slash commands like `/context`
 
@@ -109,6 +112,8 @@ yarn build        # bundle React webview to media/webview.js + media/webview.css
 yarn watch        # watch + rebuild webview on save (for VS Code Extension Host testing)
 yarn compile      # compile extension TypeScript
 yarn watch:tsc    # watch mode for extension TypeScript
+yarn ctx:install  # add "Open Argus" to Windows Explorer context menu (requires elevated shell)
+yarn ctx:uninstall # remove context menu entry
 # Primary UI testing: use `yarn dev` + browser refresh - do not suggest reloading VS Code extension
 # Press F5 in VS Code to launch Extension Development Host (for extension-side code only)
 ```

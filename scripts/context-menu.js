@@ -4,9 +4,8 @@ const { join } = require("path");
 const os = require("os");
 
 const LABEL = "Open Argus";
-const CHROME_PATH = String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
 const ICON_PATH = join(__dirname, "..", "media", "argus-icon.ico");
-const APP_URL = "http://localhost:5173/";
+const LAUNCH_SCRIPT = join(__dirname, "launch.js");
 
 function regEscape(str) {
   return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -14,7 +13,8 @@ function regEscape(str) {
 
 function buildRegFile() {
   const icon = regEscape(require("path").resolve(ICON_PATH));
-  const cmd = regEscape(`"${CHROME_PATH}" --app=${APP_URL} "%V"`);
+  const nodePath = process.execPath;
+  const cmd = regEscape(`"${nodePath}" "${require("path").resolve(LAUNCH_SCRIPT)}" "%V"`);
   const bases = [
     String.raw`HKEY_CURRENT_USER\Software\Classes\Directory\shell\ArgusWebApp`,
     String.raw`HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\ArgusWebApp`,

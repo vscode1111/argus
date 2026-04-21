@@ -227,6 +227,14 @@ function AppInner() {
   const dragStartH = React.useRef(0);
 
   useEffect(() => {
+    const dir = new URLSearchParams(window.location.search).get('dir');
+    if (dir) {
+      console.log('[Argus] Invoked from directory:', dir);
+      dispatch({ type: 'workspaceInfo', path: dir });
+    }
+  }, []);
+
+  useEffect(() => {
     const VALID_TYPES = new Set<AppAction['type']>([
       'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
       'tool_start', 'tool_end', 'done', 'error', 'clear',

@@ -23,11 +23,11 @@ const BUILTIN_COMMANDS = [
   'terminal-setup', 'vim',
 ].map(name => ({ name, scope: 'builtin' as const }));
 
-function getSkills() {
+function getSkills(cwd: string) {
   return [
     ...BUILTIN_COMMANDS,
     ...readSkillsDir(path.join(os.homedir(), '.claude', 'skills'), 'global'),
-    ...readSkillsDir(path.join(process.cwd(), '.claude', 'skills'), 'project'),
+    ...readSkillsDir(path.join(cwd, '.claude', 'skills'), 'project'),
   ];
 }
 
@@ -63,7 +63,9 @@ function argusAgentPlugin(): Plugin {
     configureServer(server) {
       const wss = new WebSocketServer({ noServer: true });
 
-      wss.on('connection', (ws: WebSocket) => {
+      wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+        const reqUrl = new URL(req.url ?? '/', 'http://localhost');
+        let workspaceDir = reqUrl.searchParams.get('dir') || process.cwd();
         let sessionId: string | undefined;
         let currentProc: ReturnType<typeof spawn> | undefined;
         let loginProc: ReturnType<typeof spawn> | undefined;
@@ -131,7 +133,7 @@ function argusAgentPlugin(): Plugin {
             }
 
             const proc = spawn('claude', args, {
-              cwd: process.cwd(),
+              cwd: workspaceDir,
               stdio: ['pipe', 'pipe', 'pipe'],
             });
             currentProc = proc;
@@ -314,16 +316,16 @@ function argusAgentPlugin(): Plugin {
             });
 
           } else if (msg.type === 'getInfo') {
-            ws.send(JSON.stringify({ type: 'workspaceInfo', path: process.cwd() }));
+            ws.send(JSON.stringify({ type: 'workspaceInfo', path: workspaceDir }));
           } else if (msg.type === 'forceError') {
             currentProc?.kill();
             ws.send(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));
           } else if (msg.type === 'getSkills') {
-            ws.send(JSON.stringify({ type: 'skills', skills: getSkills() }));
+            ws.send(JSON.stringify({ type: 'skills', skills: getSkills(workspaceDir) }));
           } else if (msg.type === 'login') {
             loginProc?.kill();
             sendLog('info', 'Starting claude login');
-            const lp = spawn('claude', ['auth', 'login'], { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] });
+            const lp = spawn('claude', ['auth', 'login'], { cwd: workspaceDir, stdio: ['pipe', 'pipe', 'pipe'] });
             loginProc = lp;
             let loginOutput = '';
             let loginResolved = false;
@@ -441,7 +443,7 @@ function argusAgentPlugin(): Plugin {
       });
 
       server.httpServer?.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-        if (req.url === '/agent') {
+        if (req.url?.startsWith('/agent')) {
           wss.handleUpgrade(req, socket, head, (ws) => {
             wss.emit('connection', ws, req);
           });
