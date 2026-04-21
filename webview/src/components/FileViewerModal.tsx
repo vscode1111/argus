@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useEncoding } from '../hooks/useEncoding';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -65,7 +66,7 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
     });
   }
 
-  return (
+  return createPortal(
     <div className={modal.overlay} onClick={onClose} aria-hidden="true">
       <div
         className={modal.modal}
@@ -127,6 +128,7 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

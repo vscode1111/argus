@@ -16,8 +16,8 @@ function buildRegFile() {
   const nodePath = process.execPath;
   const cmd = regEscape(`"${nodePath}" "${require("path").resolve(LAUNCH_SCRIPT)}" "%V"`);
   const bases = [
-    String.raw`HKEY_CURRENT_USER\Software\Classes\Directory\shell\ArgusWebApp`,
-    String.raw`HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\ArgusWebApp`,
+    String.raw`HKEY_CURRENT_USER\Software\Classes\Directory\shell\ZZArgusWebApp`,
+    String.raw`HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\ZZArgusWebApp`,
   ];
   let lines = ["Windows Registry Editor Version 5.00", ""];
   for (const base of bases) {
@@ -45,8 +45,8 @@ function install() {
 
 function uninstall() {
   const keys = [
-    String.raw`HKCU\Software\Classes\Directory\shell\ArgusWebApp`,
-    String.raw`HKCU\Software\Classes\Directory\Background\shell\ArgusWebApp`,
+    String.raw`HKCU\Software\Classes\Directory\shell\ZZArgusWebApp`,
+    String.raw`HKCU\Software\Classes\Directory\Background\shell\ZZArgusWebApp`,
   ];
   for (const key of keys) {
     try {

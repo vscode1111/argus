@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { tryDecode } from '../utils/encoding';
 import { EncodingSelect } from './shared/EncodingSelect';
@@ -88,7 +89,7 @@ export function DiffViewerModal({ path, oldString, newString, onClose }: Props) 
   const addedCount = rows.filter(r => r.type === 'add').length;
   const removedCount = rows.filter(r => r.type === 'remove').length;
 
-  return (
+  return createPortal(
     <div className={modal.overlay} onClick={onClose} aria-hidden="true">
       <div
         className={modal.modal}
@@ -136,6 +137,7 @@ export function DiffViewerModal({ path, oldString, newString, onClose }: Props) 
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
