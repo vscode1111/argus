@@ -1,20 +1,22 @@
 const { execSync } = require("child_process");
-const { writeFileSync, unlinkSync } = require("fs");
-const { join } = require("path");
+const { writeFileSync, unlinkSync, existsSync, mkdirSync } = require("fs");
+const { join, resolve } = require("path");
 const os = require("os");
 
 const LABEL = "Open Argus";
 const ICON_PATH = join(__dirname, "..", "media", "argus-icon.ico");
-const LAUNCH_SCRIPT = join(__dirname, "launch.js");
+const LAUNCH_VBS = join(__dirname, "launch.vbs");
+const LAUNCH_JS = join(__dirname, "launch.js");
+const IS_WINDOWS = process.platform === "win32";
 
 function regEscape(str) {
   return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function buildRegFile() {
-  const icon = regEscape(require("path").resolve(ICON_PATH));
-  const nodePath = process.execPath;
-  const cmd = regEscape(`"${nodePath}" "${require("path").resolve(LAUNCH_SCRIPT)}" "%V"`);
+  const icon = regEscape(resolve(ICON_PATH));
+  const vbsPath = resolve(LAUNCH_VBS);
+  const cmd = regEscape(`wscript.exe "${vbsPath}" "%V"`);
   const bases = [
     String.raw`HKEY_CURRENT_USER\Software\Classes\Directory\shell\ZZArgusWebApp`,
     String.raw`HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\ZZArgusWebApp`,
@@ -32,7 +34,18 @@ function buildRegFile() {
   return lines.join("\r\n");
 }
 
-function install() {
+function buildDesktopEntry() {
+  const launchJs = resolve(LAUNCH_JS);
+  return [
+    "[Desktop Entry]",
+    `Name=${LABEL}`,
+    "Type=Application",
+    `Exec=node "${launchJs}" %f`,
+    "MimeType=inode/directory;",
+  ].join("\n");
+}
+
+function installWindows() {
   const tmp = join(os.tmpdir(), "argus-ctx.reg");
   writeFileSync(tmp, buildRegFile(), "utf-8");
   try {
@@ -43,7 +56,16 @@ function install() {
   }
 }
 
-function uninstall() {
+function installLinux() {
+  const appsDir = join(os.homedir(), ".local", "share", "applications");
+  if (!existsSync(appsDir)) mkdirSync(appsDir, { recursive: true });
+  const desktopFile = join(appsDir, "argus-open.desktop");
+  writeFileSync(desktopFile, buildDesktopEntry(), "utf-8");
+  execSync(`chmod +x "${desktopFile}"`);
+  console.log(`Context menu installed: ${desktopFile}`);
+}
+
+function uninstallWindows() {
   const keys = [
     String.raw`HKCU\Software\Classes\Directory\shell\ZZArgusWebApp`,
     String.raw`HKCU\Software\Classes\Directory\Background\shell\ZZArgusWebApp`,
@@ -56,9 +78,19 @@ function uninstall() {
   console.log("Context menu removed.");
 }
 
+function uninstallLinux() {
+  const desktopFile = join(os.homedir(), ".local", "share", "applications", "argus-open.desktop");
+  try {
+    unlinkSync(desktopFile);
+    console.log("Context menu removed.");
+  } catch {
+    console.log("Context menu entry not found.");
+  }
+}
+
 const arg = process.argv[2];
 if (arg === "--uninstall") {
-  uninstall();
+  IS_WINDOWS ? uninstallWindows() : uninstallLinux();
 } else {
-  install();
+  IS_WINDOWS ? installWindows() : installLinux();
 }
