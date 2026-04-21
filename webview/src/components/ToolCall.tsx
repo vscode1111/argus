@@ -152,7 +152,11 @@ export function ToolCall({ call }: Props) {
       postMessage({ type: 'toolAnswer', id: call.id, answers: {} });
     }
 
-    const q = questions[activeTab] || questions[0];
+    const rawQ = questions[activeTab] || questions[0];
+    // Auto-inject "Other" option if not already present
+    const q = rawQ && !rawQ.options.some(o => o.label === 'Other')
+      ? { ...rawQ, options: [...rawQ.options, { label: 'Other' }] }
+      : rawQ;
     const selectedVal = isPending
       ? selectedAnswers[q?.question]
       : answeredMap[q?.question] || answeredMap[q?.header];
@@ -256,6 +260,9 @@ export function ToolCall({ call }: Props) {
         )}
         {isCancelled && (
           <div className={styles.askCancelled}>Session ended</div>
+        )}
+        {!isPending && !isCancelled && result && (
+          <div className={styles.askResultSummary}>{result}</div>
         )}
       </div>
     );

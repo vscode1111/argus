@@ -30,7 +30,9 @@
     "test:e2e:ui": "node node_modules/@playwright/test/cli.js test --ui",
     "test:e2e:debug": "node node_modules/@playwright/test/cli.js test --debug",
     "test:e2e:headed": "node node_modules/@playwright/test/cli.js test --headed",
-    "test:e2e:report": "node node_modules/@playwright/test/cli.js show-report"
+    "test:e2e:report": "node node_modules/@playwright/test/cli.js show-report",
+    "ctx:install": "node scripts/context-menu.js",
+    "ctx:uninstall": "node scripts/context-menu.js --uninstall"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.0",

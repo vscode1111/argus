@@ -360,6 +360,16 @@
   font-style: italic;
 }
 
+.askResultSummary {
+  padding: 6px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 0.85em;
+  color: var(--thinking-fg);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
 .todoList {
   margin: 4px 0 4px 4px;
   font-size: 1em;
