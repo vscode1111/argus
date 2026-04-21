@@ -20,9 +20,14 @@ src/
   utils/
     config.ts           - Extension settings helpers
     workspace.ts        - VS Code workspace helpers
+cmd/
+  start-argus.bat       - Launch dev server (double-click from Explorer)
+  ctx-install.bat       - Install context menu entry (run as admin)
+  ctx-uninstall.bat     - Remove context menu entry (run as admin)
 scripts/
-  context-menu.js       - Windows context menu install/uninstall (reg import)
-  launch.js             - Opens Chrome in app mode with optional ?dir= param (used by context menu)
+  context-menu.js       - Cross-platform context menu install/uninstall (Windows registry / Linux .desktop entry)
+  launch.js             - Opens Chrome in app mode with optional ?dir= param (cross-platform Chrome paths)
+  launch.vbs            - Windows-only VBS wrapper for windowless launch (invoked by context menu registry)
 media/
   chat.html             - Webview HTML template (React mount point, placeholders injected by ChatPanel)
   argus-icon.ico        - App icon for context menu and favicon
