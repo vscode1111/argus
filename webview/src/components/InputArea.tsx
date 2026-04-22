@@ -338,9 +338,9 @@ export function InputArea({ isStreaming, prefill, workspacePath, contextUsage }:
           {contextUsage && (
             <span
               className={[styles.contextPill, contextUsage.percent >= 80 ? styles.contextHigh : contextUsage.percent >= 50 ? styles.contextMedium : ''].filter(Boolean).join(' ')}
-              title={`Input: ${contextUsage.inputTokens.toLocaleString()} tokens\nOutput: ${contextUsage.outputTokens.toLocaleString()} tokens`}
+              title={`${contextUsage.percent}% used\nInput: ${contextUsage.inputTokens.toLocaleString()} tokens\nOutput: ${contextUsage.outputTokens.toLocaleString()} tokens`}
             >
-              {contextUsage.percent}% used
+              {contextUsage.percent}%
             </span>
           )}
           <div className={settings.anchor}>

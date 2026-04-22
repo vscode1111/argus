@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { UIMessage, ErrorKind, LoginState } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
@@ -168,13 +168,34 @@ export function ChatMessage({ message, login }: Props) {
   );
 }
 
+function MessageCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [text]);
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copy to clipboard"
+      aria-label="Copy to clipboard"
+      className={styles.msgCopyBtn}
+    >
+      {copied ? '✓' : '⧉'}
+    </button>
+  );
+}
+
 function UserMessage({ message }: Props) {
   const { content } = message;
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   return (
-    <div className={[msg.message, msg.user].join(' ')}>
+    <div className={[msg.message, msg.user, styles.userMsg].join(' ')}>
       <div className={msg.messageContent} style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
+      {content && <MessageCopyButton text={content} />}
       {message.images && message.images.length > 0 && (
         <div className={styles.messageImages}>
           {message.images.map((img, i) => (

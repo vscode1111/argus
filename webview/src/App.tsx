@@ -215,7 +215,7 @@ const initialState: AppState = {
 
 function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { showLogs, soundOnComplete } = useSettings();
+  const { showLogs, soundOnComplete, notifyOnComplete } = useSettings();
   const wasStreaming = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [logWidth, setLogWidth] = React.useState(320);
@@ -253,11 +253,19 @@ function AppInner() {
   }, []);
 
   useEffect(() => {
-    if (wasStreaming.current && !state.isStreaming && soundOnComplete) {
-      playCompletionSound();
+    if (wasStreaming.current && !state.isStreaming) {
+      if (soundOnComplete) playCompletionSound();
+      if (notifyOnComplete && Notification.permission === 'granted') {
+        const projectName = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
+        const title = projectName ? `Argus/${projectName}` : 'Argus';
+        const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
+        const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
+        const n = new Notification(title, { body });
+        n.onclick = () => { window.focus(); n.close(); };
+      }
     }
     wasStreaming.current = state.isStreaming;
-  }, [state.isStreaming, soundOnComplete]);
+  }, [state.isStreaming, soundOnComplete, notifyOnComplete]);
 
   useEffect(() => {
     function onResize() { setIsNarrow(window.innerWidth < 650); }

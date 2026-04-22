@@ -326,6 +326,18 @@ function Btn({ label, onClick, bg = '#0e639c' }: BtnProps) {
 export function DevHarness() {
   const [visible, setVisible] = useState(true);
 
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem('argus.showDevHarness');
+      if (stored === 'false') {
+        const el = document.getElementById('dev-harness');
+        if (el) el.style.display = 'none';
+      } else {
+        document.body.classList.add('dev-harness-visible');
+      }
+    } catch {}
+  }, []);
+
   return (
     <div style={{
       position: 'fixed',
@@ -363,6 +375,12 @@ export function DevHarness() {
           <Btn label="login:url" onClick={simulateLoginUrl} bg="#5a6a2f" />
           <Btn label="login:ok" onClick={simulateLoginSuccess} bg="#2d6a4f" />
           <Btn label="login:fail" onClick={simulateLoginFail} bg="#7a2020" />
+          <Btn label="notify" onClick={async () => {
+            send({ type: 'thinking_start' });
+            await delay(300);
+            send({ type: 'text_chunk', text: 'Done.' });
+            send({ type: 'done' });
+          }} bg="#6a5a2d" />
           <Btn label="clear" onClick={() => send({ type: 'clear' })} bg="#444" />
           <Btn label="prefill" onClick={() => send({ type: 'prefill', text: 'Explain this function' })} bg="#444" />
           <button

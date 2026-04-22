@@ -1,3 +1,26 @@
+.userMsg {
+  position: relative;
+}
+
+.msgCopyBtn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.userMsg:hover .msgCopyBtn { opacity: 0.6; }
+.msgCopyBtn:hover { opacity: 1 !important; }
+
 .messageImages {
   display: flex;
   gap: 6px;

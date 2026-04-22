@@ -8,6 +8,7 @@ interface SettingsContextValue {
   showLogTime: boolean;
   showLogType: boolean;
   soundOnComplete: boolean;
+  notifyOnComplete: boolean;
   setVerboseTools: (v: boolean) => void;
   setShowTimer: (v: boolean) => void;
   setShowOutput: (v: boolean) => void;
@@ -15,6 +16,7 @@ interface SettingsContextValue {
   setShowLogTime: (v: boolean) => void;
   setShowLogType: (v: boolean) => void;
   setSoundOnComplete: (v: boolean) => void;
+  setNotifyOnComplete: (v: boolean) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
@@ -25,6 +27,7 @@ const SettingsContext = createContext<SettingsContextValue>({
   showLogTime: true,
   showLogType: true,
   soundOnComplete: false,
+  notifyOnComplete: false,
   setVerboseTools: () => {},
   setShowTimer: () => {},
   setShowOutput: () => {},
@@ -32,6 +35,7 @@ const SettingsContext = createContext<SettingsContextValue>({
   setShowLogTime: () => {},
   setShowLogType: () => {},
   setSoundOnComplete: () => {},
+  setNotifyOnComplete: () => {},
 });
 
 function readBool(key: string, defaultVal: boolean): boolean {
@@ -51,6 +55,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [showLogTime, setShowLogTimeState] = useState(() => readBool('argus.showLogTime', true));
   const [showLogType, setShowLogTypeState] = useState(() => readBool('argus.showLogType', true));
   const [soundOnComplete, setSoundOnCompleteState] = useState(() => readBool('argus.soundOnComplete', false));
+  const [notifyOnComplete, setNotifyOnCompleteState] = useState(() => readBool('argus.notifyOnComplete', false));
 
   function setVerboseTools(v: boolean) {
     setVerboseToolsState(v);
@@ -87,8 +92,16 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('argus.soundOnComplete', String(v)); } catch {}
   }
 
+  function setNotifyOnComplete(v: boolean) {
+    setNotifyOnCompleteState(v);
+    try { localStorage.setItem('argus.notifyOnComplete', String(v)); } catch {}
+    if (v && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }
+
   return (
-    <SettingsContext.Provider value={{ verboseTools, showTimer, showOutput, showLogs, showLogTime, showLogType, soundOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setShowLogTime, setShowLogType, setSoundOnComplete }}>
+    <SettingsContext.Provider value={{ verboseTools, showTimer, showOutput, showLogs, showLogTime, showLogType, soundOnComplete, notifyOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setShowLogTime, setShowLogType, setSoundOnComplete, setNotifyOnComplete }}>
       {children}
     </SettingsContext.Provider>
   );

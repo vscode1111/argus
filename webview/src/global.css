@@ -122,6 +122,9 @@ body {
 }
 .logDividerH:hover::after { background: var(--vscode-focusBorder, var(--btn-bg)); }
 
+.code-block-wrapper:hover .code-copy-btn { opacity: 0.6 !important; }
+.code-block-wrapper .code-copy-btn:hover { opacity: 1 !important; background: var(--tool-bg); }
+
 .btn-icon {
   background: transparent;
   border: 1px solid var(--border);

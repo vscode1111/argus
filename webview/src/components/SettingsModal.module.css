@@ -89,6 +89,21 @@
   outline-offset: 1px;
 }
 
+.devCorner {
+  position: absolute;
+  bottom: 4px;
+  right: 46px;
+  background: transparent;
+  border: none;
+  color: var(--thinking-fg);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  opacity: 0.6;
+}
+.devCorner:hover { opacity: 1; }
+
 .infoCorner {
   position: absolute;
   bottom: 4px;

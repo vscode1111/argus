@@ -30,8 +30,9 @@ interface Props {
 }
 
 export function SettingsModal({ onClose, workspacePath }: Props) {
-  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete } = useSettings();
+  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete } = useSettings();
   const [infoOpen, setInfoOpen] = useState(false);
+  const devHarnessEl = document.getElementById('dev-harness');
 
   useEscapeKey(onClose);
 
@@ -59,13 +60,32 @@ export function SettingsModal({ onClose, workspacePath }: Props) {
           <span className={styles.settingLabel}>Sound on complete</span>
           <Toggle id="toggle-sound" checked={soundOnComplete} onChange={setSoundOnComplete} />
         </label>
+        <label className={styles.settingRow} htmlFor="toggle-notify">
+          <span className={styles.settingLabel}>Notify on complete</span>
+          <Toggle id="toggle-notify" checked={notifyOnComplete} onChange={setNotifyOnComplete} />
+        </label>
+        {devHarnessEl && (
+          <button
+            className={styles.devCorner}
+            onClick={() => {
+              const show = devHarnessEl.style.display === 'none';
+              devHarnessEl.style.display = show ? '' : 'none';
+              document.body.classList.toggle('dev-harness-visible', show);
+              try { localStorage.setItem('argus.showDevHarness', String(show)); } catch {}
+            }}
+            aria-label="Toggle debug panel"
+            title="Toggle debug panel"
+          >
+            dev
+          </button>
+        )}
         <button
           className={styles.infoCorner}
           onClick={() => setInfoOpen(true)}
           aria-label="Workspace info"
           title="Workspace info"
         >
-          ℹ
+          info
         </button>
       </div>
       {infoOpen && <InfoModal workspacePath={workspacePath} onClose={() => setInfoOpen(false)} />}

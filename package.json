@@ -59,7 +59,8 @@
     "commands": [
       {
         "command": "argus.openChat",
-        "title": "Argus: Open Chat"
+        "title": "Argus: Open Chat",
+        "icon": "media/argus-icon.svg"
       },
       {
         "command": "argus.askSelection",
@@ -92,6 +93,12 @@
       }
     ],
     "menus": {
+      "editor/title": [
+        {
+          "command": "argus.openChat",
+          "group": "navigation"
+        }
+      ],
       "editor/context": [
         {
           "command": "argus.askSelection",
