@@ -255,13 +255,14 @@ function AppInner() {
   useEffect(() => {
     if (wasStreaming.current && !state.isStreaming) {
       if (soundOnComplete) playCompletionSound();
-      if (notifyOnComplete && Notification.permission === 'granted') {
+      if (notifyOnComplete && !document.hasFocus() && Notification.permission === 'granted') {
         const projectName = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
         const title = projectName ? `Argus/${projectName}` : 'Argus';
         const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
         const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
         const n = new Notification(title, { body });
         n.onclick = () => { window.focus(); n.close(); };
+        window.focus();
       }
     }
     wasStreaming.current = state.isStreaming;

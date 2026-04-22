@@ -24,6 +24,7 @@ cmd/
   start-argus.bat       - Launch dev server (double-click from Explorer)
   ctx-install.bat       - Install context menu entry (run as admin)
   ctx-uninstall.bat     - Remove context menu entry (run as admin)
+  kill-claude.bat       - Kill all running Claude Code processes
 scripts/
   context-menu.js       - Cross-platform context menu install/uninstall (Windows registry / Linux .desktop entry)
   launch.js             - Opens Chrome in app mode with optional ?dir= param (cross-platform Chrome paths)
@@ -99,12 +100,16 @@ webview/
 - Login flow: `AgentSession.startLogin()` spawns `claude auth login`, captures OAuth URL, accepts auth code via stdin; webview `LoginPanel` in `ChatMessage.tsx` manages the UI; `LoginState` tracks phases (`idle | starting | url | submitting | success | error`)
 - Retry: ChatPanel stores last user text/images; webview sends `retry` message to re-run the last prompt
 - Sound on complete: `playCompletionSound()` in `App.tsx` via AudioContext; toggled by `soundOnComplete` setting in `SettingsContext`
+- Notify on complete: browser `Notification` API fires when streaming finishes (if `notifyOnComplete` enabled in `SettingsContext`); requests permission on first enable; notification title includes project name, body shows last user message; clicking focuses the window
+- Copy buttons: user messages have a hover-reveal copy button (`MessageCopyButton` in `ChatMessage.tsx`); code blocks have a hover-reveal copy button (`CopyButton` in `utils/markdown.tsx`) styled via `global.css` (`.code-block-wrapper` / `.code-copy-btn`)
+- Dev harness toggle: SettingsModal has a "dev" button (visible only when `#dev-harness` element exists) that toggles DevHarness visibility; state persisted to localStorage (`argus.showDevHarness`); `body.dev-harness-visible` class controls bottom padding
+- Editor title icon: `argus.openChat` command registered in `editor/title` menu group with `media/argus-icon.svg` icon
 - Global scrollbar styling: thin scrollbars via `scrollbar-width: thin` and `::-webkit-scrollbar` rules in `global.css`
 - Content blocks: streaming and completed messages use `ContentBlock[]` (interleaved `{ type: 'text' }` and `{ type: 'tool' }` blocks) instead of separate text/toolCalls fields - preserves tool-call ordering relative to text
 - AskUserQuestion: tabbed dialog UI - multiple questions shown as tabs, supports single-select (radio dots) and multi-select (checkboxes via `multiSelect` flag), includes automatic "Other" option with free-text input (injected client-side in ToolCall.tsx); text blocks after a pending AskUserQuestion are hidden so the AI appears to wait; cancelled dialogs show "Session ended"; completed answers show a result summary strip (`askResultSummary`); `tool_end` events can update completed messages (not just streaming) for late answers; `AskUserQuestion` blocked in plan mode. Answers sent back to CLI via `AgentSession.sendToolResult()` - stdin kept open until all interactive tools resolve; `pendingToolResolvers` map tracks in-flight prompts and are resolved with `{ cancelled: true }` on stop/close; `skipNextToolEnd` prevents duplicate tool_end events
 - Pending tool animation: tool names pulse (green, `toolNamePending` class) while awaiting result; `pending` flag derived from `!result && !error`
 - Directory-aware launch: context menu passes `?dir=` query param to the dev URL; `index.html` forwards it to the WebSocket (`ws://localhost:5173/agent?dir=...`); `vite.dev.config.ts` reads `dir` from the upgrade request and uses it as `cwd` for Claude CLI spawns and skill discovery; `App.tsx` dispatches `workspaceInfo` on mount if `dir` is present
-- Context usage indicator: pill in InputArea (`contextPill`) shows "X% used" of 200k context window; extracted from CLI `assistant` event's `message.usage` (sums `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens`); color-coded: default <50%, yellow (`contextMedium`) 50-80%, red (`contextHigh`) 80%+; tooltip shows token breakdown; persists across messages (instance-scoped counters in ChatPanel), resets on clear/new session; ignores synthetic events (zero usage) from slash commands like `/context`
+- Context usage indicator: pill in InputArea (`contextPill`) shows "X%" of 200k context window (full "X% used" in tooltip); extracted from CLI `assistant` event's `message.usage` (sums `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens`); color-coded: default <50%, yellow (`contextMedium`) 50-80%, red (`contextHigh`) 80%+; tooltip shows token breakdown; persists across messages (instance-scoped counters in ChatPanel), resets on clear/new session; ignores synthetic events (zero usage) from slash commands like `/context`
 
 ## Skills
 
