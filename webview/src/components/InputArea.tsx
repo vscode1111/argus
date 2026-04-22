@@ -27,9 +27,10 @@ interface Props {
   prefill: string;
   workspacePath: string;
   contextUsage: { percent: number; inputTokens: number; outputTokens: number } | null;
+  onSend?: () => void;
 }
 
-export function InputArea({ isStreaming, prefill, workspacePath, contextUsage }: Props) {
+export function InputArea({ isStreaming, prefill, workspacePath, contextUsage, onSend }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -131,6 +132,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, contextUsage }:
     setSlashQuery(null);
     postMessage({ type: 'send', text, images: images.length > 0 ? images : undefined, mode });
     setImages([]);
+    onSend?.();
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {

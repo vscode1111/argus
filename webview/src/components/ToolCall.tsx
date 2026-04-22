@@ -255,7 +255,6 @@ export function ToolCall({ call }: Props) {
             <button className={styles.askSubmitBtn} onClick={handleSubmit} disabled={!allAnswered}>
               Submit answers
             </button>
-            <span className={styles.askEscHint}>Esc to cancel</span>
           </div>
         )}
         {isCancelled && (

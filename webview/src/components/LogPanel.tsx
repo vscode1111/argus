@@ -33,15 +33,34 @@ interface LogPanelProps {
 }
 
 export function LogPanel({ logs, onClear }: LogPanelProps) {
+  const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const userScrolledUp = useRef(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { showLogTime, showLogType, setShowLogTime, setShowLogType } = useSettings();
 
   const hasMeta = showLogTime || showLogType;
   const metaColWidth = showLogTime ? '100px' : '44px';
 
+  function handleScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUp.current = dist > 80;
+    setShowScrollBtn(dist > 80);
+  }
+
+  function scrollToBottom() {
+    userScrolledUp.current = false;
+    setShowScrollBtn(false);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'instant' });
+    if (!userScrolledUp.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' });
+    }
   }, [logs]);
 
   return (
@@ -70,22 +89,27 @@ export function LogPanel({ logs, onClear }: LogPanelProps) {
           <button className={styles.clearBtn} onClick={onClear}>Clear</button>
         </div>
       </div>
-      <div className={styles.list}>
-        {logs.length === 0 && (
-          <div className={styles.empty}>No log entries yet. Send a message to see communication logs.</div>
+      <div className={styles.listWrapper}>
+        <div className={styles.list} ref={listRef} onScroll={handleScroll}>
+          {logs.length === 0 && (
+            <div className={styles.empty}>No log entries yet. Send a message to see communication logs.</div>
+          )}
+          {logs.map((entry, i) => (
+            <div key={i} className={hasMeta ? styles.entry : styles.entryNoMeta} style={hasMeta ? { gridTemplateColumns: `${metaColWidth} 1fr` } : undefined}>
+              {hasMeta && (
+                <div className={styles.meta}>
+                  {showLogTime && <span className={styles.timestamp}>{formatTime(entry.timestamp)}</span>}
+                  {showLogType && <span className={[styles.level, styles[entry.level]].join(' ')}>{entry.level.toUpperCase()}</span>}
+                </div>
+              )}
+              <span className={[styles.text, entry.text.includes('exited with code') ? styles.textExit : entry.text.includes('Spawning claude') ? styles.textSpawn : ''].filter(Boolean).join(' ')}>{entry.text}</span>
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+        {showScrollBtn && (
+          <button className={styles.scrollBtn} onClick={scrollToBottom} aria-label="Scroll to bottom">↓</button>
         )}
-        {logs.map((entry, i) => (
-          <div key={i} className={hasMeta ? styles.entry : styles.entryNoMeta} style={hasMeta ? { gridTemplateColumns: `${metaColWidth} 1fr` } : undefined}>
-            {hasMeta && (
-              <div className={styles.meta}>
-                {showLogTime && <span className={styles.timestamp}>{formatTime(entry.timestamp)}</span>}
-                {showLogType && <span className={[styles.level, styles[entry.level]].join(' ')}>{entry.level.toUpperCase()}</span>}
-              </div>
-            )}
-            <span className={styles.text}>{entry.text}</span>
-          </div>
-        ))}
-        <div ref={bottomRef} />
       </div>
     </div>
   );

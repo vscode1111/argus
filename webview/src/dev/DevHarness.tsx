@@ -324,19 +324,15 @@ function Btn({ label, onClick, bg = '#0e639c' }: BtnProps) {
 }
 
 export function DevHarness() {
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(() => {
+    try {
+      return localStorage.getItem('argus.showDevHarness') === 'true';
+    } catch { return false; }
+  });
 
   React.useEffect(() => {
-    try {
-      const stored = localStorage.getItem('argus.showDevHarness');
-      if (stored === 'false') {
-        const el = document.getElementById('dev-harness');
-        if (el) el.style.display = 'none';
-      } else {
-        document.body.classList.add('dev-harness-visible');
-      }
-    } catch {}
-  }, []);
+    document.body.classList.toggle('dev-harness-visible', visible);
+  }, [visible]);
 
   return (
     <div style={{

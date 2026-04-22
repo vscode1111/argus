@@ -1,6 +1,6 @@
-import React, { useEffect, useReducer } from 'react';
+import React, { useEffect, useReducer, useRef, useCallback } from 'react';
 import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState } from './types';
-import { MessageList } from './components/MessageList';
+import { MessageList, MessageListHandle } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
@@ -216,6 +216,7 @@ const initialState: AppState = {
 function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { showLogs, soundOnComplete, notifyOnComplete } = useSettings();
+  const messageListRef = useRef<MessageListHandle>(null);
   const wasStreaming = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [logWidth, setLogWidth] = React.useState(320);
@@ -328,6 +329,8 @@ function AppInner() {
     window.addEventListener('mouseup', onMouseUp);
   }
 
+  const scrollToBottom = useCallback(() => messageListRef.current?.scrollToBottom(), []);
+
   const logPanel = <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} />;
 
   return (
@@ -340,8 +343,8 @@ function AppInner() {
           </>
         )}
         <div className="chatPane">
-          <MessageList messages={state.messages} streaming={state.streaming} login={state.login} />
-          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} contextUsage={state.contextUsage} />
+          <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} />
+          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} contextUsage={state.contextUsage} onSend={scrollToBottom} />
         </div>
         {showLogs && !isNarrow && (
           <>

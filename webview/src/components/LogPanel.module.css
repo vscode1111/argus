@@ -130,6 +130,14 @@
   background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground));
 }
 
+.listWrapper {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .list {
   flex: 1;
   overflow-y: auto;
@@ -157,6 +165,32 @@
 
 .list::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.scrollBtn {
+  position: absolute;
+  bottom: 8px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--vscode-editorWidget-background, var(--assistant-bg));
+  color: var(--vscode-foreground);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0.85;
+  z-index: 10;
+}
+
+.scrollBtn:hover {
+  opacity: 1;
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
 }
 
 .empty {
@@ -202,6 +236,14 @@
   word-break: break-all;
   align-self: start;
   color: var(--vscode-foreground);
+}
+
+.textExit {
+  color: orange;
+}
+
+.textSpawn {
+  color: #4ec94e;
 }
 
 .timestamp {

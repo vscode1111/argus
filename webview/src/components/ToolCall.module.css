@@ -160,7 +160,9 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--tool-bg);
-  width: 100%;
+  width: fit-content;
+  min-width: 320px;
+  max-width: 100%;
   overflow: hidden;
 }
 
@@ -329,6 +331,7 @@
 }
 
 .askSubmitBtn {
+  flex: 1;
   background: var(--vscode-button-background, #0e639c);
   color: var(--vscode-button-foreground, #fff);
   border: none;
@@ -345,11 +348,6 @@
   cursor: default;
 }
 
-.askEscHint {
-  font-size: 0.82em;
-  color: var(--thinking-fg);
-  opacity: 0.6;
-}
 
 .askCancelled {
   padding: 6px 14px;

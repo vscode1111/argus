@@ -22,12 +22,12 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue>({
   verboseTools: false,
   showTimer: true,
-  showOutput: true,
-  showLogs: false,
+  showOutput: false,
+  showLogs: true,
   showLogTime: true,
   showLogType: true,
-  soundOnComplete: false,
-  notifyOnComplete: false,
+  soundOnComplete: true,
+  notifyOnComplete: true,
   setVerboseTools: () => {},
   setShowTimer: () => {},
   setShowOutput: () => {},
@@ -50,12 +50,12 @@ function readBool(key: string, defaultVal: boolean): boolean {
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [verboseTools, setVerboseToolsState] = useState(() => readBool('argus.verboseTools', false));
   const [showTimer, setShowTimerState] = useState(() => readBool('argus.showTimer', true));
-  const [showOutput, setShowOutputState] = useState(() => readBool('argus.showOutput', true));
-  const [showLogs, setShowLogsState] = useState(() => readBool('argus.showLogs', false));
+  const [showOutput, setShowOutputState] = useState(() => readBool('argus.showOutput', false));
+  const [showLogs, setShowLogsState] = useState(() => readBool('argus.showLogs', true));
   const [showLogTime, setShowLogTimeState] = useState(() => readBool('argus.showLogTime', true));
   const [showLogType, setShowLogTypeState] = useState(() => readBool('argus.showLogType', true));
-  const [soundOnComplete, setSoundOnCompleteState] = useState(() => readBool('argus.soundOnComplete', false));
-  const [notifyOnComplete, setNotifyOnCompleteState] = useState(() => readBool('argus.notifyOnComplete', false));
+  const [soundOnComplete, setSoundOnCompleteState] = useState(() => readBool('argus.soundOnComplete', true));
+  const [notifyOnComplete, setNotifyOnCompleteState] = useState(() => readBool('argus.notifyOnComplete', true));
 
   function setVerboseTools(v: boolean) {
     setVerboseToolsState(v);
