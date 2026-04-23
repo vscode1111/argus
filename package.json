@@ -17,8 +17,9 @@
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
+  "icon": "media/argus-icon.png",
   "scripts": {
-    "vscode:prepublish": "npm run build:webview && npm run compile",
+    "vscode:prepublish": "npm run build && npm run compile",
     "build": "vite build --config webview/vite.config.ts",
     "watch": "vite build --watch --config webview/vite.config.ts",
     "dev": "node scripts/dev.js",
@@ -35,7 +36,9 @@
     "test:e2e:headed": "node node_modules/@playwright/test/cli.js test --headed",
     "test:e2e:report": "node node_modules/@playwright/test/cli.js show-report",
     "ctx:install": "node scripts/context-menu.js",
-    "ctx:uninstall": "node scripts/context-menu.js --uninstall"
+    "ctx:uninstall": "node scripts/context-menu.js --uninstall",
+    "ext:install": "code.cmd --install-extension argus-0.0.18.vsix",
+    "ext:uninstall": "code.cmd --uninstall-extension local.argus"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.0",

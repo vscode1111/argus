@@ -71,6 +71,7 @@ export class ChatPanel {
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')],
       }
     );
+    panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'argus-icon.svg');
     const instance = new ChatPanel(panel, extensionUri);
     ChatPanel.panels.add(instance);
     ChatPanel.lastFocused = instance;

@@ -20,12 +20,18 @@ src/
   utils/
     config.ts           - Extension settings helpers
     workspace.ts        - VS Code workspace helpers
+    win32Focus.ts       - Win32 FFI (koffi) for reliable SetForegroundWindow on notification click
 cmd/
   start-argus.bat       - Launch dev server (double-click from Explorer)
   ctx-install.bat       - Install context menu entry (run as admin)
   ctx-uninstall.bat     - Remove context menu entry (run as admin)
   kill-claude.bat       - Kill all running Claude Code processes
+server/
+  index.ts              - Standalone WebSocket server (Claude CLI orchestration, extracted from Vite plugin)
+  tsconfig.json         - TypeScript config for server
 scripts/
+  dev.js                - Orchestrates Vite frontend + WebSocket server in parallel (colored [fe]/[be] output)
+  dev-stop.js           - Kill running dev processes
   context-menu.js       - Cross-platform context menu install/uninstall (Windows registry / Linux .desktop entry)
   launch.js             - Opens Chrome in app mode with optional ?dir= param (cross-platform Chrome paths)
   launch.vbs            - Windows-only VBS wrapper for windowless launch (invoked by context menu registry)
@@ -88,7 +94,7 @@ webview/
 - CSS color tokens: diff/semantic colors defined as CSS variables in `global.css` (`--diff-added`, `--diff-removed`, `--user-msg-bg`, etc.) - never hardcode color literals in component CSS
 - Webview markdown rendered via `react-markdown` in `utils/markdown.tsx`
 - Webview message protocol (extension -> webview): typed as `WebviewMessage` union in `ChatPanel.ts` - `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills | workspaceInfo | log | clearLogs | loginUrl | loginResult | contextUsage`
-- Webview message protocol (webview -> extension): `send | stop | forceError | newSession | openFile | openUrl | getInfo | getSkills | retry | toolAnswer | login | loginCode`
+- Webview message protocol (webview -> extension): `send | stop | forceError | newSession | openFile | openUrl | getInfo | getSkills | retry | toolAnswer | login | loginCode | focusPanel`
 - Modal Escape handling: use `useEscapeKey(onClose)` hook from `hooks/useEscapeKey.ts` - do not duplicate keydown listeners
 - Modal portals: FileViewerModal, DiffViewerModal, and ImageViewerModal use `createPortal(jsx, document.body)` to render outside the React tree, avoiding z-index stacking issues when modals are opened from inside the scrollable MessageList during streaming
 - Errors use `showError()` helper in ChatPanel - shows VS Code error notification with "View Output" action
@@ -108,7 +114,10 @@ webview/
 - Content blocks: streaming and completed messages use `ContentBlock[]` (interleaved `{ type: 'text' }` and `{ type: 'tool' }` blocks) instead of separate text/toolCalls fields - preserves tool-call ordering relative to text
 - AskUserQuestion: tabbed dialog UI (`askDialog`, `width: fit-content`) - multiple questions shown as tabs, supports single-select (radio dots) and multi-select (checkboxes via `multiSelect` flag), includes automatic "Other" option with free-text input (injected client-side in ToolCall.tsx); full-width submit button; text blocks after a pending AskUserQuestion are hidden so the AI appears to wait; cancelled dialogs show "Session ended"; completed answers show a result summary strip (`askResultSummary`); `tool_end` events can update completed messages (not just streaming) for late answers; `AskUserQuestion` blocked in plan mode. Answers sent back to CLI via `AgentSession.sendToolResult()` - stdin kept open until all interactive tools resolve; `pendingToolResolvers` map tracks in-flight prompts and are resolved with `{ cancelled: true }` on stop/close; `skipNextToolEnd` prevents duplicate tool_end events
 - Pending tool animation: tool names pulse (green, `toolNamePending` class) while awaiting result; `pending` flag derived from `!result && !error`
-- Directory-aware launch: context menu passes `?dir=` query param to the dev URL; `index.html` forwards it to the WebSocket (`ws://localhost:5173/agent?dir=...`); `vite.dev.config.ts` reads `dir` from the upgrade request and uses it as `cwd` for Claude CLI spawns and skill discovery; `App.tsx` dispatches `workspaceInfo` on mount if `dir` is present
+- Multi-panel support: `ChatPanel` tracks all open panels in a static `Set<ChatPanel>` with a `lastFocused` pointer; `createNew()` always opens a fresh panel, `focusOrCreate()` reveals the last-focused one; `argus.openChat` creates new panels, other commands reuse the last-focused panel
+- Win32 focus: `win32Focus.ts` uses `koffi` FFI to call `SetForegroundWindow`/`BringWindowToTop`; `captureForegroundWindow()` is called on panel creation, `focusCachedWindow()` on notification click via the `focusPanel` webview message
+- Standalone WebSocket server: `server/index.ts` runs as a separate Node process (port 3001 by default, `ARGUS_SERVER_PORT` env); `scripts/dev.js` starts both Vite and server in parallel; `vite.dev.config.ts` is now a pure Vite config with no server-side plugin
+- Directory-aware launch: context menu passes `?dir=` query param to the dev URL; `index.html` forwards it to the WebSocket (`ws://localhost:3001/agent?dir=...`); server reads `dir` from the upgrade request and uses it as `cwd` for Claude CLI spawns and skill discovery; `App.tsx` dispatches `workspaceInfo` on mount if `dir` is present
 - Context usage indicator: pill in InputArea (`contextPill`) shows "X%" of 200k context window (full "X% used" in tooltip); extracted from CLI `assistant` event's `message.usage` (sums `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens`); color-coded: default <50%, yellow (`contextMedium`) 50-80%, red (`contextHigh`) 80%+; tooltip shows token breakdown; persists across messages (instance-scoped counters in ChatPanel), resets on clear/new session; ignores synthetic events (zero usage) from slash commands like `/context`
 
 ## Skills
@@ -120,7 +129,9 @@ webview/
 ## Development
 
 ```sh
-yarn dev          # browser dev server at http://localhost:5173 (HMR, DevHarness mock panel)
+yarn dev          # starts Vite frontend (port 5173) + WebSocket server (port 3001) in parallel
+yarn dev:frontend # Vite dev server only (no backend)
+yarn dev:server   # WebSocket server only (node --experimental-strip-types server/index.ts)
 yarn build        # bundle React webview to media/webview.js + media/webview.css
 yarn watch        # watch + rebuild webview on save (for VS Code Extension Host testing)
 yarn compile      # compile extension TypeScript
