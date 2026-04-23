@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { AgentSession, ErrorKind, LoginResult } from '../agent/AgentSession';
 import { ChatMessage, ImageAttachment, createUserMessage, createAssistantMessage } from './ChatMessage';
+import { captureForegroundWindow, focusCachedWindow } from '../utils/win32Focus';
 
 type WebviewMessage =
   | { type: 'message'; message: ChatMessage }
@@ -25,7 +26,8 @@ type WebviewMessage =
   | { type: 'loginResult'; success: boolean; message?: string };
 
 export class ChatPanel {
-  public static current: ChatPanel | undefined;
+  private static readonly panels = new Set<ChatPanel>();
+  private static lastFocused: ChatPanel | undefined;
   private static readonly viewType = 'argusChat';
 
   private readonly panel: vscode.WebviewPanel;
@@ -52,26 +54,35 @@ export class ChatPanel {
     this.panel.webview.html = this.getHtml();
     this.panel.webview.onDidReceiveMessage(this.onWebviewMessage.bind(this), null, this.disposables);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+    this.panel.onDidChangeViewState((e) => {
+      if (e.webviewPanel.active) ChatPanel.lastFocused = this;
+    }, null, this.disposables);
+    captureForegroundWindow();
   }
 
-  public static createOrShow(extensionUri: vscode.Uri): ChatPanel {
-    const column = vscode.ViewColumn.Beside;
-    if (ChatPanel.current) {
-      ChatPanel.current.panel.reveal(column);
-      return ChatPanel.current;
-    }
+  public static createNew(extensionUri: vscode.Uri): ChatPanel {
     const panel = vscode.window.createWebviewPanel(
       ChatPanel.viewType,
       'Argus',
-      column,
+      vscode.ViewColumn.Beside,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')],
       }
     );
-    ChatPanel.current = new ChatPanel(panel, extensionUri);
-    return ChatPanel.current;
+    const instance = new ChatPanel(panel, extensionUri);
+    ChatPanel.panels.add(instance);
+    ChatPanel.lastFocused = instance;
+    return instance;
+  }
+
+  public static focusOrCreate(extensionUri: vscode.Uri): ChatPanel {
+    if (ChatPanel.lastFocused) {
+      ChatPanel.lastFocused.panel.reveal(undefined, true);
+      return ChatPanel.lastFocused;
+    }
+    return ChatPanel.createNew(extensionUri);
   }
 
   public sendWithContext(prefix: string): void {
@@ -128,6 +139,10 @@ export class ChatPanel {
       await this.handleLogin();
     } else if (msg.type === 'loginCode' && msg.text) {
       await this.handleLoginCode(msg.text);
+    } else if (msg.type === 'focusPanel') {
+      this.outputChannel.appendLine(`[${new Date().toISOString()}] focusPanel received`);
+      focusCachedWindow((text) => this.outputChannel.appendLine(`[${new Date().toISOString()}] ${text}`));
+      this.panel.reveal(undefined, false);
     }
   }
 
@@ -289,7 +304,10 @@ export class ChatPanel {
   }
 
   private dispose(): void {
-    ChatPanel.current = undefined;
+    ChatPanel.panels.delete(this);
+    if (ChatPanel.lastFocused === this) {
+      ChatPanel.lastFocused = ChatPanel.panels.values().next().value;
+    }
     this.panel.dispose();
     this.outputChannel.dispose();
     this.disposables.forEach(d => d.dispose());

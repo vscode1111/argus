@@ -2,16 +2,23 @@
 'use strict';
 
 const { execSync } = require('child_process');
-const PORT = 5173;
+const PORTS = [5173, 3001];
 
 const lines = execSync('netstat -ano').toString().split('\n');
-const line = lines.find(l => l.includes(`:${PORT}`) && l.includes('LISTENING'));
 
-if (!line) {
-  console.log(`Nothing running on port ${PORT}`);
-  process.exit(0);
+let stopped = 0;
+for (const port of PORTS) {
+  const line = lines.find(l => l.includes(`:${port}`) && l.includes('LISTENING'));
+  if (!line) {
+    console.log(`Nothing running on port ${port}`);
+    continue;
+  }
+  const pid = line.trim().split(/\s+/).pop();
+  execSync(`taskkill /PID ${pid} /F`);
+  console.log(`Stopped PID ${pid} (port ${port})`);
+  stopped++;
 }
 
-const pid = line.trim().split(/\s+/).pop();
-execSync(`taskkill /PID ${pid} /F`);
-console.log(`Stopped PID ${pid} (port ${PORT})`);
+if (!stopped) {
+  console.log('No dev processes found');
+}

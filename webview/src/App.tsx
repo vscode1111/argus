@@ -262,7 +262,15 @@ function AppInner() {
         const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
         const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
         const n = new Notification(title, { body });
-        n.onclick = () => { window.focus(); n.close(); };
+        n.onclick = () => {
+          console.log('[Argus] notification clicked at', new Date().toISOString());
+          postMessage({ type: 'focusPanel' });
+          window.focus();
+          n.close();
+        };
+        n.onshow = () => console.log('[Argus] notification shown');
+        n.onerror = (e) => console.error('[Argus] notification error', e);
+        n.onclose = () => console.log('[Argus] notification closed');
         window.focus();
       }
     }

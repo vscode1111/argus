@@ -402,6 +402,9 @@ export class AgentSession {
 
           if ('result' in msg && typeof msg.result === 'string') {
             yield { type: 'result', text: msg.result };
+            if (this.pendingToolResolvers.size === 0 && proc.stdin.writable) {
+              proc.stdin.end();
+            }
             continue;
           }
 

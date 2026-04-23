@@ -44,16 +44,16 @@ export function activate(context: vscode.ExtensionContext): void {
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand('argus.openChat', () => {
-      ChatPanel.createOrShow(context.extensionUri);
+      ChatPanel.createNew(context.extensionUri);
     }),
 
     vscode.commands.registerCommand('argus.newSession', () => {
-      const panel = ChatPanel.createOrShow(context.extensionUri);
+      const panel = ChatPanel.focusOrCreate(context.extensionUri);
       panel.newSession();
     }),
 
     vscode.commands.registerCommand('argus.askSelection', (args?: { line?: number; context?: string }) => {
-      const panel = ChatPanel.createOrShow(context.extensionUri);
+      const panel = ChatPanel.focusOrCreate(context.extensionUri);
       let text = '';
 
       if (args?.context) {
@@ -69,7 +69,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand('argus.editSelection', () => {
-      const panel = ChatPanel.createOrShow(context.extensionUri);
+      const panel = ChatPanel.focusOrCreate(context.extensionUri);
       const selection = getSelection();
       if (!selection) {
         vscode.window.showInformationMessage('Select some code first');
@@ -80,7 +80,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand('argus.reviewSelection', () => {
-      const panel = ChatPanel.createOrShow(context.extensionUri);
+      const panel = ChatPanel.focusOrCreate(context.extensionUri);
       const selection = getSelection();
       if (!selection) {
         vscode.window.showInformationMessage('Select some code first');
