@@ -3,6 +3,7 @@ import { UIMessage, ErrorKind, LoginState } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
 import { Markdown } from '../utils/markdown';
+import { linkifyPaths } from '../utils/filePath';
 import { formatDuration } from '../utils/time';
 import { ImageViewerModal } from './ImageViewerModal';
 import { postMessage } from '../vscode';
@@ -194,7 +195,7 @@ function UserMessage({ message }: Props) {
 
   return (
     <div className={[msg.message, msg.user, styles.userMsg].join(' ')}>
-      <div className={msg.messageContent} style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
+      <div className={msg.messageContent} style={{ whiteSpace: 'pre-wrap' }}>{content ? linkifyPaths(content) : content}</div>
       {content && <MessageCopyButton text={content} />}
       {message.images && message.images.length > 0 && (
         <div className={styles.messageImages}>

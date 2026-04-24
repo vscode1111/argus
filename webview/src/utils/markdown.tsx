@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { withLinkedPaths } from './filePath';
 
 function extractText(node: React.ReactNode): string {
   if (typeof node === 'string') return node;
@@ -75,6 +76,15 @@ export function Markdown({ children, breaks }: { children: string; breaks?: bool
               {children}
             </code>
           );
+        },
+        p({ children }) {
+          return <p>{withLinkedPaths(children)}</p>;
+        },
+        li({ children }) {
+          return <li>{withLinkedPaths(children)}</li>;
+        },
+        td({ children }) {
+          return <td>{withLinkedPaths(children)}</td>;
         },
         a({ href, children }) {
           return <a href={href} style={{ color: 'var(--vscode-textLink-foreground)' }}>{children}</a>;

@@ -117,7 +117,13 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!state.streaming) return { ...state, isStreaming: false };
       const responseTime = Date.now() - state.streaming.startTime;
       const { blocks } = state.streaming;
-      const content = blocks
+      // Mark any still-pending tool blocks as cancelled so they stop pulsing
+      const finalBlocks = blocks.map(b =>
+        b.type === 'tool' && !b.call.result && !b.call.error
+          ? { type: 'tool' as const, call: { ...b.call, error: true } }
+          : b
+      );
+      const content = finalBlocks
         .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
         .map(b => b.text)
         .join('');
@@ -126,7 +132,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         role: 'assistant',
         content,
         thinking: state.streaming.thinking || undefined,
-        blocks: blocks.length > 0 ? blocks : undefined,
+        blocks: finalBlocks.length > 0 ? finalBlocks : undefined,
         responseTime,
       };
       return {
@@ -138,10 +144,30 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'error': {
-      const errorMsg: UIMessage = { id: generateId(), role: 'error', content: action.text, errorKind: action.errorKind as UIMessage['errorKind'] };
+      const msgs: UIMessage[] = [];
+      // Preserve streaming blocks (mark pending tools as cancelled)
+      if (state.streaming && state.streaming.blocks.length > 0) {
+        const finalBlocks = state.streaming.blocks.map(b =>
+          b.type === 'tool' && !b.call.result && !b.call.error
+            ? { type: 'tool' as const, call: { ...b.call, error: true } }
+            : b
+        );
+        const content = finalBlocks
+          .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
+          .map(b => b.text)
+          .join('');
+        msgs.push({
+          id: generateId(),
+          role: 'assistant',
+          content,
+          thinking: state.streaming.thinking || undefined,
+          blocks: finalBlocks,
+        });
+      }
+      msgs.push({ id: generateId(), role: 'error', content: action.text, errorKind: action.errorKind as UIMessage['errorKind'] });
       return {
         ...state,
-        messages: [...state.messages, errorMsg],
+        messages: [...state.messages, ...msgs],
         streaming: null,
         isStreaming: false,
       };
@@ -215,7 +241,7 @@ const initialState: AppState = {
 
 function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { showLogs, soundOnComplete, notifyOnComplete } = useSettings();
+  const { showLogs, setShowLogs, soundOnComplete, notifyOnComplete } = useSettings();
   const messageListRef = useRef<MessageListHandle>(null);
   const wasStreaming = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
@@ -339,7 +365,7 @@ function AppInner() {
 
   const scrollToBottom = useCallback(() => messageListRef.current?.scrollToBottom(), []);
 
-  const logPanel = <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} />;
+  const logPanel = <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} onClose={() => setShowLogs(false)} />;
 
   return (
     <div className="app">

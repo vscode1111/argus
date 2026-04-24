@@ -300,7 +300,11 @@ export function ToolCall({ call }: Props) {
       <div className={[styles.toolCall, error && styles.error].filter(Boolean).join(' ')}>
         {verboseTools ? (
           <pre className={styles.toolInput}>
-            <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
+            {isFile && fileViewerContent ? (
+              <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={handleFileClick}>{name}</a>
+            ) : (
+              <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
+            )}
             {'\n'}{JSON.stringify(input, null, 2)}
           </pre>
         ) : (

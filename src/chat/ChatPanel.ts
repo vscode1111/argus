@@ -23,7 +23,8 @@ type WebviewMessage =
   | { type: 'log'; level: string; text: string; timestamp: string }
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number }
   | { type: 'loginUrl'; url: string }
-  | { type: 'loginResult'; success: boolean; message?: string };
+  | { type: 'loginResult'; success: boolean; message?: string }
+  | { type: 'filePreview'; path: string; content: string };
 
 export class ChatPanel {
   private static readonly panels = new Set<ChatPanel>();
@@ -99,7 +100,7 @@ export class ChatPanel {
     this.post({ type: 'clear' });
   }
 
-  private async onWebviewMessage(msg: { type: string; text?: string; path?: string; url?: string; images?: ImageAttachment[]; mode?: 'plan' | 'edit' }): Promise<void> {
+  private async onWebviewMessage(msg: { type: string; text?: string; path?: string; line?: number; url?: string; images?: ImageAttachment[]; mode?: 'plan' | 'edit' }): Promise<void> {
     console.log('[Argus] onWebviewMessage:', JSON.stringify({ ...msg, images: msg.images ? `[${msg.images.length} images]` : undefined }));
     if (msg.type === 'send' && msg.text?.trim() === '/clear') {
       this.newSession();
@@ -117,7 +118,19 @@ export class ChatPanel {
       this.newSession();
     } else if (msg.type === 'openFile' && msg.path) {
       const uri = vscode.Uri.file(msg.path);
-      vscode.window.showTextDocument(uri, { preview: true, viewColumn: vscode.ViewColumn.One });
+      const opts: vscode.TextDocumentShowOptions = { preview: true, viewColumn: vscode.ViewColumn.One };
+      if (typeof msg.line === 'number') {
+        const pos = new vscode.Position(Math.max(0, msg.line - 1), 0);
+        opts.selection = new vscode.Range(pos, pos);
+      }
+      vscode.window.showTextDocument(uri, opts);
+    } else if (msg.type === 'readFilePreview' && msg.path) {
+      try {
+        const content = fs.readFileSync(msg.path, 'utf-8');
+        this.post({ type: 'filePreview', path: msg.path, content });
+      } catch (err) {
+        this.showError(`Cannot read file: ${msg.path}`);
+      }
     } else if (msg.type === 'openUrl' && msg.url) {
       vscode.env.openExternal(vscode.Uri.parse(msg.url));
     } else if (msg.type === 'getInfo') {

@@ -30,9 +30,10 @@ function Toggle({ id, checked, onChange }: ToggleProps) {
 interface LogPanelProps {
   logs: LogEntry[];
   onClear: () => void;
+  onClose: () => void;
 }
 
-export function LogPanel({ logs, onClear }: LogPanelProps) {
+export function LogPanel({ logs, onClear, onClose }: LogPanelProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const userScrolledUp = useRef(false);
@@ -87,6 +88,7 @@ export function LogPanel({ logs, onClear }: LogPanelProps) {
             )}
           </div>
           <button className={styles.clearBtn} onClick={onClear}>Clear</button>
+          <button className={styles.closeBtn} onClick={onClose} title="Close log panel">✕</button>
         </div>
       </div>
       <div className={styles.listWrapper}>

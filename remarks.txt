@@ -13,3 +13,5 @@ Which directory are we currently working in?
 
 Общий вопрос. У меня есть небольшой псевдо-апп (Хром), которое запускает этот проект. Хотелось бы добавить его в контекстное меню Windows - по аналогии с VS Code. Дай оптиции в виде диалогового окна.
 What is your current dir?
+
+/review https://gitlab.xbet.lan/v3group/backend/applications/cms/responsible-gaming-service/-/merge_requests/1 ru
