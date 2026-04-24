@@ -135,8 +135,7 @@ export class ChatPanel {
       vscode.env.openExternal(vscode.Uri.parse(msg.url));
     } else if (msg.type === 'getInfo') {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-      let version = '';
-      try { version = JSON.parse(fs.readFileSync(path.join(this.extensionUri.fsPath, 'package.json'), 'utf-8')).version ?? ''; } catch {}
+      const version = vscode.extensions.getExtension('local.argus')?.packageJSON?.version ?? '';
       this.post({ type: 'workspaceInfo', path: root, version });
     } else if (msg.type === 'getSkills') {
       this.post({ type: 'skills', skills: this.getSkills() });

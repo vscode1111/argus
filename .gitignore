@@ -1,6 +1,6 @@
 node_modules/
 out/
-*.vsix
+dist/
 .argus/
 .playwright-mcp/
 test-results/

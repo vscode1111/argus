@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.19",
+  "version": "0.0.23",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "license": "UNLICENSED",
@@ -37,7 +37,8 @@
     "test:e2e:report": "node node_modules/@playwright/test/cli.js show-report",
     "ctx:install": "node scripts/context-menu.js",
     "ctx:uninstall": "node scripts/context-menu.js --uninstall",
-    "ext:install": "code.cmd --install-extension argus-0.0.18.vsix",
+    "ext:package": "vsce package",
+    "ext:install": "node scripts/ext-install.js",
     "ext:uninstall": "code.cmd --uninstall-extension local.argus"
   },
   "devDependencies": {
