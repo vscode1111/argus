@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useEncoding } from '../hooks/useEncoding';
@@ -36,11 +36,13 @@ function stripLineNumbers(content: string): string {
 interface Props {
   path: string;
   content: string;
+  line?: number;
+  endLine?: number;
   copyText?: string;
   onClose: () => void;
 }
 
-export function FileViewerModal({ path, content, copyText, onClose }: Props) {
+export function FileViewerModal({ path, content, line, endLine, copyText, onClose }: Props) {
   // Default to dark unless VS Code explicitly marks the theme as light.
   const isDark = !document.body.classList.contains('vscode-light');
   const [copied, setCopied] = useState(false);
@@ -52,9 +54,26 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
   const { encoding, setEncoding, decoded: code } = useEncoding(rawCode);
   const filename = path.split(/[\\/]/).pop() ?? path;
 
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  const scrollToLine = useCallback(() => {
+    if (!line || !bodyRef.current) return;
+    const row = bodyRef.current.querySelector(`[data-line="${line}"]`) as HTMLElement | null;
+    if (row) {
+      row.scrollIntoView({ block: 'center' });
+    }
+  }, [line]);
+
+  useEffect(() => {
+    if (!line) return;
+    // Delay to let SyntaxHighlighter render line elements
+    const timer = setTimeout(scrollToLine, 50);
+    return () => clearTimeout(timer);
+  }, [line, code, scrollToLine]);
+
   function openInEditor(e: React.MouseEvent) {
     e.stopPropagation();
-    postMessage({ type: 'openFile', path });
+    postMessage({ type: 'openFile', path, line });
   }
 
   function handleCopy(e: React.MouseEvent) {
@@ -100,7 +119,7 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
             <button className={modal.close} aria-label="Close" onClick={onClose}>×</button>
           </div>
         </div>
-        <div className={modal.body}>
+        <div className={modal.body} ref={bodyRef}>
           {language === 'markdown' ? (
             <div className={styles.mdBody}>
               <Markdown breaks>{code}</Markdown>
@@ -110,7 +129,18 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
               language={language}
               style={isDark ? vscDarkPlus : vs}
               showLineNumbers
+              wrapLines
               wrapLongLines={false}
+              lineProps={(lineNumber: number) => {
+                const props: Record<string, unknown> = { 'data-line': lineNumber };
+                const lo = line ?? 0;
+                const hi = endLine ?? lo;
+                if (lo && lineNumber >= lo && lineNumber <= hi) {
+                  props.style = { background: 'var(--diff-added-bg, rgba(55, 148, 255, 0.15))' };
+                  props.className = 'highlighted-line';
+                }
+                return props;
+              }}
               customStyle={{
                 margin: 0,
                 borderRadius: 0,
@@ -118,7 +148,7 @@ export function FileViewerModal({ path, content, copyText, onClose }: Props) {
                 overflow: 'auto',
                 fontSize: '13px',
                 lineHeight: '1.5',
-                background: 'var(--tool-bg)',
+                background: 'transparent',
                 height: '100%',
               }}
               codeTagProps={{ style: { fontFamily: 'var(--font-mono)' } }}

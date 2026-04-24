@@ -421,6 +421,14 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
           }, 200);
         }
       }
+    } else if (msg.type === 'readFilePreview' && (msg as { path?: string }).path) {
+      const filePath = (msg as { path: string }).path;
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        ws.send(JSON.stringify({ type: 'filePreview', path: filePath, content }));
+      } catch (err) {
+        ws.send(JSON.stringify({ type: 'filePreview', path: filePath, content: `Error reading file: ${(err as Error).message}` }));
+      }
     } else if (msg.type === 'stop') {
       for (const toolId of pendingAskTools) {
         const tc = toolMap.get(toolId);

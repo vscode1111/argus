@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { postMessage } from '../vscode';
 import { FileViewerModal } from '../components/FileViewerModal';
 
-// Matches absolute file paths with optional :line suffix
-// Windows: D:\path\to\file.ext:123 or D:/path/to/file.ext:123
+// Matches absolute file paths with optional :line or :line-endLine suffix
+// Windows: D:\path\to\file.ext:123 or D:\path\to\file.ext:10-25
 //   Lookbehind ensures the drive letter isn't part of a URL scheme (http://, ftp://)
 // Unix: /path/to/file.ext:123 (requires at least one directory segment)
-const FILE_PATH_RE = /((?:(?<![a-zA-Z])[A-Za-z]:[\\\/])[\w.\-\\\/]+\.\w+|\/(?:[\w.\-]+\/)+[\w.\-]+\.\w+)(?::(\d+))?/g;
+const FILE_PATH_RE = /((?:(?<![a-zA-Z])[A-Za-z]:[\\\/])[\w.\-\\\/]+\.\w+|\/(?:[\w.\-]+\/)+[\w.\-]+\.\w+)(?::(\d+)(?:-(\d+))?)?/g;
 
-function FilePathLink({ path, display }: { path: string; display: string }) {
+function FilePathLink({ path, line, endLine, display }: { path: string; line?: number; endLine?: number; display: string }) {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState<string | null>(null);
 
@@ -39,6 +39,8 @@ function FilePathLink({ path, display }: { path: string; display: string }) {
         <FileViewerModal
           path={path}
           content={content}
+          line={line}
+          endLine={endLine}
           onClose={() => setOpen(false)}
         />
       )}
@@ -64,9 +66,11 @@ export function linkifyPaths(text: string): React.ReactNode {
 
     const fullMatch = match[0];
     const filePath = match[1];
+    const line = match[2] ? parseInt(match[2], 10) : undefined;
+    const endLine = match[3] ? parseInt(match[3], 10) : undefined;
 
     parts.push(
-      <FilePathLink key={match.index} path={filePath} display={fullMatch} />
+      <FilePathLink key={match.index} path={filePath} line={line} endLine={endLine} display={fullMatch} />
     );
 
     lastIndex = match.index + fullMatch.length;
@@ -92,8 +96,13 @@ export function withLinkedPaths(children: React.ReactNode): React.ReactNode {
     return children.map((child, i) =>
       typeof child === 'string'
         ? <React.Fragment key={i}>{linkifyPaths(child)}</React.Fragment>
-        : child
+        : React.isValidElement(child)
+          ? React.cloneElement(child, { key: i } as Record<string, unknown>, withLinkedPaths((child.props as { children?: React.ReactNode }).children))
+          : child
     );
+  }
+  if (React.isValidElement(children)) {
+    return React.cloneElement(children, {} as Record<string, unknown>, withLinkedPaths((children.props as { children?: React.ReactNode }).children));
   }
   return children;
 }

@@ -275,6 +275,34 @@ async function simulateAskAnswer() {
   send({ type: 'done' });
 }
 
+async function simulateRichText() {
+  send({ type: 'thinking_start' });
+  await delay(300);
+  send({ type: 'text_chunk', text: [
+    '## Code Review Results\n',
+    'I found several issues in the codebase:\n',
+    '### 1. Missing null check\n',
+    'D:\\_Projects\\vscode1111\\argus\\webview\\src\\App.tsx:390\n',
+    'The `state` variable can be `undefined` when the component first mounts, but it\'s accessed without a guard.\n',
+    '### 2. Unused import\n',
+    '`D:\\_Projects\\vscode1111\\argus\\webview\\src\\utils\\markdown.tsx:4`\n',
+    'The `remarkBreaks` import is only used conditionally. Consider lazy loading.\n',
+    '### 3. Hardcoded path in config\n',
+    'File: D:\\_Projects\\vscode1111\\argus\\server\\index.ts:31-48\n',
+    '```ts\nconst MODEL = process.env.ARGUS_MODEL ?? "claude-opus-4-6";\n```\n',
+    'This should be read from a config file instead.\n',
+    '| File | Line | Severity |\n',
+    '|------|------|----------|\n',
+    '| D:\\_Projects\\vscode1111\\argus\\webview\\src\\App.tsx:390 | 390 | High |\n',
+    '| D:\\_Projects\\vscode1111\\argus\\package.json | 5 | Low |\n',
+    '| D:\\_Projects\\vscode1111\\argus\\webview\\src\\utils\\filePath.tsx:9 | 9 | Medium |\n',
+    '\nAlso check **D:\\_Projects\\vscode1111\\argus\\src\\extension.ts** for the activation entry point.\n',
+    'And the _config_ at D:\\_Projects\\vscode1111\\argus\\src\\utils\\config.ts handles settings.',
+  ].join('') });
+  await delay(100);
+  send({ type: 'done' });
+}
+
 async function simulateLoginUrl() {
   send({ type: 'loginUrl', url: 'https://claude.ai/oauth/authorize?code=true&client_id=9d1c5a3e-example' });
 }
@@ -377,6 +405,7 @@ export function DevHarness() {
             send({ type: 'text_chunk', text: 'Done.' });
             send({ type: 'done' });
           }} bg="#6a5a2d" />
+          <Btn label="rich+paths" onClick={simulateRichText} bg="#6a4a2d" />
           <Btn label="clear" onClick={() => send({ type: 'clear' })} bg="#444" />
           <Btn label="prefill" onClick={() => send({ type: 'prefill', text: 'Explain this function' })} bg="#444" />
           <button

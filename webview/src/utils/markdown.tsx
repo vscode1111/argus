@@ -4,6 +4,13 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { withLinkedPaths } from './filePath';
 
+// Escape backslashes in Windows file paths so the markdown parser preserves them.
+// Without this, `D:\_Projects` becomes `D:_Projects` (backslash consumed as escape).
+const WIN_PATH_RE = /(?<![a-zA-Z`])([A-Za-z]:[\\])[\w.\-\\\/]+\.\w+(?::\d+(?:-\d+)?)?/g;
+function protectPathBackslashes(text: string): string {
+  return text.replace(WIN_PATH_RE, match => match.replace(/\\/g, '\\\\'));
+}
+
 function extractText(node: React.ReactNode): string {
   if (typeof node === 'string') return node;
   if (typeof node === 'number') return String(node);
@@ -67,13 +74,13 @@ export function Markdown({ children, breaks }: { children: string; breaks?: bool
           if (isInline) {
             return (
               <code style={{ background: 'var(--tool-bg)', padding: '1px 4px', borderRadius: 3, fontFamily: 'var(--font-mono)', fontSize: '0.9em' }}>
-                {children}
+                {withLinkedPaths(children)}
               </code>
             );
           }
           return (
             <code style={{ background: 'none', padding: 0, fontSize: '0.9em', fontFamily: 'var(--font-mono)' }}>
-              {children}
+              {withLinkedPaths(children)}
             </code>
           );
         },
@@ -91,7 +98,7 @@ export function Markdown({ children, breaks }: { children: string; breaks?: bool
         },
       }}
     >
-      {children}
+      {protectPathBackslashes(children)}
     </ReactMarkdown>
   );
 }
