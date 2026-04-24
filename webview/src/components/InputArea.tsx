@@ -26,11 +26,12 @@ interface Props {
   isStreaming: boolean;
   prefill: string;
   workspacePath: string;
+  version: string;
   contextUsage: { percent: number; inputTokens: number; outputTokens: number } | null;
   onSend?: () => void;
 }
 
-export function InputArea({ isStreaming, prefill, workspacePath, contextUsage, onSend }: Props) {
+export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, onSend }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -354,7 +355,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, contextUsage, o
             >
               ⚙
             </button>
-            {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} workspacePath={workspacePath} />}
+            {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} workspacePath={workspacePath} version={version} />}
           </div>
         </div>
         <button className={styles.btnSend} disabled={isStreaming} onClick={send}>Send</button>

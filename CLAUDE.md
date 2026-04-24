@@ -78,6 +78,7 @@ webview/
       DevHarness.tsx    - Fixed bottom toolbar, fires mock extension messages for browser testing
     utils/
       markdown.tsx      - react-markdown wrapper with VS Code CSS variable styling
+      filePath.tsx      - Clickable file path detection and linkification (FilePathLink + linkifyPaths + withLinkedPaths)
       time.ts           - formatDuration helper
       encoding.ts       - ENCODINGS list and tryDecode() for charset re-interpretation
 ```
@@ -93,8 +94,8 @@ webview/
 - CSS Modules: camelCase class names for dot access (`styles.toolCall`), conditional classes via `.filter(Boolean).join(' ')`, shared modules in `components/shared/`, `composes:` for reuse
 - CSS color tokens: diff/semantic colors defined as CSS variables in `global.css` (`--diff-added`, `--diff-removed`, `--user-msg-bg`, etc.) - never hardcode color literals in component CSS
 - Webview markdown rendered via `react-markdown` in `utils/markdown.tsx`
-- Webview message protocol (extension -> webview): typed as `WebviewMessage` union in `ChatPanel.ts` - `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills | workspaceInfo | log | clearLogs | loginUrl | loginResult | contextUsage`
-- Webview message protocol (webview -> extension): `send | stop | forceError | newSession | openFile | openUrl | getInfo | getSkills | retry | toolAnswer | login | loginCode | focusPanel`
+- Webview message protocol (extension -> webview): typed as `WebviewMessage` union in `ChatPanel.ts` - `thinking_start | thinking_chunk | text_chunk | tool_start | tool_end | done | error | message | clear | prefill | skills | workspaceInfo | log | clearLogs | loginUrl | loginResult | contextUsage | filePreview`
+- Webview message protocol (webview -> extension): `send | stop | forceError | newSession | openFile | openUrl | getInfo | getSkills | retry | toolAnswer | login | loginCode | focusPanel | readFilePreview`
 - Modal Escape handling: use `useEscapeKey(onClose)` hook from `hooks/useEscapeKey.ts` - do not duplicate keydown listeners
 - Modal portals: FileViewerModal, DiffViewerModal, and ImageViewerModal use `createPortal(jsx, document.body)` to render outside the React tree, avoiding z-index stacking issues when modals are opened from inside the scrollable MessageList during streaming
 - Errors use `showError()` helper in ChatPanel - shows VS Code error notification with "View Output" action
@@ -113,7 +114,9 @@ webview/
 - Global scrollbar styling: thin scrollbars via `scrollbar-width: thin` and `::-webkit-scrollbar` rules in `global.css`
 - Content blocks: streaming and completed messages use `ContentBlock[]` (interleaved `{ type: 'text' }` and `{ type: 'tool' }` blocks) instead of separate text/toolCalls fields - preserves tool-call ordering relative to text
 - AskUserQuestion: tabbed dialog UI (`askDialog`, `width: fit-content`) - multiple questions shown as tabs, supports single-select (radio dots) and multi-select (checkboxes via `multiSelect` flag), includes automatic "Other" option with free-text input (injected client-side in ToolCall.tsx); full-width submit button; text blocks after a pending AskUserQuestion are hidden so the AI appears to wait; cancelled dialogs show "Session ended"; completed answers show a result summary strip (`askResultSummary`); `tool_end` events can update completed messages (not just streaming) for late answers; `AskUserQuestion` blocked in plan mode. Answers sent back to CLI via `AgentSession.sendToolResult()` - stdin kept open until all interactive tools resolve; `pendingToolResolvers` map tracks in-flight prompts and are resolved with `{ cancelled: true }` on stop/close; `skipNextToolEnd` prevents duplicate tool_end events
-- Pending tool animation: tool names pulse (green, `toolNamePending` class) while awaiting result; `pending` flag derived from `!result && !error`
+- Pending tool animation: tool names pulse (green, `toolNamePending` class) while awaiting result; `pending` flag derived from `!result && !error`; on `done` or `error`, any still-pending tool blocks are marked `error: true` so they stop pulsing
+- Clickable file paths: `utils/filePath.tsx` detects absolute paths (Windows and Unix) with optional `:line` suffix in user messages and markdown output; `linkifyPaths()` for plain text, `withLinkedPaths()` for React children; clicking opens `FileViewerModal`; `readFilePreview` / `filePreview` message pair fetches file content from extension; `openFile` supports `line` parameter to jump to a specific line; styled via `.file-path-link` in `global.css`
+- Log panel close: LogPanel has a close button (X) that calls `onClose` prop, which toggles `showLogs` off via `setShowLogs(false)` in App
 - Multi-panel support: `ChatPanel` tracks all open panels in a static `Set<ChatPanel>` with a `lastFocused` pointer; `createNew()` always opens a fresh panel, `focusOrCreate()` reveals the last-focused one; `argus.openChat` creates new panels, other commands reuse the last-focused panel
 - Win32 focus: `win32Focus.ts` uses `koffi` FFI to call `SetForegroundWindow`/`BringWindowToTop`; `captureForegroundWindow()` is called on panel creation, `focusCachedWindow()` on notification click via the `focusPanel` webview message
 - Standalone WebSocket server: `server/index.ts` runs as a separate Node process (port 3001 by default, `ARGUS_SERVER_PORT` env); `scripts/dev.js` starts both Vite and server in parallel; `vite.dev.config.ts` is now a pure Vite config with no server-side plugin

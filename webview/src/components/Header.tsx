@@ -5,9 +5,10 @@ import styles from './Header.module.css';
 
 interface Props {
   workspacePath: string;
+  version: string;
 }
 
-export function Header({ workspacePath }: Props) {
+export function Header({ workspacePath, version }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
@@ -30,7 +31,7 @@ export function Header({ workspacePath }: Props) {
           +
         </button>
       </div>
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} workspacePath={workspacePath} />}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} workspacePath={workspacePath} version={version} />}
     </div>
   );
 }

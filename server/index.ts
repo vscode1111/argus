@@ -311,7 +311,12 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       });
 
     } else if (msg.type === 'getInfo') {
-      ws.send(JSON.stringify({ type: 'workspaceInfo', path: workspaceDir }));
+      let version = '';
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
+        version = pkg.version ?? '';
+      } catch {}
+      ws.send(JSON.stringify({ type: 'workspaceInfo', path: workspaceDir, version }));
     } else if (msg.type === 'forceError') {
       currentProc?.kill();
       ws.send(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));

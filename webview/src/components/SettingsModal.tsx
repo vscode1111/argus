@@ -27,9 +27,10 @@ function Toggle({ id, checked, onChange }: ToggleProps) {
 interface Props {
   onClose: () => void;
   workspacePath: string;
+  version: string;
 }
 
-export function SettingsModal({ onClose, workspacePath }: Props) {
+export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete } = useSettings();
   const [infoOpen, setInfoOpen] = useState(false);
   const devHarnessEl = document.getElementById('dev-harness');
@@ -88,7 +89,7 @@ export function SettingsModal({ onClose, workspacePath }: Props) {
           info
         </button>
       </div>
-      {infoOpen && <InfoModal workspacePath={workspacePath} onClose={() => setInfoOpen(false)} />}
+      {infoOpen && <InfoModal workspacePath={workspacePath} version={version} onClose={() => setInfoOpen(false)} />}
     </>
   );
 }

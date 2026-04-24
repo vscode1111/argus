@@ -14,6 +14,7 @@ type AppState = {
   isStreaming: boolean;
   prefill: string;
   workspacePath: string;
+  version: string;
   logs: LogEntry[];
   login: LoginState;
   contextUsage: ContextUsage | null;
@@ -30,7 +31,7 @@ type AppAction =
   | { type: 'error'; text: string; errorKind?: string }
   | { type: 'clear' }
   | { type: 'prefill'; text: string }
-  | { type: 'workspaceInfo'; path: string }
+  | { type: 'workspaceInfo'; path: string; version?: string }
   | { type: 'log'; level: LogLevel; text: string; timestamp: string }
   | { type: 'clearLogs' }
   | { type: 'loginStart' }
@@ -180,7 +181,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, prefill: action.text };
 
     case 'workspaceInfo':
-      return { ...state, workspacePath: action.path };
+      return { ...state, workspacePath: action.path, version: action.version ?? '' };
 
     case 'log':
       return { ...state, logs: [...state.logs, { level: action.level, text: action.text, timestamp: action.timestamp }] };
@@ -234,6 +235,7 @@ const initialState: AppState = {
   isStreaming: false,
   prefill: '',
   workspacePath: '',
+  version: '',
   logs: [],
   login: { phase: 'idle' },
   contextUsage: null,
@@ -378,7 +380,7 @@ function AppInner() {
         )}
         <div className="chatPane">
           <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} />
-          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} contextUsage={state.contextUsage} onSend={scrollToBottom} />
+          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} onSend={scrollToBottom} />
         </div>
         {showLogs && !isNarrow && (
           <>

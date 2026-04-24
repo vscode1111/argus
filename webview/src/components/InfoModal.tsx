@@ -4,10 +4,11 @@ import styles from './InfoModal.module.css';
 
 interface Props {
   workspacePath: string;
+  version: string;
   onClose: () => void;
 }
 
-export function InfoModal({ workspacePath, onClose }: Props) {
+export function InfoModal({ workspacePath, version, onClose }: Props) {
   useEscapeKey(onClose);
 
   return (
@@ -18,6 +19,12 @@ export function InfoModal({ workspacePath, onClose }: Props) {
           <button className={styles.close} aria-label="Close" onClick={onClose}>×</button>
         </div>
         <div className={styles.body}>
+          {version && (
+            <div className={styles.row}>
+              <span className={styles.label}>Version</span>
+              <span className={styles.value}>{version}</span>
+            </div>
+          )}
           <div className={styles.row}>
             <span className={styles.label}>Path</span>
             <span className={styles.value}>{workspacePath || '(no workspace)'}</span>

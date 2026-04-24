@@ -18,7 +18,7 @@ type WebviewMessage =
   | { type: 'error'; text: string; errorKind?: ErrorKind }
   | { type: 'clear' }
   | { type: 'prefill'; text: string }
-  | { type: 'workspaceInfo'; path: string }
+  | { type: 'workspaceInfo'; path: string; version: string }
   | { type: 'skills'; skills: { name: string; scope: 'global' | 'project' | 'builtin' }[] }
   | { type: 'log'; level: string; text: string; timestamp: string }
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number }
@@ -135,7 +135,9 @@ export class ChatPanel {
       vscode.env.openExternal(vscode.Uri.parse(msg.url));
     } else if (msg.type === 'getInfo') {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-      this.post({ type: 'workspaceInfo', path: root });
+      let version = '';
+      try { version = JSON.parse(fs.readFileSync(path.join(this.extensionUri.fsPath, 'package.json'), 'utf-8')).version ?? ''; } catch {}
+      this.post({ type: 'workspaceInfo', path: root, version });
     } else if (msg.type === 'getSkills') {
       this.post({ type: 'skills', skills: this.getSkills() });
     } else if (msg.type === 'retry' && this.lastUserText) {
