@@ -33,7 +33,7 @@ interface Props {
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete } = useSettings();
   const [infoOpen, setInfoOpen] = useState(false);
-  const devHarnessEl = document.getElementById('dev-harness');
+  const hasDevHarness = !!document.getElementById('dev-harness');
 
   useEscapeKey(onClose);
 
@@ -65,15 +65,10 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
           <span className={styles.settingLabel}>Notify on complete</span>
           <Toggle id="toggle-notify" checked={notifyOnComplete} onChange={setNotifyOnComplete} />
         </label>
-        {devHarnessEl && (
+        {hasDevHarness && (
           <button
             className={styles.devCorner}
-            onClick={() => {
-              const show = devHarnessEl.style.display === 'none';
-              devHarnessEl.style.display = show ? '' : 'none';
-              document.body.classList.toggle('dev-harness-visible', show);
-              try { localStorage.setItem('argus.showDevHarness', String(show)); } catch {}
-            }}
+            onClick={() => window.dispatchEvent(new Event('devharness-toggle'))}
             aria-label="Toggle debug panel"
             title="Toggle debug panel"
           >

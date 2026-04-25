@@ -239,7 +239,8 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
           } else if (event.type === 'user') {
             if (suppressCliOutput) continue;
             const userMsg = event as { type: 'user'; message?: { content?: Array<Record<string, unknown>> }; content?: Array<Record<string, unknown>> };
-            const blocks = userMsg.message?.content ?? userMsg.content ?? [];
+            const raw = userMsg.message?.content ?? userMsg.content ?? [];
+            const blocks = Array.isArray(raw) ? raw : [];
             sendLog('debug', `user message: ${blocks.length} block(s)`);
             for (const block of blocks) {
               if (block.type === 'tool_result') {

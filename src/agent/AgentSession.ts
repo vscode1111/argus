@@ -380,7 +380,8 @@ export class AgentSession {
           // CLI wraps tool results in a "user" message with content array
           if ('type' in msg && msg.type === 'user') {
             const userMsg = msg as { type: 'user'; message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown; is_error?: boolean }>  }; content?: Array<{ type: string; tool_use_id?: string; content?: unknown; is_error?: boolean }> };
-            const blocks = userMsg.message?.content ?? userMsg.content ?? [];
+            const raw = userMsg.message?.content ?? userMsg.content ?? [];
+            const blocks = Array.isArray(raw) ? raw : [];
             this.log('debug', `user message: ${blocks.length} block(s) [${blocks.map(b => `${b.type}:${b.tool_use_id}`).join(', ')}]`);
             for (const block of blocks) {
               if (block.type === 'tool_result') {

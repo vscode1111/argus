@@ -360,7 +360,16 @@ export function DevHarness() {
 
   React.useEffect(() => {
     document.body.classList.toggle('dev-harness-visible', visible);
+    try { localStorage.setItem('argus.showDevHarness', String(visible)); } catch {}
   }, [visible]);
+
+  React.useEffect(() => {
+    const handler = () => setVisible(v => !v);
+    window.addEventListener('devharness-toggle', handler);
+    return () => window.removeEventListener('devharness-toggle', handler);
+  }, []);
+
+  if (!visible) return null;
 
   return (
     <div style={{
@@ -376,10 +385,6 @@ export function DevHarness() {
       gap: 6,
       zIndex: 9999,
     }}>
-      <span style={{ color: '#666', fontSize: 11, fontFamily: 'monospace', marginRight: 2 }}>dev</span>
-
-      {visible ? (
-        <>
           <Btn label="user msg" onClick={() => send({
             type: 'message',
             message: { id: String(Date.now()), role: 'user', content: 'Can you help me refactor this component?' },
@@ -410,19 +415,11 @@ export function DevHarness() {
           <Btn label="prefill" onClick={() => send({ type: 'prefill', text: 'Explain this function' })} bg="#444" />
           <button
             onClick={() => setVisible(false)}
-            style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: 11 }}
+            style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}
+            title="Close dev toolbar"
           >
-            hide
+            ✕
           </button>
-        </>
-      ) : (
-        <button
-          onClick={() => setVisible(true)}
-          style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: 11 }}
-        >
-          show
-        </button>
-      )}
     </div>
   );
 }
