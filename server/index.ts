@@ -67,6 +67,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
   let workspaceDir = reqUrl.searchParams.get('dir') || process.cwd();
   let sessionId: string | undefined;
   let currentProc: ReturnType<typeof spawn> | undefined;
+  let currentProcKey: string | undefined;
   let loginProc: ReturnType<typeof spawn> | undefined;
   let loginSubmitCode: ((code: string) => void) | undefined;
   let loginClosed = false;
@@ -78,11 +79,171 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
   let suppressCliOutput = false;
   let turnInputTokens = 0;
   let turnOutputTokens = 0;
+  let buffer = '';
+  let stderrOutput = '';
+  let receivedDeltas = false;
   const MAX_CONTEXT = 200_000;
 
   const sendLog = (level: 'debug' | 'info' | 'warn' | 'error', text: string) => {
     ws.send(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
   };
+
+  const attachProcHandlers = (proc: ReturnType<typeof spawn>) => {
+    proc.stdout!.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        let event: Record<string, unknown>;
+        try { event = JSON.parse(trimmed); } catch { continue; }
+
+        sendLog('debug', `event: ${event.type} ${trimmed.slice(0, 120)}`);
+
+        if (event.type === 'system' && event.subtype === 'init') {
+          sessionId = event.session_id as string;
+        } else if (event.type === 'content_block_delta') {
+          if (suppressCliOutput) continue;
+          const delta = event.delta as Record<string, unknown> | undefined;
+          if (delta?.type === 'text_delta' && delta.text) {
+            receivedDeltas = true;
+            ws.send(JSON.stringify({ type: 'text_chunk', text: delta.text }));
+          } else if (delta?.type === 'thinking_delta' && delta.thinking) {
+            ws.send(JSON.stringify({ type: 'thinking_chunk', text: delta.thinking }));
+          }
+        } else if (event.type === 'assistant') {
+          if (suppressCliOutput) {
+            receivedDeltas = false;
+            continue;
+          }
+          const content = (event.message as { content: Array<Record<string, unknown>> })?.content ?? [];
+          for (const block of content) {
+            if (block.type === 'thinking' && block.thinking) {
+              ws.send(JSON.stringify({ type: 'thinking_chunk', text: block.thinking }));
+            } else if (block.type === 'text' && block.text && !receivedDeltas) {
+              ws.send(JSON.stringify({ type: 'text_chunk', text: block.text }));
+            } else if (block.type === 'tool_use') {
+              sendLog('info', `tool_start: ${block.name} (${block.id})`);
+              toolMap.set(block.id as string, { name: block.name as string, input: block.input });
+              ws.send(JSON.stringify({ type: 'tool_start', call: { id: block.id, name: block.name, input: block.input } }));
+              if (block.name === 'AskUserQuestion') {
+                pendingAskTools.add(block.id as string);
+              }
+            }
+          }
+          receivedDeltas = false;
+          const usage = (event.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
+          if (usage) {
+            const newInput = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+            const newOutput = usage.output_tokens ?? 0;
+            if (newInput > 0 || newOutput > 0) {
+              turnInputTokens = newInput;
+              turnOutputTokens = newOutput;
+              const total = turnInputTokens + turnOutputTokens;
+              const percent = Math.min(100, Math.round(total / MAX_CONTEXT * 100));
+              ws.send(JSON.stringify({ type: 'contextUsage', percent, inputTokens: turnInputTokens, outputTokens: turnOutputTokens }));
+            }
+          }
+        } else if (event.type === 'tool_result') {
+          if (suppressCliOutput) continue;
+          const toolId = event.tool_use_id as string;
+          if (answeredTools.has(toolId)) {
+            answeredTools.delete(toolId);
+            sendLog('info', `Suppressing CLI echo for ${toolId} (already answered)`);
+          } else if (pendingAskTools.has(toolId)) {
+            suppressCliOutput = true;
+            sendLog('info', `Suppressing CLI auto-result for AskUserQuestion ${toolId}`);
+          } else {
+            const tc = toolMap.get(toolId);
+            ws.send(JSON.stringify({
+              type: 'tool_end',
+              call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: event.content },
+            }));
+          }
+        } else if (event.type === 'user') {
+          if (suppressCliOutput) continue;
+          const userMsg = event as { type: 'user'; message?: { content?: Array<Record<string, unknown>> }; content?: Array<Record<string, unknown>> };
+          const raw = userMsg.message?.content ?? userMsg.content ?? [];
+          const blocks = Array.isArray(raw) ? raw : [];
+          sendLog('debug', `user message: ${blocks.length} block(s)`);
+          for (const block of blocks) {
+            if (block.type === 'tool_result') {
+              const toolId = block.tool_use_id as string;
+              if (answeredTools.has(toolId)) {
+                answeredTools.delete(toolId);
+                sendLog('info', `Suppressing CLI echo for ${toolId} (already answered)`);
+                continue;
+              }
+              if (pendingAskTools.has(toolId)) {
+                suppressCliOutput = true;
+                sendLog('info', `Suppressing CLI auto-result for AskUserQuestion ${toolId}`);
+                continue;
+              }
+              const tc = toolMap.get(toolId);
+              const content = typeof block.content === 'string'
+                ? block.content
+                : JSON.stringify(block.content);
+              sendLog('debug', `tool_result ${toolId}: ${String(content).slice(0, 100)}`);
+              ws.send(JSON.stringify({
+                type: 'tool_end',
+                call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content },
+              }));
+            }
+          }
+        } else if (event.type === 'result') {
+          cliDone = true;
+          if (pendingAskTools.size === 0) {
+            ws.send(JSON.stringify({ type: 'done' }));
+          }
+        }
+      }
+    });
+
+    proc.stderr!.on('data', (chunk: Buffer) => {
+      const text = chunk.toString();
+      stderrOutput += text;
+      console.error('[argus-server]', text.trim());
+      sendLog('warn', `stderr: ${text.trim()}`);
+    });
+
+    proc.on('close', (code) => {
+      const isActiveProc = currentProc === proc;
+      if (isActiveProc) {
+        currentProc = undefined;
+        currentProcKey = undefined;
+      }
+      sendLog('info', `claude exited with code ${code}`);
+      if (code !== 0 && code !== null) {
+        const { message, errorKind } = classifyError(stderrOutput, code);
+        if (pendingAskTools.size > 0) {
+          sendLog('warn', `CLI exited (${errorKind}) with ${pendingAskTools.size} pending question(s): ${message}`);
+        } else if (isActiveProc) {
+          ws.send(JSON.stringify({ type: 'error', text: message, errorKind }));
+        }
+      }
+      if (isActiveProc && pendingAskTools.size === 0 && !cliDone) {
+        ws.send(JSON.stringify({ type: 'done' }));
+      }
+    });
+
+    proc.on('error', (err) => {
+      currentProc = undefined;
+      currentProcKey = undefined;
+      sendLog('error', `spawn error: ${err.message}`);
+      const errText = err.message.includes('ENOENT')
+        ? 'Claude Code CLI not found. Install with: npm install -g @anthropic-ai/claude-code'
+        : err.message;
+      ws.send(JSON.stringify({ type: 'error', text: errText }));
+      ws.send(JSON.stringify({ type: 'done' }));
+    });
+  };
+
+  ws.on('close', () => {
+    currentProc?.kill();
+    loginProc?.kill();
+  });
 
   ws.on('message', (data: Buffer) => {
     const msg = JSON.parse(data.toString()) as {
@@ -112,7 +273,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       const tools = isPlan
         ? ALLOWED_TOOLS.filter(t => !PLAN_BLOCKED_TOOLS.includes(t))
         : ALLOWED_TOOLS;
-      const args = [
+      const baseArgs = [
         '--print', '--verbose',
         '--output-format', 'stream-json',
         '--input-format', 'stream-json',
@@ -121,21 +282,48 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
         '--allowedTools', tools.join(','),
       ];
       if (isPlan) {
-        args.push('--permission-mode', 'plan');
-        args.push('--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
+        baseArgs.push('--permission-mode', 'plan');
+        baseArgs.push('--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
       }
-      if (sessionId) args.push('--resume', sessionId);
+      const procKey = baseArgs.join(' ');
+      const args = [...baseArgs];
+      if (sessionId && (!currentProc || currentProcKey !== procKey)) {
+        args.push('--resume', sessionId);
+      }
 
-      sendLog('info', `Spawning claude: ${args.join(' ')}`);
+      // Reset turn-local state
+      buffer = '';
+      stderrOutput = '';
+      receivedDeltas = false;
+      suppressCliOutput = false;
+      cliDone = false;
+      toolMap.clear();
+      answeredTools.clear();
+      pendingAskTools.clear();
+
+      const canReuse = currentProc?.stdin?.writable === true && currentProcKey === procKey;
+      let proc: ReturnType<typeof spawn>;
+      if (canReuse) {
+        proc = currentProc!;
+        sendLog('info', 'Reusing claude process');
+      } else {
+        if (currentProc) {
+          sendLog('info', 'Args changed, respawning claude');
+          currentProc.kill();
+        }
+        sendLog('info', `Spawning claude: ${args.join(' ')}`);
+        proc = spawn('claude', args, {
+          cwd: workspaceDir,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        currentProc = proc;
+        currentProcKey = procKey;
+        attachProcHandlers(proc);
+      }
+
       if (!msg._silent) {
         ws.send(JSON.stringify({ type: 'thinking_start' }));
       }
-
-      const proc = spawn('claude', args, {
-        cwd: workspaceDir,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      currentProc = proc;
 
       const contentBlocks: Array<Record<string, unknown>> = [];
       if (images && images.length > 0) {
@@ -152,164 +340,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       }
       const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: contentBlocks } });
       sendLog('debug', `stdin: ${stdinMsg.length} bytes`);
-      proc.stdin.write(stdinMsg + '\n');
-
-      let buffer = '';
-      let stderrOutput = '';
-      let receivedDeltas = false;
-      suppressCliOutput = false;
-      cliDone = false;
-      toolMap.clear();
-      answeredTools.clear();
-      pendingAskTools.clear();
-
-      proc.stdout.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          let event: Record<string, unknown>;
-          try { event = JSON.parse(trimmed); } catch { continue; }
-
-          sendLog('debug', `event: ${event.type} ${trimmed.slice(0, 120)}`);
-
-          if (event.type === 'system' && event.subtype === 'init') {
-            sessionId = event.session_id as string;
-          } else if (event.type === 'content_block_delta') {
-            if (suppressCliOutput) continue;
-            const delta = event.delta as Record<string, unknown> | undefined;
-            if (delta?.type === 'text_delta' && delta.text) {
-              receivedDeltas = true;
-              ws.send(JSON.stringify({ type: 'text_chunk', text: delta.text }));
-            } else if (delta?.type === 'thinking_delta' && delta.thinking) {
-              ws.send(JSON.stringify({ type: 'thinking_chunk', text: delta.thinking }));
-            }
-          } else if (event.type === 'assistant') {
-            if (suppressCliOutput) {
-              receivedDeltas = false;
-              continue;
-            }
-            const content = (event.message as { content: Array<Record<string, unknown>> })?.content ?? [];
-            for (const block of content) {
-              if (block.type === 'thinking' && block.thinking) {
-                ws.send(JSON.stringify({ type: 'thinking_chunk', text: block.thinking }));
-              } else if (block.type === 'text' && block.text && !receivedDeltas) {
-                ws.send(JSON.stringify({ type: 'text_chunk', text: block.text }));
-              } else if (block.type === 'tool_use') {
-                sendLog('info', `tool_start: ${block.name} (${block.id})`);
-                toolMap.set(block.id as string, { name: block.name as string, input: block.input });
-                ws.send(JSON.stringify({ type: 'tool_start', call: { id: block.id, name: block.name, input: block.input } }));
-                if (block.name === 'AskUserQuestion') {
-                  pendingAskTools.add(block.id as string);
-                }
-              }
-            }
-            receivedDeltas = false;
-            const usage = (event.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
-            if (usage) {
-              const newInput = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
-              const newOutput = usage.output_tokens ?? 0;
-              if (newInput > 0 || newOutput > 0) {
-                turnInputTokens = newInput;
-                turnOutputTokens = newOutput;
-                const total = turnInputTokens + turnOutputTokens;
-                const percent = Math.min(100, Math.round(total / MAX_CONTEXT * 100));
-                ws.send(JSON.stringify({ type: 'contextUsage', percent, inputTokens: turnInputTokens, outputTokens: turnOutputTokens }));
-              }
-            }
-          } else if (event.type === 'tool_result') {
-            if (suppressCliOutput) continue;
-            const toolId = event.tool_use_id as string;
-            if (answeredTools.has(toolId)) {
-              answeredTools.delete(toolId);
-              sendLog('info', `Suppressing CLI echo for ${toolId} (already answered)`);
-            } else if (pendingAskTools.has(toolId)) {
-              suppressCliOutput = true;
-              sendLog('info', `Suppressing CLI auto-result for AskUserQuestion ${toolId}`);
-            } else {
-              const tc = toolMap.get(toolId);
-              ws.send(JSON.stringify({
-                type: 'tool_end',
-                call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: event.content },
-              }));
-            }
-          } else if (event.type === 'user') {
-            if (suppressCliOutput) continue;
-            const userMsg = event as { type: 'user'; message?: { content?: Array<Record<string, unknown>> }; content?: Array<Record<string, unknown>> };
-            const raw = userMsg.message?.content ?? userMsg.content ?? [];
-            const blocks = Array.isArray(raw) ? raw : [];
-            sendLog('debug', `user message: ${blocks.length} block(s)`);
-            for (const block of blocks) {
-              if (block.type === 'tool_result') {
-                const toolId = block.tool_use_id as string;
-                if (answeredTools.has(toolId)) {
-                  answeredTools.delete(toolId);
-                  sendLog('info', `Suppressing CLI echo for ${toolId} (already answered)`);
-                  continue;
-                }
-                if (pendingAskTools.has(toolId)) {
-                  suppressCliOutput = true;
-                  sendLog('info', `Suppressing CLI auto-result for AskUserQuestion ${toolId}`);
-                  continue;
-                }
-                const tc = toolMap.get(toolId);
-                const content = typeof block.content === 'string'
-                  ? block.content
-                  : JSON.stringify(block.content);
-                sendLog('debug', `tool_result ${toolId}: ${String(content).slice(0, 100)}`);
-                ws.send(JSON.stringify({
-                  type: 'tool_end',
-                  call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content },
-                }));
-              }
-            }
-          } else if (event.type === 'result') {
-            cliDone = true;
-            if (pendingAskTools.size === 0) {
-              proc.stdin.end();
-            }
-          }
-        }
-      });
-
-      proc.stderr.on('data', (chunk: Buffer) => {
-        const text = chunk.toString();
-        stderrOutput += text;
-        console.error('[argus-server]', text.trim());
-        sendLog('warn', `stderr: ${text.trim()}`);
-      });
-
-      proc.on('close', (code) => {
-        const isActiveProc = currentProc === proc;
-        if (isActiveProc) {
-          currentProc = undefined;
-        }
-        sendLog('info', `claude exited with code ${code}`);
-        if (code !== 0 && code !== null) {
-          const { message, errorKind } = classifyError(stderrOutput, code);
-          if (pendingAskTools.size > 0) {
-            sendLog('warn', `CLI exited (${errorKind}) with ${pendingAskTools.size} pending question(s): ${message}`);
-          } else if (isActiveProc) {
-            ws.send(JSON.stringify({ type: 'error', text: message, errorKind }));
-          }
-        }
-        if (isActiveProc && pendingAskTools.size === 0) {
-          ws.send(JSON.stringify({ type: 'done' }));
-        }
-      });
-
-      proc.on('error', (err) => {
-        currentProc = undefined;
-        sendLog('error', `spawn error: ${err.message}`);
-        const errText = err.message.includes('ENOENT')
-          ? 'Claude Code CLI not found. Install with: npm install -g @anthropic-ai/claude-code'
-          : err.message;
-        ws.send(JSON.stringify({ type: 'error', text: errText }));
-        ws.send(JSON.stringify({ type: 'done' }));
-      });
+      proc.stdin!.write(stdinMsg + '\n');
 
     } else if (msg.type === 'getInfo') {
       let version = '';

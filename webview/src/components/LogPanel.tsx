@@ -55,12 +55,18 @@ export function LogPanel({ logs, onClear, onClose }: LogPanelProps) {
   function scrollToBottom() {
     userScrolledUp.current = false;
     setShowScrollBtn(false);
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: 'auto' });
   }
 
   useEffect(() => {
-    if (!userScrolledUp.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'instant' });
+    const el = listRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // dist already includes the just-appended entry (~24-60px), so use a generous threshold
+    if (dist < 200) {
+      bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+      userScrolledUp.current = false;
+      setShowScrollBtn(false);
     }
   }, [logs]);
 

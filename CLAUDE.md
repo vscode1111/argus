@@ -109,7 +109,7 @@ webview/
 - Sound on complete: `playCompletionSound()` in `App.tsx` via AudioContext; toggled by `soundOnComplete` setting in `SettingsContext`
 - Notify on complete: browser `Notification` API fires when streaming finishes (if `notifyOnComplete` enabled in `SettingsContext`); requests permission on first enable; notification title includes project name, body shows last user message; clicking focuses the window
 - Copy buttons: user messages have a hover-reveal copy button (`MessageCopyButton` in `ChatMessage.tsx`); code blocks have a hover-reveal copy button (`CopyButton` in `utils/markdown.tsx`) styled via `global.css` (`.code-block-wrapper` / `.code-copy-btn`)
-- Dev harness toggle: SettingsModal has a "dev" button (visible only when `#dev-harness` element exists) that toggles DevHarness visibility; hidden by default, state persisted to localStorage (`argus.showDevHarness`); `body.dev-harness-visible` class controls bottom padding
+- Dev harness toggle: SettingsModal "dev" button dispatches `devharness-toggle` custom event; DevHarness listens and toggles its own `visible` state (returns `null` when hidden); available in both browser dev and VS Code extension mode (`#dev-harness` div in both `index.html` and `chat.html`); state persisted to localStorage (`argus.showDevHarness`); `body.dev-harness-visible` class controls bottom padding
 - Editor title icon: `argus.openChat` command registered in `editor/title` menu group with `media/argus-icon.svg` icon
 - Global scrollbar styling: thin scrollbars via `scrollbar-width: thin` and `::-webkit-scrollbar` rules in `global.css`
 - Content blocks: streaming and completed messages use `ContentBlock[]` (interleaved `{ type: 'text' }` and `{ type: 'tool' }` blocks) instead of separate text/toolCalls fields - preserves tool-call ordering relative to text
@@ -165,3 +165,7 @@ yarn ctx:uninstall # remove context menu entry
 | argus.codeLens.enabled | true | Show code lens |
 | argus.bash.useIntegratedTerminal | true | Run bash in terminal |
 | argus.inlineCompletions.model | claude-haiku-4-5 | Model for inline completions |
+
+## Optimizations
+
+See [docs/optimizations.md](docs/optimizations.md) for performance work (persistent CLI process, future prespawn idea, benchmarks).
