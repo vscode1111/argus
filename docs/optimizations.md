@@ -2,7 +2,7 @@
 
 ## Persistent Claude CLI Process
 
-`server/index.ts` keeps the `claude` CLI subprocess alive across turns instead of spawning a fresh one per `send` message. Each spawn would otherwise pay Node startup, CLI bundle load, OAuth token check, MCP server init, and skill discovery (~5s of overhead per turn). The CLI accepts multiple turns over a single stream-json stdin pipe (the same mechanism used by the AskUserQuestion follow-up flow).
+Both `server/index.ts` (browser dev mode) and `src/agent/AgentSession.ts` (VS Code extension mode) keep the `claude` CLI subprocess alive across turns instead of spawning a fresh one per `send` message. Each spawn would otherwise pay Node startup, CLI bundle load, OAuth token check, MCP server init, and skill discovery (~5s of overhead per turn). The CLI accepts multiple turns over a single stream-json stdin pipe (the same mechanism used by the AskUserQuestion follow-up flow).
 
 ### Implementation in `server/index.ts`
 
@@ -12,6 +12,16 @@
 - The close handler only emits `done` if the proc died before a `result` event (`!cliDone`), to avoid duplicate `done` events.
 - Args change (e.g. plan vs edit mode toggle) triggers `currentProc.kill()` and a respawn with `--resume sessionId` to continue the conversation.
 - `ws.on('close')` kills `currentProc` and `loginProc` to avoid orphan subprocesses.
+
+### Implementation in `src/agent/AgentSession.ts`
+
+Same `currentProc` / `currentProcKey` reuse pattern, adapted for the async-generator API consumed by `ChatPanel.handleUserMessage`:
+
+- `attachProcHandlers(proc)` parses NDJSON stdout and pushes typed events into an `eventQueue`. The generator drains the queue via `nextEvent()`, which awaits a one-shot `eventResolver` when the queue is empty.
+- A `result` event pushes a sentinel `{ type: '__turn_end' }` that ends the generator without closing stdin, leaving the proc warm for the next turn. A `close` event pushes `{ type: '__proc_close', code, stderr }` so the generator can yield a classified error and return.
+- `procKey` excludes both `--resume` (added per-spawn) and `--system-prompt` (the system prompt embeds the active file path, which changes constantly; treating it as part of the key would defeat reuse).
+- `reset()` (called by `/clear` and "New session") kills `currentProc` so the next send spawns fresh with no `--resume`.
+- `sendToolResult()` for an `AskUserQuestion` id pushes a synthetic `tool_end` into the queue and adds the id to `skipNextToolEnd` so the CLI's later auto-`tool_result` is suppressed.
 
 ### Measured impact
 

@@ -76,15 +76,27 @@ export type LoginResult =
   | { phase: 'url'; url: string; submitCode: (code: string) => Promise<boolean> }
   | { phase: 'error'; message: string };
 
+type QueueItem =
+  | SessionEvent
+  | { type: '__turn_end' }
+  | { type: '__proc_close'; code: number | null; stderr: string };
+
 export class AgentSession {
   private sessionId: string | undefined;
   private readonly cwd: string | undefined;
   private currentProc: ReturnType<typeof spawn> | undefined;
+  private currentProcKey: string | undefined;
   private loginProc: ReturnType<typeof spawn> | undefined;
   private readonly outputChannel: vscode.OutputChannel | undefined;
   private readonly onLog: ((level: 'debug' | 'info' | 'warn' | 'error', text: string) => void) | undefined;
-  private pendingToolResolvers = new Map<string, (result: string) => void>();
   private skipNextToolEnd = new Set<string>();
+  private pendingAskTools = new Set<string>();
+  private toolMap = new Map<string, { name: string; input: unknown }>();
+  private eventQueue: QueueItem[] = [];
+  private eventResolver: (() => void) | undefined;
+  private buffer = '';
+  private stderrOutput = '';
+  private receivedDeltas = false;
   public mode: 'plan' | 'edit' = 'edit';
 
   constructor(outputChannel?: vscode.OutputChannel, onLog?: (level: 'debug' | 'info' | 'warn' | 'error', text: string) => void) {
@@ -101,21 +113,175 @@ export class AgentSession {
 
   reset(): void {
     this.sessionId = undefined;
+    const proc = this.currentProc;
+    this.currentProc = undefined;
+    this.currentProcKey = undefined;
+    proc?.kill('SIGTERM');
   }
 
   abort(): void {
     const proc = this.currentProc;
     if (!proc) return;
     this.currentProc = undefined;
-    // Resolve pending interactive tool promises to unblock the generator
-    for (const [, resolver] of this.pendingToolResolvers) {
-      resolver(JSON.stringify({ cancelled: true }));
+    this.currentProcKey = undefined;
+    for (const id of this.pendingAskTools) {
+      this.pushEvent({ type: 'tool_end', id, result: JSON.stringify({ cancelled: true }) });
     }
-    this.pendingToolResolvers.clear();
+    this.pendingAskTools.clear();
     proc.kill('SIGTERM');
     setTimeout(() => {
       if (!proc.killed) proc.kill('SIGKILL');
     }, 3000);
+  }
+
+  private pushEvent(item: QueueItem): void {
+    this.eventQueue.push(item);
+    const r = this.eventResolver;
+    this.eventResolver = undefined;
+    r?.();
+  }
+
+  private nextEvent(): Promise<QueueItem> {
+    if (this.eventQueue.length > 0) {
+      return Promise.resolve(this.eventQueue.shift()!);
+    }
+    return new Promise<QueueItem>(resolve => {
+      this.eventResolver = () => resolve(this.eventQueue.shift()!);
+    });
+  }
+
+  private attachProcHandlers(proc: ReturnType<typeof spawn>): void {
+    proc.stdout!.on('data', (chunk: Buffer) => {
+      this.buffer += chunk.toString();
+      const lines = this.buffer.split('\n');
+      this.buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        let msg: CliMessage;
+        try { msg = JSON.parse(trimmed) as CliMessage; } catch { continue; }
+        this.handleCliMessage(msg, trimmed);
+      }
+    });
+
+    proc.stderr!.on('data', (data: Buffer) => {
+      const text = data.toString();
+      this.stderrOutput += text;
+      this.outputChannel?.append(text);
+      this.onLog?.('warn', `stderr: ${text.trim()}`);
+    });
+
+    proc.on('close', (code) => {
+      const wasActive = this.currentProc === proc;
+      if (wasActive) {
+        this.currentProc = undefined;
+        this.currentProcKey = undefined;
+      }
+      this.log('info', `claude exited with code ${code}`);
+      this.pushEvent({ type: '__proc_close', code, stderr: this.stderrOutput });
+    });
+
+    proc.on('error', (err) => {
+      this.currentProc = undefined;
+      this.currentProcKey = undefined;
+      const message = err instanceof Error ? err.message : String(err);
+      this.log('error', `spawn error: ${message}`);
+      const errorKind: ErrorKind = message.includes('ENOENT') ? 'not_found' : 'generic';
+      const friendly = errorKind === 'not_found'
+        ? 'Claude Code CLI not found. Install it with: npm install -g @anthropic/claude-code'
+        : message;
+      this.pushEvent({ type: 'error', message: friendly, errorKind });
+      this.pushEvent({ type: '__turn_end' });
+    });
+  }
+
+  private handleCliMessage(msg: CliMessage, raw: string): void {
+    const evtType = 'type' in msg ? String(msg.type) : 'unknown';
+    this.log('debug', `event: ${evtType} ${raw.slice(0, 120)}`);
+
+    if ('type' in msg && msg.type === 'system' && 'subtype' in msg && msg.subtype === 'init') {
+      this.sessionId = (msg as SystemInitMessage).session_id;
+      return;
+    }
+
+    if ('type' in msg && msg.type === 'content_block_delta') {
+      const delta = (msg as Record<string, unknown>).delta as Record<string, unknown> | undefined;
+      if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text) {
+        this.receivedDeltas = true;
+        this.pushEvent({ type: 'text', text: delta.text });
+      } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string' && delta.thinking) {
+        this.pushEvent({ type: 'thinking', text: delta.thinking });
+      }
+      return;
+    }
+
+    if ('type' in msg && msg.type === 'assistant') {
+      const assistantMsg = msg as AssistantMessage;
+      const usage = (assistantMsg.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
+      if (usage) {
+        const inputTokens = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+        const outputTokens = usage.output_tokens ?? 0;
+        if (inputTokens > 0 || outputTokens > 0) {
+          this.pushEvent({ type: 'usage', inputTokens, outputTokens });
+        }
+      }
+      for (const block of assistantMsg.message?.content ?? []) {
+        if (block.type === 'thinking' && block.thinking) {
+          this.pushEvent({ type: 'thinking', text: block.thinking });
+        } else if (block.type === 'text' && block.text && !this.receivedDeltas) {
+          this.pushEvent({ type: 'text', text: block.text });
+        } else if (block.type === 'tool_use') {
+          this.log('info', `tool_start: ${block.name} (${block.id})`);
+          this.toolMap.set(block.id, { name: block.name, input: block.input });
+          this.pushEvent({ type: 'tool_start', id: block.id, name: block.name, input: block.input });
+          if (block.name === 'AskUserQuestion') {
+            this.pendingAskTools.add(block.id);
+          }
+        }
+      }
+      this.receivedDeltas = false;
+      return;
+    }
+
+    if ('type' in msg && msg.type === 'tool_result') {
+      const tr = msg as ToolResultMessage;
+      if (this.skipNextToolEnd.has(tr.tool_use_id)) {
+        this.skipNextToolEnd.delete(tr.tool_use_id);
+        this.log('info', `Skipping CLI auto-result for ${tr.tool_use_id} (answered interactively)`);
+        return;
+      }
+      this.pushEvent({ type: 'tool_end', id: tr.tool_use_id, result: tr.content });
+      return;
+    }
+
+    if ('type' in msg && msg.type === 'user') {
+      const userMsg = msg as { type: 'user'; message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown }> }; content?: Array<{ type: string; tool_use_id?: string; content?: unknown }> };
+      const raw2 = userMsg.message?.content ?? userMsg.content ?? [];
+      const blocks = Array.isArray(raw2) ? raw2 : [];
+      this.log('debug', `user message: ${blocks.length} block(s) [${blocks.map(b => `${b.type}:${b.tool_use_id}`).join(', ')}]`);
+      for (const block of blocks) {
+        if (block.type === 'tool_result') {
+          const toolId = block.tool_use_id ?? '';
+          const content = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
+          this.log('debug', `tool_result ${toolId}: ${content?.slice(0, 100)}`);
+          if (this.skipNextToolEnd.has(toolId)) {
+            this.skipNextToolEnd.delete(toolId);
+            this.log('info', `Skipping CLI auto-result for ${toolId} (answered interactively)`);
+            continue;
+          }
+          this.pushEvent({ type: 'tool_end', id: toolId, result: content ?? '' });
+        }
+      }
+      return;
+    }
+
+    if ('result' in msg && typeof msg.result === 'string') {
+      this.pushEvent({ type: 'result', text: msg.result });
+      this.pushEvent({ type: '__turn_end' });
+      return;
+    }
+
+    this.log('warn', `unhandled event type: ${evtType} keys: ${Object.keys(msg).join(',')} ${raw.slice(0, 200)}`);
   }
 
   abortLogin(): void {
@@ -205,11 +371,10 @@ export class AgentSession {
   }
 
   sendToolResult(toolUseId: string, content: string): void {
-    const resolver = this.pendingToolResolvers.get(toolUseId);
-    if (resolver) {
-      this.pendingToolResolvers.delete(toolUseId);
-      this.log('info', `Resolving interactive tool ${toolUseId}: ${content.slice(0, 100)}`);
-      resolver(content);
+    if (this.pendingAskTools.has(toolUseId)) {
+      this.pendingAskTools.delete(toolUseId);
+      this.skipNextToolEnd.add(toolUseId);
+      this.pushEvent({ type: 'tool_end', id: toolUseId, result: content });
     }
     const proc = this.currentProc;
     if (!proc?.stdin?.writable) return;
@@ -224,7 +389,7 @@ export class AgentSession {
     const tools = isPlan
       ? ALLOWED_TOOLS.filter(t => !PLAN_BLOCKED_TOOLS.includes(t))
       : ALLOWED_TOOLS;
-    const args = [
+    const baseArgs = [
       '--print',
       '--verbose',
       '--output-format', 'stream-json',
@@ -233,202 +398,92 @@ export class AgentSession {
       '--tools', tools.join(','),
       '--allowedTools', tools.join(','),
     ];
-
     if (isPlan) {
-      args.push('--permission-mode', 'plan');
-      args.push('--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
+      baseArgs.push('--permission-mode', 'plan');
+      baseArgs.push('--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
     }
 
-    if (this.sessionId) {
-      args.push('--resume', this.sessionId);
-    }
-    if (systemPrompt) {
-      args.push('--system-prompt', systemPrompt);
-    }
+    // procKey excludes --resume (added per-spawn) and --system-prompt
+    // (changes when active file changes; stale system prompt is acceptable)
+    const procKey = baseArgs.join(' ');
 
-    this.pendingToolResolvers.clear();
+    // Reset turn-local state
+    this.eventQueue = [];
+    this.eventResolver = undefined;
+    this.buffer = '';
+    this.stderrOutput = '';
+    this.receivedDeltas = false;
     this.skipNextToolEnd.clear();
+    this.pendingAskTools.clear();
+    this.toolMap.clear();
 
-    try {
+    const canReuse = this.currentProc?.stdin?.writable === true && this.currentProcKey === procKey;
+    let proc: ReturnType<typeof spawn>;
+    if (canReuse) {
+      proc = this.currentProc!;
+      this.log('info', 'Reusing claude process');
+    } else {
+      if (this.currentProc) {
+        this.log('info', 'Args changed, respawning claude');
+        this.currentProc.kill();
+      }
+      const args = [...baseArgs];
+      if (this.sessionId) {
+        args.push('--resume', this.sessionId);
+      }
+      if (systemPrompt) {
+        args.push('--system-prompt', systemPrompt);
+      }
       this.log('info', `Spawning claude: ${args.join(' ')}`);
-
-      const proc = spawn('claude', args, {
-        cwd: this.cwd,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      this.currentProc = proc;
-
-      // Always use stream-json input format (NDJSON)
-      const content: Array<Record<string, unknown>> = [];
-      if (hasImages) {
-        for (const img of images) {
-          content.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: img.mediaType,
-              data: img.data,
-            },
-          });
-        }
-        const totalBytes = images.reduce((s, i) => s + i.data.length, 0);
-        this.log('debug', `Attaching ${images.length} image(s), total base64: ${totalBytes} bytes`);
-      }
-      if (prompt) {
-        content.push({ type: 'text', text: prompt });
-      }
-      const msg = JSON.stringify({ type: 'user', message: { role: 'user', content } });
-      this.log('debug', `stdin: ${msg.length} bytes`);
-      proc.stdin.write(msg + '\n');
-
-      let stderrOutput = '';
-      proc.stderr.on('data', (data: Buffer) => {
-        const text = data.toString();
-        stderrOutput += text;
-        this.outputChannel?.append(text);
-        this.onLog?.('warn', `stderr: ${text.trim()}`);
-      });
-
-      const exitCodePromise = new Promise<number | null>((resolve, reject) => {
-        proc.on('close', (code) => {
-          // Resolve any pending interactive tool promises to unblock the generator
-          for (const [, resolver] of this.pendingToolResolvers) {
-            resolver(JSON.stringify({ cancelled: true }));
-          }
-          this.pendingToolResolvers.clear();
-          resolve(code);
+      try {
+        proc = spawn('claude', args, {
+          cwd: this.cwd,
+          stdio: ['pipe', 'pipe', 'pipe'],
         });
-        proc.on('error', reject);
-      });
-
-      let buffer = '';
-      let receivedDeltas = false;
-      for await (const chunk of proc.stdout) {
-        buffer += (chunk as Buffer).toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) { continue; }
-
-          let msg: CliMessage;
-          try {
-            msg = JSON.parse(trimmed) as CliMessage;
-          } catch {
-            continue;
-          }
-
-          const evtType = 'type' in msg ? String(msg.type) : 'unknown';
-          this.log('debug', `event: ${evtType} ${trimmed.slice(0, 120)}`);
-
-          if ('type' in msg && msg.type === 'system' && 'subtype' in msg && msg.subtype === 'init') {
-            this.sessionId = (msg as SystemInitMessage).session_id;
-            continue;
-          }
-
-          // Streaming deltas from the API (token-level streaming)
-          if ('type' in msg && msg.type === 'content_block_delta') {
-            const delta = (msg as Record<string, unknown>).delta as Record<string, unknown> | undefined;
-            if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text) {
-              receivedDeltas = true;
-              yield { type: 'text', text: delta.text };
-            } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string' && delta.thinking) {
-              yield { type: 'thinking', text: delta.thinking };
-            }
-            continue;
-          }
-
-          if ('type' in msg && msg.type === 'assistant') {
-            const assistantMsg = msg as AssistantMessage;
-            const usage = (assistantMsg.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
-            if (usage) {
-              const inputTokens = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
-              const outputTokens = usage.output_tokens ?? 0;
-              if (inputTokens > 0 || outputTokens > 0) {
-                yield { type: 'usage', inputTokens, outputTokens };
-              }
-            }
-            for (const block of assistantMsg.message?.content ?? []) {
-              if (block.type === 'thinking' && block.thinking) {
-                yield { type: 'thinking', text: block.thinking };
-              } else if (block.type === 'text' && block.text && !receivedDeltas) {
-                yield { type: 'text', text: block.text };
-              } else if (block.type === 'tool_use') {
-                this.log('info', `tool_start: ${block.name} (${block.id})`);
-                yield { type: 'tool_start', id: block.id, name: block.name, input: block.input };
-                if (block.name === 'AskUserQuestion') {
-                  const userResult = await new Promise<string>(resolve => {
-                    this.pendingToolResolvers.set(block.id, resolve);
-                  });
-                  this.log('info', `AskUserQuestion ${block.id} answered: ${userResult.slice(0, 100)}`);
-                  this.skipNextToolEnd.add(block.id);
-                  yield { type: 'tool_end', id: block.id, result: userResult };
-                }
-              }
-            }
-            receivedDeltas = false; // reset for next turn
-            continue;
-          }
-
-          if ('type' in msg && msg.type === 'tool_result') {
-            const tr = msg as ToolResultMessage;
-            yield { type: 'tool_end', id: tr.tool_use_id, result: tr.content };
-            continue;
-          }
-
-          // CLI wraps tool results in a "user" message with content array
-          if ('type' in msg && msg.type === 'user') {
-            const userMsg = msg as { type: 'user'; message?: { content?: Array<{ type: string; tool_use_id?: string; content?: unknown; is_error?: boolean }>  }; content?: Array<{ type: string; tool_use_id?: string; content?: unknown; is_error?: boolean }> };
-            const raw = userMsg.message?.content ?? userMsg.content ?? [];
-            const blocks = Array.isArray(raw) ? raw : [];
-            this.log('debug', `user message: ${blocks.length} block(s) [${blocks.map(b => `${b.type}:${b.tool_use_id}`).join(', ')}]`);
-            for (const block of blocks) {
-              if (block.type === 'tool_result') {
-                const toolId = block.tool_use_id ?? '';
-                const content = typeof block.content === 'string'
-                  ? block.content
-                  : JSON.stringify(block.content);
-                this.log('debug', `tool_result ${toolId}: ${content?.slice(0, 100)}`);
-                if (this.skipNextToolEnd.has(toolId)) {
-                  this.skipNextToolEnd.delete(toolId);
-                  this.log('info', `Skipping CLI auto-result for ${toolId} (answered interactively)`);
-                  continue;
-                }
-                yield { type: 'tool_end', id: toolId, result: content ?? '' };
-              }
-            }
-            continue;
-          }
-
-          if ('result' in msg && typeof msg.result === 'string') {
-            yield { type: 'result', text: msg.result };
-            if (this.pendingToolResolvers.size === 0 && proc.stdin.writable) {
-              proc.stdin.end();
-            }
-            continue;
-          }
-
-          this.log('warn', `unhandled event type: ${evtType} keys: ${Object.keys(msg).join(',')} ${trimmed.slice(0, 200)}`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.log('error', `spawn error: ${errMsg}`);
+        if (errMsg.includes('ENOENT')) {
+          yield { type: 'error', message: 'Claude Code CLI not found. Install it with: npm install -g @anthropic/claude-code', errorKind: 'not_found' };
+        } else {
+          yield { type: 'error', message: errMsg, errorKind: 'generic' };
         }
+        return;
       }
+      this.currentProc = proc;
+      this.currentProcKey = procKey;
+      this.attachProcHandlers(proc);
+    }
 
-      this.currentProc = undefined;
-      const exitCode = await exitCodePromise;
-      this.log('info', `claude exited with code ${exitCode}`);
-      if (exitCode !== 0 && exitCode !== null) {
-        const classified = classifyError(stderrOutput, exitCode);
-        yield { type: 'error', ...classified };
+    const content: Array<Record<string, unknown>> = [];
+    if (hasImages) {
+      for (const img of images) {
+        content.push({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mediaType, data: img.data },
+        });
       }
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      this.log('error', `spawn error: ${errMsg}`);
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes('ENOENT')) {
-        yield { type: 'error', message: 'Claude Code CLI not found. Install it with: npm install -g @anthropic/claude-code', errorKind: 'not_found' as ErrorKind };
-      } else {
-        yield { type: 'error', message, errorKind: 'generic' as ErrorKind };
+      const totalBytes = images.reduce((s, i) => s + i.data.length, 0);
+      this.log('debug', `Attaching ${images.length} image(s), total base64: ${totalBytes} bytes`);
+    }
+    if (prompt) {
+      content.push({ type: 'text', text: prompt });
+    }
+    const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content } });
+    this.log('debug', `stdin: ${stdinMsg.length} bytes`);
+    proc.stdin!.write(stdinMsg + '\n');
+
+    while (true) {
+      const item = await this.nextEvent();
+      if (item.type === '__turn_end') return;
+      if (item.type === '__proc_close') {
+        if (item.code !== 0 && item.code !== null) {
+          const classified = classifyError(item.stderr, item.code);
+          yield { type: 'error', ...classified };
+        }
+        return;
       }
+      yield item;
     }
   }
 }

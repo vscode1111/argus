@@ -168,4 +168,4 @@ yarn ctx:uninstall # remove context menu entry
 
 ## Optimizations
 
-See [docs/optimizations.md](docs/optimizations.md) for performance work (persistent CLI process, future prespawn idea, benchmarks).
+See [docs/optimizations.md](docs/optimizations.md) for performance work (persistent CLI process in both `server/index.ts` and `src/agent/AgentSession.ts`, future prespawn idea, benchmarks).
