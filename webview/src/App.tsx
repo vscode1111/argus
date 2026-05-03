@@ -22,7 +22,7 @@ type AppState = {
 
 type AppAction =
   | { type: 'message'; message: UIMessage }
-  | { type: 'thinking_start' }
+  | { type: 'thinking_start'; reused?: boolean }
   | { type: 'thinking_chunk'; text: string }
   | { type: 'text_chunk'; text: string }
   | { type: 'tool_start'; call: ToolCallData }
@@ -49,7 +49,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         isStreaming: true,
-        streaming: { thinking: '', blocks: [], startTime: Date.now(), lastEventTime: Date.now() },
+        streaming: { thinking: '', blocks: [], startTime: Date.now(), lastEventTime: Date.now(), logsAtStart: state.logs.length, reused: action.reused ?? false },
       };
 
     case 'thinking_chunk':
@@ -215,17 +215,24 @@ function generateId(): string { return `msg-${++nextMsgId}-${Date.now()}`; }
 function playCompletionSound(): void {
   try {
     const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.2);
-    osc.onended = () => ctx.close();
+    const play = () => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+      osc.onended = () => ctx.close();
+    };
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(play);
+    } else {
+      play();
+    }
   } catch {}
 }
 
@@ -284,22 +291,19 @@ function AppInner() {
   useEffect(() => {
     if (wasStreaming.current && !state.isStreaming) {
       if (soundOnComplete) playCompletionSound();
-      if (notifyOnComplete && !document.hasFocus() && Notification.permission === 'granted') {
-        const projectName = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
-        const title = projectName ? `Argus/${projectName}` : 'Argus';
-        const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
-        const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
-        const n = new Notification(title, { body });
-        n.onclick = () => {
-          console.log('[Argus] notification clicked at', new Date().toISOString());
-          postMessage({ type: 'focusPanel' });
-          window.focus();
-          n.close();
-        };
-        n.onshow = () => console.log('[Argus] notification shown');
-        n.onerror = (e) => console.error('[Argus] notification error', e);
-        n.onclose = () => console.log('[Argus] notification closed');
-        window.focus();
+      if (notifyOnComplete && typeof Notification !== 'undefined') {
+        if (Notification.permission === 'granted') {
+          const projectName = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
+          const title = projectName ? `Argus/${projectName}` : 'Argus';
+          const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
+          const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
+          const n = new Notification(title, { body });
+          n.onclick = () => {
+            postMessage({ type: 'focusPanel' });
+            window.focus();
+            n.close();
+          };
+        }
       }
     }
     wasStreaming.current = state.isStreaming;
@@ -379,7 +383,7 @@ function AppInner() {
           </>
         )}
         <div className="chatPane">
-          <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} />
+          <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
           <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} onSend={scrollToBottom} />
         </div>
         {showLogs && !isNarrow && (

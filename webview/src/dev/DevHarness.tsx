@@ -37,10 +37,12 @@ async function simulateLogs() {
 
 async function simulateStream() {
   log('info', 'Spawning claude: --print --verbose --output-format stream-json --input-format stream-json --model claude-opus-4-6');
+  send({ type: 'thinking_start' });
   await delay(100);
   log('debug', 'stdin: 312 bytes');
-  send({ type: 'thinking_start' });
-  await delay(200);
+  await delay(2000);
+  log('debug', 'event: system {"type":"system","subtype":"init","session_id":"sess_dev"}');
+  await delay(1500);
   send({ type: 'thinking_chunk', text: 'Analyzing the request...' });
   await delay(400);
   send({ type: 'thinking_chunk', text: ' Breaking it down step by step.' });
@@ -57,10 +59,12 @@ async function simulateStream() {
 
 async function simulateTools() {
   log('info', 'Spawning claude: --print --verbose --output-format stream-json --input-format stream-json --model claude-opus-4-6');
+  send({ type: 'thinking_start' });
   await delay(80);
   log('debug', 'stdin: 512 bytes');
-  send({ type: 'thinking_start' });
-  await delay(300);
+  await delay(1800);
+  log('debug', 'event: system {"type":"system","subtype":"init","session_id":"sess_dev"}');
+  await delay(800);
   log('info', 'tool_start: Read (toolu_001)');
   send({ type: 'tool_start', call: { id: '1', name: 'Read', input: { file_path: '/src/App.tsx' } } });
   await delay(600);

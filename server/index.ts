@@ -6,23 +6,70 @@ import * as os from 'os';
 import * as path from 'path';
 import type { IncomingMessage } from 'http';
 
+function readSkillDescription(skillDir: string): string | undefined {
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  try {
+    const content = fs.readFileSync(skillFile, 'utf-8');
+    const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+    if (match) {
+      const descMatch = match[1].match(/^description:\s*(.+)$/m);
+      if (descMatch) return descMatch[1].trim();
+    }
+  } catch {}
+  return undefined;
+}
+
 function readSkillsDir(dir: string, scope: 'global' | 'project') {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true })
     .filter(e => e.isDirectory())
-    .map(e => ({ name: e.name, scope }));
+    .map(e => ({ name: e.name, scope, description: readSkillDescription(path.join(dir, e.name)) }));
 }
 
-const BUILTIN_COMMANDS = [
-  'clear', 'compact', 'context', 'cost', 'diff', 'doctor',
-  'help', 'hooks', 'ide', 'init', 'login', 'logout', 'memory',
-  'model', 'permissions', 'plan', 'security-review', 'status',
-  'terminal-setup', 'vim',
-].map(name => ({ name, scope: 'builtin' as const }));
+function readCommandsDir(dir: string, scope: 'global' | 'project') {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter(e => e.isFile() && e.name.endsWith('.md'))
+    .map(e => {
+      const name = e.name.replace(/\.md$/, '');
+      let description: string | undefined;
+      try {
+        const content = fs.readFileSync(path.join(dir, e.name), 'utf-8');
+        const firstLine = content.split('\n')[0]?.trim();
+        if (firstLine) description = firstLine;
+      } catch {}
+      return { name, scope, description };
+    });
+}
+
+const BUILTIN_COMMANDS: { name: string; scope: 'builtin'; description: string }[] = [
+  { name: 'clear', scope: 'builtin', description: 'Clear conversation history' },
+  { name: 'compact', scope: 'builtin', description: 'Compact conversation to save context' },
+  { name: 'context', scope: 'builtin', description: 'Show context window usage' },
+  { name: 'cost', scope: 'builtin', description: 'Show token usage and cost' },
+  { name: 'diff', scope: 'builtin', description: 'Show file changes since start' },
+  { name: 'doctor', scope: 'builtin', description: 'Check installation health' },
+  { name: 'help', scope: 'builtin', description: 'Show available commands' },
+  { name: 'hooks', scope: 'builtin', description: 'Manage event hooks' },
+  { name: 'ide', scope: 'builtin', description: 'IDE integration status' },
+  { name: 'init', scope: 'builtin', description: 'Initialize project with CLAUDE.md' },
+  { name: 'login', scope: 'builtin', description: 'Sign in to your account' },
+  { name: 'logout', scope: 'builtin', description: 'Sign out of your account' },
+  { name: 'memory', scope: 'builtin', description: 'Edit CLAUDE.md memory files' },
+  { name: 'model', scope: 'builtin', description: 'Switch or show current model' },
+  { name: 'permissions', scope: 'builtin', description: 'View or update tool permissions' },
+  { name: 'plan', scope: 'builtin', description: 'Create and execute a plan' },
+  { name: 'security-review', scope: 'builtin', description: 'Review code for vulnerabilities' },
+  { name: 'status', scope: 'builtin', description: 'Show session and account info' },
+  { name: 'terminal-setup', scope: 'builtin', description: 'Install shell integration' },
+  { name: 'vim', scope: 'builtin', description: 'Toggle vim keybindings' },
+];
 
 function getSkills(cwd: string) {
   return [
     ...BUILTIN_COMMANDS,
+    ...readCommandsDir(path.join(os.homedir(), '.claude', 'commands'), 'global'),
+    ...readCommandsDir(path.join(cwd, '.claude', 'commands'), 'project'),
     ...readSkillsDir(path.join(os.homedir(), '.claude', 'skills'), 'global'),
     ...readSkillsDir(path.join(cwd, '.claude', 'skills'), 'project'),
   ];
@@ -249,9 +296,10 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const msg = JSON.parse(data.toString()) as {
       type: string;
       text?: string;
-      images?: Array<{ data: string; mediaType: string }>;
+      images?: Array<{ data: string; mediaType: string; name?: string }>;
       mode?: 'plan' | 'edit';
       _silent?: boolean;
+      path?: string;
     };
 
     if (msg.type === 'send' && msg.text?.trim() === '/clear') {
@@ -322,18 +370,29 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       }
 
       if (!msg._silent) {
-        ws.send(JSON.stringify({ type: 'thinking_start' }));
+        ws.send(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
       }
 
       const contentBlocks: Array<Record<string, unknown>> = [];
       if (images && images.length > 0) {
         for (const img of images) {
-          contentBlocks.push({
-            type: 'image',
-            source: { type: 'base64', media_type: img.mediaType, data: img.data },
-          });
+          if (img.mediaType.startsWith('text/')) {
+            const text = Buffer.from(img.data, 'base64').toString('utf-8');
+            const fileName = img.name ?? 'file.txt';
+            contentBlocks.push({ type: 'text', text: `[Attached file: ${fileName}]\n${text}` });
+          } else if (img.mediaType === 'application/pdf') {
+            contentBlocks.push({
+              type: 'document',
+              source: { type: 'base64', media_type: img.mediaType, data: img.data },
+            });
+          } else {
+            contentBlocks.push({
+              type: 'image',
+              source: { type: 'base64', media_type: img.mediaType, data: img.data },
+            });
+          }
         }
-        sendLog('debug', `Attaching ${images.length} image(s)`);
+        sendLog('debug', `Attaching ${images.length} attachment(s)`);
       }
       if (text) {
         contentBlocks.push({ type: 'text', text });
@@ -453,8 +512,8 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
           }, 200);
         }
       }
-    } else if (msg.type === 'readFilePreview' && (msg as { path?: string }).path) {
-      const filePath = (msg as { path: string }).path;
+    } else if (msg.type === 'readFilePreview' && msg.path) {
+      const filePath = msg.path;
       try {
         const content = fs.readFileSync(filePath, 'utf-8');
         ws.send(JSON.stringify({ type: 'filePreview', path: filePath, content }));

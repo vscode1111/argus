@@ -11,6 +11,7 @@ export interface ToolCall {
 export interface ImageAttachment {
   data: string;
   mediaType: string;
+  name?: string;
 }
 
 export interface ChatMessage {

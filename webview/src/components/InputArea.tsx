@@ -6,8 +6,6 @@ import { ImageViewerModal } from './ImageViewerModal';
 import styles from './InputArea.module.css';
 import settings from './SettingsModal.module.css';
 
-const DEFAULT_SLASH_MENU_LEFT = 12;
-const DEFAULT_FALLBACK_PADDING = 8;
 const DEFAULT_FALLBACK_HEIGHT = 100;
 const MIN_HEIGHT_WITH_IMAGES = 120;
 const MIN_HEIGHT_DEFAULT = 73;
@@ -15,11 +13,14 @@ const MAX_HEIGHT_RATIO_AUTO = 0.5;
 const MAX_HEIGHT_RATIO_DRAG = 0.7;
 const TEXTAREA_ROWS_DEFAULT = 3;
 const TEXTAREA_ROWS_WITH_IMAGES = 1;
-const PLACEHOLDER_TEXT = 'Ask Argus... (paste images with Ctrl+V)';
+const PLACEHOLDER_TEXT = 'Ask Argus... (paste images, text, or PDFs with Ctrl+V)';
+const PASTE_ERROR_TIMEOUT_MS = 8000;
+const TEXT_FILE_EXTENSIONS = /\.(txt|md|markdown|json|jsonc|yaml|yml|toml|ini|cfg|conf|log|csv|tsv|xml|html|htm|css|scss|sass|less|js|jsx|ts|tsx|mjs|cjs|py|rb|go|rs|java|c|h|cpp|hpp|cs|swift|kt|kts|sh|bash|zsh|ps1|sql|env|gitignore|dockerfile)$/i;
 
 interface Skill {
   name: string;
   scope: 'global' | 'project' | 'builtin';
+  description?: string;
 }
 
 interface Props {
@@ -38,11 +39,12 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   const [history, setHistory] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const pasteErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [wrapperHeight, setWrapperHeight] = useState<number | null>(null);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
-  const [slashMenuLeft, setSlashMenuLeft] = useState(DEFAULT_SLASH_MENU_LEFT);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [mode, setMode] = useState<'plan' | 'edit'>('edit');
   const historyIndex = useRef(-1);
@@ -52,7 +54,6 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   const dragStartH = useRef(0);
   const lastHeight = useRef(0);
   const skillsLoaded = useRef(false);
-  const measureCanvas = useRef<HTMLCanvasElement | null>(null);
   const hasImagesRef = useRef(false);
   hasImagesRef.current = images.length > 0;
 
@@ -134,28 +135,60 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     postMessage({ type: 'send', text, images: images.length > 0 ? images : undefined, mode });
     setImages([]);
     onSend?.();
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }
+
+  function showPasteError(message: string) {
+    setPasteError(message);
+    if (pasteErrorTimeoutRef.current) clearTimeout(pasteErrorTimeoutRef.current);
+    pasteErrorTimeoutRef.current = setTimeout(() => setPasteError(null), PASTE_ERROR_TIMEOUT_MS);
+  }
+
+  function classifyPastedFile(file: File): 'image' | 'pdf' | 'text' | 'unsupported' {
+    const t = file.type;
+    if (t.startsWith('image/')) return 'image';
+    if (t === 'application/pdf') return 'pdf';
+    if (t.startsWith('text/')) return 'text';
+    // Some text files (.md, .yml, .env) report empty MIME on Windows - fall back to extension
+    if (t === '' && TEXT_FILE_EXTENSIONS.test(file.name)) return 'text';
+    return 'unsupported';
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     const items = e.clipboardData.items;
-    const imageFiles: File[] = [];
+    const accepted: { kind: 'image' | 'pdf' | 'text'; file: File }[] = [];
+    const unsupported: string[] = [];
+
     for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        const file = items[i].getAsFile();
-        if (file) imageFiles.push(file);
-      }
+      const item = items[i];
+      if (item.kind !== 'file') continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+      const kind = classifyPastedFile(file);
+      if (kind === 'unsupported') unsupported.push(file.name || file.type || 'unknown');
+      else accepted.push({ kind, file });
     }
-    if (imageFiles.length === 0) return;
+
+    if (accepted.length === 0 && unsupported.length === 0) return;
     e.preventDefault();
 
-    for (const file of imageFiles) {
+    if (unsupported.length > 0) {
+      const list = unsupported.join(', ');
+      showPasteError(`Unsupported file type: ${list}. Supported types: images (PNG, JPG, GIF, WebP), text files, and PDFs.`);
+    }
+
+    for (const { kind, file } of accepted) {
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
-        // dataUrl format: "data:image/png;base64,iVBOR..."
-        const match = dataUrl.match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
+        const match = dataUrl.match(/^data:([^;]*);base64,(.+)$/);
         if (!match) return;
-        setImages(prev => [...prev, { data: match[2], mediaType: match[1] }]);
+        // Normalize text-file media type when the OS reports it as empty
+        const detectedType = match[1];
+        const mediaType = kind === 'text' && !detectedType.startsWith('text/') ? 'text/plain' : detectedType;
+        setImages(prev => [...prev, { data: match[2], mediaType, name: file.name }]);
       };
       reader.readAsDataURL(file);
     }
@@ -174,29 +207,10 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     return { query: textAfterSlash, slashIndex };
   }
 
-  function calcSlashMenuLeft(slashIndex: number): number {
-    const el = textareaRef.current;
-    const areaEl = inputAreaRef.current;
-    if (!el || !areaEl) return DEFAULT_SLASH_MENU_LEFT;
-    const computed = window.getComputedStyle(el);
-    if (!measureCanvas.current) measureCanvas.current = document.createElement('canvas');
-    const ctx2d = measureCanvas.current.getContext('2d');
-    if (!ctx2d) return DEFAULT_SLASH_MENU_LEFT;
-    ctx2d.font = `${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`;
-    const textBefore = el.value.slice(0, slashIndex);
-    const lineText = textBefore.slice(textBefore.lastIndexOf('\n') + 1);
-    const textWidth = ctx2d.measureText(lineText).width;
-    const elRect = el.getBoundingClientRect();
-    const areaRect = areaEl.getBoundingClientRect();
-    const elPaddingLeft = parseFloat(computed.paddingLeft) || DEFAULT_FALLBACK_PADDING;
-    return (elRect.left - areaRect.left) + elPaddingLeft + textWidth;
-  }
-
   function updateSlashState() {
     const ctx = getSlashContext();
     if (ctx) {
       setSlashQuery(ctx.query);
-      setSlashMenuLeft(calcSlashMenuLeft(ctx.slashIndex));
       setHighlightIndex(0);
       if (!skillsLoaded.current) {
         skillsLoaded.current = true;
@@ -274,9 +288,15 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
 
   return (
     <div className={styles.inputArea} ref={inputAreaRef}>
+      {pasteError && (
+        <div className={styles.pasteError} role="alert">
+          <span>{pasteError}</span>
+          <button className={styles.pasteErrorClose} aria-label="Dismiss" onClick={() => setPasteError(null)}>×</button>
+        </div>
+      )}
       <div className={styles.inputResizeHandle} onMouseDown={onDragStart} />
       {slashQuery !== null && (
-        <div className={styles.slashMenu} style={{ left: slashMenuLeft }}>
+        <div className={styles.slashMenu} style={{ left: 0 }}>
           <div className={styles.slashMenuHeader}>Slash Commands</div>
           {filteredSkills.length === 0 && (
             <div className={styles.slashMenuEmpty}>
@@ -292,6 +312,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
               onClick={() => selectSkill(skill.name)}
             >
               <span className={styles.slashMenuName}>/{skill.name}</span>
+              {skill.description && <span className={styles.slashMenuDesc}>{skill.description.length > 100 ? skill.description.slice(0, 100) + '...' : skill.description}</span>}
               {skill.scope !== 'builtin' && (
                 <span className={[styles.slashMenuScope, skill.scope === 'project' ? styles.slashMenuScopeProject : ''].filter(Boolean).join(' ')}>{skill.scope}</span>
               )}
@@ -316,12 +337,22 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
         />
         {images.length > 0 && (
           <div className={styles.imagePreviews}>
-            {images.map((img, i) => (
-              <div key={i} className={styles.imagePreview} onClick={() => setViewerIndex(i)} title={`image.${img.mediaType.split('/')[1] ?? 'png'}`}>
-                <img src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} />
-                <button className={styles.imageRemove} aria-label={`Remove attachment ${i + 1}`} onClick={e => { e.stopPropagation(); removeImage(i); }} title="Remove image">×</button>
-              </div>
-            ))}
+            {images.map((img, i) => {
+              const isImage = img.mediaType.startsWith('image/');
+              const label = img.name ?? `image.${img.mediaType.split('/')[1] ?? 'png'}`;
+              return isImage ? (
+                <div key={i} className={styles.imagePreview} onClick={() => setViewerIndex(i)} title={label}>
+                  <img src={`data:${img.mediaType};base64,${img.data}`} alt={`Attachment ${i + 1}`} />
+                  <button className={styles.imageRemove} aria-label={`Remove attachment ${i + 1}`} onClick={e => { e.stopPropagation(); removeImage(i); }} title="Remove attachment">×</button>
+                </div>
+              ) : (
+                <div key={i} className={styles.filePreview} title={label}>
+                  <span className={styles.fileIcon} aria-hidden="true">📄</span>
+                  <span className={styles.fileName}>{label}</span>
+                  <button className={styles.imageRemove} aria-label={`Remove attachment ${i + 1}`} onClick={e => { e.stopPropagation(); removeImage(i); }} title="Remove attachment">×</button>
+                </div>
+              );
+            })}
             <button className={styles.imageClearAll} aria-label="Remove all attachments" onClick={() => setImages([])} title="Remove all attachments">×</button>
           </div>
         )}

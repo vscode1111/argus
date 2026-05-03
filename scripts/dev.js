@@ -6,53 +6,66 @@ const path = require('path');
 
 const isWin = process.platform === 'win32';
 const viteBin = path.join(__dirname, '..', 'node_modules', '.bin', isWin ? 'vite.cmd' : 'vite');
-
-const procs = [
-  {
-    name: 'fe',
-    color: '\x1b[36m',
-    cmd: isWin ? `"${viteBin}"` : viteBin,
-    args: ['--config', 'webview/vite.dev.config.ts'],
-    shell: isWin,
-  },
-  {
-    name: 'be',
-    color: '\x1b[32m',
-    cmd: process.execPath,
-    args: ['--experimental-strip-types', '--no-warnings=ExperimentalWarning', 'server/index.ts'],
-  },
-];
-
 const reset = '\x1b[0m';
-const children = [];
+const feColor = '\x1b[36m';
+const beColor = '\x1b[32m';
+const feTag = `${feColor}[fe]${reset} `;
+const beTag = `${beColor}[be]${reset} `;
 
-for (const p of procs) {
-  const child = spawn(p.cmd, p.args, { stdio: ['ignore', 'pipe', 'pipe'], shell: p.shell === true });
-  children.push(child);
+function forward(stream, tag) {
+  let buf = '';
+  stream.on('data', (chunk) => {
+    buf += chunk.toString();
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) process.stdout.write(tag + line + '\n');
+  });
+  stream.on('end', () => { if (buf) process.stdout.write(tag + buf + '\n'); });
+}
 
-  const tag = `${p.color}[${p.name}]${reset} `;
-  const forward = (stream) => {
-    let buf = '';
-    stream.on('data', (chunk) => {
-      buf += chunk.toString();
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) process.stdout.write(tag + line + '\n');
-    });
-    stream.on('end', () => { if (buf) process.stdout.write(tag + buf + '\n'); });
-  };
-  forward(child.stdout);
-  forward(child.stderr);
+// Frontend (Vite) - long-lived, exit kills everything
+const fe = spawn(isWin ? `"${viteBin}"` : viteBin, ['--config', 'webview/vite.dev.config.ts'], {
+  stdio: ['ignore', 'pipe', 'pipe'],
+  shell: isWin,
+});
+forward(fe.stdout, feTag);
+forward(fe.stderr, feTag);
+fe.on('exit', (code, signal) => {
+  process.stdout.write(`${feTag}exited (${signal || code})\n`);
+  if (be && !be.killed) be.kill();
+  process.exit(code ?? 1);
+});
 
-  child.on('exit', (code, signal) => {
-    process.stdout.write(`${tag}exited (${signal || code})\n`);
-    for (const c of children) if (c !== child && !c.killed) c.kill();
+// Backend (server) - respawnable via --watch
+let be = null;
+
+function startBackend() {
+  be = spawn(process.execPath, [
+    '--watch', '--watch-path=server',
+    '--experimental-strip-types', '--no-warnings=ExperimentalWarning',
+    'server/index.ts',
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+  forward(be.stdout, beTag);
+  forward(be.stderr, beTag);
+
+  be.on('exit', (code, signal) => {
+    // --watch restarts with specific signals; don't kill everything
+    if (signal === 'SIGTERM') {
+      process.stdout.write(`${beTag}restarting...\n`);
+      return;
+    }
+    process.stdout.write(`${beTag}exited (${signal || code})\n`);
+    if (!fe.killed) fe.kill();
     process.exit(code ?? 1);
   });
 }
 
+startBackend();
+
 const shutdown = () => {
-  for (const c of children) if (!c.killed) c.kill();
+  if (fe && !fe.killed) fe.kill();
+  if (be && !be.killed) be.kill();
 };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

@@ -458,13 +458,24 @@ export class AgentSession {
     const content: Array<Record<string, unknown>> = [];
     if (hasImages) {
       for (const img of images) {
-        content.push({
-          type: 'image',
-          source: { type: 'base64', media_type: img.mediaType, data: img.data },
-        });
+        if (img.mediaType.startsWith('text/')) {
+          const text = Buffer.from(img.data, 'base64').toString('utf-8');
+          const fileName = img.name ?? 'file.txt';
+          content.push({ type: 'text', text: `[Attached file: ${fileName}]\n${text}` });
+        } else if (img.mediaType === 'application/pdf') {
+          content.push({
+            type: 'document',
+            source: { type: 'base64', media_type: img.mediaType, data: img.data },
+          });
+        } else {
+          content.push({
+            type: 'image',
+            source: { type: 'base64', media_type: img.mediaType, data: img.data },
+          });
+        }
       }
       const totalBytes = images.reduce((s, i) => s + i.data.length, 0);
-      this.log('debug', `Attaching ${images.length} image(s), total base64: ${totalBytes} bytes`);
+      this.log('debug', `Attaching ${images.length} attachment(s), total base64: ${totalBytes} bytes`);
     }
     if (prompt) {
       content.push({ type: 'text', text: prompt });

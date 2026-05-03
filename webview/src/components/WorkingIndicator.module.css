@@ -1,0 +1,34 @@
+.working {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--thinking-fg);
+  font-style: italic;
+  font-size: 0.95em;
+  padding: 2px 0;
+}
+
+.asterisk {
+  display: inline-block;
+  animation: spin 2.4s linear infinite;
+  font-style: normal;
+  line-height: 1;
+  transform-origin: 50% 55%;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.verb {
+  font-weight: 500;
+}
+
+.dots {
+  display: inline-block;
+  width: 1.5em;
+  text-align: left;
+  font-style: normal;
+  letter-spacing: 1px;
+}

@@ -9,7 +9,7 @@ import { captureForegroundWindow, focusCachedWindow } from '../utils/win32Focus'
 
 type WebviewMessage =
   | { type: 'message'; message: ChatMessage }
-  | { type: 'thinking_start' }
+  | { type: 'thinking_start'; reused?: boolean }
   | { type: 'thinking_chunk'; text: string }
   | { type: 'text_chunk'; text: string }
   | { type: 'tool_start'; call: { id: string; name: string; input: unknown } }
@@ -19,7 +19,7 @@ type WebviewMessage =
   | { type: 'clear' }
   | { type: 'prefill'; text: string }
   | { type: 'workspaceInfo'; path: string; version: string }
-  | { type: 'skills'; skills: { name: string; scope: 'global' | 'project' | 'builtin' }[] }
+  | { type: 'skills'; skills: { name: string; scope: 'global' | 'project' | 'builtin'; description?: string }[] }
   | { type: 'log'; level: string; text: string; timestamp: string }
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number }
   | { type: 'loginUrl'; url: string }
@@ -235,25 +235,68 @@ export class ChatPanel {
     this.post({ type: 'done' });
   }
 
-  private getSkills(): { name: string; scope: 'global' | 'project' | 'builtin' }[] {
-    const BUILTIN_COMMANDS = [
-      'clear', 'compact', 'context', 'cost', 'diff', 'doctor',
-      'help', 'hooks', 'ide', 'init', 'login', 'logout', 'memory',
-      'model', 'permissions', 'plan', 'security-review', 'status',
-      'terminal-setup', 'vim',
-    ].map(name => ({ name, scope: 'builtin' as const }));
+  private getSkills(): { name: string; scope: 'global' | 'project' | 'builtin'; description?: string }[] {
+    const BUILTIN_COMMANDS: { name: string; scope: 'builtin'; description: string }[] = [
+      { name: 'clear', scope: 'builtin', description: 'Clear conversation history' },
+      { name: 'compact', scope: 'builtin', description: 'Compact conversation to save context' },
+      { name: 'context', scope: 'builtin', description: 'Show context window usage' },
+      { name: 'cost', scope: 'builtin', description: 'Show token usage and cost' },
+      { name: 'diff', scope: 'builtin', description: 'Show file changes since start' },
+      { name: 'doctor', scope: 'builtin', description: 'Check installation health' },
+      { name: 'help', scope: 'builtin', description: 'Show available commands' },
+      { name: 'hooks', scope: 'builtin', description: 'Manage event hooks' },
+      { name: 'ide', scope: 'builtin', description: 'IDE integration status' },
+      { name: 'init', scope: 'builtin', description: 'Initialize project with CLAUDE.md' },
+      { name: 'login', scope: 'builtin', description: 'Sign in to your account' },
+      { name: 'logout', scope: 'builtin', description: 'Sign out of your account' },
+      { name: 'memory', scope: 'builtin', description: 'Edit CLAUDE.md memory files' },
+      { name: 'model', scope: 'builtin', description: 'Switch or show current model' },
+      { name: 'permissions', scope: 'builtin', description: 'View or update tool permissions' },
+      { name: 'plan', scope: 'builtin', description: 'Create and execute a plan' },
+      { name: 'security-review', scope: 'builtin', description: 'Review code for vulnerabilities' },
+      { name: 'status', scope: 'builtin', description: 'Show session and account info' },
+      { name: 'terminal-setup', scope: 'builtin', description: 'Install shell integration' },
+      { name: 'vim', scope: 'builtin', description: 'Toggle vim keybindings' },
+    ];
 
-    const skills: { name: string; scope: 'global' | 'project' | 'builtin' }[] = [...BUILTIN_COMMANDS];
+    const skills: { name: string; scope: 'global' | 'project' | 'builtin'; description?: string }[] = [...BUILTIN_COMMANDS];
 
     const readSkillsDir = (dir: string, scope: 'global' | 'project') => {
       if (!fs.existsSync(dir)) return;
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        if (entry.isDirectory()) skills.push({ name: entry.name, scope });
+        if (!entry.isDirectory()) continue;
+        let description: string | undefined;
+        try {
+          const content = fs.readFileSync(path.join(dir, entry.name, 'SKILL.md'), 'utf-8');
+          const fm = content.match(/^---\s*\n([\s\S]*?)\n---/);
+          if (fm) {
+            const dm = fm[1].match(/^description:\s*(.+)$/m);
+            if (dm) description = dm[1].trim();
+          }
+        } catch {}
+        skills.push({ name: entry.name, scope, description });
       }
     };
 
-    readSkillsDir(path.join(os.homedir(), '.claude', 'skills'), 'global');
+    const readCommandsDir = (dir: string, scope: 'global' | 'project') => {
+      if (!fs.existsSync(dir)) return;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+        const name = entry.name.replace(/\.md$/, '');
+        let description: string | undefined;
+        try {
+          const content = fs.readFileSync(path.join(dir, entry.name), 'utf-8');
+          const firstLine = content.split('\n')[0]?.trim();
+          if (firstLine) description = firstLine;
+        } catch {}
+        skills.push({ name, scope, description });
+      }
+    };
+
+    readCommandsDir(path.join(os.homedir(), '.claude', 'commands'), 'global');
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+    if (root) readCommandsDir(path.join(root, '.claude', 'commands'), 'project');
+    readSkillsDir(path.join(os.homedir(), '.claude', 'skills'), 'global');
     if (root) readSkillsDir(path.join(root, '.claude', 'skills'), 'project');
 
     return skills;

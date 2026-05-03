@@ -8,7 +8,8 @@ export type LogEntry = {
 
 export type ImageAttachment = {
   data: string;      // base64 data (without the data:... prefix)
-  mediaType: string;  // e.g. "image/png", "image/jpeg"
+  mediaType: string;  // e.g. "image/png", "image/jpeg", "application/pdf"
+  name?: string;     // original filename (for non-image attachments)
 };
 
 export type ToolCallData = {
@@ -49,4 +50,6 @@ export type StreamingState = {
   blocks: ContentBlock[];
   startTime: number;
   lastEventTime: number;
+  logsAtStart: number;
+  reused: boolean;
 };

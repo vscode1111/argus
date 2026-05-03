@@ -4,17 +4,24 @@ import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
 import { Markdown } from '../utils/markdown';
 import { StreamingTimer } from './StreamingTimer';
+import { WorkingIndicator } from './WorkingIndicator';
 import { useSettings } from '../contexts/SettingsContext';
 import msg from './shared/message.module.css';
 
 interface Props {
   streaming: StreamingState;
+  logCount: number;
 }
 
-export function StreamingMessage({ streaming }: Props) {
+export function StreamingMessage({ streaming, logCount }: Props) {
   const { showTimer } = useSettings();
-  const { thinking, blocks, startTime, lastEventTime } = streaming;
+  const { thinking, blocks, startTime, lastEventTime, logsAtStart, reused } = streaming;
   const isEmpty = !thinking && blocks.length === 0;
+  // New session: trigger after the first CLI event past "stdin" (newLogs > 1)
+  // Reused process: wait one more event so the indicator doesn't appear instantly (newLogs > 2)
+  const newLogs = logCount - logsAtStart;
+  const threshold = reused ? 2 : 1;
+  const showWorking = isEmpty && newLogs > threshold;
 
   // Hide text blocks after a pending AskUserQuestion so the AI appears to wait
   const firstPendingAskIdx = blocks.findIndex(
@@ -29,6 +36,7 @@ export function StreamingMessage({ streaming }: Props) {
       isEmpty && msg.empty,
     ].filter(Boolean).join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
+      {showWorking && <WorkingIndicator />}
       {blocks.map((block, i) => {
         if (firstPendingAskIdx >= 0 && i > firstPendingAskIdx && block.type === 'text') {
           return null;

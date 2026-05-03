@@ -34,6 +34,18 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete } = useSettings();
   const [infoOpen, setInfoOpen] = useState(false);
   const hasDevHarness = !!document.getElementById('dev-harness');
+  const hasNotificationAPI = typeof Notification !== 'undefined';
+  const [notifPerm, setNotifPerm] = useState(() => hasNotificationAPI ? Notification.permission : 'unavailable');
+
+  function handleGrantNotifications() {
+    if (!hasNotificationAPI) return;
+    Notification.requestPermission().then(p => {
+      setNotifPerm(p);
+      if (p === 'granted') {
+        new Notification('Argus', { body: 'Notifications enabled!' });
+      }
+    });
+  }
 
   useEscapeKey(onClose);
 
@@ -65,6 +77,18 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
           <span className={styles.settingLabel}>Notify on complete</span>
           <Toggle id="toggle-notify" checked={notifyOnComplete} onChange={setNotifyOnComplete} />
         </label>
+        {notifyOnComplete && hasNotificationAPI && notifPerm !== 'granted' && (
+          <div className={styles.settingRow} style={{ paddingTop: 0 }}>
+            {notifPerm === 'default' && (
+              <button className={styles.grantBtn} onClick={handleGrantNotifications}>
+                Grant permission
+              </button>
+            )}
+            {notifPerm === 'denied' && (
+              <span className={styles.permDenied}>Blocked in browser settings</span>
+            )}
+          </div>
+        )}
         {hasDevHarness && (
           <button
             className={styles.devCorner}

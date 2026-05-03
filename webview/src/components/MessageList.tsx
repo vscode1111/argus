@@ -12,11 +12,12 @@ interface Props {
   messages: UIMessage[];
   streaming: StreamingState | null;
   login: LoginState;
+  logCount: number;
 }
 
 const SCROLL_THRESHOLD = 80;
 
-export const MessageList = forwardRef<MessageListHandle, Props>(function MessageList({ messages, streaming, login }, ref) {
+export const MessageList = forwardRef<MessageListHandle, Props>(function MessageList({ messages, streaming, login, logCount }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const userScrolledUp = useRef(false);
@@ -56,7 +57,7 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
         {messages.map(msg => (
           <ChatMessage key={msg.id} message={msg} login={msg.role === 'error' && msg.errorKind === 'auth' ? login : undefined} />
         ))}
-        {streaming && <StreamingMessage streaming={streaming} />}
+        {streaming && <StreamingMessage streaming={streaming} logCount={logCount} />}
         <div ref={bottomRef} />
       </div>
       {showScrollBtn && (

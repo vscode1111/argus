@@ -13,6 +13,8 @@
   position: absolute;
   bottom: 100%;
   min-width: 220px;
+  width: fit-content;
+  max-width: 100vw;
   background: var(--vscode-quickInput-background, var(--vscode-editor-background));
   border: 1px solid var(--vscode-widget-border, var(--border));
   border-radius: 6px;
@@ -59,16 +61,31 @@
   color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
 }
 
+.slashMenuItemActive .slashMenuDesc {
+  color: var(--vscode-list-activeSelectionForeground, var(--vscode-descriptionForeground));
+  opacity: 0.7;
+}
+
 .slashMenuName {
   font-size: var(--font-size);
   color: var(--vscode-foreground);
+  flex-shrink: 0;
+}
+
+.slashMenuDesc {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .slashMenuScope {
   font-size: 10px;
   color: var(--vscode-descriptionForeground);
   flex-shrink: 0;
+  margin-left: auto;
   opacity: 0.6;
 }
 .slashMenuScopeProject {
@@ -142,11 +159,14 @@
   padding: 6px 8px;
   flex-wrap: wrap;
   flex-shrink: 0;
-  min-height: 78px;
   max-height: 160px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)) transparent;
+}
+
+.imagePreviews:has(.imagePreview) {
+  min-height: 78px;
 }
 
 .imagePreview {
@@ -157,6 +177,69 @@
   flex-shrink: 0;
   cursor: pointer;
 }
+
+.filePreview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 24px 0 8px;
+  background: var(--vscode-badge-background, rgba(255,255,255,0.06));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--vscode-foreground);
+  font-size: 12px;
+  flex-shrink: 0;
+  max-width: 220px;
+}
+
+.fileIcon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.fileName {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filePreview .imageRemove {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  opacity: 1;
+}
+
+.pasteError {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  background: var(--diff-removed-bg);
+  border: 1px solid var(--diff-removed);
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.pasteErrorClose {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+  opacity: 0.7;
+}
+.pasteErrorClose:hover { opacity: 1; }
 
 .imagePreview img {
   width: 64px;
