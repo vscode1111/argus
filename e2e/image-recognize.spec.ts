@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { waitForApp } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -10,7 +11,7 @@ test('paste text.jpg via Ctrl+V and recognize text in response', async ({ page }
   await page.addInitScript(() => {
     localStorage.setItem('argus.showLogs', 'true');
   });
-  await page.goto('/');
+  await waitForApp(page);
 
   const textarea = page.getByPlaceholder('Ask Argus');
   await textarea.fill('Recognize text');

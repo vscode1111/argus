@@ -75,6 +75,43 @@ function computeSimpleDiff(oldLines: string[], newLines: string[]): DiffRow[] {
   return rows;
 }
 
+type PairedRow =
+  | { type: 'equal'; old: string; new: string }
+  | { type: 'change'; old?: string; new?: string };
+
+function pairRows(rows: DiffRow[]): PairedRow[] {
+  const paired: PairedRow[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    const row = rows[i];
+    if (row.type === 'equal') {
+      paired.push({ type: 'equal', old: row.old, new: row.new });
+      i++;
+      continue;
+    }
+    // Collect consecutive removes and adds
+    const removes: string[] = [];
+    const adds: string[] = [];
+    while (i < rows.length && rows[i].type === 'remove') {
+      removes.push((rows[i] as { type: 'remove'; old: string }).old);
+      i++;
+    }
+    while (i < rows.length && rows[i].type === 'add') {
+      adds.push((rows[i] as { type: 'add'; new: string }).new);
+      i++;
+    }
+    const max = Math.max(removes.length, adds.length);
+    for (let j = 0; j < max; j++) {
+      paired.push({
+        type: 'change',
+        old: j < removes.length ? removes[j] : undefined,
+        new: j < adds.length ? adds[j] : undefined,
+      });
+    }
+  }
+  return paired;
+}
+
 export function DiffViewerModal({ path, oldString, newString, onClose }: Props) {
   useEscapeKey(onClose);
 
@@ -84,10 +121,11 @@ export function DiffViewerModal({ path, oldString, newString, onClose }: Props) 
 
   const oldLines = decodedOld.split('\n');
   const newLines = decodedNew.split('\n');
-  const rows = useMemo(() => computeDiff(oldLines, newLines), [decodedOld, decodedNew]);
+  const rawRows = useMemo(() => computeDiff(oldLines, newLines), [decodedOld, decodedNew]);
+  const rows = useMemo(() => pairRows(rawRows), [rawRows]);
 
-  const addedCount = rows.filter(r => r.type === 'add').length;
-  const removedCount = rows.filter(r => r.type === 'remove').length;
+  const addedCount = rawRows.filter(r => r.type === 'add').length;
+  const removedCount = rawRows.filter(r => r.type === 'remove').length;
 
   return createPortal(
     <div className={modal.overlay} onClick={onClose} aria-hidden="true">
@@ -120,16 +158,14 @@ export function DiffViewerModal({ path, oldString, newString, onClose }: Props) 
                     <div className={styles.line}>{row.new}</div>
                   </>
                 )}
-                {row.type === 'remove' && (
+                {row.type === 'change' && (
                   <>
-                    <div className={[styles.line, styles.lineRemoved].join(' ')}>{row.old}</div>
-                    <div className={[styles.line, styles.lineEmpty].join(' ')} />
-                  </>
-                )}
-                {row.type === 'add' && (
-                  <>
-                    <div className={[styles.line, styles.lineEmpty, styles.lineEmptyOld].join(' ')} />
-                    <div className={[styles.line, styles.lineAdded].join(' ')}>{row.new}</div>
+                    <div className={[styles.line, row.old !== undefined ? styles.lineRemoved : styles.lineEmpty, styles.lineOld].join(' ')}>
+                      {row.old}
+                    </div>
+                    <div className={[styles.line, row.new !== undefined ? styles.lineAdded : styles.lineEmpty].join(' ')}>
+                      {row.new}
+                    </div>
                   </>
                 )}
               </React.Fragment>

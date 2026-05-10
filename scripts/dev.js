@@ -41,7 +41,7 @@ let be = null;
 
 function startBackend() {
   be = spawn(process.execPath, [
-    '--watch', '--watch-path=server',
+    '--watch', '--watch-path=server', '--watch-path=src/argusServer.ts',
     '--experimental-strip-types', '--no-warnings=ExperimentalWarning',
     'server/index.ts',
   ], { stdio: ['ignore', 'pipe', 'pipe'] });

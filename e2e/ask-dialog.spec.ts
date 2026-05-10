@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { waitForApp } from './helpers';
 
 const PROMPT = 'Общий вопрос. У меня есть небольшой псевдо-апп (Хром), которое запускает этот проект. Хотелось бы добавить его в контекстное меню Windows - по аналогии с VS Code. Дай оптиции в виде диалогового окна.';
 
 test('AskUserQuestion dialog: 3 tabs, Other option, submit enables after all answered', async ({ page }) => {
-  await page.goto('/');
+  await waitForApp(page);
 
   const textarea = page.getByPlaceholder('Ask Argus');
   await textarea.fill(PROMPT);

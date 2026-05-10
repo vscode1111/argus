@@ -43,6 +43,10 @@ body {
   overflow: hidden;
 }
 
+body.dev-harness-visible {
+  padding-bottom: 30px;
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -90,6 +94,8 @@ body {
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
+  min-width: 0;
+  contain: inline-size;
 }
 
 .content:has(.logPaneTop) {

@@ -18,7 +18,6 @@
   font-size: 13px;
   align-content: start;
   min-width: 100%;
-  width: max-content;
 }
 
 .colHeaderOld,
@@ -37,9 +36,14 @@
 
 .line {
   padding: 0 8px;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
   line-height: 1.5;
   min-height: 1.5em;
+}
+.lineOld {
+  border-right: 1px solid var(--border);
 }
 .lineUnchangedOld {
   border-right: 1px solid var(--border);
@@ -47,7 +51,6 @@
 .lineRemoved {
   background: var(--diff-removed-bg);
   color: var(--diff-removed);
-  border-right: 1px solid var(--border);
 }
 .lineAdded {
   background: var(--diff-added-bg);
@@ -63,4 +66,3 @@
   );
   min-height: 1.5em;
 }
-.lineEmptyOld { border-right: 1px solid var(--border); }

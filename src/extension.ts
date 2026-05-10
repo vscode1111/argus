@@ -3,9 +3,25 @@ import { ChatPanel } from './chat/ChatPanel';
 import { ArgusCodeLensProvider } from './providers/CodeLensProvider';
 import { InlineSuggestProvider } from './providers/InlineSuggestProvider';
 import { getSelection } from './utils/workspace';
-import { isInlineCompletionsEnabled, isCodeLensEnabled } from './utils/config';
+import { isInlineCompletionsEnabled, isCodeLensEnabled, getModel } from './utils/config';
+import { startServer } from './argusServer';
+import type { ArgusServer } from './argusServer';
 
-export function activate(context: vscode.ExtensionContext): void {
+let argusServer: ArgusServer | undefined;
+
+export function getServerPort(): number | undefined {
+  return argusServer?.port;
+}
+
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  // Start the WebSocket server on a dynamic port
+  try {
+    argusServer = await startServer({ port: 0, model: getModel() });
+    console.log('[Argus] WebSocket server started on port', argusServer.port);
+  } catch (err) {
+    console.error('[Argus] Failed to start WebSocket server:', err);
+  }
+
   const codeLensProvider = new ArgusCodeLensProvider();
   let codeLensDisposable: vscode.Disposable | undefined;
   let inlineSuggestDisposable: vscode.Disposable | undefined;
@@ -92,4 +108,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+  if (argusServer) {
+    argusServer.close();
+    argusServer = undefined;
+  }
+}

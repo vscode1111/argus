@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { waitForApp } from './helpers';
 
 function clickDevButton(page: import('@playwright/test').Page, label: string) {
   return page.evaluate((lbl) => {
@@ -20,9 +21,7 @@ test.describe('file path links', () => {
     await page.addInitScript(() => {
       localStorage.setItem('argus.showDevHarness', 'true');
     });
-    await page.goto('/');
-    // Wait for the app to mount before interacting with DevHarness
-    await expect(page.getByPlaceholder('Ask Argus')).toBeVisible({ timeout: 10_000 });
+    await waitForApp(page);
     await clickDevButton(page, 'rich+paths');
     // Wait for the review content to render
     await expect(page.getByRole('heading', { name: 'Code Review Results' })).toBeVisible({ timeout: 5_000 });
@@ -38,7 +37,7 @@ test.describe('file path links', () => {
     await expect(messageArea.getByRole('link', { name: /markdown\.tsx:4/ })).toBeVisible();
 
     // Path with line range after "File:" label
-    await expect(messageArea.getByRole('link', { name: /server\\index\.ts:31-48/ })).toBeVisible();
+    await expect(messageArea.getByRole('link', { name: /src\\argusServer\.ts:31-48/ })).toBeVisible();
 
     // Paths inside table cells
     await expect(messageArea.locator('td').getByRole('link')).toHaveCount(3);
@@ -85,7 +84,7 @@ test.describe('file path links', () => {
   });
 
   test('file path with line range highlights all lines in range', async ({ page }) => {
-    page.getByRole('link', { name: /index\.ts:31-48/ }).click();
+    page.getByRole('link', { name: /argusServer\.ts:31-48/ }).click();
 
     // First line in range should be visible (scrolled into view)
     await expect(modalLine(page, 31)).toBeVisible({ timeout: 10_000 });

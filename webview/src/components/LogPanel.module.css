@@ -223,6 +223,8 @@
   padding: 2px 12px;
   margin: 0;
   border-top: 1px solid rgba(128, 128, 128, 0.15);
+  min-width: 0;
+  contain: inline-size;
 }
 
 .entryNoMeta {
@@ -249,9 +251,13 @@
 
 .text {
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
+  overflow-wrap: break-word;
   align-self: start;
   color: var(--vscode-foreground);
+  min-width: 0;
+  max-height: 4.5em;
+  overflow: hidden;
 }
 
 .textExit {

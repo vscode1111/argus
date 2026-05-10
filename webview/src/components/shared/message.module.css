@@ -53,3 +53,13 @@
   composes: responseTime;
   color: var(--diff-added);
 }
+
+.responseTimeStopped {
+  composes: responseTime;
+  color: var(--vscode-charts-blue, #3794ff);
+}
+
+.responseTimeError {
+  composes: responseTime;
+  color: var(--vscode-errorForeground, #f14c4c);
+}

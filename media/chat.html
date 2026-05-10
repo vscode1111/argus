@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src {{cspSource}} 'nonce-{{nonce}}'; script-src 'nonce-{{nonce}}'; img-src data:;" />
+    content="default-src 'none'; style-src {{cspSource}} 'nonce-{{nonce}}'; script-src 'nonce-{{nonce}}'; img-src data:; connect-src ws://localhost:*;" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{cssUri}}" />
   <title>Argus</title>
@@ -29,6 +29,57 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
+  <script nonce="{{nonce}}">
+    // WebSocket bridge: route Claude-related messages over WS,
+    // VS Code-specific messages stay on postMessage
+    (function() {
+      var WS_URL = '{{wsUrl}}';
+      if (!WS_URL) return; // no server available
+
+      var VS_ONLY = { openFile: 1, openUrl: 1, focusPanel: 1, getInfo: 1, readFilePreview: 1 };
+      var realApi = acquireVsCodeApi();
+      var ws = new WebSocket(WS_URL);
+      var queue = [];
+      var ready = false;
+
+      ws.onopen = function() {
+        ready = true;
+        queue.splice(0).forEach(function(m) { ws.send(JSON.stringify(m)); });
+      };
+
+      ws.onmessage = function(event) {
+        var data = JSON.parse(event.data);
+        window.dispatchEvent(new MessageEvent('message', { data: data }));
+      };
+
+      ws.onerror = function(e) { console.error('[argus-ws] error', e); };
+      ws.onclose = function() { ready = false; console.warn('[argus-ws] disconnected'); };
+
+      // Listen for extension->webview messages that need forwarding to WS
+      window.addEventListener('message', function(event) {
+        var data = event.data;
+        if (data && data.type === 'newSession') {
+          if (ready) ws.send(JSON.stringify({ type: 'newSession' }));
+          else queue.push({ type: 'newSession' });
+        }
+      });
+
+      // Override acquireVsCodeApi so the React app uses our proxy
+      window.acquireVsCodeApi = function() {
+        return {
+          postMessage: function(msg) {
+            if (msg && VS_ONLY[msg.type]) {
+              realApi.postMessage(msg);
+            } else if (ready) {
+              ws.send(JSON.stringify(msg));
+            } else {
+              queue.push(msg);
+            }
+          }
+        };
+      };
+    })();
+  </script>
   <script nonce="{{nonce}}" src="{{jsUri}}"></script>
 </body>
 </html>

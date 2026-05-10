@@ -319,15 +319,16 @@ export function ToolCall({ call }: Props) {
                   className={[styles.toolSummary, styles.toolFileLink].join(' ')}
                   href="#"
                   onClick={handleFileClick}
+                  title={summary}
                 >
                   {summary}
                 </a>
               ) : (
-                <span className={[styles.toolSummary, name === 'Bash' && summary === bashCommand && styles.toolSummaryBash].filter(Boolean).join(' ')}>{summary}</span>
+                <span className={[styles.toolSummary, name === 'Bash' && summary === bashCommand && styles.toolSummaryBash].filter(Boolean).join(' ')} title={summary}>{summary}</span>
               )
             )}
             {name === 'Bash' && bashCommand && summary !== bashCommand && (
-              <span className={[styles.toolSummary, styles.toolSummaryBash].join(' ')}>{bashCommand}</span>
+              <span className={[styles.toolSummary, styles.toolSummaryBash].join(' ')} title={bashCommand}>{bashCommand}</span>
             )}
             {name === 'Bash' && result && (
               <a

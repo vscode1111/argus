@@ -4,7 +4,7 @@ import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
 import { Markdown } from '../utils/markdown';
 import { linkifyPaths } from '../utils/filePath';
-import { formatDuration } from '../utils/time';
+import { formatDuration, formatTime } from '../utils/time';
 import { ImageViewerModal } from './ImageViewerModal';
 import { postMessage } from '../vscode';
 import msg from './shared/message.module.css';
@@ -163,7 +163,9 @@ export function ChatMessage({ message, login }: Props) {
         </div>
       )}
       {responseTime !== undefined && (
-        <div className={msg.responseTimeSuccess}>{formatDuration(responseTime)}</div>
+        <div className={message.outcome === 'error' ? msg.responseTimeError : message.outcome === 'stopped' ? msg.responseTimeStopped : msg.responseTimeSuccess}>
+          {formatDuration(responseTime)}{message.finishedAt ? ` (${formatTime(message.finishedAt)})` : ''}
+        </div>
       )}
     </div>
   );

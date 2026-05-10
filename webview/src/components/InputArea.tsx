@@ -30,9 +30,10 @@ interface Props {
   version: string;
   contextUsage: { percent: number; inputTokens: number; outputTokens: number } | null;
   onSend?: () => void;
+  onStop?: () => void;
 }
 
-export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, onSend }: Props) {
+export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, onSend, onStop }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -360,7 +361,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
       <div className={styles.btnGroup}>
         <div className={styles.btnRow}>
           {isStreaming && (
-            <button className={styles.btnStop} onClick={() => postMessage({ type: 'stop' })}>Stop</button>
+            <button className={styles.btnStop} onClick={() => { postMessage({ type: 'stop' }); onStop?.(); }}>Stop</button>
           )}
           <button
             className={[styles.modePill, mode === 'plan' ? styles.modePlan : ''].filter(Boolean).join(' ')}

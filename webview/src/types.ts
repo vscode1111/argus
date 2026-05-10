@@ -42,8 +42,12 @@ export type UIMessage = {
   thinking?: string;
   blocks?: ContentBlock[];
   responseTime?: number;
+  finishedAt?: number;
+  outcome?: Outcome;
   errorKind?: ErrorKind;
 };
+
+export type Outcome = 'success' | 'stopped' | 'error';
 
 export type StreamingState = {
   thinking: string;
@@ -52,4 +56,5 @@ export type StreamingState = {
   lastEventTime: number;
   logsAtStart: number;
   reused: boolean;
+  stopped: boolean;
 };

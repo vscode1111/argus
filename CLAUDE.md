@@ -6,13 +6,10 @@ AI coding assistant powered by Claude, built as a VS Code extension.
 
 ```
 src/
-  extension.ts          - Activation entry point, registers commands/providers
-  agent/
-    ClaudeClient.ts     - Anthropic SDK wrapper, streaming + tool use
-    AgentLoop.ts        - Agentic loop orchestrating tools and conversation
-    tools/              - Individual tool implementations (read, write, edit, glob, grep, bash)
+  extension.ts          - Activation entry point, starts WS server on dynamic port, registers commands/providers
+  argusServer.ts        - Shared WebSocket server (Claude CLI orchestration, used by both extension and standalone)
   chat/
-    ChatPanel.ts        - WebviewPanel lifecycle and message handling
+    ChatPanel.ts        - WebviewPanel lifecycle, VS Code-specific message handlers, injects WS URL into HTML
     ChatMessage.ts      - Message types
   providers/
     InlineSuggestProvider.ts  - Inline completions (Copilot-style)
@@ -27,10 +24,10 @@ cmd/
   ctx-uninstall.bat     - Remove context menu entry (run as admin)
   kill-claude.bat       - Kill all running Claude Code processes
 server/
-  index.ts              - Standalone WebSocket server (Claude CLI orchestration, extracted from Vite plugin)
+  index.ts              - Thin entry point for standalone dev mode (imports startServer from src/argusServer.ts)
   tsconfig.json         - TypeScript config for server
 scripts/
-  dev.js                - Orchestrates Vite frontend + WebSocket server in parallel (colored [fe]/[be] output)
+  dev.js                - Orchestrates Vite frontend + WebSocket server in parallel (colored [fe]/[be] output, watches server/ and src/argusServer.ts)
   dev-stop.js           - Kill running dev processes
   context-menu.js       - Cross-platform context menu install/uninstall (Windows registry / Linux .desktop entry)
   launch.js             - Opens Chrome in app mode with optional ?dir= param (cross-platform Chrome paths)
@@ -79,7 +76,7 @@ webview/
     utils/
       markdown.tsx      - react-markdown wrapper with VS Code CSS variable styling
       filePath.tsx      - Clickable file path detection and linkification (FilePathLink + linkifyPaths + withLinkedPaths)
-      time.ts           - formatDuration helper
+      time.ts           - formatDuration and formatTime helpers
       encoding.ts       - ENCODINGS list and tryDecode() for charset re-interpretation
 ```
 
@@ -103,11 +100,11 @@ webview/
 - Image paste: clipboard images are base64-encoded in the webview, sent via `--input-format stream-json` NDJSON to the Claude CLI with `type: "image"` content blocks
 - Slash commands: InputArea shows a dropdown when "/" is typed; sends `getSkills` to extension, receives `skills` response with `{ name, scope: 'builtin' | 'global' | 'project' }[]`; skills read from `~/.claude/skills/` (global) and `<workspace>/.claude/skills/` (project); built-in commands hardcoded in `ChatPanel.getSkills()` and `vite.dev.config.ts`; Tab or Enter selects highlighted skill
 - Log panel: has its own settings dropdown (gear icon) with toggles for show time / show type; settings persisted via `SettingsContext` to localStorage (`argus.showLogTime`, `argus.showLogType`); log text is color-highlighted by content: "Spawning claude" entries render green (`textSpawn`), "exited with code" entries render orange (`textExit`)
-- Error handling: errors classified into `ErrorKind` (`auth | not_found | session | generic`) via `classifyError()` in `AgentSession.ts`; webview shows structured error blocks with contextual actions (Login, Retry, New session)
+- Error handling: errors classified into `ErrorKind` (`auth | not_found | session | generic`) via `classifyError()` in `argusServer.ts`; webview shows structured error blocks with contextual actions (Login, Retry, New session); API errors delivered as text content (e.g. "API Error: 403") are detected via a 3-second stale timer in the server and converted to error+done events; if `error` arrives after `done`, the reducer retroactively marks the last assistant message's outcome as `'error'`
 - Login flow: `AgentSession.startLogin()` spawns `claude auth login`, captures OAuth URL, accepts auth code via stdin; webview `LoginPanel` in `ChatMessage.tsx` manages the UI; `LoginState` tracks phases (`idle | starting | url | submitting | success | error`)
 - Retry: ChatPanel stores last user text/images; webview sends `retry` message to re-run the last prompt
-- Sound on complete: `playCompletionSound()` in `App.tsx` via AudioContext; toggled by `soundOnComplete` setting in `SettingsContext`
-- Notify on complete: browser `Notification` API fires when streaming finishes (if `notifyOnComplete` enabled in `SettingsContext`); requests permission on first enable; notification title includes project name, body shows last user message; clicking focuses the window
+- Sound on complete: `playCompletionSound()` in `App.tsx` via AudioContext; toggled by `soundOnComplete` setting in `SettingsContext`; suppressed when user manually stops the session (`outcome === 'stopped'`)
+- Notify on complete: browser `Notification` API fires when streaming finishes (if `notifyOnComplete` enabled in `SettingsContext`); requests permission on first enable; notification title includes project name, body shows last user message; clicking focuses the window; suppressed on manual stop
 - Copy buttons: user messages have a hover-reveal copy button (`MessageCopyButton` in `ChatMessage.tsx`); code blocks have a hover-reveal copy button (`CopyButton` in `utils/markdown.tsx`) styled via `global.css` (`.code-block-wrapper` / `.code-copy-btn`)
 - Dev harness toggle: SettingsModal "dev" button dispatches `devharness-toggle` custom event; DevHarness listens and toggles its own `visible` state (returns `null` when hidden); available in both browser dev and VS Code extension mode (`#dev-harness` div in both `index.html` and `chat.html`); state persisted to localStorage (`argus.showDevHarness`); `body.dev-harness-visible` class controls bottom padding
 - Editor title icon: `argus.openChat` command registered in `editor/title` menu group with `media/argus-icon.svg` icon
@@ -120,8 +117,13 @@ webview/
 - Log panel close: LogPanel has a close button (X) that calls `onClose` prop, which toggles `showLogs` off via `setShowLogs(false)` in App
 - Multi-panel support: `ChatPanel` tracks all open panels in a static `Set<ChatPanel>` with a `lastFocused` pointer; `createNew()` always opens a fresh panel, `focusOrCreate()` reveals the last-focused one; `argus.openChat` creates new panels, other commands reuse the last-focused panel
 - Win32 focus: `win32Focus.ts` uses `koffi` FFI to call `SetForegroundWindow`/`BringWindowToTop`; `captureForegroundWindow()` is called on panel creation, `focusCachedWindow()` on notification click via the `focusPanel` webview message
-- Standalone WebSocket server: `server/index.ts` runs as a separate Node process (port 3001 by default, `ARGUS_SERVER_PORT` env); `scripts/dev.js` starts both Vite and server in parallel; `vite.dev.config.ts` is now a pure Vite config with no server-side plugin
+- Unified WebSocket server: `src/argusServer.ts` exports `startServer({ port, model })` used by both the VS Code extension (dynamic port via `port: 0`) and standalone dev mode (`server/index.ts`, port 3001); the extension starts the server on `activate()` and shuts it down on `deactivate()`; `ChatPanel` injects the WS URL (`ws://localhost:PORT/agent?dir=...`) into `chat.html`; the webview connects via a shim script that routes Claude-related messages to WS and VS Code-specific messages (`openFile`, `openUrl`, `focusPanel`, `getInfo`, `readFilePreview`) to real `postMessage`; one port serves many panels (per-connection isolated state); `scripts/dev.js` starts both Vite and server in parallel, watches `server/` and `src/argusServer.ts` for auto-restart
 - Directory-aware launch: context menu passes `?dir=` query param to the dev URL; `index.html` forwards it to the WebSocket (`ws://localhost:3001/agent?dir=...`); server reads `dir` from the upgrade request and uses it as `cwd` for Claude CLI spawns and skill discovery; `App.tsx` dispatches `workspaceInfo` on mount if `dir` is present
+- Response time and outcome: completed assistant messages store `responseTime` (ms), `finishedAt` (timestamp), and `outcome` (`'success' | 'stopped' | 'error'`); timer text is color-coded: green (`responseTimeSuccess`) for success, blue (`responseTimeStopped`, `--vscode-charts-blue`) for stopped, red (`responseTimeError`, `--vscode-errorForeground`) for error; finish time shown in brackets e.g. "8s (02:15:35)"; `StreamingTimer` shows elapsed+idle during streaming; `InputArea.onStop` dispatches `stop` action to set `streaming.stopped = true` before `done` commits the message
+- Log panel performance: log entry text uses `max-height: 4.5em` + `overflow: hidden` to cap visual height; `.logPane` uses `contain: inline-size` to prevent content from affecting parent layout width during reflow (prevents layout glitch on VS Code tab switch); server truncates debug event logs to 120 chars; `word-break: break-word` instead of `break-all` for natural line breaks
+- DiffViewerModal: side-by-side diff with `pairRows()` that groups consecutive removes/adds into paired `change` rows (no empty-cell gaps); `pre-wrap` + `word-break: break-word` for long lines; `1fr 1fr` grid without `max-content` so columns stay equal width
+- Tool summary tooltips: `title` attribute on all `toolSummary` spans/links (file paths, Bash commands) so truncated text is visible on hover
+- DevHarness stress test: "10K" button generates 10,000 log entries + 20 multi-tool assistant messages for layout/performance testing; "diff" button simulates two Edit tool calls (markdown + TypeScript refactor) for DiffViewerModal testing
 - Context usage indicator: pill in InputArea (`contextPill`) shows "X%" of 200k context window (full "X% used" in tooltip); extracted from CLI `assistant` event's `message.usage` (sums `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens`); color-coded: default <50%, yellow (`contextMedium`) 50-80%, red (`contextHigh`) 80%+; tooltip shows token breakdown; persists across messages (instance-scoped counters in ChatPanel), resets on clear/new session; ignores synthetic events (zero usage) from slash commands like `/context`
 
 ## Skills

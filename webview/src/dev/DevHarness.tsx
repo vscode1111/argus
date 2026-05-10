@@ -279,6 +279,388 @@ async function simulateAskAnswer() {
   send({ type: 'done' });
 }
 
+async function simulateDiff() {
+  const oldString = [
+    '# Project Config',
+    '',
+    '## Key Conventions',
+    '',
+    '- Model: `claude-opus-4-6` for agent (adaptive thinking), `claude-haiku-4-5` for inline completions',
+    '- Streaming: always use `client.messages.stream()` + `finalMessage()`',
+    '- Tool approval: destructive tools (write_file, bash) require user confirmation via `showWarningMessage`',
+    '- No Python scripts - use Node.js/TypeScript for any tooling',
+    '- Webview UI is React 18 + TypeScript + Vite (lib/IIFE mode). Build with `yarn build`',
+    '- Webview styling uses CSS Modules (co-located `.module.css` files) with VS Code CSS variables (`var(--vscode-*)`) - no Tailwind, auto-adapts to any theme',
+    '- CSS Modules: camelCase class names for dot access (`styles.toolCall`), conditional classes via `.filter(Boolean).join(\' \')`, shared modules in `components/shared/`, `composes:` for reuse',
+    '- Error handling: errors classified into `ErrorKind` (`auth | not_found | session | generic`) via `classifyError()` in `argusServer.ts`; webview shows structured error blocks with contextual actions (Login, Retry, New session); API errors delivered as text content (e.g. "API Error: 403") are detected via a 3-second stale timer in the server and converted to error+done events; if `error` arrives after `done`, the reducer retroactively marks the last assistant message outcome as error',
+    '- Unified WebSocket server: `src/argusServer.ts` exports `startServer({ port, model })` used by both the VS Code extension (dynamic port via `port: 0`) and standalone dev mode (`server/index.ts`, port 3001); the extension starts the server on `activate()` and shuts it down on `deactivate()`; `ChatPanel` injects the WS URL into `chat.html`; the webview connects via a shim script that routes Claude-related messages to WS and VS Code-specific messages to real `postMessage`; one port serves many panels (per-connection isolated state)',
+    '- Context usage indicator: pill in InputArea (`contextPill`) shows "X%" of 200k context window (full "X% used" in tooltip); extracted from CLI `assistant` event message usage; color-coded: default <50%, yellow (`contextMedium`) 50-80%, red (`contextHigh`) 80%+; tooltip shows token breakdown; persists across messages, resets on clear/new session',
+    '',
+    '## Development',
+    '',
+    '```sh',
+    'yarn dev          # starts Vite frontend + WebSocket server',
+    'yarn build        # bundle React webview',
+    '```',
+  ].join('\n');
+
+  const newString = [
+    '# Project Config',
+    '',
+    '## Key Conventions',
+    '',
+    '- Model: `claude-opus-4-6` for agent, `claude-haiku-4-5` for inline completions',
+    '- Streaming: always use `client.messages.stream()` + `finalMessage()`',
+    '- Tool approval: destructive tools (write_file, bash) require user confirmation',
+    '- No Python scripts, use Node.js/TypeScript for any tooling',
+    '- Webview UI: React 18 + TypeScript + Vite (lib/IIFE mode), build with `yarn build`',
+    '- CSS Modules with VS Code CSS variables (`var(--vscode-*)`), no Tailwind',
+    '  - camelCase class names, conditional via `.filter(Boolean).join(\' \')`',
+    '  - shared modules in `components/shared/`, `composes:` for reuse',
+    '- Error handling: `ErrorKind` (`auth | not_found | session | generic`) via',
+    '  `classifyError()` in `argusServer.ts`; contextual actions in webview;',
+    '  API errors as text detected via 3-second stale timer;',
+    '  late `error` after `done` retroactively marks assistant message outcome',
+    '- Unified WS server: `src/argusServer.ts` exports `startServer({ port, model })`',
+    '  for both VS Code extension (port 0) and standalone dev (port 3001);',
+    '  extension starts on `activate()`, stops on `deactivate()`;',
+    '  webview shim routes Claude messages to WS, VS Code messages to postMessage',
+    '- Context usage: pill shows "X%" of 200k window; color-coded',
+    '  (default <50%, yellow 50-80%, red 80%+); tooltip shows token breakdown;',
+    '  persists across messages, resets on clear/new session',
+    '',
+    '## Development',
+    '',
+    '```sh',
+    'yarn dev          # starts Vite frontend + WebSocket server',
+    'yarn build        # bundle React webview',
+    'yarn watch        # watch + rebuild on save',
+    '```',
+  ].join('\n');
+
+  // Second diff: TypeScript refactor with many changes
+  const oldTs = [
+    'import { spawn, ChildProcess } from "child_process";',
+    'import { WebSocket, WebSocketServer } from "ws";',
+    'import http from "http";',
+    'import path from "path";',
+    'import fs from "fs";',
+    '',
+    'interface ServerOptions {',
+    '  port: number;',
+    '  model: string;',
+    '  debug?: boolean;',
+    '}',
+    '',
+    'const DEFAULT_MODEL = "claude-opus-4-6";',
+    'const MAX_RETRIES = 3;',
+    'const RETRY_DELAY = 1000;',
+    '',
+    'export function startServer(options: ServerOptions) {',
+    '  const { port, model = DEFAULT_MODEL, debug = false } = options;',
+    '  const httpServer = http.createServer((req, res) => {',
+    '    if (req.url === "/health") {',
+    '      res.writeHead(200, { "Content-Type": "application/json" });',
+    '      res.end(JSON.stringify({ status: "ok", model, uptime: process.uptime() }));',
+    '      return;',
+    '    }',
+    '    res.writeHead(404);',
+    '    res.end("Not found");',
+    '  });',
+    '',
+    '  const wss = new WebSocketServer({ server: httpServer, path: "/agent" });',
+    '',
+    '  wss.on("connection", (ws, req) => {',
+    '    const dir = new URL(req.url!, `http://${req.headers.host}`).searchParams.get("dir") ?? process.cwd();',
+    '    let currentProc: ChildProcess | null = null;',
+    '    let sessionId: string | null = null;',
+    '    let retryCount = 0;',
+    '',
+    '    function spawnCli(prompt: string) {',
+    '      const args = ["--print", "--verbose", "--output-format", "stream-json", "--input-format", "stream-json", "--model", model];',
+    '      currentProc = spawn("claude", args, { cwd: dir, stdio: ["pipe", "pipe", "pipe"] });',
+    '      if (debug) console.log(`[server] spawned claude pid=${currentProc.pid}`);',
+    '',
+    '      currentProc.stdout?.on("data", (chunk: Buffer) => {',
+    '        const lines = chunk.toString().split("\\n").filter(Boolean);',
+    '        for (const line of lines) {',
+    '          try {',
+    '            const event = JSON.parse(line);',
+    '            handleEvent(event);',
+    '          } catch {',
+    '            if (debug) console.log("[server] non-JSON stdout:", line.slice(0, 200));',
+    '          }',
+    '        }',
+    '      });',
+    '',
+    '      currentProc.stderr?.on("data", (chunk: Buffer) => {',
+    '        const text = chunk.toString().trim();',
+    '        if (text) sendLog("warn", `stderr: ${text}`);',
+    '      });',
+    '',
+    '      currentProc.on("close", (code) => {',
+    '        sendLog("info", `claude exited with code ${code}`);',
+    '        if (code !== 0 && retryCount < MAX_RETRIES) {',
+    '          retryCount++;',
+    '          setTimeout(() => spawnCli(prompt), RETRY_DELAY);',
+    '        }',
+    '        currentProc = null;',
+    '      });',
+    '    }',
+    '',
+    '    function handleEvent(event: any) {',
+    '      // ... event handling logic',
+    '    }',
+    '',
+    '    function sendLog(level: string, text: string) {',
+    '      ws.send(JSON.stringify({ type: "log", level, text, timestamp: new Date().toISOString() }));',
+    '    }',
+    '',
+    '    ws.on("message", (raw) => {',
+    '      const msg = JSON.parse(raw.toString());',
+    '      if (msg.type === "send") spawnCli(msg.text);',
+    '      if (msg.type === "stop") {',
+    '        currentProc?.kill("SIGTERM");',
+    '        currentProc = null;',
+    '      }',
+    '    });',
+    '',
+    '    ws.on("close", () => {',
+    '      currentProc?.kill("SIGTERM");',
+    '    });',
+    '  });',
+    '',
+    '  httpServer.listen(port, () => {',
+    '    console.log(`Server running on port ${port}`);',
+    '  });',
+    '',
+    '  return { httpServer, wss };',
+    '}',
+  ].join('\n');
+
+  const newTs = [
+    'import { spawn, ChildProcess } from "child_process";',
+    'import { WebSocket, WebSocketServer } from "ws";',
+    'import http from "http";',
+    'import path from "path";',
+    'import fs from "fs";',
+    'import { EventEmitter } from "events";',
+    '',
+    'interface ServerOptions {',
+    '  port: number;',
+    '  model: string;',
+    '  debug?: boolean;',
+    '  maxRetries?: number;',
+    '  onError?: (err: Error) => void;',
+    '}',
+    '',
+    'interface ServerResult {',
+    '  httpServer: http.Server;',
+    '  wss: WebSocketServer;',
+    '  port: number;',
+    '  close: () => Promise<void>;',
+    '}',
+    '',
+    'const DEFAULT_MODEL = "claude-opus-4-6";',
+    'const DEFAULT_MAX_RETRIES = 3;',
+    'const RETRY_DELAY = 1000;',
+    'const STALE_TIMEOUT = 3000;',
+    '',
+    'const API_ERROR_RE = /API Error:|Failed to authenticate|overloaded_error/i;',
+    '',
+    'export function startServer(options: ServerOptions): ServerResult {',
+    '  const {',
+    '    port,',
+    '    model = DEFAULT_MODEL,',
+    '    debug = false,',
+    '    maxRetries = DEFAULT_MAX_RETRIES,',
+    '    onError,',
+    '  } = options;',
+    '',
+    '  const httpServer = http.createServer((req, res) => {',
+    '    if (req.url === "/health") {',
+    '      res.writeHead(200, { "Content-Type": "application/json" });',
+    '      res.end(JSON.stringify({',
+    '        status: "ok",',
+    '        model,',
+    '        uptime: process.uptime(),',
+    '        connections: wss.clients.size,',
+    '      }));',
+    '      return;',
+    '    }',
+    '    if (req.url === "/version") {',
+    '      res.writeHead(200, { "Content-Type": "text/plain" });',
+    '      res.end("1.0.0");',
+    '      return;',
+    '    }',
+    '    res.writeHead(404);',
+    '    res.end("Not found");',
+    '  });',
+    '',
+    '  const wss = new WebSocketServer({ server: httpServer, path: "/agent" });',
+    '',
+    '  wss.on("connection", (ws, req) => {',
+    '    const url = new URL(req.url!, `http://${req.headers.host}`);',
+    '    const dir = url.searchParams.get("dir") ?? process.cwd();',
+    '    let currentProc: ChildProcess | null = null;',
+    '    let sessionId: string | null = null;',
+    '    let retryCount = 0;',
+    '    let textAccum = "";',
+    '    let staleTimer: ReturnType<typeof setTimeout> | null = null;',
+    '    let cliDone = false;',
+    '',
+    '    function resetStaleTimer() {',
+    '      if (staleTimer) clearTimeout(staleTimer);',
+    '      staleTimer = null;',
+    '    }',
+    '',
+    '    function startStaleTimer() {',
+    '      resetStaleTimer();',
+    '      staleTimer = setTimeout(() => {',
+    '        if (cliDone) return;',
+    '        if (textAccum && API_ERROR_RE.test(textAccum)) {',
+    '          cliDone = true;',
+    '          ws.send(JSON.stringify({ type: "error", text: textAccum.trim() }));',
+    '          ws.send(JSON.stringify({ type: "done" }));',
+    '        }',
+    '      }, STALE_TIMEOUT);',
+    '    }',
+    '',
+    '    function spawnCli(prompt: string) {',
+    '      cliDone = false;',
+    '      textAccum = "";',
+    '      resetStaleTimer();',
+    '      const args = [',
+    '        "--print", "--verbose",',
+    '        "--output-format", "stream-json",',
+    '        "--input-format", "stream-json",',
+    '        "--model", model,',
+    '      ];',
+    '      currentProc = spawn("claude", args, {',
+    '        cwd: dir,',
+    '        stdio: ["pipe", "pipe", "pipe"],',
+    '      });',
+    '      sendLog("info", `Spawning claude pid=${currentProc.pid}`);',
+    '',
+    '      currentProc.stdout?.on("data", (chunk: Buffer) => {',
+    '        const lines = chunk.toString().split("\\n").filter(Boolean);',
+    '        for (const line of lines) {',
+    '          try {',
+    '            const event = JSON.parse(line);',
+    '            handleEvent(event);',
+    '          } catch {',
+    '            const trimmed = line.trim();',
+    '            if (trimmed && API_ERROR_RE.test(trimmed)) {',
+    '              cliDone = true;',
+    '              ws.send(JSON.stringify({ type: "error", text: trimmed }));',
+    '              ws.send(JSON.stringify({ type: "done" }));',
+    '            }',
+    '          }',
+    '        }',
+    '      });',
+    '',
+    '      currentProc.stderr?.on("data", (chunk: Buffer) => {',
+    '        const text = chunk.toString().trim();',
+    '        if (text) sendLog("warn", `stderr: ${text}`);',
+    '      });',
+    '',
+    '      currentProc.on("close", (code) => {',
+    '        resetStaleTimer();',
+    '        sendLog("info", `claude exited with code ${code}`);',
+    '        if (code !== 0 && !cliDone) {',
+    '          if (retryCount < maxRetries) {',
+    '            retryCount++;',
+    '            sendLog("warn", `Retry ${retryCount}/${maxRetries}`);',
+    '            setTimeout(() => spawnCli(prompt), RETRY_DELAY);',
+    '          } else {',
+    '            ws.send(JSON.stringify({ type: "error", text: `Exited with code ${code}` }));',
+    '            ws.send(JSON.stringify({ type: "done" }));',
+    '          }',
+    '        }',
+    '        currentProc = null;',
+    '      });',
+    '    }',
+    '',
+    '    function handleEvent(event: any) {',
+    '      if (event.type === "content_block_delta") {',
+    '        const delta = event.delta;',
+    '        if (delta?.type === "text_delta" && delta.text) {',
+    '          textAccum += delta.text;',
+    '          startStaleTimer();',
+    '          ws.send(JSON.stringify({ type: "text_chunk", text: delta.text }));',
+    '        }',
+    '      }',
+    '    }',
+    '',
+    '    function sendLog(level: string, text: string) {',
+    '      const ts = new Date().toISOString();',
+    '      ws.send(JSON.stringify({ type: "log", level, text, timestamp: ts }));',
+    '    }',
+    '',
+    '    ws.on("message", (raw) => {',
+    '      const msg = JSON.parse(raw.toString());',
+    '      switch (msg.type) {',
+    '        case "send":',
+    '          retryCount = 0;',
+    '          spawnCli(msg.text);',
+    '          break;',
+    '        case "stop":',
+    '          cliDone = true;',
+    '          resetStaleTimer();',
+    '          currentProc?.kill("SIGTERM");',
+    '          currentProc = null;',
+    '          ws.send(JSON.stringify({ type: "done" }));',
+    '          break;',
+    '        case "newSession":',
+    '          sessionId = null;',
+    '          retryCount = 0;',
+    '          break;',
+    '      }',
+    '    });',
+    '',
+    '    ws.on("close", () => {',
+    '      resetStaleTimer();',
+    '      currentProc?.kill("SIGTERM");',
+    '    });',
+    '  });',
+    '',
+    '  return new Promise<ServerResult>((resolve) => {',
+    '    httpServer.listen(port, () => {',
+    '      const addr = httpServer.address();',
+    '      const boundPort = typeof addr === "object" ? addr!.port : port;',
+    '      console.log(`Server running on port ${boundPort}`);',
+    '      resolve({',
+    '        httpServer,',
+    '        wss,',
+    '        port: boundPort,',
+    '        close: () => new Promise<void>((r) => {',
+    '          wss.close();',
+    '          httpServer.close(() => r());',
+    '        }),',
+    '      });',
+    '    });',
+    '  }) as any;',
+    '}',
+  ].join('\n');
+
+  send({ type: 'thinking_start' });
+  await delay(200);
+
+  // First edit: CLAUDE.md line wrapping
+  send({ type: 'tool_start', call: { id: 'diff1', name: 'Edit', input: { file_path: '/project/CLAUDE.md', old_string: oldString, new_string: newString } } });
+  await delay(300);
+  send({ type: 'tool_end', call: { id: 'diff1', name: 'Edit', input: { file_path: '/project/CLAUDE.md', old_string: oldString, new_string: newString }, result: 'File edited successfully' } });
+
+  // Second edit: server refactor
+  send({ type: 'tool_start', call: { id: 'diff2', name: 'Edit', input: { file_path: '/project/src/argusServer.ts', old_string: oldTs, new_string: newTs } } });
+  await delay(300);
+  send({ type: 'tool_end', call: { id: 'diff2', name: 'Edit', input: { file_path: '/project/src/argusServer.ts', old_string: oldTs, new_string: newTs }, result: 'File edited successfully' } });
+
+  await delay(200);
+  send({ type: 'text_chunk', text: 'Refactored `argusServer.ts`: added stale timer for API error detection, retry logic with configurable max, `/version` endpoint, and proper cleanup on close. Also wrapped long lines in `CLAUDE.md`.' });
+  send({ type: 'done' });
+}
+
 async function simulateRichText() {
   send({ type: 'thinking_start' });
   await delay(300);
@@ -292,7 +674,7 @@ async function simulateRichText() {
     '`D:\\_Projects\\vscode1111\\argus\\webview\\src\\utils\\markdown.tsx:4`\n',
     'The `remarkBreaks` import is only used conditionally. Consider lazy loading.\n',
     '### 3. Hardcoded path in config\n',
-    'File: D:\\_Projects\\vscode1111\\argus\\server\\index.ts:31-48\n',
+    'File: D:\\_Projects\\vscode1111\\argus\\src\\argusServer.ts:31-48\n',
     '```ts\nconst MODEL = process.env.ARGUS_MODEL ?? "claude-opus-4-6";\n```\n',
     'This should be read from a config file instead.\n',
     '| File | Line | Severity |\n',
@@ -305,6 +687,51 @@ async function simulateRichText() {
   ].join('') });
   await delay(100);
   send({ type: 'done' });
+}
+
+async function simulateStress() {
+  send({ type: 'clear' });
+  await delay(50);
+
+  // Generate 10K log entries
+  const levels: Array<'debug' | 'info' | 'warn' | 'error'> = ['debug', 'info', 'warn', 'error'];
+  const sampleEvents = [
+    'event: content_block_delta {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"analyzing"}}',
+    'event: assistant {"type":"assistant","message":{"model":"claude-opus-4-6","id":"msg_stress","role":"assistant"}}',
+    'event: system {"type":"system","subtype":"init","session_id":"sess_stress_test","cwd":"/project"}',
+    'tool_result toolu_stress: import React from "react"; import { useState } from "react";',
+    'stdin: 1024 bytes',
+    'event: content_block_start {"type":"content_block_start","index":0}',
+    'stderr: [DEBUG] Token refresh completed successfully',
+    'Spawning claude: --print --verbose --output-format stream-json --input-format stream-json',
+  ];
+  for (let i = 0; i < 10000; i++) {
+    const level = levels[i % levels.length];
+    const text = `[${i}] ${sampleEvents[i % sampleEvents.length]}`;
+    send({ type: 'log', level, text, timestamp: new Date(Date.now() + i * 50).toISOString() });
+  }
+
+  // Generate multiple assistant messages with tool calls
+  for (let turn = 0; turn < 20; turn++) {
+    send({ type: 'thinking_start' });
+    const chunks: string[] = [];
+    for (let j = 0; j < 25; j++) {
+      chunks.push(`Line ${turn * 25 + j + 1}: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.\n`);
+    }
+    send({ type: 'text_chunk', text: chunks.join('') });
+
+    // Add 2 tool calls per turn
+    const toolId1 = `stress-${turn}-1`;
+    const toolId2 = `stress-${turn}-2`;
+    send({ type: 'tool_start', call: { id: toolId1, name: 'Read', input: { file_path: `/src/module-${turn}/index.ts` } } });
+    send({ type: 'tool_end', call: { id: toolId1, name: 'Read', input: { file_path: `/src/module-${turn}/index.ts` }, result: `export function module${turn}() { return ${turn}; }` } });
+    send({ type: 'tool_start', call: { id: toolId2, name: 'Bash', input: { command: `find src/module-${turn} -name "*.ts" | wc -l` } } });
+    send({ type: 'tool_end', call: { id: toolId2, name: 'Bash', input: { command: `find src/module-${turn} -name "*.ts" | wc -l` }, result: `${turn + 3}` } });
+
+    send({ type: 'text_chunk', text: `\nTurn ${turn + 1} complete. Processed ${(turn + 1) * 25} lines.\n` });
+    send({ type: 'done' });
+    await delay(10);
+  }
 }
 
 async function simulateLoginUrl() {
@@ -414,7 +841,9 @@ export function DevHarness() {
             send({ type: 'text_chunk', text: 'Done.' });
             send({ type: 'done' });
           }} bg="#6a5a2d" />
+          <Btn label="diff" onClick={simulateDiff} bg="#4a6a2d" />
           <Btn label="rich+paths" onClick={simulateRichText} bg="#6a4a2d" />
+          <Btn label="10K" onClick={simulateStress} bg="#7a5a20" />
           <Btn label="clear" onClick={() => send({ type: 'clear' })} bg="#444" />
           <Btn label="prefill" onClick={() => send({ type: 'prefill', text: 'Explain this function' })} bg="#444" />
           <button

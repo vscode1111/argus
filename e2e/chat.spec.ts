@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { waitForApp } from './helpers';
 
 test('sending "test" produces a response and at least 5 logs within 30s', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('argus.showLogs', 'true');
   });
-  await page.goto('/');
+  await waitForApp(page);
 
   const textarea = page.getByPlaceholder('Ask Argus');
   await textarea.fill('test');

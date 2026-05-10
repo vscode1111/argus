@@ -28,6 +28,7 @@ type AppAction =
   | { type: 'tool_start'; call: ToolCallData }
   | { type: 'tool_end'; call: ToolCallData }
   | { type: 'done' }
+  | { type: 'stop' }
   | { type: 'error'; text: string; errorKind?: string }
   | { type: 'clear' }
   | { type: 'prefill'; text: string }
@@ -49,7 +50,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         isStreaming: true,
-        streaming: { thinking: '', blocks: [], startTime: Date.now(), lastEventTime: Date.now(), logsAtStart: state.logs.length, reused: action.reused ?? false },
+        streaming: { thinking: '', blocks: [], startTime: Date.now(), lastEventTime: Date.now(), logsAtStart: state.logs.length, reused: action.reused ?? false, stopped: false },
       };
 
     case 'thinking_chunk':
@@ -114,10 +115,14 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, messages: updated };
     }
 
+    case 'stop':
+      if (!state.streaming) return state;
+      return { ...state, streaming: { ...state.streaming, stopped: true } };
+
     case 'done': {
       if (!state.streaming) return { ...state, isStreaming: false };
       const responseTime = Date.now() - state.streaming.startTime;
-      const { blocks } = state.streaming;
+      const { blocks, stopped } = state.streaming;
       // Mark any still-pending tool blocks as cancelled so they stop pulsing
       const finalBlocks = blocks.map(b =>
         b.type === 'tool' && !b.call.result && !b.call.error
@@ -135,6 +140,8 @@ function reducer(state: AppState, action: AppAction): AppState {
         thinking: state.streaming.thinking || undefined,
         blocks: finalBlocks.length > 0 ? finalBlocks : undefined,
         responseTime,
+        finishedAt: Date.now(),
+        outcome: stopped ? 'stopped' : 'success',
       };
       return {
         ...state,
@@ -146,8 +153,10 @@ function reducer(state: AppState, action: AppAction): AppState {
 
     case 'error': {
       const msgs: UIMessage[] = [];
+      let existingMessages = state.messages;
       // Preserve streaming blocks (mark pending tools as cancelled)
       if (state.streaming && state.streaming.blocks.length > 0) {
+        const responseTime = Date.now() - state.streaming.startTime;
         const finalBlocks = state.streaming.blocks.map(b =>
           b.type === 'tool' && !b.call.result && !b.call.error
             ? { type: 'tool' as const, call: { ...b.call, error: true } }
@@ -163,12 +172,24 @@ function reducer(state: AppState, action: AppAction): AppState {
           content,
           thinking: state.streaming.thinking || undefined,
           blocks: finalBlocks,
+          responseTime,
+          finishedAt: Date.now(),
+          outcome: 'error',
         });
+      } else {
+        // Error arrived after 'done' already committed the assistant message;
+        // mark the last assistant message as error outcome
+        const idx = existingMessages.findLastIndex(m => m.role === 'assistant');
+        if (idx >= 0) {
+          existingMessages = existingMessages.map((m, i) =>
+            i === idx ? { ...m, outcome: 'error' as const } : m
+          );
+        }
       }
       msgs.push({ id: generateId(), role: 'error', content: action.text, errorKind: action.errorKind as UIMessage['errorKind'] });
       return {
         ...state,
-        messages: [...state.messages, ...msgs],
+        messages: [...existingMessages, ...msgs],
         streaming: null,
         isStreaming: false,
       };
@@ -290,8 +311,10 @@ function AppInner() {
 
   useEffect(() => {
     if (wasStreaming.current && !state.isStreaming) {
-      if (soundOnComplete) playCompletionSound();
-      if (notifyOnComplete && typeof Notification !== 'undefined') {
+      const lastAssistant = [...state.messages].reverse().find(m => m.role === 'assistant');
+      const wasStopped = lastAssistant?.outcome === 'stopped';
+      if (soundOnComplete && !wasStopped) playCompletionSound();
+      if (notifyOnComplete && !wasStopped && typeof Notification !== 'undefined') {
         if (Notification.permission === 'granted') {
           const projectName = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
           const title = projectName ? `Argus/${projectName}` : 'Argus';
@@ -384,7 +407,7 @@ function AppInner() {
         )}
         <div className="chatPane">
           <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
-          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} onSend={scrollToBottom} />
+          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
         </div>
         {showLogs && !isNarrow && (
           <>

@@ -23,3 +23,4 @@ vsc-extension-quickstart.md
 !out/**
 node_modules/**
 !node_modules/koffi/**
+!node_modules/ws/**
