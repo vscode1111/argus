@@ -36,7 +36,7 @@ export function StreamingMessage({ streaming, logCount }: Props) {
       isEmpty && msg.empty,
     ].filter(Boolean).join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
-      {showWorking && <WorkingIndicator />}
+      {showWorking && !streaming.retryStatus && <WorkingIndicator logCount={logCount} />}
       {blocks.map((block, i) => {
         if (firstPendingAskIdx >= 0 && i > firstPendingAskIdx && block.type === 'text') {
           return null;
@@ -47,6 +47,7 @@ export function StreamingMessage({ streaming, logCount }: Props) {
               <Markdown>{block.text}</Markdown>
             </div>;
       })}
+      {streaming.retryStatus && <WorkingIndicator logCount={logCount} retryStatus={streaming.retryStatus} />}
       {showTimer && <StreamingTimer startTime={startTime} lastEventTime={lastEventTime} />}
     </div>
   );

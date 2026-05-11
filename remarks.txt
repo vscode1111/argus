@@ -15,3 +15,5 @@ Which directory are we currently working in?
 What is your current dir?
 
 /review https://gitlab.xbet.lan/v3group/backend/applications/cms/responsible-gaming-service/-/merge_requests/1 ru
+
+analyze project

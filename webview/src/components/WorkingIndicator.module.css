@@ -25,6 +25,10 @@
   font-weight: 500;
 }
 
+.retrying {
+  color: var(--vscode-charts-yellow, #cca700);
+}
+
 .dots {
   display: inline-block;
   width: 1.5em;

@@ -31,7 +31,7 @@ interface Props {
 }
 
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
-  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete } = useSettings();
+  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogTimeout, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogTimeout } = useSettings();
   const [infoOpen, setInfoOpen] = useState(false);
   const hasDevHarness = !!document.getElementById('dev-harness');
   const hasNotificationAPI = typeof Notification !== 'undefined';
@@ -89,6 +89,22 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             )}
           </div>
         )}
+        <label className={styles.settingRow} htmlFor="input-watchdog">
+          <span className={styles.settingLabel}>Watchdog timeout</span>
+          <input
+            id="input-watchdog"
+            type="number"
+            className={styles.numberInput}
+            min={10}
+            max={600}
+            value={watchdogTimeout}
+            onChange={e => {
+              const v = Math.max(10, Math.min(600, parseInt(e.target.value) || 120));
+              setWatchdogTimeout(v);
+            }}
+          />
+          <span className={styles.settingUnit}>s</span>
+        </label>
         {hasDevHarness && (
           <button
             className={styles.devCorner}

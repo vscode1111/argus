@@ -1,25 +1,8 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { postMessage } from '../vscode';
+import type { ArgusSettings } from '../types';
 
-interface SettingsContextValue {
-  verboseTools: boolean;
-  showTimer: boolean;
-  showOutput: boolean;
-  showLogs: boolean;
-  showLogTime: boolean;
-  showLogType: boolean;
-  soundOnComplete: boolean;
-  notifyOnComplete: boolean;
-  setVerboseTools: (v: boolean) => void;
-  setShowTimer: (v: boolean) => void;
-  setShowOutput: (v: boolean) => void;
-  setShowLogs: (v: boolean) => void;
-  setShowLogTime: (v: boolean) => void;
-  setShowLogType: (v: boolean) => void;
-  setSoundOnComplete: (v: boolean) => void;
-  setNotifyOnComplete: (v: boolean) => void;
-}
-
-const SettingsContext = createContext<SettingsContextValue>({
+const DEFAULTS: ArgusSettings = {
   verboseTools: false,
   showTimer: true,
   showOutput: false,
@@ -28,6 +11,27 @@ const SettingsContext = createContext<SettingsContextValue>({
   showLogType: true,
   soundOnComplete: true,
   notifyOnComplete: true,
+  watchdogTimeout: 120,
+  watchdogAutoRetries: 3,
+};
+
+interface SettingsContextValue extends ArgusSettings {
+  update: (patch: Partial<ArgusSettings>) => void;
+  setVerboseTools: (v: boolean) => void;
+  setShowTimer: (v: boolean) => void;
+  setShowOutput: (v: boolean) => void;
+  setShowLogs: (v: boolean) => void;
+  setShowLogTime: (v: boolean) => void;
+  setShowLogType: (v: boolean) => void;
+  setSoundOnComplete: (v: boolean) => void;
+  setNotifyOnComplete: (v: boolean) => void;
+  setWatchdogTimeout: (v: number) => void;
+  setWatchdogAutoRetries: (v: number) => void;
+}
+
+const SettingsContext = createContext<SettingsContextValue>({
+  ...DEFAULTS,
+  update: () => {},
   setVerboseTools: () => {},
   setShowTimer: () => {},
   setShowOutput: () => {},
@@ -36,72 +40,60 @@ const SettingsContext = createContext<SettingsContextValue>({
   setShowLogType: () => {},
   setSoundOnComplete: () => {},
   setNotifyOnComplete: () => {},
+  setWatchdogTimeout: () => {},
+  setWatchdogAutoRetries: () => {},
 });
 
-function readBool(key: string, defaultVal: boolean): boolean {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored === null ? defaultVal : stored === 'true';
-  } catch {
-    return defaultVal;
-  }
-}
-
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [verboseTools, setVerboseToolsState] = useState(() => readBool('argus.verboseTools', false));
-  const [showTimer, setShowTimerState] = useState(() => readBool('argus.showTimer', true));
-  const [showOutput, setShowOutputState] = useState(() => readBool('argus.showOutput', false));
-  const [showLogs, setShowLogsState] = useState(() => readBool('argus.showLogs', true));
-  const [showLogTime, setShowLogTimeState] = useState(() => readBool('argus.showLogTime', true));
-  const [showLogType, setShowLogTypeState] = useState(() => readBool('argus.showLogType', true));
-  const [soundOnComplete, setSoundOnCompleteState] = useState(() => readBool('argus.soundOnComplete', true));
-  const [notifyOnComplete, setNotifyOnCompleteState] = useState(() => readBool('argus.notifyOnComplete', true));
+  const [settings, setSettings] = useState<ArgusSettings>(DEFAULTS);
 
-  function setVerboseTools(v: boolean) {
-    setVerboseToolsState(v);
-    try { localStorage.setItem('argus.verboseTools', String(v)); } catch {}
-  }
+  useEffect(() => {
+    postMessage({ type: 'getSettings' });
+  }, []);
 
-  function setShowTimer(v: boolean) {
-    setShowTimerState(v);
-    try { localStorage.setItem('argus.showTimer', String(v)); } catch {}
-  }
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.data?.type === 'settings' && event.data.settings) {
+        setSettings(prev => ({ ...prev, ...event.data.settings }));
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
-  function setShowOutput(v: boolean) {
-    setShowOutputState(v);
-    try { localStorage.setItem('argus.showOutput', String(v)); } catch {}
-  }
+  const update = useCallback((patch: Partial<ArgusSettings>) => {
+    setSettings(prev => {
+      const next = { ...prev, ...patch };
+      postMessage({ type: 'updateSettings', settings: patch });
+      return next;
+    });
+  }, []);
 
-  function setShowLogs(v: boolean) {
-    setShowLogsState(v);
-    try { localStorage.setItem('argus.showLogs', String(v)); } catch {}
-  }
+  const setVerboseTools = useCallback((v: boolean) => update({ verboseTools: v }), [update]);
+  const setShowTimer = useCallback((v: boolean) => update({ showTimer: v }), [update]);
+  const setShowOutput = useCallback((v: boolean) => update({ showOutput: v }), [update]);
+  const setShowLogs = useCallback((v: boolean) => update({ showLogs: v }), [update]);
+  const setShowLogTime = useCallback((v: boolean) => update({ showLogTime: v }), [update]);
+  const setShowLogType = useCallback((v: boolean) => update({ showLogType: v }), [update]);
+  const setSoundOnComplete = useCallback((v: boolean) => update({ soundOnComplete: v }), [update]);
+  const setWatchdogTimeout = useCallback((v: number) => update({ watchdogTimeout: v }), [update]);
+  const setWatchdogAutoRetries = useCallback((v: number) => update({ watchdogAutoRetries: v }), [update]);
 
-  function setShowLogTime(v: boolean) {
-    setShowLogTimeState(v);
-    try { localStorage.setItem('argus.showLogTime', String(v)); } catch {}
-  }
-
-  function setShowLogType(v: boolean) {
-    setShowLogTypeState(v);
-    try { localStorage.setItem('argus.showLogType', String(v)); } catch {}
-  }
-
-  function setSoundOnComplete(v: boolean) {
-    setSoundOnCompleteState(v);
-    try { localStorage.setItem('argus.soundOnComplete', String(v)); } catch {}
-  }
-
-  function setNotifyOnComplete(v: boolean) {
-    setNotifyOnCompleteState(v);
-    try { localStorage.setItem('argus.notifyOnComplete', String(v)); } catch {}
-    if (v && Notification.permission === 'default') {
+  const setNotifyOnComplete = useCallback((v: boolean) => {
+    update({ notifyOnComplete: v });
+    if (v && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-  }
+  }, [update]);
 
   return (
-    <SettingsContext.Provider value={{ verboseTools, showTimer, showOutput, showLogs, showLogTime, showLogType, soundOnComplete, notifyOnComplete, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setShowLogTime, setShowLogType, setSoundOnComplete, setNotifyOnComplete }}>
+    <SettingsContext.Provider value={{
+      ...settings,
+      update,
+      setVerboseTools, setShowTimer, setShowOutput, setShowLogs,
+      setShowLogTime, setShowLogType, setSoundOnComplete, setNotifyOnComplete,
+      setWatchdogTimeout, setWatchdogAutoRetries,
+    }}>
       {children}
     </SettingsContext.Provider>
   );

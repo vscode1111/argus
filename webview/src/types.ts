@@ -44,10 +44,20 @@ export type UIMessage = {
   responseTime?: number;
   finishedAt?: number;
   outcome?: Outcome;
+  watchdogRetries?: number;
   errorKind?: ErrorKind;
 };
 
-export type Outcome = 'success' | 'stopped' | 'error';
+export type Outcome = 'success' | 'stopped' | 'error' | 'retried';
+
+export type RetryStatus = {
+  attempt: number;
+  maxRetries: number;
+  delayMs: number;
+  autoRetry?: number;
+  autoRetryMax?: number;
+  timedOut?: boolean;
+};
 
 export type StreamingState = {
   thinking: string;
@@ -57,4 +67,19 @@ export type StreamingState = {
   logsAtStart: number;
   reused: boolean;
   stopped: boolean;
+  retryStatus: RetryStatus | null;
+  watchdogRetries: number;
+};
+
+export type ArgusSettings = {
+  verboseTools: boolean;
+  showTimer: boolean;
+  showOutput: boolean;
+  showLogs: boolean;
+  showLogTime: boolean;
+  showLogType: boolean;
+  soundOnComplete: boolean;
+  notifyOnComplete: boolean;
+  watchdogTimeout: number;
+  watchdogAutoRetries: number;
 };

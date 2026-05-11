@@ -107,6 +107,29 @@
   opacity: 0.8;
 }
 
+.numberInput {
+  width: 56px;
+  background: var(--input-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.88em;
+  text-align: center;
+  flex-shrink: 0;
+}
+.numberInput:focus {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.settingUnit {
+  font-size: 0.82em;
+  color: var(--thinking-fg);
+  opacity: 0.7;
+  margin-left: -6px;
+}
+
 .devCorner {
   position: absolute;
   bottom: 4px;

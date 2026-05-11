@@ -169,3 +169,18 @@
   font-weight: 600;
   margin-bottom: 8px;
 }
+
+.retryBtn {
+  background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2));
+  color: var(--vscode-button-secondaryForeground, var(--fg));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 0.85em;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.retryBtn:hover {
+  background: var(--vscode-button-secondaryHoverBackground, rgba(128,128,128,0.35));
+}

@@ -1,5 +1,5 @@
 import React, { useEffect, useReducer, useRef, useCallback } from 'react';
-import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState } from './types';
+import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState, RetryStatus } from './types';
 import { MessageList, MessageListHandle } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
@@ -39,7 +39,8 @@ type AppAction =
   | { type: 'loginUrl'; url: string }
   | { type: 'loginSubmitting' }
   | { type: 'loginResult'; success: boolean; message?: string }
-  | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number };
+  | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number }
+  | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; timedOut?: boolean };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -50,14 +51,14 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         isStreaming: true,
-        streaming: { thinking: '', blocks: [], startTime: Date.now(), lastEventTime: Date.now(), logsAtStart: state.logs.length, reused: action.reused ?? false, stopped: false },
+        streaming: { thinking: '', blocks: [], startTime: Date.now(), lastEventTime: Date.now(), logsAtStart: state.logs.length, reused: action.reused ?? false, stopped: false, retryStatus: null, watchdogRetries: 0 },
       };
 
     case 'thinking_chunk':
       if (!state.streaming) return state;
       return {
         ...state,
-        streaming: { ...state.streaming, thinking: state.streaming.thinking + action.text, lastEventTime: Date.now() },
+        streaming: { ...state.streaming, thinking: state.streaming.thinking + action.text, lastEventTime: Date.now(), retryStatus: null },
       };
 
     case 'text_chunk': {
@@ -69,7 +70,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       } else {
         blocks.push({ type: 'text', text: action.text });
       }
-      return { ...state, streaming: { ...state.streaming, blocks, lastEventTime: Date.now() } };
+      return { ...state, streaming: { ...state.streaming, blocks, lastEventTime: Date.now(), retryStatus: null } };
     }
 
     case 'tool_start':
@@ -80,6 +81,7 @@ function reducer(state: AppState, action: AppAction): AppState {
           ...state.streaming,
           blocks: [...state.streaming.blocks, { type: 'tool', call: action.call }],
           lastEventTime: Date.now(),
+          retryStatus: null,
         },
       };
 
@@ -122,8 +124,7 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'done': {
       if (!state.streaming) return { ...state, isStreaming: false };
       const responseTime = Date.now() - state.streaming.startTime;
-      const { blocks, stopped } = state.streaming;
-      // Mark any still-pending tool blocks as cancelled so they stop pulsing
+      const { blocks, stopped, watchdogRetries } = state.streaming;
       const finalBlocks = blocks.map(b =>
         b.type === 'tool' && !b.call.result && !b.call.error
           ? { type: 'tool' as const, call: { ...b.call, error: true } }
@@ -133,6 +134,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
         .map(b => b.text)
         .join('');
+      const outcome = stopped ? 'stopped' : watchdogRetries > 0 ? 'retried' : 'success';
       const msg: UIMessage = {
         id: generateId(),
         role: 'assistant',
@@ -141,7 +143,8 @@ function reducer(state: AppState, action: AppAction): AppState {
         blocks: finalBlocks.length > 0 ? finalBlocks : undefined,
         responseTime,
         finishedAt: Date.now(),
-        outcome: stopped ? 'stopped' : 'success',
+        outcome,
+        watchdogRetries: watchdogRetries > 0 ? watchdogRetries : undefined,
       };
       return {
         ...state,
@@ -204,8 +207,39 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'workspaceInfo':
       return { ...state, workspacePath: action.path, version: action.version ?? '' };
 
-    case 'log':
-      return { ...state, logs: [...state.logs, { level: action.level, text: action.text, timestamp: action.timestamp }] };
+    case 'retry_status': {
+      if (!state.streaming) return state;
+      const retryStatus: RetryStatus = {
+        attempt: action.attempt,
+        maxRetries: action.maxRetries,
+        delayMs: action.delayMs,
+        autoRetry: action.autoRetry,
+        autoRetryMax: action.autoRetryMax,
+        timedOut: action.timedOut,
+      };
+      const isWatchdogRetry = action.autoRetry != null && !action.timedOut;
+      return {
+        ...state,
+        streaming: {
+          ...state.streaming,
+          retryStatus,
+          lastEventTime: Date.now(),
+          ...(isWatchdogRetry ? {
+            thinking: '',
+            blocks: [],
+            watchdogRetries: state.streaming.watchdogRetries + 1,
+          } : {}),
+        },
+      };
+    }
+
+    case 'log': {
+      const logs = [...state.logs, { level: action.level, text: action.text, timestamp: action.timestamp }];
+      if (state.streaming) {
+        return { ...state, logs, streaming: { ...state.streaming, lastEventTime: Date.now() } };
+      }
+      return { ...state, logs };
+    }
 
     case 'clearLogs':
       return { ...state, logs: [] };
@@ -296,7 +330,7 @@ function AppInner() {
       'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
       'tool_start', 'tool_end', 'done', 'error', 'clear',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
-      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage',
+      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'retry_status',
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;

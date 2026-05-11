@@ -75,6 +75,49 @@ function getSkills(cwd: string) {
   ];
 }
 
+const CONFIG_PATH = path.join(os.homedir(), '.claude', 'argus.json');
+
+const DEFAULT_CONFIG: ArgusConfig = {
+  verboseTools: false,
+  showTimer: true,
+  showOutput: false,
+  showLogs: true,
+  showLogTime: true,
+  showLogType: true,
+  soundOnComplete: true,
+  notifyOnComplete: true,
+  watchdogTimeout: 120,
+  watchdogAutoRetries: 3,
+};
+
+export interface ArgusConfig {
+  verboseTools: boolean;
+  showTimer: boolean;
+  showOutput: boolean;
+  showLogs: boolean;
+  showLogTime: boolean;
+  showLogType: boolean;
+  soundOnComplete: boolean;
+  notifyOnComplete: boolean;
+  watchdogTimeout: number;
+  watchdogAutoRetries: number;
+}
+
+function readConfig(): ArgusConfig {
+  try {
+    const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
+    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+  } catch {
+    return { ...DEFAULT_CONFIG };
+  }
+}
+
+function writeConfig(config: ArgusConfig): void {
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
+  } catch {}
+}
+
 const DEFAULT_MODEL = process.env.ARGUS_MODEL ?? "claude-opus-4-6";
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
@@ -144,7 +187,60 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     let stderrOutput = '';
     let textAccum = '';
     let staleTimer: ReturnType<typeof setTimeout> | null = null;
+    let autoRetryCount = 0;
+    let lastMessage: { text: string; images?: Array<{ data: string; mediaType: string; name?: string }>; mode?: string } | null = null;
+    const RETRY_DELAYS = [5000, 15000, 30000];
     const API_ERROR_RE = /API Error:|Failed to authenticate|Request not allowed|socket connection was closed|overloaded_error|invalid_api_key|permission_error/i;
+
+    let lastEventTime = 0;
+    let watchdogActive = false;
+    let watchdogRetrying = false;
+    const watchdogInterval = setInterval(() => {
+      if (!watchdogActive || cliDone || lastEventTime === 0) return;
+      const cfg = readConfig();
+      const elapsed = (Date.now() - lastEventTime) / 1000;
+      if (elapsed < cfg.watchdogTimeout) return;
+
+      if (autoRetryCount < cfg.watchdogAutoRetries && lastMessage) {
+        autoRetryCount++;
+        const delay = RETRY_DELAYS[Math.min(autoRetryCount - 1, RETRY_DELAYS.length - 1)];
+        sendLog('warn', `Watchdog: no CLI events for ${Math.round(elapsed)}s, auto-retry ${autoRetryCount}/${cfg.watchdogAutoRetries} in ${delay / 1000}s`);
+        ws.send(JSON.stringify({
+          type: 'retry_status',
+          attempt: 0,
+          maxRetries: 0,
+          delayMs: delay,
+          autoRetry: autoRetryCount,
+          autoRetryMax: cfg.watchdogAutoRetries,
+        }));
+        lastEventTime = Date.now();
+        watchdogRetrying = true;
+        currentProc?.kill();
+        setTimeout(() => {
+          watchdogRetrying = false;
+          if (!lastMessage) return;
+          const synthetic = JSON.stringify({
+            type: 'send',
+            text: lastMessage.text,
+            images: lastMessage.images,
+            mode: lastMessage.mode,
+            _silent: true,
+          });
+          ws.emit('message', Buffer.from(synthetic));
+        }, delay);
+      } else {
+        sendLog('error', `Watchdog: no CLI events for ${Math.round(elapsed)}s, all retries exhausted`);
+        watchdogActive = false;
+        currentProc?.kill();
+        ws.send(JSON.stringify({
+          type: 'retry_status',
+          attempt: 0, maxRetries: 0, delayMs: 0,
+          autoRetry: autoRetryCount,
+          autoRetryMax: cfg.watchdogAutoRetries,
+          timedOut: true,
+        }));
+      }
+    }, 5000);
 
     function resetStaleTimer() {
       if (staleTimer) clearTimeout(staleTimer);
@@ -196,9 +292,15 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           }
 
           sendLog('debug', `event: ${event.type} ${trimmed.slice(0, 120)}`);
+          lastEventTime = Date.now();
 
           if (event.type === 'system' && event.subtype === 'init') {
             sessionId = event.session_id as string;
+          } else if (event.type === 'system' && event.subtype === 'api_retry') {
+            const attempt = event.attempt as number;
+            const maxRetries = event.max_retries as number;
+            const delayMs = event.retry_delay_ms as number;
+            ws.send(JSON.stringify({ type: 'retry_status', attempt, maxRetries, delayMs }));
           } else if (event.type === 'content_block_delta') {
             if (suppressCliOutput) continue;
             const delta = event.delta as Record<string, unknown> | undefined;
@@ -211,6 +313,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
               ws.send(JSON.stringify({ type: 'thinking_chunk', text: delta.thinking }));
             }
           } else if (event.type === 'assistant') {
+            autoRetryCount = 0;
             if (suppressCliOutput) {
               receivedDeltas = false;
               continue;
@@ -292,6 +395,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           } else if (event.type === 'result') {
             cliDone = true;
             resetStaleTimer();
+            watchdogActive = false;
             // Detect error results from the CLI (API errors, auth failures, etc.)
             if (event.is_error === true || event.subtype === 'error') {
               const errText = typeof event.error === 'string' ? event.error
@@ -323,7 +427,9 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           currentProc = undefined;
           currentProcKey = undefined;
         }
-        sendLog('info', `claude exited with code ${code}`);
+        sendLog('info', `claude exited with code ${code}${watchdogRetrying ? ' (watchdog retry pending)' : ''}`);
+        if (watchdogRetrying) return;
+        watchdogActive = false;
         if (code !== 0 && code !== null) {
           const { message, errorKind } = classifyError(stderrOutput, code);
           if (pendingAskTools.size > 0) {
@@ -350,6 +456,9 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     };
 
     ws.on('close', () => {
+      watchdogActive = false;
+      clearInterval(watchdogInterval);
+      resetStaleTimer();
       currentProc?.kill();
       loginProc?.kill();
     });
@@ -401,11 +510,17 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           args.push('--resume', sessionId);
         }
 
+        if (!msg._silent) {
+          lastMessage = { text, images, mode: msg.mode };
+          autoRetryCount = 0;
+        }
+
         // Reset turn-local state
         buffer = '';
         stderrOutput = '';
         textAccum = '';
         resetStaleTimer();
+        watchdogActive = false;
         receivedDeltas = false;
         suppressCliOutput = false;
         cliDone = false;
@@ -436,6 +551,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         if (!msg._silent) {
           ws.send(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
         }
+        lastEventTime = Date.now();
+        watchdogActive = true;
 
         const contentBlocks: Array<Record<string, unknown>> = [];
         if (images && images.length > 0) {
@@ -465,6 +582,15 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         sendLog('debug', `stdin: ${stdinMsg.length} bytes`);
         proc.stdin!.write(stdinMsg + '\n');
 
+      } else if (msg.type === 'getSettings') {
+        ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
+      } else if (msg.type === 'updateSettings') {
+        const patch = (msg as { settings?: Partial<ArgusConfig> }).settings;
+        if (patch) {
+          const config = { ...readConfig(), ...patch };
+          writeConfig(config);
+          ws.send(JSON.stringify({ type: 'settings', settings: config }));
+        }
       } else if (msg.type === 'getInfo') {
         let version = '';
         try {
@@ -472,6 +598,16 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           version = pkg.version ?? '';
         } catch {}
         ws.send(JSON.stringify({ type: 'workspaceInfo', path: workspaceDir, version }));
+      } else if (msg.type === 'retry') {
+        if (lastMessage) {
+          sendLog('info', 'Retrying last message');
+          ws.emit('message', Buffer.from(JSON.stringify({
+            type: 'send',
+            text: lastMessage.text,
+            images: lastMessage.images,
+            mode: lastMessage.mode,
+          })));
+        }
       } else if (msg.type === 'forceError') {
         currentProc?.kill();
         ws.send(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));
@@ -593,7 +729,11 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           }));
         }
         pendingAskTools.clear();
-        currentProc?.kill();
+        if (currentProc) {
+          currentProc.kill();
+        } else {
+          ws.send(JSON.stringify({ type: 'done' }));
+        }
       } else if (msg.type === 'newSession') {
         sessionId = undefined;
       }

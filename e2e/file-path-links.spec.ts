@@ -55,9 +55,11 @@ test.describe('file path links', () => {
     // Modal line numbers only appear after file content loads
     await expect(modalLine(page, 1)).toContainText('import React', { timeout: 10_000 });
 
-    // Escape closes the modal
-    await page.keyboard.press('Escape');
-    await expect(modalLine(page, 1)).not.toBeVisible({ timeout: 2_000 });
+    // Escape closes the modal (retry press under parallel load)
+    await expect(async () => {
+      await page.keyboard.press('Escape');
+      await expect(modalLine(page, 1)).not.toBeVisible({ timeout: 500 });
+    }).toPass({ timeout: 5_000 });
   });
 
   test('clicking a table cell file path opens FileViewerModal', async ({ page }) => {

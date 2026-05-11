@@ -104,6 +104,9 @@ function ErrorMessage({ message, login }: Props) {
   const { content, errorKind = 'generic' } = message;
   const { title, hint } = ERROR_HINTS[errorKind];
   const showLoginPanel = errorKind === 'auth' && login && login.phase !== 'idle';
+  const [hidden, setHidden] = useState(false);
+
+  if (hidden) return null;
 
   return (
     <div className={[msg.message, msg.assistant, styles.errorBlock].join(' ')}>
@@ -118,7 +121,7 @@ function ErrorMessage({ message, login }: Props) {
             {errorKind === 'auth' && (
               <button className={styles.loginContinueBtn} onClick={() => { dispatchLocal({ type: 'loginStart' }); postMessage({ type: 'login' }); }}>Login</button>
             )}
-            <button className={styles.errorBtn} onClick={() => postMessage({ type: 'retry' })}>Retry</button>
+            <button className={styles.errorBtn} onClick={() => { setHidden(true); postMessage({ type: 'retry' }); }}>Retry</button>
             {errorKind === 'session' && (
               <button className={styles.errorBtn} onClick={() => postMessage({ type: 'newSession' })}>New session</button>
             )}
@@ -131,6 +134,7 @@ function ErrorMessage({ message, login }: Props) {
 
 export function ChatMessage({ message, login }: Props) {
   const { role, content, thinking, blocks, responseTime } = message;
+  const [retryHidden, setRetryHidden] = useState(false);
 
   if (role === 'error') {
     return <ErrorMessage message={message} login={login} />;
@@ -144,6 +148,8 @@ export function ChatMessage({ message, login }: Props) {
   const firstPendingAskIdx = blocks?.findIndex(
     b => b.type === 'tool' && b.call.name === 'AskUserQuestion' && !b.call.result
   ) ?? -1;
+
+  const showRetryBtn = message.watchdogRetries && !retryHidden;
 
   return (
     <div className={[msg.message, msg.assistant].join(' ')}>
@@ -163,8 +169,17 @@ export function ChatMessage({ message, login }: Props) {
         </div>
       )}
       {responseTime !== undefined && (
-        <div className={message.outcome === 'error' ? msg.responseTimeError : message.outcome === 'stopped' ? msg.responseTimeStopped : msg.responseTimeSuccess}>
+        <div className={
+          message.outcome === 'error' ? msg.responseTimeError
+          : message.outcome === 'stopped' ? msg.responseTimeStopped
+          : message.outcome === 'retried' ? msg.responseTimeRetried
+          : msg.responseTimeSuccess
+        }>
+          {message.watchdogRetries ? `Watchdog: retried ${message.watchdogRetries}x. ` : ''}
           {formatDuration(responseTime)}{message.finishedAt ? ` (${formatTime(message.finishedAt)})` : ''}
+          {showRetryBtn && (
+            <button className={styles.retryBtn} onClick={() => { setRetryHidden(true); postMessage({ type: 'retry' }); }}>Retry</button>
+          )}
         </div>
       )}
     </div>

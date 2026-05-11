@@ -10,6 +10,7 @@
   align-self: flex-start;
   max-width: 85%;
   padding: 4px 8px;
+  margin-top: 12px;
 }
 
 .assistant {
@@ -62,4 +63,9 @@
 .responseTimeError {
   composes: responseTime;
   color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.responseTimeRetried {
+  composes: responseTime;
+  color: var(--vscode-editorWarning-foreground, #cca700);
 }

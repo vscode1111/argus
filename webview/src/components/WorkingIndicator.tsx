@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import type { RetryStatus } from '../types';
 import styles from './WorkingIndicator.module.css';
 
 const VERBS = [
@@ -25,23 +26,42 @@ function pickVerb(prev?: string): string {
   return v!;
 }
 
-export function WorkingIndicator() {
+interface Props {
+  logCount: number;
+  retryStatus?: RetryStatus | null;
+}
+
+export function WorkingIndicator({ logCount, retryStatus }: Props) {
   const [verb, setVerb] = useState<string>(() => pickVerb());
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    const verbId = setInterval(() => setVerb(prev => pickVerb(prev)), 3500);
+    setVerb(prev => pickVerb(prev));
+  }, [logCount]);
+
+  useEffect(() => {
     const dotsId = setInterval(() => setTick(t => t + 1), 400);
-    return () => { clearInterval(verbId); clearInterval(dotsId); };
+    return () => clearInterval(dotsId);
   }, []);
 
   const dotCount = (tick % 3) + 1;
   const dots = '.'.repeat(dotCount);
 
+  let label: string;
+  if (retryStatus?.timedOut) {
+    label = 'Timed out, press Stop';
+  } else if (retryStatus?.autoRetry != null) {
+    label = `Reconnecting (${retryStatus.autoRetry}/${retryStatus.autoRetryMax ?? 3})`;
+  } else if (retryStatus) {
+    label = `Retrying (${retryStatus.attempt}/${retryStatus.maxRetries})`;
+  } else {
+    label = verb;
+  }
+
   return (
-    <div className={styles.working} aria-live="polite">
+    <div className={[styles.working, retryStatus ? styles.retrying : ''].filter(Boolean).join(' ')} aria-live="polite">
       <span className={styles.asterisk}>✻</span>
-      <span className={styles.verb}>{verb}</span>
+      <span className={styles.verb}>{label}</span>
       <span className={styles.dots}>{dots}</span>
     </div>
   );
