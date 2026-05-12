@@ -1,0 +1,12 @@
+{
+  "verboseTools": false,
+  "showTimer": true,
+  "showOutput": false,
+  "showLogs": true,
+  "showLogTime": true,
+  "showLogType": true,
+  "soundOnComplete": false,
+  "notifyOnComplete": false,
+  "watchdogTimeout": 120,
+  "watchdogAutoRetries": 3
+}

@@ -75,7 +75,7 @@ function getSkills(cwd: string) {
   ];
 }
 
-const CONFIG_PATH = path.join(os.homedir(), '.claude', 'argus.json');
+const CONFIG_PATH = process.env.ARGUS_CONFIG || path.join(os.homedir(), '.claude', 'argus.json');
 
 const DEFAULT_CONFIG: ArgusConfig = {
   verboseTools: false,
@@ -200,6 +200,18 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       const cfg = readConfig();
       const elapsed = (Date.now() - lastEventTime) / 1000;
       if (elapsed < cfg.watchdogTimeout) return;
+
+      const errContent = textAccum.trim() || stderrOutput.trim();
+      if (errContent && API_ERROR_RE.test(errContent)) {
+        cliDone = true;
+        resetStaleTimer();
+        watchdogActive = false;
+        const { errorKind } = classifyError(errContent, 1);
+        currentProc?.kill();
+        ws.send(JSON.stringify({ type: 'error', text: errContent, errorKind }));
+        ws.send(JSON.stringify({ type: 'done' }));
+        return;
+      }
 
       if (autoRetryCount < cfg.watchdogAutoRetries && lastMessage) {
         autoRetryCount++;
@@ -439,6 +451,13 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
             ws.send(JSON.stringify({ type: 'done' }));
           }
         } else if (isActiveProc && pendingAskTools.size === 0 && !cliDone) {
+          if (code === null) {
+            const accErr = textAccum.trim() || stderrOutput.trim();
+            if (accErr && API_ERROR_RE.test(accErr)) {
+              const { errorKind } = classifyError(accErr, 1);
+              ws.send(JSON.stringify({ type: 'error', text: accErr, errorKind }));
+            }
+          }
           ws.send(JSON.stringify({ type: 'done' }));
         }
       });
@@ -548,9 +567,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           attachProcHandlers(proc);
         }
 
-        if (!msg._silent) {
-          ws.send(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
-        }
+        ws.send(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
         lastEventTime = Date.now();
         watchdogActive = true;
 
@@ -601,11 +618,13 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       } else if (msg.type === 'retry') {
         if (lastMessage) {
           sendLog('info', 'Retrying last message');
+          ws.send(JSON.stringify({ type: 'retry_clean' }));
           ws.emit('message', Buffer.from(JSON.stringify({
             type: 'send',
             text: lastMessage.text,
             images: lastMessage.images,
             mode: lastMessage.mode,
+            _silent: true,
           })));
         }
       } else if (msg.type === 'forceError') {
@@ -713,7 +732,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           }
         }
       } else if (msg.type === 'readFilePreview' && msg.path) {
-        const filePath = msg.path;
+        const filePath = path.isAbsolute(msg.path) ? msg.path : path.resolve(workspaceDir, msg.path);
         try {
           const content = fs.readFileSync(filePath, 'utf-8');
           ws.send(JSON.stringify({ type: 'filePreview', path: filePath, content }));

@@ -81,11 +81,13 @@ export class ChatPanel {
       const version = vscode.extensions.getExtension('local.argus')?.packageJSON?.version ?? '';
       this.post({ type: 'workspaceInfo', path: root, version });
     } else if (msg.type === 'readFilePreview' && msg.path) {
+      const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+      const filePath = path.isAbsolute(msg.path) ? msg.path : path.resolve(root, msg.path);
       try {
-        const content = fs.readFileSync(msg.path, 'utf-8');
-        this.post({ type: 'filePreview', path: msg.path, content });
+        const content = fs.readFileSync(filePath, 'utf-8');
+        this.post({ type: 'filePreview', path: filePath, content });
       } catch (err) {
-        this.outputChannel.appendLine(`[Error] Cannot read file: ${msg.path}`);
+        this.outputChannel.appendLine(`[Error] Cannot read file: ${filePath}`);
       }
     } else if (msg.type === 'focusPanel') {
       this.outputChannel.appendLine(`[${new Date().toISOString()}] focusPanel received`);

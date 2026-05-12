@@ -104,9 +104,6 @@ function ErrorMessage({ message, login }: Props) {
   const { content, errorKind = 'generic' } = message;
   const { title, hint } = ERROR_HINTS[errorKind];
   const showLoginPanel = errorKind === 'auth' && login && login.phase !== 'idle';
-  const [hidden, setHidden] = useState(false);
-
-  if (hidden) return null;
 
   return (
     <div className={[msg.message, msg.assistant, styles.errorBlock].join(' ')}>
@@ -121,7 +118,7 @@ function ErrorMessage({ message, login }: Props) {
             {errorKind === 'auth' && (
               <button className={styles.loginContinueBtn} onClick={() => { dispatchLocal({ type: 'loginStart' }); postMessage({ type: 'login' }); }}>Login</button>
             )}
-            <button className={styles.errorBtn} onClick={() => { setHidden(true); postMessage({ type: 'retry' }); }}>Retry</button>
+            <button className={styles.errorBtn} onClick={() => postMessage({ type: 'retry' })}>Retry</button>
             {errorKind === 'session' && (
               <button className={styles.errorBtn} onClick={() => postMessage({ type: 'newSession' })}>New session</button>
             )}
@@ -149,7 +146,8 @@ export function ChatMessage({ message, login }: Props) {
     b => b.type === 'tool' && b.call.name === 'AskUserQuestion' && !b.call.result
   ) ?? -1;
 
-  const showRetryBtn = message.watchdogRetries && !retryHidden;
+  const hasWatchdog = !!message.watchdogRetries;
+  const isWatchdogTimeout = message.outcome === 'error' && hasWatchdog;
 
   return (
     <div className={[msg.message, msg.assistant].join(' ')}>
@@ -168,6 +166,18 @@ export function ChatMessage({ message, login }: Props) {
           <Markdown>{content}</Markdown>
         </div>
       )}
+      {hasWatchdog && !retryHidden && (
+        <div className={styles.errorBlock}>
+          <div className={styles.errorTitle}>{isWatchdogTimeout ? 'Connection timed out' : 'Connection interrupted'}</div>
+          <div className={styles.errorDetail}>
+            Watchdog retried {message.watchdogRetries}x{isWatchdogTimeout ? ' but received no response' : ''}.
+          </div>
+          <div className={styles.errorHint}>The model may be overloaded. Try again in a moment.</div>
+          <div className={styles.errorActions}>
+            <button className={styles.errorBtn} onClick={() => { setRetryHidden(true); postMessage({ type: 'retry' }); }}>Retry</button>
+          </div>
+        </div>
+      )}
       {responseTime !== undefined && (
         <div className={
           message.outcome === 'error' ? msg.responseTimeError
@@ -175,11 +185,7 @@ export function ChatMessage({ message, login }: Props) {
           : message.outcome === 'retried' ? msg.responseTimeRetried
           : msg.responseTimeSuccess
         }>
-          {message.watchdogRetries ? `Watchdog: retried ${message.watchdogRetries}x. ` : ''}
           {formatDuration(responseTime)}{message.finishedAt ? ` (${formatTime(message.finishedAt)})` : ''}
-          {showRetryBtn && (
-            <button className={styles.retryBtn} onClick={() => { setRetryHidden(true); postMessage({ type: 'retry' }); }}>Retry</button>
-          )}
         </div>
       )}
     </div>

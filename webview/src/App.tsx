@@ -40,7 +40,8 @@ type AppAction =
   | { type: 'loginSubmitting' }
   | { type: 'loginResult'; success: boolean; message?: string }
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number }
-  | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; timedOut?: boolean };
+  | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; timedOut?: boolean }
+  | { type: 'retry_clean' };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -51,7 +52,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         isStreaming: true,
-        streaming: { thinking: '', blocks: [], startTime: Date.now(), lastEventTime: Date.now(), logsAtStart: state.logs.length, reused: action.reused ?? false, stopped: false, retryStatus: null, watchdogRetries: 0 },
+        streaming: { thinking: '', blocks: [], startTime: state.streaming?.startTime ?? Date.now(), lastEventTime: Date.now(), logsAtStart: state.streaming?.logsAtStart ?? state.logs.length, reused: action.reused ?? false, stopped: false, retryStatus: null, watchdogRetries: state.streaming?.watchdogRetries ?? 0 },
       };
 
     case 'thinking_chunk':
@@ -134,7 +135,8 @@ function reducer(state: AppState, action: AppAction): AppState {
         .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
         .map(b => b.text)
         .join('');
-      const outcome = stopped ? 'stopped' : watchdogRetries > 0 ? 'retried' : 'success';
+      const timedOut = state.streaming.retryStatus?.timedOut;
+      const outcome = timedOut ? 'error' : stopped ? 'stopped' : watchdogRetries > 0 ? 'retried' : 'success';
       const msg: UIMessage = {
         id: generateId(),
         role: 'assistant',
@@ -196,6 +198,19 @@ function reducer(state: AppState, action: AppAction): AppState {
         streaming: null,
         isStreaming: false,
       };
+    }
+
+    case 'retry_clean': {
+      const msgs = [...state.messages];
+      while (msgs.length > 0) {
+        const last = msgs[msgs.length - 1];
+        if (last.role === 'error' || (last.role === 'assistant' && last.outcome === 'error')) {
+          msgs.pop();
+        } else {
+          break;
+        }
+      }
+      return { ...state, messages: msgs };
     }
 
     case 'clear':
@@ -330,7 +345,7 @@ function AppInner() {
       'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
       'tool_start', 'tool_end', 'done', 'error', 'clear',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
-      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'retry_status',
+      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'retry_status', 'retry_clean',
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;

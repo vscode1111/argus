@@ -7,7 +7,8 @@ import { withLinkedPaths } from './filePath';
 // Escape backslashes in Windows file paths so the markdown parser preserves them.
 // Without this, `D:\_Projects` becomes `D:_Projects` (backslash consumed as escape).
 const WIN_PATH_RE = /(?<![a-zA-Z`])([A-Za-z]:[\\])[\w.\-\\\/]+\.\w+(?::\d+(?:-\d+)?)?/g;
-function protectPathBackslashes(text: string): string {
+function protectPathBackslashes(text: unknown): string {
+  if (typeof text !== 'string') return String(text ?? '');
   return text.replace(WIN_PATH_RE, match => match.replace(/\\/g, '\\\\'));
 }
 
