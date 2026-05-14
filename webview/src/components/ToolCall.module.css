@@ -65,6 +65,12 @@
 }
 .toolOutLink:hover { opacity: 0.85; }
 
+.toolOutLinkRunning {
+  color: var(--vscode-testing-iconPassed, #73c991);
+  border-color: var(--vscode-testing-iconPassed, #73c991);
+  animation: toolPulse 1.5s ease-in-out infinite;
+}
+
 .toolResultCount {
   color: var(--vscode-textLink-foreground);
   font-family: var(--font-mono);

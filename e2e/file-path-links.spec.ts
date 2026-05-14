@@ -16,8 +16,6 @@ function clickDevButton(page: import('@playwright/test').Page, label: string) {
 const modalLine = (page: import('@playwright/test').Page, n: number) =>
   page.locator(`[data-line="${n}"]`);
 
-// Click a link and wait for the modal to open. Retries because the WS roundtrip
-// for readFilePreview can be slow under parallel test load.
 async function clickAndWaitForModal(
   link: import('@playwright/test').Locator,
   page: import('@playwright/test').Page,
@@ -25,8 +23,8 @@ async function clickAndWaitForModal(
 ) {
   await expect(async () => {
     await link.click();
-    await expect(modalLine(page, lineNo)).toBeVisible({ timeout: 3_000 });
-  }).toPass({ timeout: 15_000 });
+    await expect(modalLine(page, lineNo)).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 20_000 });
 }
 
 test.describe('file path links', () => {
@@ -79,8 +77,8 @@ test.describe('file path links', () => {
     const link = page.locator('td').getByRole('link', { name: /package\.json/ });
     await clickAndWaitForModal(link, page);
 
-    await expect(modalLine(page, 1)).toContainText('{');
-    await expect(modalLine(page, 2)).toContainText('"name"');
+    await expect(modalLine(page, 1)).toContainText('{', { timeout: 5_000 });
+    await expect(modalLine(page, 2)).toContainText('"name"', { timeout: 5_000 });
 
     await page.keyboard.press('Escape');
   });

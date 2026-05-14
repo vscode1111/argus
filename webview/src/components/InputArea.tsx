@@ -270,17 +270,23 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
       e.preventDefault();
       send();
     } else if (e.key === 'ArrowUp' && history.length > 0 && slashQuery === null) {
-      e.preventDefault();
       const el = textareaRef.current;
       if (!el) return;
+      const cursorOnFirstLine = el.selectionStart === el.selectionEnd
+        && el.value.lastIndexOf('\n', el.selectionStart - 1) === -1;
+      if (!cursorOnFirstLine) return;
+      e.preventDefault();
       if (historyIndex.current === -1) savedDraft.current = el.value;
       historyIndex.current = Math.min(historyIndex.current + 1, history.length - 1);
       el.value = history[historyIndex.current];
       adjustHeight();
     } else if (e.key === 'ArrowDown' && historyIndex.current !== -1 && slashQuery === null) {
-      e.preventDefault();
       const el = textareaRef.current;
       if (!el) return;
+      const cursorOnLastLine = el.selectionStart === el.selectionEnd
+        && el.value.indexOf('\n', el.selectionStart) === -1;
+      if (!cursorOnLastLine) return;
+      e.preventDefault();
       historyIndex.current--;
       el.value = historyIndex.current === -1 ? savedDraft.current : history[historyIndex.current];
       adjustHeight();

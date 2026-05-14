@@ -28,6 +28,8 @@ export function StreamingMessage({ streaming, logCount }: Props) {
     b => b.type === 'tool' && b.call.name === 'AskUserQuestion' && !b.call.result
   );
 
+  if (streaming.backgroundWaiting) return null;
+
   return (
     <div className={[
       msg.message,

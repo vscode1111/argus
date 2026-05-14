@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { UIMessage, ErrorKind, LoginState } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
+import { WorkingIndicator } from './WorkingIndicator';
 import { Markdown } from '../utils/markdown';
 import { linkifyPaths } from '../utils/filePath';
 import { formatDuration, formatTime } from '../utils/time';
@@ -17,6 +18,7 @@ function dispatchLocal(data: object) {
 interface Props {
   message: UIMessage;
   login?: LoginState;
+  logCount?: number;
 }
 
 const ERROR_HINTS: Record<ErrorKind, { title: string; hint: string }> = {
@@ -129,7 +131,7 @@ function ErrorMessage({ message, login }: Props) {
   );
 }
 
-export function ChatMessage({ message, login }: Props) {
+export function ChatMessage({ message, login, logCount }: Props) {
   const { role, content, thinking, blocks, responseTime } = message;
   const [retryHidden, setRetryHidden] = useState(false);
 
@@ -178,7 +180,7 @@ export function ChatMessage({ message, login }: Props) {
           </div>
         </div>
       )}
-      {responseTime !== undefined && (
+      {responseTime !== undefined && message.outcome !== 'background_waiting' && message.outcome !== 'background_done' && (
         <div className={
           message.outcome === 'error' ? msg.responseTimeError
           : message.outcome === 'stopped' ? msg.responseTimeStopped
@@ -187,6 +189,9 @@ export function ChatMessage({ message, login }: Props) {
         }>
           {formatDuration(responseTime)}{message.finishedAt ? ` (${formatTime(message.finishedAt)})` : ''}
         </div>
+      )}
+      {message.outcome === 'background_waiting' && (
+        <WorkingIndicator logCount={logCount ?? 0} backgroundWaiting bgTasksCompleted={message.bgTasksCompleted} bgTasksTotal={message.bgTasksTotal} />
       )}
     </div>
   );

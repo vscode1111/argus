@@ -46,9 +46,11 @@ export type UIMessage = {
   outcome?: Outcome;
   watchdogRetries?: number;
   errorKind?: ErrorKind;
+  bgTasksCompleted?: number;
+  bgTasksTotal?: number;
 };
 
-export type Outcome = 'success' | 'stopped' | 'error' | 'retried';
+export type Outcome = 'success' | 'stopped' | 'error' | 'retried' | 'background_waiting' | 'background_done';
 
 export type RetryStatus = {
   attempt: number;
@@ -69,6 +71,7 @@ export type StreamingState = {
   stopped: boolean;
   retryStatus: RetryStatus | null;
   watchdogRetries: number;
+  backgroundWaiting?: boolean;
 };
 
 export type ArgusSettings = {

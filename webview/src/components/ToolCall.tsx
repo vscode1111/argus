@@ -332,7 +332,7 @@ export function ToolCall({ call }: Props) {
             )}
             {name === 'Bash' && result && (
               <a
-                className={styles.toolOutLink}
+                className={[styles.toolOutLink, result.startsWith('Command running in background') && styles.toolOutLinkRunning].filter(Boolean).join(' ')}
                 href="#"
                 onClick={e => { e.preventDefault(); setViewerOpen(true); }}
               >

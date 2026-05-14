@@ -181,6 +181,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     const pendingAskTools = new Set<string>();
     let cliDone = false;
     let suppressCliOutput = false;
+    const pendingBgTasks = new Set<string>();
+    let totalBgTasks = 0;
     let turnInputTokens = 0;
     let turnOutputTokens = 0;
     let buffer = '';
@@ -306,8 +308,42 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           sendLog('debug', `event: ${event.type} ${trimmed.slice(0, 120)}`);
           lastEventTime = Date.now();
 
+          if (cliDone && (event.type === 'content_block_delta' || event.type === 'assistant' || event.type === 'message_start')) {
+            cliDone = false;
+            textAccum = '';
+            receivedDeltas = false;
+            suppressCliOutput = false;
+            toolMap.clear();
+            answeredTools.clear();
+            pendingAskTools.clear();
+            resetStaleTimer();
+            watchdogActive = true;
+            ws.send(JSON.stringify({ type: 'thinking_start', reused: true }));
+            sendLog('info', 'Background task notification: starting autonomous turn');
+          }
+
           if (event.type === 'system' && event.subtype === 'init') {
             sessionId = event.session_id as string;
+          } else if (event.type === 'system' && event.subtype === 'task_started') {
+            pendingBgTasks.add(event.task_id as string);
+            totalBgTasks++;
+          } else if (event.type === 'system' && event.subtype === 'task_updated') {
+            pendingBgTasks.delete(event.task_id as string);
+          } else if (event.type === 'system' && event.subtype === 'task_notification') {
+            pendingBgTasks.delete(event.task_id as string);
+            const toolUseId = event.tool_use_id as string | undefined;
+            const summary = event.summary as string | undefined;
+            const outputFile = event.output_file as string | undefined;
+            if (toolUseId && summary) {
+              let result = summary;
+              if (outputFile) {
+                try {
+                  const output = fs.readFileSync(outputFile, 'utf-8').trim();
+                  if (output) result += '\n\nOutput:\n' + output;
+                } catch {}
+              }
+              ws.send(JSON.stringify({ type: 'tool_end', call: { id: toolUseId, name: 'Bash', input: {}, result } }));
+            }
           } else if (event.type === 'system' && event.subtype === 'api_retry') {
             const attempt = event.attempt as number;
             const maxRetries = event.max_retries as number;
@@ -417,7 +453,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
               ws.send(JSON.stringify({ type: 'error', text: errText, errorKind }));
             }
             if (pendingAskTools.size === 0) {
-              ws.send(JSON.stringify({ type: 'done' }));
+              ws.send(JSON.stringify({ type: 'done', ...(pendingBgTasks.size > 0 ? { pendingBackgroundTasks: pendingBgTasks.size, totalBackgroundTasks: totalBgTasks } : {}) }));
             }
           } else if (!['content_block_start', 'content_block_stop', 'message_start', 'message_stop', 'message_delta', 'ping', 'rate_limit_event'].includes(event.type as string)) {
             sendLog('warn', `unhandled event type: ${event.type} ${trimmed.slice(0, 120)}`);
@@ -430,6 +466,10 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         stderrOutput += text;
         console.error('[argus-server]', text.trim());
         sendLog('warn', `stderr: ${text.trim()}`);
+      });
+
+      proc.stdin!.on('error', (err) => {
+        sendLog('warn', `stdin error (CLI likely crashed): ${err.message}`);
       });
 
       proc.on('close', (code) => {
@@ -495,6 +535,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       if (msg.type === 'send' && msg.text?.trim() === '/clear') {
         sessionId = undefined;
         currentProc?.kill();
+        pendingBgTasks.clear();
+        totalBgTasks = 0;
         ws.send(JSON.stringify({ type: 'clear' }));
       } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
         const text = msg.text ?? '';
@@ -567,6 +609,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           attachProcHandlers(proc);
         }
 
+        pendingBgTasks.clear();
+        totalBgTasks = 0;
         ws.send(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
         lastEventTime = Date.now();
         watchdogActive = true;
@@ -755,6 +799,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         }
       } else if (msg.type === 'newSession') {
         sessionId = undefined;
+        pendingBgTasks.clear();
+        totalBgTasks = 0;
       }
     });
   });

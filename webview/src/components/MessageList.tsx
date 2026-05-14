@@ -55,7 +55,7 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
     <div className={styles.wrapper}>
       <div className={styles.messages} ref={containerRef} onScroll={handleScroll}>
         {messages.map(msg => (
-          <ChatMessage key={msg.id} message={msg} login={msg.role === 'error' && msg.errorKind === 'auth' ? login : undefined} />
+          <ChatMessage key={msg.id} message={msg} login={msg.role === 'error' && msg.errorKind === 'auth' ? login : undefined} logCount={logCount} />
         ))}
         {streaming && <StreamingMessage streaming={streaming} logCount={logCount} />}
         <div ref={bottomRef} />

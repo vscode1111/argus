@@ -27,7 +27,7 @@ type AppAction =
   | { type: 'text_chunk'; text: string }
   | { type: 'tool_start'; call: ToolCallData }
   | { type: 'tool_end'; call: ToolCallData }
-  | { type: 'done' }
+  | { type: 'done'; pendingBackgroundTasks?: number; totalBackgroundTasks?: number }
   | { type: 'stop' }
   | { type: 'error'; text: string; errorKind?: string }
   | { type: 'clear' }
@@ -48,12 +48,15 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'message':
       return { ...state, messages: [...state.messages, action.message] };
 
-    case 'thinking_start':
+    case 'thinking_start': {
+      const prev = state.streaming;
+      const inheritStart = prev && !prev.backgroundWaiting;
       return {
         ...state,
         isStreaming: true,
-        streaming: { thinking: '', blocks: [], startTime: state.streaming?.startTime ?? Date.now(), lastEventTime: Date.now(), logsAtStart: state.streaming?.logsAtStart ?? state.logs.length, reused: action.reused ?? false, stopped: false, retryStatus: null, watchdogRetries: state.streaming?.watchdogRetries ?? 0 },
+        streaming: { thinking: '', blocks: [], startTime: prev ? prev.startTime : Date.now(), lastEventTime: Date.now(), logsAtStart: (inheritStart ? prev!.logsAtStart : state.logs.length), reused: action.reused ?? false, stopped: false, retryStatus: null, watchdogRetries: (inheritStart ? prev!.watchdogRetries : 0) },
       };
+    }
 
     case 'thinking_chunk':
       if (!state.streaming) return state;
@@ -87,7 +90,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
 
     case 'tool_end': {
-      if (state.streaming) {
+      const inStreaming = state.streaming?.blocks.some(b => b.type === 'tool' && b.call.id === action.call.id);
+      if (state.streaming && inStreaming) {
         return {
           ...state,
           streaming: {
@@ -101,7 +105,6 @@ function reducer(state: AppState, action: AppAction): AppState {
           },
         };
       }
-      // Update tool block in completed messages (e.g. late AskUserQuestion answer)
       const updated = state.messages.map(msg => {
         if (!msg.blocks) return msg;
         const hasMatch = msg.blocks.some(b => b.type === 'tool' && b.call.id === action.call.id);
@@ -135,8 +138,12 @@ function reducer(state: AppState, action: AppAction): AppState {
         .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
         .map(b => b.text)
         .join('');
+      const hasPendingBg = action.pendingBackgroundTasks != null && action.pendingBackgroundTasks > 0;
       const timedOut = state.streaming.retryStatus?.timedOut;
-      const outcome = timedOut ? 'error' : stopped ? 'stopped' : watchdogRetries > 0 ? 'retried' : 'success';
+      const outcome = hasPendingBg ? 'background_waiting'
+        : timedOut ? 'error' : stopped ? 'stopped' : watchdogRetries > 0 ? 'retried' : 'success';
+      const bgTotal = action.totalBackgroundTasks;
+      const bgCompleted = bgTotal != null ? bgTotal - (action.pendingBackgroundTasks ?? 0) : undefined;
       const msg: UIMessage = {
         id: generateId(),
         role: 'assistant',
@@ -147,12 +154,19 @@ function reducer(state: AppState, action: AppAction): AppState {
         finishedAt: Date.now(),
         outcome,
         watchdogRetries: watchdogRetries > 0 ? watchdogRetries : undefined,
+        bgTasksCompleted: hasPendingBg ? bgCompleted : undefined,
+        bgTasksTotal: hasPendingBg ? bgTotal : undefined,
       };
+      const resolvedMessages = state.messages.map(m =>
+        m.outcome === 'background_waiting' ? { ...m, outcome: 'background_done' as const } : m
+      );
       return {
         ...state,
-        messages: [...state.messages, msg],
-        streaming: null,
-        isStreaming: false,
+        messages: [...resolvedMessages, msg],
+        streaming: hasPendingBg
+          ? { thinking: '', blocks: [], startTime: state.streaming.startTime, lastEventTime: Date.now(), logsAtStart: state.logs.length, reused: true, stopped: false, retryStatus: null, watchdogRetries: 0, backgroundWaiting: true }
+          : null,
+        isStreaming: hasPendingBg,
       };
     }
 

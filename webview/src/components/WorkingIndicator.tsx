@@ -29,9 +29,12 @@ function pickVerb(prev?: string): string {
 interface Props {
   logCount: number;
   retryStatus?: RetryStatus | null;
+  backgroundWaiting?: boolean;
+  bgTasksCompleted?: number;
+  bgTasksTotal?: number;
 }
 
-export function WorkingIndicator({ logCount, retryStatus }: Props) {
+export function WorkingIndicator({ logCount, retryStatus, backgroundWaiting, bgTasksCompleted, bgTasksTotal }: Props) {
   const [verb, setVerb] = useState<string>(() => pickVerb());
   const [tick, setTick] = useState(0);
 
@@ -48,7 +51,11 @@ export function WorkingIndicator({ logCount, retryStatus }: Props) {
   const dots = '.'.repeat(dotCount);
 
   let label: string;
-  if (retryStatus?.timedOut) {
+  if (backgroundWaiting) {
+    const plural = bgTasksTotal != null && bgTasksTotal > 1;
+    const counter = plural ? ` (${bgTasksCompleted ?? 0}/${bgTasksTotal})` : '';
+    label = `Waiting background ${plural ? 'tasks' : 'task'}${counter}`;
+  } else if (retryStatus?.timedOut) {
     label = 'Timed out, press Stop';
   } else if (retryStatus?.autoRetry != null) {
     label = `Reconnecting (${retryStatus.autoRetry}/${retryStatus.autoRetryMax ?? 3})`;
