@@ -1,12 +1,35 @@
 import { createServer } from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { spawn, execSync } from 'child_process';
+import { spawn, execSync, execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { IncomingMessage } from 'http';
 
 const IS_WIN = process.platform === 'win32';
+
+let resolvedClaudeBin: string | null = null;
+function resolveClaudeBin(): string {
+  if (resolvedClaudeBin) return resolvedClaudeBin;
+  if (!IS_WIN) { resolvedClaudeBin = 'claude'; return 'claude'; }
+  try {
+    const out = execFileSync('where', ['claude.cmd'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const hit = out.split(/\r?\n/).map(l => l.trim()).find(Boolean);
+    if (hit && fs.existsSync(hit)) { resolvedClaudeBin = hit; return hit; }
+  } catch {}
+  const nvmHome = process.env.NVM_HOME;
+  if (nvmHome) {
+    try {
+      const versions = fs.readdirSync(nvmHome).filter(d => /^v\d/.test(d)).sort().reverse();
+      for (const v of versions) {
+        const candidate = path.join(nvmHome, v, 'claude.cmd');
+        if (fs.existsSync(candidate)) { resolvedClaudeBin = candidate; return candidate; }
+      }
+    } catch {}
+  }
+  resolvedClaudeBin = 'claude';
+  return 'claude';
+}
 
 function killProc(proc: ReturnType<typeof spawn>) {
   if (!proc.pid) return;
@@ -639,10 +662,13 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
             sendLog('info', 'Args changed, respawning claude');
             killProc(currentProc);
           }
+          const claudeBin = resolveClaudeBin();
+          const spawnCmd = IS_WIN && /\s/.test(claudeBin) ? `"${claudeBin}"` : claudeBin;
           sendLog('info', `Spawning claude: ${args.join(' ')}`);
-          proc = spawn('claude', args, {
+          proc = spawn(spawnCmd, args, {
             cwd: workspaceDir,
             stdio: ['pipe', 'pipe', 'pipe'],
+            shell: IS_WIN,
           });
           currentProc = proc;
           currentProcKey = procKey;
@@ -719,7 +745,9 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       } else if (msg.type === 'login') {
         if (loginProc) killProc(loginProc);
         sendLog('info', 'Starting claude login');
-        const lp = spawn('claude', ['auth', 'login'], { cwd: workspaceDir, stdio: ['pipe', 'pipe', 'pipe'] });
+        const loginBin = resolveClaudeBin();
+        const loginCmd = IS_WIN && /\s/.test(loginBin) ? `"${loginBin}"` : loginBin;
+        const lp = spawn(loginCmd, ['auth', 'login'], { cwd: workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN });
         loginProc = lp;
         let loginOutput = '';
         let loginResolved = false;
