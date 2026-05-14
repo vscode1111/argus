@@ -44,26 +44,40 @@
     window.acquireVsCodeApi = () => {
       const _dir = new URLSearchParams(window.location.search).get('dir');
       const _wsUrl = _dir ? 'ws://localhost:3001/agent?dir=' + encodeURIComponent(_dir) : 'ws://localhost:3001/agent';
-      const ws = new WebSocket(_wsUrl);
+      let ws;
       const queue = [];
       let ready = false;
+      let reconnectTimer;
 
-      ws.onopen = () => {
-        ready = true;
-        queue.splice(0).forEach(m => ws.send(JSON.stringify(m)));
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+      function dispatch(data) {
         window.dispatchEvent(new MessageEvent('message', { data }));
-      };
+      }
 
-      ws.onerror = (e) => console.error('[argus-ws] error', e);
+      function connect() {
+        ws = new WebSocket(_wsUrl);
 
-      ws.onclose = () => {
-        ready = false;
-        console.warn('[argus-ws] disconnected');
-      };
+        ws.onopen = () => {
+          ready = true;
+          dispatch({ type: 'ws_status', connected: true });
+          queue.splice(0).forEach(m => ws.send(JSON.stringify(m)));
+        };
+
+        ws.onmessage = (event) => {
+          dispatch(JSON.parse(event.data));
+        };
+
+        ws.onerror = (e) => console.error('[argus-ws] error', e);
+
+        ws.onclose = () => {
+          ready = false;
+          console.warn('[argus-ws] disconnected, reconnecting in 2s');
+          dispatch({ type: 'ws_status', connected: false });
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connect, 2000);
+        };
+      }
+
+      connect();
 
       return {
         postMessage: (msg) => {

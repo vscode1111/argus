@@ -38,22 +38,40 @@
 
       var VS_ONLY = { openFile: 1, openUrl: 1, focusPanel: 1, getInfo: 1, readFilePreview: 1 };
       var realApi = acquireVsCodeApi();
-      var ws = new WebSocket(WS_URL);
+      var ws;
       var queue = [];
       var ready = false;
+      var reconnectTimer;
 
-      ws.onopen = function() {
-        ready = true;
-        queue.splice(0).forEach(function(m) { ws.send(JSON.stringify(m)); });
-      };
-
-      ws.onmessage = function(event) {
-        var data = JSON.parse(event.data);
+      function dispatch(data) {
         window.dispatchEvent(new MessageEvent('message', { data: data }));
-      };
+      }
 
-      ws.onerror = function(e) { console.error('[argus-ws] error', e); };
-      ws.onclose = function() { ready = false; console.warn('[argus-ws] disconnected'); };
+      function connect() {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = function() {
+          ready = true;
+          dispatch({ type: 'ws_status', connected: true });
+          queue.splice(0).forEach(function(m) { ws.send(JSON.stringify(m)); });
+        };
+
+        ws.onmessage = function(event) {
+          dispatch(JSON.parse(event.data));
+        };
+
+        ws.onerror = function(e) { console.error('[argus-ws] error', e); };
+
+        ws.onclose = function() {
+          ready = false;
+          console.warn('[argus-ws] disconnected, reconnecting in 2s');
+          dispatch({ type: 'ws_status', connected: false });
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connect, 2000);
+        };
+      }
+
+      connect();
 
       // Listen for extension->webview messages that need forwarding to WS
       window.addEventListener('message', function(event) {

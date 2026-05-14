@@ -29,11 +29,12 @@ interface Props {
   workspacePath: string;
   version: string;
   contextUsage: { percent: number; inputTokens: number; outputTokens: number } | null;
+  wsConnected?: boolean;
   onSend?: () => void;
   onStop?: () => void;
 }
 
-export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, onSend, onStop }: Props) {
+export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, wsConnected = true, onSend, onStop }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -363,6 +364,10 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
             <button className={styles.imageClearAll} aria-label="Remove all attachments" onClick={() => setImages([])} title="Remove all attachments">×</button>
           </div>
         )}
+        <span
+          className={[styles.wsDot, wsConnected ? styles.wsDotOn : styles.wsDotOff].join(' ')}
+          title={wsConnected ? 'Connected' : 'Disconnected, reconnecting...'}
+        />
       </div>
       <div className={styles.btnGroup}>
         <div className={styles.btnRow}>
