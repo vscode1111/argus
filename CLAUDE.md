@@ -42,7 +42,11 @@ e2e/
   argus.json            - Server config override for e2e (model, watchdog settings)
   chat.spec.ts          - Integration: send message, verify logs and response
   ask-dialog.spec.ts    - Integration: AskUserQuestion dialog interaction
+  ask-dialog-resume.spec.ts - Mock: AskUserQuestion answer commit, follow-up, cancel
   image-recognize.spec.ts - Integration: paste image, verify text recognition
+  slash-commands.spec.ts - Mock: slash command menu UI (filtering, scopes, keyboard nav)
+  slash-commands-integration.spec.ts - Integration: real commands/skills from server
+  stop-no-error.spec.ts - Mock: stop does not produce error blocks
   background-tasks.spec.ts - Mock: background task indicators and counters
   retry-clean.spec.ts   - Mock: retry cleanup of error messages
   retry-indicator.spec.ts - Mock: retry status indicator display
@@ -108,7 +112,7 @@ webview/
 - Errors use `showError()` helper in ChatPanel - shows VS Code error notification with "View Output" action
 - AgentSession and ChatPanel use a shared `vscode.OutputChannel` ("Argus") for stderr and error logging
 - Image paste: clipboard images are base64-encoded in the webview, sent via `--input-format stream-json` NDJSON to the Claude CLI with `type: "image"` content blocks
-- Slash commands: InputArea shows a dropdown when "/" is typed; sends `getSkills` to extension, receives `skills` response with `{ name, scope: 'builtin' | 'global' | 'project' }[]`; skills read from `~/.claude/skills/` (global) and `<workspace>/.claude/skills/` (project); built-in commands hardcoded in `ChatPanel.getSkills()` and `vite.dev.config.ts`; Tab or Enter selects highlighted skill
+- Slash commands: InputArea shows a dropdown when "/" is typed; sends `getSkills` to extension, receives `skills` response with `{ name, scope: 'builtin' | 'global' | 'project', description? }[]`; commands read from `~/.claude/commands/` (global) and `<workspace>/.claude/commands/` (project) as `.md` files with YAML frontmatter `description:` field; skills read from `~/.claude/skills/` (global) and `<workspace>/.claude/skills/` (project) via `SKILL.md` frontmatter; built-in commands hardcoded in `argusServer.ts`; `readCommandsDir` parses frontmatter for description, falls back to first non-frontmatter line; Tab or Enter selects highlighted skill; description truncated to 100 chars in dropdown; e2e tests in `e2e/slash-commands.spec.ts` (mock) and `e2e/slash-commands-integration.spec.ts` (integration)
 - Log panel: has its own settings dropdown (gear icon) with toggles for show time / show type; settings persisted via `SettingsContext` to localStorage (`argus.showLogTime`, `argus.showLogType`); log text is color-highlighted by content: "Spawning claude" entries render green (`textSpawn`), "exited with code" entries render orange (`textExit`)
 - Error handling: errors classified into `ErrorKind` (`auth | not_found | session | generic`) via `classifyError()` in `argusServer.ts`; webview shows structured error blocks with contextual actions (Login, Retry, New session); API errors delivered as text content (e.g. "API Error: 403") are detected via a 3-second stale timer in the server and converted to error+done events; if `error` arrives after `done`, the reducer retroactively marks the last assistant message's outcome as `'error'`
 - Login flow: `AgentSession.startLogin()` spawns `claude auth login`, captures OAuth URL, accepts auth code via stdin; webview `LoginPanel` in `ChatMessage.tsx` manages the UI; `LoginState` tracks phases (`idle | starting | url | submitting | success | error`)
@@ -138,13 +142,21 @@ webview/
 - Watchdog: interval-based health check every 5s in `argusServer.ts`; compares elapsed time since last JSON event from CLI stdout (`lastEventTime`) against `watchdogTimeout` config (min 10s, default 120s); auto-retries up to `watchdogAutoRetries` (default 3) with delays [5s, 15s, 30s]; `watchdogRetrying` flag prevents the proc close handler from sending premature `done` during retry; on retry, sends `retry_status` with `autoRetry` count to frontend which clears streaming blocks and shows "Reconnecting (N/M)" indicator; when all retries exhausted, sends `retry_status` with `timedOut: true` showing "Timed out, press Stop" indicator (no error block); server `stop` handler sends `done` directly when proc is already dead; `watchdogRetries` tracked in `StreamingState` and persisted to `UIMessage` for timer display; e2e tests in `e2e/retry-indicator.spec.ts`
 - Background tasks: CLI `run_in_background: true` Bash tools produce `task_started`, `task_updated`, `task_notification` system events; server tracks pending tasks in `pendingBgTasks` Set and `totalBgTasks` counter (both reset at each user-initiated turn); `done` event includes `pendingBackgroundTasks` and `totalBackgroundTasks` when tasks are pending; reducer creates `background_waiting` outcome messages with `bgTasksCompleted`/`bgTasksTotal` on `UIMessage`; `WorkingIndicator` shows "Waiting background task" (singular, no counter) for 1 task, "Waiting background tasks (N/M)" for multiple; `task_notification` triggers a `tool_end` event with summary + output file content (`fs.readFileSync`) to update the original tool call result; `tool_end` reducer checks streaming blocks first, falls through to completed messages for late updates; Out link pulses green (`toolOutLinkRunning` class, reuses `toolPulse` animation) while result starts with "Command running in background", stops when result is updated; previous `background_waiting` messages are resolved to `background_done` (no indicator, no timer) when a new `done` arrives; e2e tests in `e2e/background-tasks.spec.ts`
 - CLI stdin error handler: `proc.stdin.on('error', ...)` in `attachProcHandlers` prevents the server from crashing when the CLI process dies unexpectedly (e.g. Bun panic); without it, a `write EOF` error on stdin propagates as an unhandled event that kills the Node.js server and drops all WebSocket connections
-- E2e tests: Playwright-based, split into two projects in `playwright.config.ts`; `mock` project (background-tasks, retry-clean, retry-indicator, file-path-links) runs first with 4 workers using `window.dispatchEvent` to inject messages, no Claude CLI needed; `integration` project (chat, ask-dialog, image-recognize) runs after mock finishes (`dependencies: ['mock']`) to avoid OOM from concurrent CLI processes + Chromium instances; `waitForApp()` in `e2e/helpers.ts` navigates with `waitUntil: 'domcontentloaded'` and retries `page.reload()` up to 3 times if React fails to mount; Chromium launched with `--disable-gpu --disable-dev-shm-usage --no-sandbox` for reduced memory; `retries: 1` for transient failures; `fullyParallel: true` for maximum parallelism within each project; `clickAndWaitForModal()` in file-path-links uses `toPass()` retry loop for WS roundtrip tolerance; new e2e test files must be added to either `mock` or `integration` testMatch regex in `playwright.config.ts`
+- E2e tests: Playwright-based, split into two projects in `playwright.config.ts`; `mock` project (background-tasks, retry-clean, retry-indicator, file-path-links, ask-dialog-resume, stop-no-error, slash-commands) runs first with 4 workers using `window.dispatchEvent` to inject messages, no Claude CLI needed; `integration` project (chat, ask-dialog, image-recognize, slash-commands-integration) runs after mock finishes (`dependencies: ['mock']`) to avoid OOM from concurrent CLI processes + Chromium instances; `waitForApp()` in `e2e/helpers.ts` navigates with `waitUntil: 'domcontentloaded'` and retries `page.reload()` up to 3 times if React fails to mount; Chromium launched with `--disable-gpu --disable-dev-shm-usage --no-sandbox` for reduced memory; `retries: 1` for transient failures; `fullyParallel: true` for maximum parallelism within each project; `clickAndWaitForModal()` in file-path-links uses `toPass()` retry loop for WS roundtrip tolerance; new e2e test files must be added to either `mock` or `integration` testMatch regex in `playwright.config.ts`
 
 ## Skills
 
 | Skill | Path | When to use |
 |-------|------|-------------|
 | frontend | `.claude/skills/frontend/SKILL.md` | Building or reviewing webview UI, React components, CSS styling |
+
+## Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/bump` | Bump package.json version (patch/minor/major) |
+| `/dev` | Control dev environment (start/stop/restart/status) |
+| `/e2e` | Run Playwright e2e tests (all/mock/integration/specific file) |
 
 ## Development
 

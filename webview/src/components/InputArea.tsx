@@ -20,6 +20,7 @@ const TEXT_FILE_EXTENSIONS = /\.(txt|md|markdown|json|jsonc|yaml|yml|toml|ini|cf
 interface Skill {
   name: string;
   scope: 'global' | 'project' | 'builtin';
+  kind?: 'command' | 'skill';
   description?: string;
 }
 
@@ -319,7 +320,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
               onMouseDown={e => e.preventDefault()}
               onClick={() => selectSkill(skill.name)}
             >
-              <span className={styles.slashMenuName}>/{skill.name}</span>
+              <span className={[styles.slashMenuName, skill.kind === 'command' ? styles.slashMenuNameCustom : ''].filter(Boolean).join(' ')}>/{skill.name}</span>
               {skill.description && <span className={styles.slashMenuDesc}>{skill.description.length > 100 ? skill.description.slice(0, 100) + '...' : skill.description}</span>}
               {skill.scope !== 'builtin' && (
                 <span className={[styles.slashMenuScope, skill.scope === 'project' ? styles.slashMenuScopeProject : ''].filter(Boolean).join(' ')}>{skill.scope}</span>

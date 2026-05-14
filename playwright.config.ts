@@ -20,12 +20,12 @@ export default defineConfig({
   projects: [
     {
       name: 'mock',
-      testMatch: /background-tasks|retry-clean|retry-indicator|file-path-links/,
+      testMatch: /background-tasks|retry-clean|retry-indicator|file-path-links|ask-dialog-resume|stop-no-error|slash-commands\.spec|ws-reconnect/,
       use: chromiumOptions,
     },
     {
       name: 'integration',
-      testMatch: /chat|ask-dialog|image-recognize/,
+      testMatch: /chat\.spec|ask-dialog\.spec|image-recognize|slash-commands-integration/,
       use: chromiumOptions,
       dependencies: ['mock'],
     },

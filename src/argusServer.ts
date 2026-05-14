@@ -34,7 +34,7 @@ function readSkillsDir(dir: string, scope: 'global' | 'project') {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true })
     .filter(e => e.isDirectory())
-    .map(e => ({ name: e.name, scope, description: readSkillDescription(path.join(dir, e.name)) }));
+    .map(e => ({ name: e.name, scope, kind: 'skill' as const, description: readSkillDescription(path.join(dir, e.name)) }));
 }
 
 function readCommandsDir(dir: string, scope: 'global' | 'project') {
@@ -46,10 +46,17 @@ function readCommandsDir(dir: string, scope: 'global' | 'project') {
       let description: string | undefined;
       try {
         const content = fs.readFileSync(path.join(dir, e.name), 'utf-8');
-        const firstLine = content.split('\n')[0]?.trim();
-        if (firstLine) description = firstLine;
+        const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+        if (fmMatch) {
+          const descMatch = fmMatch[1].match(/^description:\s*(.+)$/m);
+          if (descMatch) description = descMatch[1].trim();
+        }
+        if (!description) {
+          const firstLine = content.split('\n')[0]?.trim();
+          if (firstLine && firstLine !== '---') description = firstLine;
+        }
       } catch {}
-      return { name, scope, description };
+      return { name, scope, kind: 'command' as const, description };
     });
 }
 
@@ -144,7 +151,7 @@ function classifyError(stderr: string, exitCode: number | null): { message: stri
     if (AUTH_PATTERNS.some(p => p.test(text))) return { message: text, errorKind: 'auth' };
     if (SESSION_PATTERNS.some(p => p.test(text))) return { message: text, errorKind: 'session' };
   }
-  if (exitCode === 1) return { message: text || 'Claude exited unexpectedly. This usually means authentication is required.', errorKind: 'auth' };
+  if (exitCode === 1 && text) return { message: text, errorKind: 'auth' };
   return { message: text || `claude exited with code ${exitCode}`, errorKind: 'generic' };
 }
 
@@ -177,7 +184,22 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
   const wss = new WebSocketServer({ noServer: true });
 
+  const PING_INTERVAL = 15_000;
+  const pingTimer = setInterval(() => {
+    for (const client of wss.clients) {
+      if ((client as any)._argusAlive === false) {
+        client.terminate();
+        continue;
+      }
+      (client as any)._argusAlive = false;
+      client.ping();
+    }
+  }, PING_INTERVAL);
+  wss.on('close', () => clearInterval(pingTimer));
+
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    (ws as any)._argusAlive = true;
+    ws.on('pong', () => { (ws as any)._argusAlive = true; });
     const reqUrl = new URL(req.url ?? '/', 'http://localhost');
     let workspaceDir = reqUrl.searchParams.get('dir') || process.cwd();
     let sessionId: string | undefined;
@@ -191,6 +213,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     const answeredTools = new Set<string>();
     const pendingAskTools = new Set<string>();
     let cliDone = false;
+    let userStopped = false;
     let suppressCliOutput = false;
     const pendingBgTasks = new Set<string>();
     let totalBgTasks = 0;
@@ -495,7 +518,10 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         sendLog('info', `claude exited with code ${code}${watchdogRetrying ? ' (watchdog retry pending)' : ''}`);
         if (watchdogRetrying) return;
         watchdogActive = false;
-        if (code !== 0 && code !== null) {
+        if (userStopped) {
+          userStopped = false;
+          if (isActiveProc) ws.send(JSON.stringify({ type: 'done' }));
+        } else if (code !== 0 && code !== null) {
           const { message, errorKind } = classifyError(stderrOutput, code);
           if (pendingAskTools.size > 0) {
             sendLog('warn', `CLI exited (${errorKind}) with ${pendingAskTools.size} pending question(s): ${message}`);
@@ -597,6 +623,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         watchdogActive = false;
         receivedDeltas = false;
         suppressCliOutput = false;
+        userStopped = false;
         cliDone = false;
         toolMap.clear();
         answeredTools.clear();
@@ -764,19 +791,14 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           currentProc.stdin.write(toolResult + '\n');
         } else {
           sendLog('info', `Tool answer (fallback) for ${answerId}: ${content.slice(0, 100)}`);
-          if (currentProc?.stdin?.writable) {
-            currentProc.stdin.end();
-          }
           const tc2 = toolMap.get(answerId);
           ws.send(JSON.stringify({
             type: 'tool_end',
             call: { id: answerId, name: tc2?.name ?? 'AskUserQuestion', input: tc2?.input ?? {}, result: content },
           }));
           const willResume = pendingAskTools.size === 0 && sessionId && answers && Object.keys(answers).length > 0;
-          if (pendingAskTools.size === 0 && !willResume && cliDone) {
-            setTimeout(() => ws.send(JSON.stringify({ type: 'done' })), 100);
-          }
           if (willResume) {
+            ws.send(JSON.stringify({ type: 'done' }));
             const answerLines = Object.entries(answers!)
               .map(([q, a]) => `- ${q}: ${a}`)
               .join('\n');
@@ -786,6 +808,13 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
               const synthetic = JSON.stringify({ type: 'send', text: followUp, mode: msg.mode, _silent: true });
               ws.emit('message', Buffer.from(synthetic));
             }, 200);
+          } else {
+            if (currentProc?.stdin?.writable) {
+              currentProc.stdin.end();
+            }
+            if (pendingAskTools.size === 0 && cliDone) {
+              setTimeout(() => ws.send(JSON.stringify({ type: 'done' })), 100);
+            }
           }
         }
       } else if (msg.type === 'readFilePreview' && msg.path) {
@@ -806,6 +835,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         }
         pendingAskTools.clear();
         if (currentProc) {
+          userStopped = true;
           killProc(currentProc);
         } else {
           ws.send(JSON.stringify({ type: 'done' }));
@@ -831,7 +861,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       const addr = httpServer.address() as { port: number };
       const actualPort = addr.port;
       console.log(`[argus-server] WebSocket agent ready at ws://localhost:${actualPort}/agent`);
-      resolve({ httpServer, port: actualPort, close: () => httpServer.close() });
+      resolve({ httpServer, port: actualPort, close: () => { clearInterval(pingTimer); wss.close(); httpServer.close(); } });
     });
   });
 }

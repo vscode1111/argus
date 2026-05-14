@@ -42,16 +42,31 @@
       var queue = [];
       var ready = false;
       var reconnectTimer;
+      var attempt = 0;
+      var DELAYS = [1000, 2000, 4000, 8000, 10000];
 
       function dispatch(data) {
         window.dispatchEvent(new MessageEvent('message', { data: data }));
       }
 
+      function scheduleReconnect() {
+        clearTimeout(reconnectTimer);
+        var delay = DELAYS[Math.min(attempt, DELAYS.length - 1)];
+        attempt++;
+        console.warn('[argus-ws] reconnecting in ' + delay + 'ms (attempt ' + attempt + ')');
+        reconnectTimer = setTimeout(connect, delay);
+      }
+
       function connect() {
+        if (ws) {
+          ws.onopen = ws.onclose = ws.onmessage = ws.onerror = null;
+          try { ws.close(); } catch(e) {}
+        }
         ws = new WebSocket(WS_URL);
 
         ws.onopen = function() {
           ready = true;
+          attempt = 0;
           dispatch({ type: 'ws_status', connected: true });
           queue.splice(0).forEach(function(m) { ws.send(JSON.stringify(m)); });
         };
@@ -64,14 +79,21 @@
 
         ws.onclose = function() {
           ready = false;
-          console.warn('[argus-ws] disconnected, reconnecting in 2s');
           dispatch({ type: 'ws_status', connected: false });
-          clearTimeout(reconnectTimer);
-          reconnectTimer = setTimeout(connect, 2000);
+          scheduleReconnect();
         };
       }
 
       connect();
+
+      // Reconnect when tab becomes visible (catches sleep/resume)
+      document.addEventListener('visibilitychange', function() {
+        if (!document.hidden && !ready) {
+          clearTimeout(reconnectTimer);
+          attempt = 0;
+          connect();
+        }
+      });
 
       // Listen for extension->webview messages that need forwarding to WS
       window.addEventListener('message', function(event) {

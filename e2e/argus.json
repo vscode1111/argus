@@ -5,8 +5,8 @@
   "showLogs": true,
   "showLogTime": true,
   "showLogType": true,
-  "soundOnComplete": false,
-  "notifyOnComplete": false,
+  "soundOnComplete": true,
+  "notifyOnComplete": true,
   "watchdogTimeout": 120,
   "watchdogAutoRetries": 3
 }

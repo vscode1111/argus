@@ -48,16 +48,31 @@
       const queue = [];
       let ready = false;
       let reconnectTimer;
+      let attempt = 0;
+      const DELAYS = [1000, 2000, 4000, 8000, 10000];
 
       function dispatch(data) {
         window.dispatchEvent(new MessageEvent('message', { data }));
       }
 
+      function scheduleReconnect() {
+        clearTimeout(reconnectTimer);
+        const delay = DELAYS[Math.min(attempt, DELAYS.length - 1)];
+        attempt++;
+        console.warn(`[argus-ws] reconnecting in ${delay}ms (attempt ${attempt})`);
+        reconnectTimer = setTimeout(connect, delay);
+      }
+
       function connect() {
+        if (ws) {
+          ws.onopen = ws.onclose = ws.onmessage = ws.onerror = null;
+          try { ws.close(); } catch(e) {}
+        }
         ws = new WebSocket(_wsUrl);
 
         ws.onopen = () => {
           ready = true;
+          attempt = 0;
           dispatch({ type: 'ws_status', connected: true });
           queue.splice(0).forEach(m => ws.send(JSON.stringify(m)));
         };
@@ -70,14 +85,20 @@
 
         ws.onclose = () => {
           ready = false;
-          console.warn('[argus-ws] disconnected, reconnecting in 2s');
           dispatch({ type: 'ws_status', connected: false });
-          clearTimeout(reconnectTimer);
-          reconnectTimer = setTimeout(connect, 2000);
+          scheduleReconnect();
         };
       }
 
       connect();
+
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && !ready) {
+          clearTimeout(reconnectTimer);
+          attempt = 0;
+          connect();
+        }
+      });
 
       return {
         postMessage: (msg) => {

@@ -72,6 +72,14 @@
   flex-shrink: 0;
 }
 
+.slashMenuNameCustom {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.slashMenuItemActive .slashMenuNameCustom {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
 .slashMenuDesc {
   font-size: 12px;
   color: var(--vscode-descriptionForeground);
