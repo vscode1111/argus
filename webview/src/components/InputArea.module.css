@@ -119,6 +119,7 @@
 }
 
 .inputWrapper {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -291,6 +292,18 @@
   margin-left: 2px;
 }
 .imageClearAll:hover { color: var(--vscode-errorForeground); border-color: var(--vscode-errorForeground); }
+
+.wsDot {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.wsDotOn { background: var(--vscode-testing-iconPassed, #388a34); }
+.wsDotOff { background: var(--vscode-errorForeground, #f14c4c); animation: wsPulse 1.5s ease-in-out infinite; }
+@keyframes wsPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 .btnGroup {
   display: flex;

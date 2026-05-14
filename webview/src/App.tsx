@@ -18,6 +18,7 @@ type AppState = {
   logs: LogEntry[];
   login: LoginState;
   contextUsage: ContextUsage | null;
+  wsConnected: boolean;
 };
 
 type AppAction =
@@ -41,7 +42,8 @@ type AppAction =
   | { type: 'loginResult'; success: boolean; message?: string }
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number }
   | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; timedOut?: boolean }
-  | { type: 'retry_clean' };
+  | { type: 'retry_clean' }
+  | { type: 'ws_status'; connected: boolean };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -288,6 +290,38 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'contextUsage':
       return { ...state, contextUsage: { percent: action.percent, inputTokens: action.inputTokens, outputTokens: action.outputTokens } };
 
+    case 'ws_status': {
+      if (action.connected) return { ...state, wsConnected: true };
+      if (!state.streaming) return { ...state, wsConnected: false };
+      const responseTime = Date.now() - state.streaming.startTime;
+      const finalBlocks = state.streaming.blocks.map(b =>
+        b.type === 'tool' && !b.call.result && !b.call.error
+          ? { type: 'tool' as const, call: { ...b.call, error: true } }
+          : b
+      );
+      const content = finalBlocks
+        .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
+        .map(b => b.text)
+        .join('');
+      const msg: UIMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content,
+        thinking: state.streaming.thinking || undefined,
+        blocks: finalBlocks.length > 0 ? finalBlocks : undefined,
+        responseTime,
+        finishedAt: Date.now(),
+        outcome: 'error',
+      };
+      return {
+        ...state,
+        wsConnected: false,
+        messages: [...state.messages, msg],
+        streaming: null,
+        isStreaming: false,
+      };
+    }
+
     default:
       return state;
   }
@@ -330,6 +364,7 @@ const initialState: AppState = {
   logs: [],
   login: { phase: 'idle' },
   contextUsage: null,
+  wsConnected: true,
 };
 
 function AppInner() {
@@ -359,7 +394,7 @@ function AppInner() {
       'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
       'tool_start', 'tool_end', 'done', 'error', 'clear',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
-      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'retry_status', 'retry_clean',
+      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'retry_status', 'retry_clean', 'ws_status',
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;
@@ -470,7 +505,7 @@ function AppInner() {
         )}
         <div className="chatPane">
           <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
-          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
+          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} wsConnected={state.wsConnected} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
         </div>
         {showLogs && !isNarrow && (
           <>

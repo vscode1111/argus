@@ -1,10 +1,21 @@
 import { createServer } from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { IncomingMessage } from 'http';
+
+const IS_WIN = process.platform === 'win32';
+
+function killProc(proc: ReturnType<typeof spawn>) {
+  if (!proc.pid) return;
+  if (IS_WIN) {
+    try { execSync(`taskkill /T /F /PID ${proc.pid}`, { stdio: 'ignore' }); } catch {}
+  } else {
+    proc.kill();
+  }
+}
 
 function readSkillDescription(skillDir: string): string | undefined {
   const skillFile = path.join(skillDir, 'SKILL.md');
@@ -209,7 +220,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         resetStaleTimer();
         watchdogActive = false;
         const { errorKind } = classifyError(errContent, 1);
-        currentProc?.kill();
+        if (currentProc) killProc(currentProc);
         ws.send(JSON.stringify({ type: 'error', text: errContent, errorKind }));
         ws.send(JSON.stringify({ type: 'done' }));
         return;
@@ -229,7 +240,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         }));
         lastEventTime = Date.now();
         watchdogRetrying = true;
-        currentProc?.kill();
+        if (currentProc) killProc(currentProc);
         setTimeout(() => {
           watchdogRetrying = false;
           if (!lastMessage) return;
@@ -245,7 +256,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       } else {
         sendLog('error', `Watchdog: no CLI events for ${Math.round(elapsed)}s, all retries exhausted`);
         watchdogActive = false;
-        currentProc?.kill();
+        if (currentProc) killProc(currentProc);
         ws.send(JSON.stringify({
           type: 'retry_status',
           attempt: 0, maxRetries: 0, delayMs: 0,
@@ -306,7 +317,9 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           }
 
           sendLog('debug', `event: ${event.type} ${trimmed.slice(0, 120)}`);
-          lastEventTime = Date.now();
+          if (event.type !== 'ping' && event.type !== 'rate_limit_event') {
+            lastEventTime = Date.now();
+          }
 
           if (cliDone && (event.type === 'content_block_delta' || event.type === 'assistant' || event.type === 'message_start')) {
             cliDone = false;
@@ -518,8 +531,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       watchdogActive = false;
       clearInterval(watchdogInterval);
       resetStaleTimer();
-      currentProc?.kill();
-      loginProc?.kill();
+      if (currentProc) killProc(currentProc);
+      if (loginProc) killProc(loginProc);
     });
 
     ws.on('message', (data: Buffer) => {
@@ -534,7 +547,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
       if (msg.type === 'send' && msg.text?.trim() === '/clear') {
         sessionId = undefined;
-        currentProc?.kill();
+        if (currentProc) killProc(currentProc);
         pendingBgTasks.clear();
         totalBgTasks = 0;
         ws.send(JSON.stringify({ type: 'clear' }));
@@ -597,7 +610,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         } else {
           if (currentProc) {
             sendLog('info', 'Args changed, respawning claude');
-            currentProc.kill();
+            killProc(currentProc);
           }
           sendLog('info', `Spawning claude: ${args.join(' ')}`);
           proc = spawn('claude', args, {
@@ -672,12 +685,12 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           })));
         }
       } else if (msg.type === 'forceError') {
-        currentProc?.kill();
+        if (currentProc) killProc(currentProc);
         ws.send(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));
       } else if (msg.type === 'getSkills') {
         ws.send(JSON.stringify({ type: 'skills', skills: getSkills(workspaceDir) }));
       } else if (msg.type === 'login') {
-        loginProc?.kill();
+        if (loginProc) killProc(loginProc);
         sendLog('info', 'Starting claude login');
         const lp = spawn('claude', ['auth', 'login'], { cwd: workspaceDir, stdio: ['pipe', 'pipe', 'pipe'] });
         loginProc = lp;
@@ -793,7 +806,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         }
         pendingAskTools.clear();
         if (currentProc) {
-          currentProc.kill();
+          killProc(currentProc);
         } else {
           ws.send(JSON.stringify({ type: 'done' }));
         }
