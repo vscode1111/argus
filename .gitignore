@@ -3,6 +3,7 @@ out/
 dist/
 .argus/
 .playwright-mcp/
+tmp/
 test-results/
 playwright-report/
 yarn-error.log

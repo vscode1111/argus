@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useSettings } from '../contexts/SettingsContext';
+import { postMessage } from '../vscode';
 import styles from './SettingsModal.module.css';
 
 interface ToggleProps {
@@ -69,6 +70,7 @@ type Tab = 'general' | 'watchdog' | 'info';
 
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor } = useSettings();
+  useEffect(() => { postMessage({ type: 'getSettings' }); }, []);
   const [tab, setTabState] = useState<Tab>(() => (localStorage.getItem('argus.settingsTab') as Tab) || 'general');
   const setTab = (t: Tab) => { setTabState(t); localStorage.setItem('argus.settingsTab', t); };
   const hasDevHarness = !!document.getElementById('dev-harness');

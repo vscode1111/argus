@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { RetryStatus } from '../types';
+import { formatDuration } from '../utils/time';
+import msg from './shared/message.module.css';
 import styles from './WorkingIndicator.module.css';
 
 const VERBS = [
@@ -32,11 +34,14 @@ interface Props {
   backgroundWaiting?: boolean;
   bgTasksCompleted?: number;
   bgTasksTotal?: number;
+  startTime?: number;
+  lastEventTime?: number;
 }
 
-export function WorkingIndicator({ logCount, retryStatus, backgroundWaiting, bgTasksCompleted, bgTasksTotal }: Props) {
+export function WorkingIndicator({ logCount, retryStatus, backgroundWaiting, bgTasksCompleted, bgTasksTotal, startTime, lastEventTime }: Props) {
   const [verb, setVerb] = useState<string>(() => pickVerb());
   const [tick, setTick] = useState(0);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     setVerb(prev => pickVerb(prev));
@@ -46,6 +51,12 @@ export function WorkingIndicator({ logCount, retryStatus, backgroundWaiting, bgT
     const dotsId = setInterval(() => setTick(t => t + 1), 400);
     return () => clearInterval(dotsId);
   }, []);
+
+  useEffect(() => {
+    if (startTime == null) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [startTime]);
 
   const dotCount = (tick % 3) + 1;
   const dots = '.'.repeat(dotCount);
@@ -65,11 +76,18 @@ export function WorkingIndicator({ logCount, retryStatus, backgroundWaiting, bgT
     label = verb;
   }
 
+  const showTimer = backgroundWaiting && startTime != null;
+  const total = showTimer ? formatDuration(now - startTime!) : '';
+  const idle = showTimer && lastEventTime ? Math.floor((now - lastEventTime) / 1000) : 0;
+
   return (
-    <div className={[styles.working, retryStatus ? styles.retrying : ''].filter(Boolean).join(' ')} aria-live="polite">
-      <span className={styles.asterisk}>✻</span>
-      <span className={styles.verb}>{label}</span>
-      <span className={styles.dots}>{dots}</span>
-    </div>
+    <>
+      <div className={[styles.working, retryStatus ? styles.retrying : ''].filter(Boolean).join(' ')} aria-live="polite">
+        <span className={styles.asterisk}>✻</span>
+        <span className={styles.verb}>{label}</span>
+        <span className={styles.dots}>{dots}</span>
+      </div>
+      {showTimer && <div className={msg.responseTime}>{total}{idle > 0 ? ` (${idle}s)` : ''}</div>}
+    </>
   );
 }

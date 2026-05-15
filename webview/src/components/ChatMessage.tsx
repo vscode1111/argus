@@ -7,6 +7,7 @@ import { Markdown } from '../utils/markdown';
 import { linkifyPaths } from '../utils/filePath';
 import { formatDuration, formatTime } from '../utils/time';
 import { ImageViewerModal } from './ImageViewerModal';
+import { useSettings } from '../contexts/SettingsContext';
 import { postMessage } from '../vscode';
 import msg from './shared/message.module.css';
 import styles from './ChatMessage.module.css';
@@ -134,6 +135,7 @@ function ErrorMessage({ message, login }: Props) {
 export function ChatMessage({ message, login, logCount }: Props) {
   const { role, content, thinking, blocks, responseTime } = message;
   const [retryHidden, setRetryHidden] = useState(false);
+  const { showTimer } = useSettings();
 
   if (role === 'error') {
     return <ErrorMessage message={message} login={login} />;
@@ -150,6 +152,7 @@ export function ChatMessage({ message, login, logCount }: Props) {
 
   const hasWatchdog = !!message.watchdogRetries;
   const isWatchdogTimeout = message.outcome === 'error' && hasWatchdog;
+  const sessionDone = message.outcome != null && message.outcome !== 'background_waiting' && message.outcome !== 'background_done';
 
   return (
     <div className={[msg.message, msg.assistant].join(' ')}>
@@ -159,7 +162,7 @@ export function ChatMessage({ message, login, logCount }: Props) {
           return null;
         }
         return block.type === 'tool'
-          ? <ToolCall key={block.call.id} call={block.call} />
+          ? <ToolCall key={block.call.id} call={block.call} sessionDone={sessionDone} />
           : <div key={`text-${i}`} className={msg.messageContent}>
               <Markdown>{block.text}</Markdown>
             </div>;
@@ -168,7 +171,7 @@ export function ChatMessage({ message, login, logCount }: Props) {
           <Markdown>{content}</Markdown>
         </div>
       )}
-      {hasWatchdog && !retryHidden && message.outcome !== 'stopped' && (
+      {hasWatchdog && !retryHidden && message.outcome !== 'stopped' && message.outcome !== 'retried' && (
         <div className={styles.errorBlock}>
           <div className={styles.errorTitle}>{isWatchdogTimeout ? 'Connection timed out' : 'Connection interrupted'}</div>
           <div className={styles.errorDetail}>
@@ -180,18 +183,18 @@ export function ChatMessage({ message, login, logCount }: Props) {
           </div>
         </div>
       )}
-      {responseTime !== undefined && message.outcome !== 'background_waiting' && message.outcome !== 'background_done' && (
+      {responseTime !== undefined && message.outcome !== 'background_waiting' && message.outcome !== 'background_done' && (showTimer || message.outcome === 'retried') && (
         <div className={
           message.outcome === 'error' ? msg.responseTimeError
           : message.outcome === 'stopped' ? msg.responseTimeStopped
           : message.outcome === 'retried' ? msg.responseTimeRetried
           : msg.responseTimeSuccess
         }>
-          {formatDuration(responseTime)}{message.finishedAt ? ` (${formatTime(message.finishedAt)})` : ''}
+          {formatDuration(responseTime)}{message.finishedAt ? ` (${formatTime(message.finishedAt)})` : ''}{message.outcome === 'retried' && message.watchdogRetries ? ` reconnected ${message.watchdogRetries}x` : ''}
         </div>
       )}
       {message.outcome === 'background_waiting' && (
-        <WorkingIndicator logCount={logCount ?? 0} backgroundWaiting bgTasksCompleted={message.bgTasksCompleted} bgTasksTotal={message.bgTasksTotal} />
+        <WorkingIndicator logCount={logCount ?? 0} backgroundWaiting bgTasksCompleted={message.bgTasksCompleted} bgTasksTotal={message.bgTasksTotal} startTime={message.finishedAt ? message.finishedAt - (message.responseTime ?? 0) : undefined} lastEventTime={message.finishedAt} />
       )}
     </div>
   );

@@ -120,15 +120,27 @@ test.describe('background tasks', () => {
     await expect(indicators).toHaveCount(1);
   });
 
-  test('no timer shown on background_waiting messages', async ({ page }) => {
+  test('background_waiting shows live elapsed timer, not static response time', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
     await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
 
-    // No timer should be visible on the waiting message
     const timer = page.locator('[class*="responseTime"]');
-    await expect(timer).toHaveCount(0);
+    await expect(timer).toBeVisible();
+    // No color-coded class (not success/error/stopped), just base responseTime
+    await expect(timer).not.toHaveClass(/responseTimeSuccess/);
+  });
+
+  test('background_waiting indicator shows elapsed timer on separate line', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
+    await send(page, { type: 'thinking_start' });
+    await startBgTask(page, 't1', 'Task 1', 'sleep 10');
+    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+
+    const timer = page.locator('[class*="responseTime"]');
+    await expect(timer).toBeVisible();
+    await expect(timer).toContainText('s');
   });
 
   test('final message shows timer after all tasks complete', async ({ page }) => {

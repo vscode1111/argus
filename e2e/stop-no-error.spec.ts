@@ -108,4 +108,82 @@ test.describe('stop does not produce error', () => {
     const timer = page.locator('[class*="responseTimeStopped"]');
     await expect(timer).toBeVisible();
   });
+
+  test('stop after watchdog retries shows stopped outcome, no error block', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'test watchdog stop' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'text_chunk', text: 'partial' });
+
+    // Watchdog retries twice
+    await send(page, { type: 'retry_status', attempt: 0, maxRetries: 0, delayMs: 5000, autoRetry: 1, autoRetryMax: 3 });
+    await send(page, { type: 'thinking_start', reused: true });
+    await send(page, { type: 'retry_status', attempt: 0, maxRetries: 0, delayMs: 10000, autoRetry: 2, autoRetryMax: 3 });
+
+    // User clicks stop during reconnect
+    await page.getByRole('button', { name: 'Stop' }).click();
+    await send(page, { type: 'done' });
+
+    // No "Connection interrupted" error block
+    const errorBlock = page.locator('[class*="errorBlock"]');
+    await expect(errorBlock).toHaveCount(0);
+
+    // Stopped outcome, not error or retried
+    const stoppedTimer = page.locator('[class*="responseTimeStopped"]');
+    await expect(stoppedTimer).toBeVisible();
+    const errorTimer = page.locator('[class*="responseTimeError"]');
+    await expect(errorTimer).toHaveCount(0);
+  });
+
+  test('stop after watchdog timed out shows stopped outcome, no error block', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'test timeout stop' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'text_chunk', text: 'partial' });
+
+    // Watchdog exhausts all retries
+    await send(page, { type: 'retry_status', attempt: 0, maxRetries: 0, delayMs: 5000, autoRetry: 1, autoRetryMax: 3 });
+    await send(page, { type: 'thinking_start', reused: true });
+    await send(page, { type: 'retry_status', attempt: 0, maxRetries: 0, delayMs: 0, autoRetry: 3, autoRetryMax: 3, timedOut: true });
+
+    // "Timed out, press Stop" indicator visible
+    const retrying = page.locator('[class*="retrying"]');
+    await expect(retrying).toContainText('Timed out, press Stop');
+
+    // User clicks stop
+    await page.getByRole('button', { name: 'Stop' }).click();
+    await send(page, { type: 'done' });
+
+    // No error block or "Connection interrupted"/"Connection timed out"
+    const errorBlock = page.locator('[class*="errorBlock"]');
+    await expect(errorBlock).toHaveCount(0);
+
+    // Stopped outcome
+    const stoppedTimer = page.locator('[class*="responseTimeStopped"]');
+    await expect(stoppedTimer).toBeVisible();
+    const errorTimer = page.locator('[class*="responseTimeError"]');
+    await expect(errorTimer).toHaveCount(0);
+  });
+
+  test('stop after watchdog retries does not show Connection interrupted block', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-watchdog-test' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'text_chunk', text: 'some response' });
+
+    // Simulate 2 watchdog retries then success resumes
+    await send(page, { type: 'retry_status', attempt: 0, maxRetries: 0, delayMs: 5000, autoRetry: 1, autoRetryMax: 3 });
+    await send(page, { type: 'thinking_start', reused: true });
+    await send(page, { type: 'retry_status', attempt: 0, maxRetries: 0, delayMs: 10000, autoRetry: 2, autoRetryMax: 3 });
+    await send(page, { type: 'thinking_start', reused: true });
+    await send(page, { type: 'text_chunk', text: 'resumed content' });
+
+    // User stops mid-stream after retries happened
+    await page.getByRole('button', { name: 'Stop' }).click();
+    await send(page, { type: 'done' });
+
+    // "Connection interrupted" block must not appear
+    await expect(page.getByText('Connection interrupted')).toHaveCount(0);
+    await expect(page.getByText('Connection timed out')).toHaveCount(0);
+
+    const stoppedTimer = page.locator('[class*="responseTimeStopped"]');
+    await expect(stoppedTimer).toBeVisible();
+  });
 });

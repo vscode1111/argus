@@ -56,7 +56,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         isStreaming: true,
-        streaming: { thinking: '', blocks: [], startTime: prev ? prev.startTime : Date.now(), lastEventTime: Date.now(), logsAtStart: (inheritStart ? prev!.logsAtStart : state.logs.length), reused: action.reused ?? false, stopped: false, retryStatus: null, watchdogRetries: (inheritStart ? prev!.watchdogRetries : 0) },
+        streaming: { thinking: '', blocks: [], startTime: prev ? prev.startTime : Date.now(), lastEventTime: Date.now(), logsAtStart: (inheritStart ? prev!.logsAtStart : state.logs.length), reused: action.reused ?? false, stopped: false, retryStatus: inheritStart ? prev!.retryStatus : null, watchdogRetries: (inheritStart ? prev!.watchdogRetries : 0) },
       };
     }
 
@@ -207,7 +207,11 @@ function reducer(state: AppState, action: AppAction): AppState {
           );
         }
       }
-      msgs.push({ id: generateId(), role: 'error', content: action.text, errorKind: action.errorKind as UIMessage['errorKind'] });
+      const lastAssistant = [...existingMessages, ...msgs].reverse().find(m => m.role === 'assistant');
+      const hasWatchdogBlock = lastAssistant?.watchdogRetries != null && lastAssistant.watchdogRetries > 0;
+      if (!hasWatchdogBlock) {
+        msgs.push({ id: generateId(), role: 'error', content: action.text, errorKind: action.errorKind as UIMessage['errorKind'] });
+      }
       return {
         ...state,
         messages: [...existingMessages, ...msgs],
@@ -220,8 +224,11 @@ function reducer(state: AppState, action: AppAction): AppState {
       const msgs = [...state.messages];
       while (msgs.length > 0) {
         const last = msgs[msgs.length - 1];
-        if (last.role === 'error' || (last.role === 'assistant' && last.outcome === 'error')) {
+        if (last.role === 'error') {
           msgs.pop();
+        } else if (last.role === 'assistant' && last.outcome === 'error') {
+          msgs[msgs.length - 1] = { ...last, outcome: 'retried' };
+          break;
         } else {
           break;
         }
@@ -249,8 +256,33 @@ function reducer(state: AppState, action: AppAction): AppState {
         timedOut: action.timedOut,
       };
       const isWatchdogRetry = action.autoRetry != null && !action.timedOut;
+      let messages = state.messages;
+      if (isWatchdogRetry) {
+        const finalBlocks = state.streaming.blocks.map(b =>
+          b.type === 'tool' && !b.call.result && !b.call.error
+            ? { ...b, call: { ...b.call, error: true } }
+            : b
+        );
+        const content = finalBlocks
+          .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
+          .map(b => b.text)
+          .join('');
+        const partial: UIMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content,
+          thinking: state.streaming.thinking || undefined,
+          blocks: finalBlocks.length > 0 ? finalBlocks : undefined,
+          responseTime: Date.now() - state.streaming.startTime,
+          finishedAt: Date.now(),
+          outcome: 'retried',
+          watchdogRetries: state.streaming.watchdogRetries + 1,
+        };
+        messages = [...messages, partial];
+      }
       return {
         ...state,
+        messages,
         streaming: {
           ...state.streaming,
           retryStatus,

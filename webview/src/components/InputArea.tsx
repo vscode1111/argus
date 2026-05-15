@@ -345,7 +345,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
           onBlur={() => setSlashQuery(null)}
         />
         {images.length > 0 && (
-          <div className={styles.imagePreviews}>
+          <div className={styles.imagePreviews} onMouseDown={e => { e.preventDefault(); textareaRef.current?.focus(); }}>
             {images.map((img, i) => {
               const isImage = img.mediaType.startsWith('image/');
               const label = img.name ?? `image.${img.mediaType.split('/')[1] ?? 'png'}`;

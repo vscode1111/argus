@@ -12,7 +12,7 @@ test.describe('retry cleanup', () => {
     await waitForApp(page);
   });
 
-  test('retry_clean removes trailing error and error-outcome assistant', async ({ page }) => {
+  test('retry_clean preserves error-outcome assistant as retried', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'hello' } });
     await send(page, { type: 'thinking_start' });
     await send(page, { type: 'text_chunk', text: 'partial response' });
@@ -21,15 +21,15 @@ test.describe('retry cleanup', () => {
     const errorBlock = page.locator('[class*="errorBlock"]');
     await expect(errorBlock).toBeVisible();
 
-    // Error-outcome assistant message should be committed
-    const assistantTimers = page.locator('[class*="responseTime"]');
-    await expect(assistantTimers.first()).toBeVisible();
-
     await send(page, { type: 'retry_clean' });
 
+    // Error role message removed
     await expect(errorBlock).not.toBeVisible();
-    // Error-outcome assistant should also be removed
-    await expect(assistantTimers).toHaveCount(0);
+    // Assistant content preserved
+    await expect(page.getByText('partial response')).toBeVisible();
+    // Timer re-marked as retried (yellow)
+    const timer = page.locator('[class*="responseTimeRetried"]');
+    await expect(timer).toBeVisible();
     // User message should remain
     await expect(page.getByText('hello')).toBeVisible();
   });
@@ -107,6 +107,40 @@ test.describe('retry cleanup', () => {
     // Should have a success timer
     const timer = page.locator('[class*="responseTimeSuccess"]');
     await expect(timer).toBeVisible();
+  });
+
+  test('retry_clean preserves retried messages from watchdog reconnects', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-retry-history' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'text_chunk', text: 'First attempt work.' });
+    await send(page, { type: 'tool_start', call: { id: 't1', name: 'Read', input: { file_path: '/src/a.ts' } } });
+    await send(page, { type: 'tool_end', call: { id: 't1', name: 'Read', result: 'content' } });
+
+    // Auto-retry commits retried message
+    await send(page, { type: 'retry_status', attempt: 0, maxRetries: 0, delayMs: 5000, autoRetry: 1, autoRetryMax: 2 });
+    await send(page, { type: 'thinking_start', reused: true });
+
+    // Timeout + done
+    await send(page, { type: 'retry_status', attempt: 0, maxRetries: 0, delayMs: 0, autoRetry: 2, autoRetryMax: 2, timedOut: true });
+    await send(page, { type: 'done' });
+
+    // Error from proc close
+    await send(page, { type: 'error', text: 'claude exited with code 1' });
+
+    // Verify retried message + error outcome message exist
+    await expect(page.getByText('First attempt work.')).toBeVisible();
+    const retriedTimers = page.locator('[class*="responseTimeRetried"]');
+    await expect(retriedTimers.first()).toBeVisible();
+
+    // retry_clean should preserve retried messages
+    await send(page, { type: 'retry_clean' });
+
+    // Retried message still visible
+    await expect(page.getByText('First attempt work.')).toBeVisible();
+    await expect(retriedTimers.first()).toBeVisible();
+
+    // User message preserved
+    await expect(page.getByText('scub-retry-history')).toBeVisible();
   });
 
   test('retry_clean does not remove successful assistant messages', async ({ page }) => {

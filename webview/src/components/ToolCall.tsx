@@ -47,9 +47,10 @@ function toolSummary(name: string, input: Record<string, unknown>): string {
 
 interface Props {
   call: ToolCallData;
+  sessionDone?: boolean;
 }
 
-export function ToolCall({ call }: Props) {
+export function ToolCall({ call, sessionDone }: Props) {
   const { verboseTools, showOutput } = useSettings();
   const { name, input, result, error } = call;
   const isFile = ['Read', 'Write', 'Edit'].includes(name);
@@ -332,7 +333,7 @@ export function ToolCall({ call }: Props) {
             )}
             {name === 'Bash' && result && (
               <a
-                className={[styles.toolOutLink, result.startsWith('Command running in background') && styles.toolOutLinkRunning].filter(Boolean).join(' ')}
+                className={[styles.toolOutLink, !sessionDone && result.startsWith('Command running in background') && styles.toolOutLinkRunning].filter(Boolean).join(' ')}
                 href="#"
                 onClick={e => { e.preventDefault(); setViewerOpen(true); }}
               >

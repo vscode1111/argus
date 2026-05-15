@@ -277,7 +277,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         watchdogRetryTimer = setTimeout(() => {
           watchdogRetryTimer = null;
           watchdogRetrying = false;
-          if (!lastMessage) return;
+          if (!lastMessage || cliDone) return;
           const synthetic = JSON.stringify({
             type: 'send',
             text: lastMessage.text,
@@ -290,6 +290,12 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       } else {
         sendLog('error', `Watchdog: no CLI events for ${Math.round(elapsed)}s, all retries exhausted`);
         watchdogActive = false;
+        cliDone = true;
+        if (watchdogRetryTimer) {
+          clearTimeout(watchdogRetryTimer);
+          watchdogRetryTimer = null;
+        }
+        watchdogRetrying = false;
         if (currentProc) killProc(currentProc);
         ws.send(JSON.stringify({
           type: 'retry_status',
@@ -298,6 +304,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           autoRetryMax: cfg.watchdogAutoRetries,
           timedOut: true,
         }));
+        ws.send(JSON.stringify({ type: 'done' }));
       }
     }, 5000);
 
