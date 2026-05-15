@@ -143,7 +143,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       const hasPendingBg = action.pendingBackgroundTasks != null && action.pendingBackgroundTasks > 0;
       const timedOut = state.streaming.retryStatus?.timedOut;
       const outcome = hasPendingBg ? 'background_waiting'
-        : timedOut ? 'error' : stopped ? 'stopped' : watchdogRetries > 0 ? 'retried' : 'success';
+        : stopped ? 'stopped' : timedOut ? 'error' : watchdogRetries > 0 ? 'retried' : 'success';
       const bgTotal = action.totalBackgroundTasks;
       const bgCompleted = bgTotal != null ? bgTotal - (action.pendingBackgroundTasks ?? 0) : undefined;
       const msg: UIMessage = {

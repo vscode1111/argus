@@ -168,7 +168,7 @@ export function ChatMessage({ message, login, logCount }: Props) {
           <Markdown>{content}</Markdown>
         </div>
       )}
-      {hasWatchdog && !retryHidden && (
+      {hasWatchdog && !retryHidden && message.outcome !== 'stopped' && (
         <div className={styles.errorBlock}>
           <div className={styles.errorTitle}>{isWatchdogTimeout ? 'Connection timed out' : 'Connection interrupted'}</div>
           <div className={styles.errorDetail}>

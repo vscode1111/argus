@@ -28,7 +28,7 @@ test.describe('AskUserQuestion resume', () => {
     await waitForApp(page);
   });
 
-  test('answer commits original turn and follow-up creates second message', async ({ page }) => {
+  test('answer continues streaming in the same message (no done between answer and follow-up)', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub question' } });
     await send(page, { type: 'thinking_start' });
     await send(page, { type: 'text_chunk', text: 'Let me ask you something.' });
@@ -44,29 +44,22 @@ test.describe('AskUserQuestion resume', () => {
       call: { id: ASK_TOOL_ID, name: 'AskUserQuestion', input: ASK_TOOL_INPUT, result: answerResult },
     });
 
-    // done commits the original turn as a completed message
-    await send(page, { type: 'done' });
-
-    // Original turn should be committed with the answer
+    // Answer result shown, streaming still active (no done yet)
     const resultSummary = page.locator('[class*="askResultSummary"]');
     await expect(resultSummary).toBeVisible();
     await expect(page.getByText('Let me ask you something.')).toBeVisible();
 
-    // First message should have a success timer
-    const timers = page.locator('[class*="responseTimeSuccess"]');
-    await expect(timers.first()).toBeVisible();
-
-    // Follow-up starts
-    await send(page, { type: 'thinking_start' });
+    // Follow-up text arrives in the same streaming message (no thinking_start)
     await send(page, { type: 'text_chunk', text: 'Great, using Option A.' });
     await send(page, { type: 'done' });
 
-    // Both responses visible
+    // Both texts in the same assistant message
     await expect(page.getByText('Let me ask you something.')).toBeVisible();
     await expect(page.getByText('Great, using Option A.')).toBeVisible();
 
-    // Two success timers (one per assistant message)
-    await expect(timers).toHaveCount(2);
+    // Single success timer (one message, not two)
+    const timers = page.locator('[class*="responseTimeSuccess"]');
+    await expect(timers).toHaveCount(1);
   });
 
   test('cancelled dialog sends done without follow-up', async ({ page }) => {
@@ -106,6 +99,9 @@ test.describe('AskUserQuestion resume', () => {
       type: 'tool_end',
       call: { id: ASK_TOOL_ID, name: 'AskUserQuestion', input: ASK_TOOL_INPUT, result: answerResult },
     });
+
+    // Follow-up text and done
+    await send(page, { type: 'text_chunk', text: 'Using Option B.' });
     await send(page, { type: 'done' });
 
     // Text from original turn preserved
@@ -141,10 +137,8 @@ test.describe('AskUserQuestion resume', () => {
       type: 'tool_end',
       call: { id: ASK_TOOL_ID, name: 'AskUserQuestion', input: ASK_TOOL_INPUT, result: answerResult },
     });
-    await send(page, { type: 'done' });
 
-    // Follow-up
-    await send(page, { type: 'thinking_start' });
+    // Follow-up continues in the same streaming message
     await send(page, { type: 'text_chunk', text: 'Proceeding with A.' });
     await send(page, { type: 'done' });
 
@@ -155,8 +149,8 @@ test.describe('AskUserQuestion resume', () => {
     await expect(page.getByText('Need clarification.')).toBeVisible();
     await expect(page.getByText('Proceeding with A.')).toBeVisible();
 
-    // Three assistant timers (first reply + ask turn + follow-up)
+    // Two assistant timers (first reply + combined ask+follow-up)
     const timers = page.locator('[class*="responseTimeSuccess"]');
-    await expect(timers).toHaveCount(3);
+    await expect(timers).toHaveCount(2);
   });
 });

@@ -83,6 +83,9 @@ export type ArgusSettings = {
   showLogType: boolean;
   soundOnComplete: boolean;
   notifyOnComplete: boolean;
+  watchdogEnabled: boolean;
   watchdogTimeout: number;
   watchdogAutoRetries: number;
+  watchdogRetryDelay: number;
+  watchdogDelayFactor: number;
 };

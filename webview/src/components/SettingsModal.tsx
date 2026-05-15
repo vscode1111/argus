@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useSettings } from '../contexts/SettingsContext';
-import { InfoModal } from './InfoModal';
 import styles from './SettingsModal.module.css';
 
 interface ToggleProps {
@@ -24,15 +23,54 @@ function Toggle({ id, checked, onChange }: ToggleProps) {
   );
 }
 
+interface NumberInputProps {
+  id: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  step?: number;
+  disabled?: boolean;
+}
+
+function NumberInput({ id, value, onChange, min = 1, step, disabled }: NumberInputProps) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => { setText(String(value)); }, [value]);
+  return (
+    <input
+      id={id}
+      type="number"
+      className={styles.numberInput}
+      min={min}
+      step={step}
+      disabled={disabled}
+      value={text}
+      onChange={e => {
+        setText(e.target.value);
+        const parsed = step ? parseFloat(e.target.value) : parseInt(e.target.value);
+        if (!isNaN(parsed)) onChange(Math.max(min, parsed));
+      }}
+      onBlur={() => {
+        const parsed = step ? parseFloat(text) : parseInt(text);
+        const final = isNaN(parsed) || parsed < min ? min : parsed;
+        onChange(final);
+        setText(String(final));
+      }}
+    />
+  );
+}
+
 interface Props {
   onClose: () => void;
   workspacePath: string;
   version: string;
 }
 
+type Tab = 'general' | 'watchdog' | 'info';
+
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
-  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogTimeout, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogTimeout } = useSettings();
-  const [infoOpen, setInfoOpen] = useState(false);
+  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor } = useSettings();
+  const [tab, setTabState] = useState<Tab>(() => (localStorage.getItem('argus.settingsTab') as Tab) || 'general');
+  const setTab = (t: Tab) => { setTabState(t); localStorage.setItem('argus.settingsTab', t); };
   const hasDevHarness = !!document.getElementById('dev-harness');
   const hasNotificationAPI = typeof Notification !== 'undefined';
   const [notifPerm, setNotifPerm] = useState(() => hasNotificationAPI ? Notification.permission : 'unavailable');
@@ -53,58 +91,90 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     <>
       <div className={styles.overlay} onClick={onClose} aria-hidden="true" />
       <div className={styles.dropdown} role="dialog" aria-label="Settings">
-        <label className={styles.settingRow} htmlFor="toggle-verbose">
-          <span className={styles.settingLabel}>Verbose tools</span>
-          <Toggle id="toggle-verbose" checked={verboseTools} onChange={setVerboseTools} />
-        </label>
-        <label className={styles.settingRow} htmlFor="toggle-timer">
-          <span className={styles.settingLabel}>Show timer</span>
-          <Toggle id="toggle-timer" checked={showTimer} onChange={setShowTimer} />
-        </label>
-        <label className={styles.settingRow} htmlFor="toggle-output">
-          <span className={styles.settingLabel}>Show output</span>
-          <Toggle id="toggle-output" checked={showOutput} onChange={setShowOutput} />
-        </label>
-        <label className={styles.settingRow} htmlFor="toggle-logs">
-          <span className={styles.settingLabel}>Show logs</span>
-          <Toggle id="toggle-logs" checked={showLogs} onChange={setShowLogs} />
-        </label>
-        <label className={styles.settingRow} htmlFor="toggle-sound">
-          <span className={styles.settingLabel}>Sound on complete</span>
-          <Toggle id="toggle-sound" checked={soundOnComplete} onChange={setSoundOnComplete} />
-        </label>
-        <label className={styles.settingRow} htmlFor="toggle-notify">
-          <span className={styles.settingLabel}>Notify on complete</span>
-          <Toggle id="toggle-notify" checked={notifyOnComplete} onChange={setNotifyOnComplete} />
-        </label>
-        {notifyOnComplete && hasNotificationAPI && notifPerm !== 'granted' && (
-          <div className={styles.settingRow} style={{ paddingTop: 0 }}>
-            {notifPerm === 'default' && (
-              <button className={styles.grantBtn} onClick={handleGrantNotifications}>
-                Grant permission
-              </button>
-            )}
-            {notifPerm === 'denied' && (
-              <span className={styles.permDenied}>Blocked in browser settings</span>
+        <button className={styles.closeBtn} onClick={onClose} aria-label="Close settings" title="Close">&times;</button>
+        <div className={styles.tabBar}>
+          <button className={[styles.tab, tab === 'general' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('general')}>General</button>
+          <button className={[styles.tab, tab === 'watchdog' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('watchdog')}>Watchdog</button>
+          <button className={[styles.tab, tab === 'info' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('info')}>Info</button>
+        </div>
+        {tab === 'general' && (
+          <div className={styles.tabContent}>
+            <label className={styles.settingRow} htmlFor="toggle-verbose">
+              <span className={styles.settingLabel} title="Show full tool call details in messages">Verbose tools</span>
+              <Toggle id="toggle-verbose" checked={verboseTools} onChange={setVerboseTools} />
+            </label>
+            <label className={styles.settingRow} htmlFor="toggle-timer">
+              <span className={styles.settingLabel} title="Display response time and finish timestamp">Show timer</span>
+              <Toggle id="toggle-timer" checked={showTimer} onChange={setShowTimer} />
+            </label>
+            <label className={styles.settingRow} htmlFor="toggle-output">
+              <span className={styles.settingLabel} title="Show CLI stdout in the log panel">Show output</span>
+              <Toggle id="toggle-output" checked={showOutput} onChange={setShowOutput} />
+            </label>
+            <label className={styles.settingRow} htmlFor="toggle-logs">
+              <span className={styles.settingLabel} title="Show the log panel below messages">Show logs</span>
+              <Toggle id="toggle-logs" checked={showLogs} onChange={setShowLogs} />
+            </label>
+            <label className={styles.settingRow} htmlFor="toggle-sound">
+              <span className={styles.settingLabel} title="Play a sound when a response finishes">Sound on complete</span>
+              <Toggle id="toggle-sound" checked={soundOnComplete} onChange={setSoundOnComplete} />
+            </label>
+            <label className={styles.settingRow} htmlFor="toggle-notify">
+              <span className={styles.settingLabel} title="Show a browser notification when a response finishes">Notify on complete</span>
+              <Toggle id="toggle-notify" checked={notifyOnComplete} onChange={setNotifyOnComplete} />
+            </label>
+            {notifyOnComplete && hasNotificationAPI && notifPerm !== 'granted' && (
+              <div className={styles.settingRow} style={{ paddingTop: 0 }}>
+                {notifPerm === 'default' && (
+                  <button className={styles.grantBtn} onClick={handleGrantNotifications}>
+                    Grant permission
+                  </button>
+                )}
+                {notifPerm === 'denied' && (
+                  <span className={styles.permDenied}>Blocked in browser settings</span>
+                )}
+              </div>
             )}
           </div>
         )}
-        <label className={styles.settingRow} htmlFor="input-watchdog">
-          <span className={styles.settingLabel}>Watchdog timeout</span>
-          <input
-            id="input-watchdog"
-            type="number"
-            className={styles.numberInput}
-            min={10}
-            max={600}
-            value={watchdogTimeout}
-            onChange={e => {
-              const v = Math.max(10, Math.min(600, parseInt(e.target.value) || 120));
-              setWatchdogTimeout(v);
-            }}
-          />
-          <span className={styles.settingUnit}>s</span>
-        </label>
+        {tab === 'watchdog' && (
+          <div className={styles.tabContent}>
+            <label className={styles.settingRow} htmlFor="toggle-watchdog">
+              <span className={styles.settingLabel} title="Monitor CLI process for stalls and auto-recover">Enabled</span>
+              <Toggle id="toggle-watchdog" checked={watchdogEnabled} onChange={setWatchdogEnabled} />
+            </label>
+            <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-watchdog">
+              <span className={styles.settingLabel} title="Seconds of no CLI output before a retry is triggered">Timeout (s)</span>
+              <NumberInput id="input-watchdog" value={watchdogTimeout} onChange={setWatchdogTimeout} min={1} disabled={!watchdogEnabled} />
+            </label>
+            <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-retries">
+              <span className={styles.settingLabel} title="Max consecutive retries before giving up">Auto retries</span>
+              <NumberInput id="input-retries" value={watchdogAutoRetries} onChange={setWatchdogAutoRetries} min={0} disabled={!watchdogEnabled} />
+            </label>
+            <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-retry-delay">
+              <span className={styles.settingLabel} title="Initial wait before the first retry">Base delay (s)</span>
+              <NumberInput id="input-retry-delay" value={watchdogRetryDelay} onChange={setWatchdogRetryDelay} min={1} disabled={!watchdogEnabled} />
+            </label>
+            <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-delay-factor">
+              <span className={styles.settingLabel} title="Multiplier applied each retry: delay = base * factor^attempt. Set to 1 for fixed delay">Delay factor</span>
+              <NumberInput id="input-delay-factor" value={watchdogDelayFactor} onChange={setWatchdogDelayFactor} min={1} step={0.5} disabled={!watchdogEnabled} />
+            </label>
+          </div>
+        )}
+        {tab === 'info' && (
+          <div className={styles.tabContent}>
+            {version && (
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>Version</span>
+                <span className={styles.infoValue}>{version}</span>
+              </div>
+            )}
+            <div className={styles.infoRow}>
+              <span className={styles.infoLabel}>Path</span>
+              <span className={styles.infoValue}>{workspacePath || '(no workspace)'}</span>
+            </div>
+          </div>
+        )}
         {hasDevHarness && (
           <button
             className={styles.devCorner}
@@ -115,16 +185,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             dev
           </button>
         )}
-        <button
-          className={styles.infoCorner}
-          onClick={() => setInfoOpen(true)}
-          aria-label="Workspace info"
-          title="Workspace info"
-        >
-          info
-        </button>
       </div>
-      {infoOpen && <InfoModal workspacePath={workspacePath} version={version} onClose={() => setInfoOpen(false)} />}
     </>
   );
 }

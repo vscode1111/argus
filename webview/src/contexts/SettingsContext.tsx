@@ -11,8 +11,11 @@ const DEFAULTS: ArgusSettings = {
   showLogType: true,
   soundOnComplete: true,
   notifyOnComplete: true,
+  watchdogEnabled: true,
   watchdogTimeout: 120,
   watchdogAutoRetries: 3,
+  watchdogRetryDelay: 5,
+  watchdogDelayFactor: 2,
 };
 
 interface SettingsContextValue extends ArgusSettings {
@@ -25,8 +28,11 @@ interface SettingsContextValue extends ArgusSettings {
   setShowLogType: (v: boolean) => void;
   setSoundOnComplete: (v: boolean) => void;
   setNotifyOnComplete: (v: boolean) => void;
+  setWatchdogEnabled: (v: boolean) => void;
   setWatchdogTimeout: (v: number) => void;
   setWatchdogAutoRetries: (v: number) => void;
+  setWatchdogRetryDelay: (v: number) => void;
+  setWatchdogDelayFactor: (v: number) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
@@ -40,8 +46,11 @@ const SettingsContext = createContext<SettingsContextValue>({
   setShowLogType: () => {},
   setSoundOnComplete: () => {},
   setNotifyOnComplete: () => {},
+  setWatchdogEnabled: () => {},
   setWatchdogTimeout: () => {},
   setWatchdogAutoRetries: () => {},
+  setWatchdogRetryDelay: () => {},
+  setWatchdogDelayFactor: () => {},
 });
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
@@ -76,8 +85,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const setShowLogTime = useCallback((v: boolean) => update({ showLogTime: v }), [update]);
   const setShowLogType = useCallback((v: boolean) => update({ showLogType: v }), [update]);
   const setSoundOnComplete = useCallback((v: boolean) => update({ soundOnComplete: v }), [update]);
+  const setWatchdogEnabled = useCallback((v: boolean) => update({ watchdogEnabled: v }), [update]);
   const setWatchdogTimeout = useCallback((v: number) => update({ watchdogTimeout: v }), [update]);
   const setWatchdogAutoRetries = useCallback((v: number) => update({ watchdogAutoRetries: v }), [update]);
+  const setWatchdogRetryDelay = useCallback((v: number) => update({ watchdogRetryDelay: v }), [update]);
+  const setWatchdogDelayFactor = useCallback((v: number) => update({ watchdogDelayFactor: v }), [update]);
 
   const setNotifyOnComplete = useCallback((v: boolean) => {
     update({ notifyOnComplete: v });
@@ -92,7 +104,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       update,
       setVerboseTools, setShowTimer, setShowOutput, setShowLogs,
       setShowLogTime, setShowLogType, setSoundOnComplete, setNotifyOnComplete,
-      setWatchdogTimeout, setWatchdogAutoRetries,
+      setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor,
     }}>
       {children}
     </SettingsContext.Provider>

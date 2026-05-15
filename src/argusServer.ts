@@ -104,8 +104,11 @@ const DEFAULT_CONFIG: ArgusConfig = {
   showLogType: true,
   soundOnComplete: true,
   notifyOnComplete: true,
+  watchdogEnabled: true,
   watchdogTimeout: 120,
   watchdogAutoRetries: 3,
+  watchdogRetryDelay: 5,
+  watchdogDelayFactor: 2,
 };
 
 export interface ArgusConfig {
@@ -117,8 +120,11 @@ export interface ArgusConfig {
   showLogType: boolean;
   soundOnComplete: boolean;
   notifyOnComplete: boolean;
+  watchdogEnabled: boolean;
   watchdogTimeout: number;
   watchdogAutoRetries: number;
+  watchdogRetryDelay: number;
+  watchdogDelayFactor: number;
 }
 
 function readConfig(): ArgusConfig {
@@ -225,15 +231,19 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     let staleTimer: ReturnType<typeof setTimeout> | null = null;
     let autoRetryCount = 0;
     let lastMessage: { text: string; images?: Array<{ data: string; mediaType: string; name?: string }>; mode?: string } | null = null;
-    const RETRY_DELAYS = [5000, 15000, 30000];
+    function getRetryDelay(attempt: number, baseDelaySec: number, factor: number): number {
+      return baseDelaySec * 1000 * Math.pow(factor, attempt);
+    }
     const API_ERROR_RE = /API Error:|Failed to authenticate|Request not allowed|socket connection was closed|overloaded_error|invalid_api_key|permission_error/i;
 
     let lastEventTime = 0;
     let watchdogActive = false;
     let watchdogRetrying = false;
+    let watchdogRetryTimer: ReturnType<typeof setTimeout> | null = null;
     const watchdogInterval = setInterval(() => {
       if (!watchdogActive || cliDone || lastEventTime === 0) return;
       const cfg = readConfig();
+      if (!cfg.watchdogEnabled) return;
       const elapsed = (Date.now() - lastEventTime) / 1000;
       if (elapsed < cfg.watchdogTimeout) return;
 
@@ -251,7 +261,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
       if (autoRetryCount < cfg.watchdogAutoRetries && lastMessage) {
         autoRetryCount++;
-        const delay = RETRY_DELAYS[Math.min(autoRetryCount - 1, RETRY_DELAYS.length - 1)];
+        const delay = getRetryDelay(autoRetryCount - 1, cfg.watchdogRetryDelay, cfg.watchdogDelayFactor);
         sendLog('warn', `Watchdog: no CLI events for ${Math.round(elapsed)}s, auto-retry ${autoRetryCount}/${cfg.watchdogAutoRetries} in ${delay / 1000}s`);
         ws.send(JSON.stringify({
           type: 'retry_status',
@@ -264,7 +274,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         lastEventTime = Date.now();
         watchdogRetrying = true;
         if (currentProc) killProc(currentProc);
-        setTimeout(() => {
+        watchdogRetryTimer = setTimeout(() => {
+          watchdogRetryTimer = null;
           watchdogRetrying = false;
           if (!lastMessage) return;
           const synthetic = JSON.stringify({
@@ -568,6 +579,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         images?: Array<{ data: string; mediaType: string; name?: string }>;
         mode?: 'plan' | 'edit';
         _silent?: boolean;
+        _askResume?: boolean;
         path?: string;
       };
 
@@ -651,7 +663,9 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
         pendingBgTasks.clear();
         totalBgTasks = 0;
-        ws.send(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
+        if (!msg._askResume) {
+          ws.send(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
+        }
         lastEventTime = Date.now();
         watchdogActive = true;
 
@@ -798,14 +812,13 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           }));
           const willResume = pendingAskTools.size === 0 && sessionId && answers && Object.keys(answers).length > 0;
           if (willResume) {
-            ws.send(JSON.stringify({ type: 'done' }));
             const answerLines = Object.entries(answers!)
               .map(([q, a]) => `- ${q}: ${a}`)
               .join('\n');
             const followUp = `Here are my answers:\n${answerLines}`;
             setTimeout(() => {
               suppressCliOutput = false;
-              const synthetic = JSON.stringify({ type: 'send', text: followUp, mode: msg.mode, _silent: true });
+              const synthetic = JSON.stringify({ type: 'send', text: followUp, mode: msg.mode, _silent: true, _askResume: true });
               ws.emit('message', Buffer.from(synthetic));
             }, 200);
           } else {
@@ -826,6 +839,12 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           ws.send(JSON.stringify({ type: 'filePreview', path: filePath, content: `Error reading file: ${(err as Error).message}` }));
         }
       } else if (msg.type === 'stop') {
+        watchdogActive = false;
+        if (watchdogRetryTimer) {
+          clearTimeout(watchdogRetryTimer);
+          watchdogRetryTimer = null;
+        }
+        watchdogRetrying = false;
         for (const toolId of pendingAskTools) {
           const tc = toolMap.get(toolId);
           ws.send(JSON.stringify({
