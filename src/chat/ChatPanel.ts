@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as path from 'path';
+import * as os from 'os';
 import * as fs from 'fs';
 import { captureForegroundWindow, focusCachedWindow } from '../utils/win32Focus';
+import { copyImageToClipboard } from '../utils/win32Clipboard';
+
 import { getServerPort } from '../extension';
 
 export class ChatPanel {
@@ -65,7 +68,7 @@ export class ChatPanel {
     this.post({ type: 'clear' }); // App.tsx dispatches clear (clears UI immediately)
   }
 
-  private async onWebviewMessage(msg: { type: string; path?: string; line?: number; url?: string }): Promise<void> {
+  private async onWebviewMessage(msg: { type: string; path?: string; line?: number; url?: string; data?: string; mediaType?: string }): Promise<void> {
     if (msg.type === 'openFile' && msg.path) {
       const uri = vscode.Uri.file(msg.path);
       const opts: vscode.TextDocumentShowOptions = { preview: true, viewColumn: vscode.ViewColumn.One };
@@ -88,6 +91,17 @@ export class ChatPanel {
         this.post({ type: 'filePreview', path: filePath, content });
       } catch (err) {
         this.outputChannel.appendLine(`[Error] Cannot read file: ${filePath}`);
+      }
+    } else if (msg.type === 'copyImage' && msg.data) {
+      const tmp = path.join(os.tmpdir(), `argus-clip-${Date.now()}.png`);
+      try {
+        fs.writeFileSync(tmp, Buffer.from(msg.data, 'base64'));
+        const success = copyImageToClipboard(tmp);
+        this.post({ type: 'copyImageResult', success });
+      } catch {
+        this.post({ type: 'copyImageResult', success: false });
+      } finally {
+        try { fs.unlinkSync(tmp); } catch {}
       }
     } else if (msg.type === 'focusPanel') {
       this.outputChannel.appendLine(`[${new Date().toISOString()}] focusPanel received`);

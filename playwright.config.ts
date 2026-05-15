@@ -20,7 +20,7 @@ export default defineConfig({
   projects: [
     {
       name: 'mock',
-      testMatch: /background-tasks|retry-clean|retry-indicator|file-path-links|ask-dialog-resume|stop-no-error|slash-commands\.spec|ws-reconnect/,
+      testMatch: /background-tasks|retry-clean|retry-indicator|file-path-links|ask-dialog-resume|stop-no-error|slash-commands\.spec|ws-reconnect|image-copy/,
       use: chromiumOptions,
     },
     {
