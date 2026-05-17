@@ -12,11 +12,17 @@ export class ChatPanel {
   private static readonly panels = new Set<ChatPanel>();
   private static lastFocused: ChatPanel | undefined;
   private static readonly viewType = 'argusChat';
+  private static readonly PULSE_OPACITIES = [1, 0.85, 0.65, 0.45, 0.3, 0.2, 0.1, 0.2, 0.3, 0.45, 0.65, 0.85];
+  private static pulseFrameUris: vscode.Uri[] = [];
 
   private readonly panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;
   private readonly outputChannel: vscode.OutputChannel;
   private disposables: vscode.Disposable[] = [];
+  private webviewReady = false;
+  private pendingMessages: object[] = [];
+  private spinInterval?: ReturnType<typeof setInterval>;
+  private spinFrame = 0;
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
@@ -24,7 +30,15 @@ export class ChatPanel {
     this.outputChannel = vscode.window.createOutputChannel('Argus');
 
     this.panel.webview.html = this.getHtml();
-    this.panel.webview.onDidReceiveMessage(this.onWebviewMessage.bind(this), null, this.disposables);
+    this.panel.webview.onDidReceiveMessage((msg) => {
+      if (msg.type === 'webviewReady') {
+        this.webviewReady = true;
+        for (const m of this.pendingMessages) this.panel.webview.postMessage(m);
+        this.pendingMessages = [];
+        return;
+      }
+      this.onWebviewMessage(msg);
+    }, null, this.disposables);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.onDidChangeViewState((e) => {
       if (e.webviewPanel.active) ChatPanel.lastFocused = this;
@@ -51,9 +65,11 @@ export class ChatPanel {
   }
 
   public static focusOrCreate(extensionUri: vscode.Uri): ChatPanel {
-    if (ChatPanel.lastFocused) {
-      ChatPanel.lastFocused.panel.reveal(undefined, true);
-      return ChatPanel.lastFocused;
+    const target = ChatPanel.lastFocused ?? ChatPanel.panels.values().next().value;
+    if (target) {
+      target.panel.reveal(undefined, true);
+      ChatPanel.lastFocused = target;
+      return target;
     }
     return ChatPanel.createNew(extensionUri);
   }
@@ -68,7 +84,7 @@ export class ChatPanel {
     this.post({ type: 'clear' }); // App.tsx dispatches clear (clears UI immediately)
   }
 
-  private async onWebviewMessage(msg: { type: string; path?: string; line?: number; url?: string; data?: string; mediaType?: string }): Promise<void> {
+  private async onWebviewMessage(msg: { type: string; path?: string; line?: number; url?: string; data?: string; mediaType?: string; active?: boolean; outcome?: string }): Promise<void> {
     if (msg.type === 'openFile' && msg.path) {
       const uri = vscode.Uri.file(msg.path);
       const opts: vscode.TextDocumentShowOptions = { preview: true, viewColumn: vscode.ViewColumn.One };
@@ -103,6 +119,9 @@ export class ChatPanel {
       } finally {
         try { fs.unlinkSync(tmp); } catch {}
       }
+    } else if (msg.type === 'streamingState') {
+      if (msg.active) this.startSpin();
+      else this.stopSpin(msg.outcome);
     } else if (msg.type === 'focusPanel') {
       this.outputChannel.appendLine(`[${new Date().toISOString()}] focusPanel received`);
       focusCachedWindow((text) => this.outputChannel.appendLine(`[${new Date().toISOString()}] ${text}`));
@@ -110,7 +129,50 @@ export class ChatPanel {
     }
   }
 
+  private static readonly OUTCOME_ICONS: Record<string, string> = {
+    success: 'argus-icon-success.svg',
+    error: 'argus-icon-error.svg',
+    stopped: 'argus-icon-stopped.svg',
+    retried: 'argus-icon-retried.svg',
+  };
+
+  private static ensurePulseFrames(): void {
+    if (ChatPanel.pulseFrameUris.length > 0) return;
+    const tmpDir = os.tmpdir();
+    for (let i = 0; i < ChatPanel.PULSE_OPACITIES.length; i++) {
+      const op = ChatPanel.PULSE_OPACITIES[i];
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#3794ff" stroke-width="2" opacity="${op}"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>`;
+      const filePath = path.join(tmpDir, `argus-pulse-${i}.svg`);
+      fs.writeFileSync(filePath, svg);
+      ChatPanel.pulseFrameUris.push(vscode.Uri.file(filePath));
+    }
+  }
+
+  private startSpin(): void {
+    if (this.spinInterval) return;
+    ChatPanel.ensurePulseFrames();
+    this.spinFrame = 0;
+    this.panel.iconPath = ChatPanel.pulseFrameUris[0];
+    this.spinInterval = setInterval(() => {
+      this.spinFrame = (this.spinFrame + 1) % ChatPanel.pulseFrameUris.length;
+      this.panel.iconPath = ChatPanel.pulseFrameUris[this.spinFrame];
+    }, 200);
+  }
+
+  private stopSpin(outcome?: string): void {
+    if (this.spinInterval) {
+      clearInterval(this.spinInterval);
+      this.spinInterval = undefined;
+    }
+    const iconFile = (outcome && ChatPanel.OUTCOME_ICONS[outcome]) || 'argus-icon.svg';
+    this.panel.iconPath = vscode.Uri.joinPath(this.extensionUri, 'media', iconFile);
+  }
+
   private post(data: object): void {
+    if (!this.webviewReady) {
+      this.pendingMessages.push(data);
+      return;
+    }
     this.panel.webview.postMessage(data);
   }
 
@@ -137,6 +199,7 @@ export class ChatPanel {
   }
 
   private dispose(): void {
+    this.stopSpin();
     ChatPanel.panels.delete(this);
     if (ChatPanel.lastFocused === this) {
       ChatPanel.lastFocused = ChatPanel.panels.values().next().value;

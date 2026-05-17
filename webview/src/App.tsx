@@ -240,7 +240,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, messages: [], streaming: null, isStreaming: false, logs: [], contextUsage: null };
 
     case 'prefill':
-      return { ...state, prefill: action.text };
+      return { ...state, prefill: action.text + '\x00' + Date.now() };
 
     case 'workspaceInfo':
       return { ...state, workspacePath: action.path, version: action.version ?? '' };
@@ -435,6 +435,7 @@ function AppInner() {
       }
     }
     window.addEventListener('message', handleMessage);
+    postMessage({ type: 'webviewReady' });
     postMessage({ type: 'getInfo' });
     return () => window.removeEventListener('message', handleMessage);
   }, []);
@@ -461,6 +462,15 @@ function AppInner() {
     }
     wasStreaming.current = state.isStreaming;
   }, [state.isStreaming, soundOnComplete, notifyOnComplete]);
+
+  useEffect(() => {
+    if (state.isStreaming) {
+      postMessage({ type: 'streamingState', active: true });
+    } else {
+      const last = [...state.messages].reverse().find(m => m.role === 'assistant');
+      postMessage({ type: 'streamingState', active: false, outcome: last?.outcome });
+    }
+  }, [state.isStreaming]);
 
   useEffect(() => {
     function onResize() { setIsNarrow(window.innerWidth < 650); }

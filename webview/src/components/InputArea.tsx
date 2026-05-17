@@ -117,8 +117,12 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
 
   useEffect(() => {
     if (prefill && textareaRef.current) {
-      textareaRef.current.value = prefill;
+      const text = prefill.split('\x00')[0];
+      const existing = textareaRef.current.value;
+      textareaRef.current.value = (existing ? existing.trimEnd() + '\n' + text : text) + '\n';
+      textareaRef.current.selectionStart = textareaRef.current.selectionEnd = textareaRef.current.value.length;
       textareaRef.current.focus();
+      textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
       adjustHeight();
     }
   }, [prefill]);

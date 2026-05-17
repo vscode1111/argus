@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { ChatPanel } from './chat/ChatPanel';
 import { ArgusCodeLensProvider } from './providers/CodeLensProvider';
 import { InlineSuggestProvider } from './providers/InlineSuggestProvider';
@@ -93,6 +94,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       const prefix = `Edit this code from ${selection.file} (line ${selection.startLine}):\n\`\`\`\n${selection.text}\n\`\`\`\n\nChange: `;
       panel.sendWithContext(prefix);
+    }),
+
+    vscode.commands.registerCommand('argus.sendPath', (uri?: vscode.Uri) => {
+      if (!uri) return;
+      const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const filePath = root ? path.relative(root, uri.fsPath) : uri.fsPath;
+      const panel = ChatPanel.focusOrCreate(context.extensionUri);
+      panel.sendWithContext(filePath + ' ');
     }),
 
     vscode.commands.registerCommand('argus.reviewSelection', () => {

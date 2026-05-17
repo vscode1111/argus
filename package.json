@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.40",
+  "version": "0.0.41",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "license": "UNLICENSED",
@@ -87,6 +87,11 @@
       {
         "command": "argus.newSession",
         "title": "Argus: New Session"
+      },
+      {
+        "command": "argus.sendPath",
+        "title": "Send path to Argus",
+        "icon": "media/argus-icon.svg"
       }
     ],
     "keybindings": [
@@ -107,6 +112,18 @@
         {
           "command": "argus.openChat",
           "group": "navigation"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "argus.sendPath",
+          "group": "navigation@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "argus.sendPath",
+          "group": "navigation@2"
         }
       ],
       "editor/context": [
