@@ -103,8 +103,20 @@ export class ChatPanel {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
       const filePath = path.isAbsolute(msg.path) ? msg.path : path.resolve(root, msg.path);
       try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        this.post({ type: 'filePreview', path: filePath, content });
+        const ext = path.extname(filePath).toLowerCase();
+        const imageExts: Record<string, string> = {
+          '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+          '.gif': 'image/gif', '.bmp': 'image/bmp', '.webp': 'image/webp',
+          '.ico': 'image/x-icon', '.tiff': 'image/tiff', '.tif': 'image/tiff',
+        };
+        const mime = imageExts[ext];
+        if (mime) {
+          const base64 = fs.readFileSync(filePath).toString('base64');
+          this.post({ type: 'filePreview', path: filePath, content: `data:${mime};base64,${base64}` });
+        } else {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          this.post({ type: 'filePreview', path: filePath, content });
+        }
       } catch (err) {
         this.outputChannel.appendLine(`[Error] Cannot read file: ${filePath}`);
       }

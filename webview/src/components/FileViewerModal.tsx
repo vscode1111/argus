@@ -92,6 +92,8 @@ interface Props {
   onClose: () => void;
 }
 
+const isDataUrl = (s: string) => s.startsWith('data:image/');
+
 export function FileViewerModal({ path, content, line, endLine, copyText, onClose }: Props) {
   // Default to dark unless VS Code explicitly marks the theme as light.
   const isDark = !document.body.classList.contains('vscode-light');
@@ -99,8 +101,9 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
 
   useEscapeKey(onClose);
 
-  const language = detectLanguage(path);
-  const rawCode = stripLineNumbers(content);
+  const isImage = isDataUrl(content);
+  const language = isImage ? 'text' : detectLanguage(path);
+  const rawCode = isImage ? '' : stripLineNumbers(content);
   const { encoding, setEncoding, decoded: code } = useEncoding(rawCode);
   const filename = path.split(/[\\/]/).pop() ?? path;
 
@@ -162,7 +165,7 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
             )}
           </div>
           <div className={modal.actions}>
-            <EncodingSelect value={encoding} onChange={setEncoding} />
+            {!isImage && <EncodingSelect value={encoding} onChange={setEncoding} />}
             <button className={modal.btnOpen} onClick={openInEditor} title="Open in VS Code editor">
               Open in editor
             </button>
@@ -170,7 +173,11 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
           </div>
         </div>
         <div className={modal.body} ref={bodyRef}>
-          {language === 'markdown' ? (
+          {isImage ? (
+            <div className={styles.imageBody}>
+              <img src={content} alt={filename} />
+            </div>
+          ) : language === 'markdown' ? (
             <div className={styles.mdBody}>
               <Markdown breaks>{code}</Markdown>
             </div>

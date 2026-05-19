@@ -868,8 +868,20 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       } else if (msg.type === 'readFilePreview' && msg.path) {
         const filePath = path.isAbsolute(msg.path) ? msg.path : path.resolve(workspaceDir, msg.path);
         try {
-          const content = fs.readFileSync(filePath, 'utf-8');
-          ws.send(JSON.stringify({ type: 'filePreview', path: filePath, content }));
+          const ext = path.extname(filePath).toLowerCase();
+          const imageExts: Record<string, string> = {
+            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+            '.gif': 'image/gif', '.bmp': 'image/bmp', '.webp': 'image/webp',
+            '.ico': 'image/x-icon', '.tiff': 'image/tiff', '.tif': 'image/tiff',
+          };
+          const mime = imageExts[ext];
+          if (mime) {
+            const base64 = fs.readFileSync(filePath).toString('base64');
+            ws.send(JSON.stringify({ type: 'filePreview', path: filePath, content: `data:${mime};base64,${base64}` }));
+          } else {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            ws.send(JSON.stringify({ type: 'filePreview', path: filePath, content }));
+          }
         } catch (err) {
           ws.send(JSON.stringify({ type: 'filePreview', path: filePath, content: `Error reading file: ${(err as Error).message}` }));
         }

@@ -683,7 +683,9 @@ async function simulateRichText() {
     '| D:\\_Projects\\vscode1111\\argus\\package.json | 5 | Low |\n',
     '| D:\\_Projects\\vscode1111\\argus\\webview\\src\\utils\\filePath.tsx:9 | 9 | Medium |\n',
     '\nAlso check **D:\\_Projects\\vscode1111\\argus\\src\\extension.ts** for the activation entry point.\n',
-    'And the _config_ at D:\\_Projects\\vscode1111\\argus\\src\\utils\\config.ts handles settings.',
+    'And the _config_ at D:\\_Projects\\vscode1111\\argus\\src\\utils\\config.ts handles settings.\n',
+    '\n### 4. App icon\n',
+    'The icon used in the context menu: D:\\_Projects\\vscode1111\\argus\\media\\argus-icon.png',
   ].join('') });
   await delay(100);
   send({ type: 'done' });
