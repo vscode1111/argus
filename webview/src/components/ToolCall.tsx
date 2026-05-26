@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ToolCallData } from '../types';
 import { postMessage } from '../vscode';
 import { useSettings } from '../contexts/SettingsContext';
+import { plural } from '../utils/text';
 import { FileViewerModal } from './FileViewerModal';
 import { DiffViewerModal } from './DiffViewerModal';
 import styles from './ToolCall.module.css';
@@ -261,8 +262,10 @@ export function ToolCall({ call, sessionDone }: Props) {
         {isCancelled && (
           <div className={styles.askCancelled}>Session ended</div>
         )}
-        {!isPending && !isCancelled && result && (
-          <div className={styles.askResultSummary}>{result}</div>
+        {!isPending && !isCancelled && Object.keys(answeredMap).length > 0 && (
+          <div className={styles.askResultSummary}>
+            User has answered your questions: {Object.entries(answeredMap).map(([q, a]) => `"${q}"="${a}"`).join(', ')}
+          </div>
         )}
       </div>
     );
@@ -346,7 +349,7 @@ export function ToolCall({ call, sessionDone }: Props) {
                 href="#"
                 onClick={e => { e.preventDefault(); setViewerOpen(true); }}
               >
-                {resultLineCount} {name === 'Glob' ? 'files' : 'lines of output'}
+                {plural(resultLineCount, name === 'Glob' ? 'file' : 'line of output', name === 'Glob' ? 'files' : 'lines of output')}
               </a>
             )}
             {hasDiff && (

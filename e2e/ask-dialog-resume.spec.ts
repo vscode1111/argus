@@ -44,9 +44,11 @@ test.describe('AskUserQuestion resume', () => {
       call: { id: ASK_TOOL_ID, name: 'AskUserQuestion', input: ASK_TOOL_INPUT, result: answerResult },
     });
 
-    // Answer result shown, streaming still active (no done yet)
+    // Answer result shown with formatted text, streaming still active (no done yet)
     const resultSummary = page.locator('[class*="askResultSummary"]');
     await expect(resultSummary).toBeVisible();
+    await expect(resultSummary).toContainText('User has answered your questions');
+    await expect(resultSummary).toContainText('"Which approach should we use?"="Option A"');
     await expect(page.getByText('Let me ask you something.')).toBeVisible();
 
     // Follow-up text arrives in the same streaming message (no thinking_start)
@@ -152,5 +154,72 @@ test.describe('AskUserQuestion resume', () => {
     // Two assistant timers (first reply + combined ask+follow-up)
     const timers = page.locator('[class*="responseTimeSuccess"]');
     await expect(timers).toHaveCount(2);
+  });
+
+  test('multi-question result summary shows all Q/A pairs', async ({ page }) => {
+    const multiInput = {
+      questions: [
+        { question: 'Preferred color?', header: 'Color', multiSelect: false, options: [{ label: 'Red' }, { label: 'Blue' }] },
+        { question: 'Preferred size?', header: 'Size', multiSelect: false, options: [{ label: 'Small' }, { label: 'Large' }] },
+      ],
+    };
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub multi-q' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'tool_start', call: { id: 'ask-multi', name: 'AskUserQuestion', input: multiInput } });
+
+    const answerResult = JSON.stringify({ answers: { 'Preferred color?': 'Blue', 'Preferred size?': 'Small' } });
+    await send(page, {
+      type: 'tool_end',
+      call: { id: 'ask-multi', name: 'AskUserQuestion', input: multiInput, result: answerResult },
+    });
+    await send(page, { type: 'done' });
+
+    const summary = page.locator('[class*="askResultSummary"]');
+    await expect(summary).toContainText('"Preferred color?"="Blue"');
+    await expect(summary).toContainText('"Preferred size?"="Small"');
+  });
+
+  test('result summary not shown for cancelled dialog', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub cancel-test' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'tool_start', call: { id: ASK_TOOL_ID, name: 'AskUserQuestion', input: ASK_TOOL_INPUT } });
+
+    await send(page, {
+      type: 'tool_end',
+      call: { id: ASK_TOOL_ID, name: 'AskUserQuestion', input: ASK_TOOL_INPUT, result: JSON.stringify({ cancelled: true }) },
+    });
+    await send(page, { type: 'done' });
+
+    await expect(page.locator('[class*="askCancelled"]')).toBeVisible();
+    await expect(page.locator('[class*="askResultSummary"]')).not.toBeVisible();
+  });
+
+  test('thinking continues after answer without losing dialog', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub think-after' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'thinking_chunk', text: 'Planning...' });
+    await send(page, { type: 'tool_start', call: { id: ASK_TOOL_ID, name: 'AskUserQuestion', input: ASK_TOOL_INPUT } });
+
+    const answerResult = JSON.stringify({ answers: { 'Which approach should we use?': 'Option A' } });
+    await send(page, {
+      type: 'tool_end',
+      call: { id: ASK_TOOL_ID, name: 'AskUserQuestion', input: ASK_TOOL_INPUT, result: answerResult },
+    });
+
+    // New thinking arrives after answer (simulates CLI continuing)
+    await send(page, { type: 'thinking_chunk', text: ' Proceeding with the answer.' });
+    await send(page, { type: 'text_chunk', text: 'Here is my response after your answer.' });
+    await send(page, { type: 'done' });
+
+    // Dialog with result summary preserved
+    const summary = page.locator('[class*="askResultSummary"]');
+    await expect(summary).toBeVisible();
+
+    // Follow-up text visible
+    await expect(page.getByText('Here is my response after your answer.')).toBeVisible();
+
+    // Single message (not split by thinking)
+    const timers = page.locator('[class*="responseTimeSuccess"]');
+    await expect(timers).toHaveCount(1);
   });
 });

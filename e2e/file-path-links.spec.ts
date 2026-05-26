@@ -186,3 +186,137 @@ test.describe('relative file path links', () => {
     await expect(link.getByRole('link')).toHaveCount(0);
   });
 });
+
+const modalDialog = (page: import('@playwright/test').Page) =>
+  page.locator('[role="dialog"]');
+
+const modalImage = (page: import('@playwright/test').Page) =>
+  modalDialog(page).locator('img');
+
+test.describe('image file preview', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('argus.showDevHarness', 'true');
+    });
+    await waitForApp(page);
+  });
+
+  async function clickImageAndWaitForModal(
+    link: import('@playwright/test').Locator,
+    page: import('@playwright/test').Page,
+  ) {
+    await expect(async () => {
+      await link.click();
+      await expect(modalImage(page)).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
+  }
+
+  test('clicking an image path opens FileViewerModal with <img> instead of code', async ({ page }) => {
+    await clickDevButton(page, 'rich+paths');
+    await expect(page.getByRole('heading', { name: 'App icon' })).toBeVisible({ timeout: 5_000 });
+
+    const link = page.getByRole('link', { name: /argus-icon\.png/ });
+    await clickImageAndWaitForModal(link, page);
+
+    const img = modalImage(page);
+    await expect(img).toHaveAttribute('src', /^data:image\/png;base64,/);
+    await expect(img).toHaveAttribute('alt', 'argus-icon.png');
+
+    // No SyntaxHighlighter lines for images
+    await expect(modalDialog(page).locator('[data-line]')).toHaveCount(0);
+  });
+
+  test('image modal has no encoding dropdown', async ({ page }) => {
+    await clickDevButton(page, 'rich+paths');
+    await expect(page.getByRole('heading', { name: 'App icon' })).toBeVisible({ timeout: 5_000 });
+
+    const link = page.getByRole('link', { name: /argus-icon\.png/ });
+    await clickImageAndWaitForModal(link, page);
+
+    const dialog = modalDialog(page);
+    await expect(dialog.locator('select')).toHaveCount(0);
+    await expect(dialog.locator('button', { hasText: 'Open in editor' })).toBeVisible();
+  });
+
+  test('Escape closes the image modal', async ({ page }) => {
+    await clickDevButton(page, 'rich+paths');
+    await expect(page.getByRole('heading', { name: 'App icon' })).toBeVisible({ timeout: 5_000 });
+
+    const link = page.getByRole('link', { name: /argus-icon\.png/ });
+    await clickImageAndWaitForModal(link, page);
+
+    await expect(async () => {
+      await page.keyboard.press('Escape');
+      await expect(modalDialog(page)).not.toBeVisible({ timeout: 500 });
+    }).toPass({ timeout: 5_000 });
+  });
+
+  test('relative image path opens as image preview', async ({ page }) => {
+    await sendDevMessage(page, 'Check media/argus-icon.png for the icon');
+
+    const link = page.getByRole('link', { name: /argus-icon\.png/ });
+    await clickImageAndWaitForModal(link, page);
+
+    const img = modalImage(page);
+    await expect(img).toHaveAttribute('src', /^data:image\/png;base64,/);
+    await expect(modalDialog(page).locator('[data-line]')).toHaveCount(0);
+
+    await page.keyboard.press('Escape');
+  });
+});
+
+test.describe('tool result count pluralization', () => {
+  function send(page: import('@playwright/test').Page, data: object) {
+    return page.evaluate((d) => {
+      window.dispatchEvent(new MessageEvent('message', { data: d }));
+    }, data);
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await waitForApp(page);
+  });
+
+  test('Glob with 1 result shows "1 file"', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-glob-test' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'tool_start', call: { id: 'g1', name: 'Glob', input: { pattern: '*.ts' } } });
+    await send(page, { type: 'tool_end', call: { id: 'g1', name: 'Glob', input: { pattern: '*.ts' }, result: 'src/index.ts' } });
+    await send(page, { type: 'done' });
+
+    const countLink = page.locator('[class*="toolResultCount"]');
+    await expect(countLink).toHaveText('1 file');
+  });
+
+  test('Glob with 3 results shows "3 files"', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-glob-multi' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'tool_start', call: { id: 'g2', name: 'Glob', input: { pattern: '*.ts' } } });
+    await send(page, { type: 'tool_end', call: { id: 'g2', name: 'Glob', input: { pattern: '*.ts' }, result: 'a.ts\nb.ts\nc.ts' } });
+    await send(page, { type: 'done' });
+
+    const countLink = page.locator('[class*="toolResultCount"]');
+    await expect(countLink).toHaveText('3 files');
+  });
+
+  test('Grep with 1 result shows "1 line of output"', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-grep-test' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'tool_start', call: { id: 'gr1', name: 'Grep', input: { pattern: 'foo' } } });
+    await send(page, { type: 'tool_end', call: { id: 'gr1', name: 'Grep', input: { pattern: 'foo' }, result: 'src/foo.ts' } });
+    await send(page, { type: 'done' });
+
+    const countLink = page.locator('[class*="toolResultCount"]');
+    await expect(countLink).toHaveText('1 line of output');
+  });
+
+  test('Grep with multiple results shows "N lines of output"', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-grep-multi' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'tool_start', call: { id: 'gr2', name: 'Grep', input: { pattern: 'bar' } } });
+    await send(page, { type: 'tool_end', call: { id: 'gr2', name: 'Grep', input: { pattern: 'bar' }, result: 'a.ts:1:bar\nb.ts:2:bar' } });
+    await send(page, { type: 'done' });
+
+    const countLink = page.locator('[class*="toolResultCount"]');
+    await expect(countLink).toHaveText('2 lines of output');
+  });
+});

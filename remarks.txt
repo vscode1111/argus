@@ -20,3 +20,5 @@ analyze project
 
 Run this bash command in background: sleep 30 && echo "Background task done". Do not read any files, just run it.
 Run these 3 bash commands in background: sleep 10 && echo task1-done, sleep 20 && echo task2-done, sleep 30 && echo task3-done
+
+Общий вопрос. У меня есть небольшой псевдо-апп (Хром), которое запускает этот проект. Хотелось бы добавить его в контекстное меню Windows - по аналогии с VS Code. Задай мне несколько отдельных вопросов в виде диалогового окна: 1) какие пункты меню добавить, 2) целевые типы объектов (файлы, папки, фон), 3) способ реализации.

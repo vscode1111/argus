@@ -25,7 +25,7 @@ async function simulateLogs() {
   await delay(150);
   log('info', 'tool_start: Read (toolu_abc123)');
   await delay(600);
-  log('debug', 'user message: 1 block(s) [tool_result:toolu_abc123]');
+  log('debug', 'user message: 1 block [tool_result:toolu_abc123]');
   log('debug', 'tool_result toolu_abc123: import React from "react";\nimport { useReducer } from "react";');
   await delay(200);
   log('debug', 'event: content_block_delta {"type":"content_block_delta","index":2}');

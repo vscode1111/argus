@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { RetryStatus } from '../types';
 import { formatDuration } from '../utils/time';
+import { plural } from '../utils/text';
 import msg from './shared/message.module.css';
 import styles from './WorkingIndicator.module.css';
 
@@ -63,9 +64,9 @@ export function WorkingIndicator({ logCount, retryStatus, backgroundWaiting, bgT
 
   let label: string;
   if (backgroundWaiting) {
-    const plural = bgTasksTotal != null && bgTasksTotal > 1;
-    const counter = plural ? ` (${bgTasksCompleted ?? 0}/${bgTasksTotal})` : '';
-    label = `Waiting background ${plural ? 'tasks' : 'task'}${counter}`;
+    const total = bgTasksTotal ?? 1;
+    const counter = total > 1 ? ` (${bgTasksCompleted ?? 0}/${total})` : '';
+    label = `Waiting ${plural(total, 'background task')}${counter}`;
   } else if (retryStatus?.timedOut) {
     label = 'Timed out, press Stop';
   } else if (retryStatus?.autoRetry != null) {

@@ -8,6 +8,10 @@ import type { IncomingMessage } from 'http';
 
 const IS_WIN = process.platform === 'win32';
 
+function plural(count: number, singular: string, pluralForm?: string): string {
+  return `${count} ${count === 1 ? singular : (pluralForm ?? singular + 's')}`;
+}
+
 let resolvedClaudeBin: string | null = null;
 function resolveClaudeBin(): string {
   if (resolvedClaudeBin) return resolvedClaudeBin;
@@ -449,7 +453,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
                 ws.send(JSON.stringify({ type: 'thinking_chunk', text: block.thinking }));
               } else if (block.type === 'text' && block.text && !receivedDeltas) {
                 ws.send(JSON.stringify({ type: 'text_chunk', text: block.text }));
-              } else if (block.type === 'tool_use') {
+              } else if (block.type === 'tool_use' && !toolMap.has(block.id as string) && !answeredTools.has(block.id as string)) {
                 sendLog('info', `tool_start: ${block.name} (${block.id})`);
                 toolMap.set(block.id as string, { name: block.name as string, input: block.input });
                 ws.send(JSON.stringify({ type: 'tool_start', call: { id: block.id, name: block.name, input: block.input } }));
@@ -492,7 +496,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
             const userMsg = event as { type: 'user'; message?: { content?: Array<Record<string, unknown>> }; content?: Array<Record<string, unknown>> };
             const raw = userMsg.message?.content ?? userMsg.content ?? [];
             const blocks = Array.isArray(raw) ? raw : [];
-            sendLog('debug', `user message: ${blocks.length} block(s)`);
+            sendLog('debug', `user message: ${plural(blocks.length, 'block')}`);
             for (const block of blocks) {
               if (block.type === 'tool_result') {
                 const toolId = block.tool_use_id as string;
@@ -565,7 +569,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         } else if (code !== 0 && code !== null) {
           const { message, errorKind } = classifyError(stderrOutput, code);
           if (pendingAskTools.size > 0) {
-            sendLog('warn', `CLI exited (${errorKind}) with ${pendingAskTools.size} pending question(s): ${message}`);
+            sendLog('warn', `CLI exited (${errorKind}) with ${plural(pendingAskTools.size, 'pending question')}: ${message}`);
           } else if (isActiveProc) {
             ws.send(JSON.stringify({ type: 'error', text: message, errorKind }));
             ws.send(JSON.stringify({ type: 'done' }));
@@ -721,7 +725,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
               });
             }
           }
-          sendLog('debug', `Attaching ${images.length} attachment(s)`);
+          sendLog('debug', `Attaching ${plural(images.length, 'attachment')}`);
         }
         if (text) {
           contentBlocks.push({ type: 'text', text });
@@ -830,6 +834,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
         pendingAskTools.delete(answerId);
         answeredTools.add(answerId);
+        if (pendingAskTools.size === 0) suppressCliOutput = false;
         if (currentProc?.stdin?.writable && !cliDone) {
           ws.send(JSON.stringify({
             type: 'tool_end',

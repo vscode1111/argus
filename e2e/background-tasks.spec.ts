@@ -31,7 +31,7 @@ test.describe('background tasks', () => {
 
     const indicator = page.locator('[class*="working"]');
     await expect(indicator).toBeVisible();
-    await expect(indicator).toContainText('Waiting background task');
+    await expect(indicator).toContainText('Waiting 1 background task');
     // No counter for single task
     await expect(indicator).not.toContainText('(');
   });
@@ -64,7 +64,7 @@ test.describe('background tasks', () => {
 
     const indicator = page.locator('[class*="working"]');
     await expect(indicator).toBeVisible();
-    await expect(indicator).toContainText('Waiting background tasks (0/3)');
+    await expect(indicator).toContainText('Waiting 3 background tasks (0/3)');
   });
 
   test('counter updates as tasks complete', async ({ page }) => {
@@ -82,7 +82,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'done', pendingBackgroundTasks: 2, totalBackgroundTasks: 3 });
 
     let indicator = page.locator('[class*="working"]');
-    await expect(indicator).toContainText('Waiting background tasks (1/3)');
+    await expect(indicator).toContainText('Waiting 3 background tasks (1/3)');
 
     // Task 2 completes
     await completeBgTask(page, 't2', 'completed (exit code 0)');
@@ -91,7 +91,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 3 });
 
     indicator = page.locator('[class*="working"]');
-    await expect(indicator).toContainText('Waiting background tasks (2/3)');
+    await expect(indicator).toContainText('Waiting 3 background tasks (2/3)');
 
     // Task 3 completes (last one)
     await completeBgTask(page, 't3', 'completed (exit code 0)');
