@@ -5,9 +5,10 @@ import msg from './shared/message.module.css';
 interface Props {
   startTime: number;
   lastEventTime: number;
+  hideIdle?: boolean;
 }
 
-export function StreamingTimer({ startTime, lastEventTime }: Props) {
+export function StreamingTimer({ startTime, lastEventTime, hideIdle }: Props) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -20,7 +21,7 @@ export function StreamingTimer({ startTime, lastEventTime }: Props) {
 
   return (
     <div className={msg.responseTime}>
-      {total}{idle > 0 ? ` (${idle}s)` : ''}
+      {total}{!hideIdle && idle > 0 ? ` (${idle}s)` : ''}
     </div>
   );
 }

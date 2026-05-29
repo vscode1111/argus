@@ -50,7 +50,7 @@ export function StreamingMessage({ streaming, logCount }: Props) {
             </div>;
       })}
       {streaming.retryStatus && <WorkingIndicator logCount={logCount} retryStatus={streaming.retryStatus} />}
-      {showTimer && <StreamingTimer startTime={startTime} lastEventTime={lastEventTime} />}
+      {showTimer && <StreamingTimer startTime={startTime} lastEventTime={lastEventTime} hideIdle={!!streaming.askPausedAt} />}
     </div>
   );
 }

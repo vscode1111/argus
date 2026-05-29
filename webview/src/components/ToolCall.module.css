@@ -35,6 +35,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 .toolSummaryBash { color: var(--vscode-symbolIcon-variableForeground, #dcdcaa); }
 
@@ -80,6 +81,18 @@
   cursor: pointer;
 }
 .toolResultCount:hover { opacity: 0.85; }
+.toolResultEmpty {
+  color: var(--vscode-errorForeground);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  white-space: nowrap;
+}
+.toolResultInline {
+  color: var(--vscode-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  white-space: nowrap;
+}
 
 .toolDiff {
   margin-top: 4px;
@@ -94,8 +107,8 @@
   background: var(--tool-bg);
   border-bottom: 1px solid var(--border);
 }
-.statsAdded { color: var(--diff-added); }
-.statsRemoved { color: var(--diff-removed); }
+.statsAdded { color: var(--diff-added); white-space: nowrap; }
+.statsRemoved { color: var(--diff-removed); white-space: nowrap; }
 .toolDiffTable {
   display: grid;
   grid-template-columns: 1fr 1fr;

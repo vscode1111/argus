@@ -276,15 +276,15 @@ test.describe('tool result count pluralization', () => {
     await waitForApp(page);
   });
 
-  test('Glob with 1 result shows "1 file"', async ({ page }) => {
+  test('Glob with 1 result shows inline result', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-glob-test' } });
     await send(page, { type: 'thinking_start' });
     await send(page, { type: 'tool_start', call: { id: 'g1', name: 'Glob', input: { pattern: '*.ts' } } });
     await send(page, { type: 'tool_end', call: { id: 'g1', name: 'Glob', input: { pattern: '*.ts' }, result: 'src/index.ts' } });
     await send(page, { type: 'done' });
 
-    const countLink = page.locator('[class*="toolResultCount"]');
-    await expect(countLink).toHaveText('1 file');
+    const inline = page.locator('[class*="toolResultInline"]');
+    await expect(inline).toHaveText('src/index.ts');
   });
 
   test('Glob with 3 results shows "3 files"', async ({ page }) => {
@@ -298,15 +298,15 @@ test.describe('tool result count pluralization', () => {
     await expect(countLink).toHaveText('3 files');
   });
 
-  test('Grep with 1 result shows "1 line of output"', async ({ page }) => {
+  test('Grep with 1 result shows inline result', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-grep-test' } });
     await send(page, { type: 'thinking_start' });
     await send(page, { type: 'tool_start', call: { id: 'gr1', name: 'Grep', input: { pattern: 'foo' } } });
     await send(page, { type: 'tool_end', call: { id: 'gr1', name: 'Grep', input: { pattern: 'foo' }, result: 'src/foo.ts' } });
     await send(page, { type: 'done' });
 
-    const countLink = page.locator('[class*="toolResultCount"]');
-    await expect(countLink).toHaveText('1 line of output');
+    const inline = page.locator('[class*="toolResultInline"]');
+    await expect(inline).toHaveText('src/foo.ts');
   });
 
   test('Grep with multiple results shows "N lines of output"', async ({ page }) => {

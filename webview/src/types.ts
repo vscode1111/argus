@@ -72,6 +72,7 @@ export type StreamingState = {
   retryStatus: RetryStatus | null;
   watchdogRetries: number;
   backgroundWaiting?: boolean;
+  askPausedAt?: number;
 };
 
 export type ArgusSettings = {

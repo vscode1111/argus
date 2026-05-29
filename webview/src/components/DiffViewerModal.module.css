@@ -41,6 +41,7 @@
   overflow-wrap: break-word;
   line-height: 1.5;
   min-height: 1.5em;
+  min-width: 0;
 }
 .lineOld {
   border-right: 1px solid var(--border);

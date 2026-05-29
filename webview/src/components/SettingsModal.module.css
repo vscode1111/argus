@@ -20,7 +20,19 @@
   z-index: 100;
   min-width: 200px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  border-top: 3px solid #90ee90;
 }
+
+.dragHandle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  cursor: grab;
+  border-radius: 8px 8px 0 0;
+}
+.dragHandle:active { cursor: grabbing; }
 
 .closeBtn {
   position: absolute;

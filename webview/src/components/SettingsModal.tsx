@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useSettings } from '../contexts/SettingsContext';
 import { postMessage } from '../vscode';
@@ -89,10 +89,45 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
 
   useEscapeKey(onClose);
 
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  const onMouseMove = useCallback((e: MouseEvent) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    setOffset({ x: dragRef.current.origX + dx, y: dragRef.current.origY + dy });
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    dragRef.current = null;
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  }, [onMouseMove]);
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: offset.x, origY: offset.y };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [offset, onMouseMove, onMouseUp]);
+
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [onMouseMove, onMouseUp]);
+
   return (
     <>
       <div className={styles.overlay} onClick={onClose} aria-hidden="true" />
-      <div className={styles.dropdown} role="dialog" aria-label="Settings">
+      <div
+        className={styles.dropdown}
+        role="dialog"
+        aria-label="Settings"
+        style={{ transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))` }}
+      >
+        <div className={styles.dragHandle} onMouseDown={onDragStart} />
         <button className={styles.closeBtn} onClick={onClose} aria-label="Close settings" title="Close">&times;</button>
         <div className={styles.tabBar}>
           <button className={[styles.tab, tab === 'general' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('general')}>General</button>

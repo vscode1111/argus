@@ -88,22 +88,28 @@ function reducer(state: AppState, action: AppAction): AppState {
           blocks: [...state.streaming.blocks, { type: 'tool', call: action.call }],
           lastEventTime: Date.now(),
           retryStatus: null,
+          askPausedAt: action.call.name === 'AskUserQuestion' ? Date.now() : state.streaming.askPausedAt,
         },
       };
 
     case 'tool_end': {
       const inStreaming = state.streaming?.blocks.some(b => b.type === 'tool' && b.call.id === action.call.id);
       if (state.streaming && inStreaming) {
+        const updatedBlocks = state.streaming.blocks.map(b =>
+          b.type === 'tool' && b.call.id === action.call.id
+            ? { type: 'tool' as const, call: { ...b.call, result: action.call.result, error: action.call.error } }
+            : b
+        );
+        const stillHasPendingAsk = updatedBlocks.some(
+          b => b.type === 'tool' && b.call.name === 'AskUserQuestion' && !b.call.result && !b.call.error
+        );
         return {
           ...state,
           streaming: {
             ...state.streaming,
-            blocks: state.streaming.blocks.map(b =>
-              b.type === 'tool' && b.call.id === action.call.id
-                ? { type: 'tool' as const, call: { ...b.call, result: action.call.result, error: action.call.error } }
-                : b
-            ),
+            blocks: updatedBlocks,
             lastEventTime: Date.now(),
+            askPausedAt: stillHasPendingAsk ? state.streaming.askPausedAt : undefined,
           },
         };
       }
@@ -404,6 +410,7 @@ function AppInner() {
   const { showLogs, setShowLogs, soundOnComplete, notifyOnComplete } = useSettings();
   const messageListRef = useRef<MessageListHandle>(null);
   const wasStreaming = React.useRef(false);
+  const hadPendingAsk = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [logWidth, setLogWidth] = React.useState(320);
   const [logHeight, setLogHeight] = React.useState(180);
@@ -462,6 +469,24 @@ function AppInner() {
     }
     wasStreaming.current = state.isStreaming;
   }, [state.isStreaming, soundOnComplete, notifyOnComplete]);
+
+  const hasPendingAsk = !!state.streaming?.askPausedAt;
+  useEffect(() => {
+    if (hasPendingAsk && !hadPendingAsk.current) {
+      if (soundOnComplete) playCompletionSound();
+      if (notifyOnComplete && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        const projectName = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
+        const title = projectName ? `Argus/${projectName}` : 'Argus';
+        const n = new Notification(title, { body: 'Waiting for your answer' });
+        n.onclick = () => {
+          postMessage({ type: 'focusPanel' });
+          window.focus();
+          n.close();
+        };
+      }
+    }
+    hadPendingAsk.current = hasPendingAsk;
+  }, [hasPendingAsk, soundOnComplete, notifyOnComplete]);
 
   useEffect(() => {
     if (state.isStreaming) {

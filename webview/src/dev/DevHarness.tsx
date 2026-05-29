@@ -83,6 +83,10 @@ async function simulateTools() {
   log('debug', 'tool_result toolu_003: File edited successfully');
   send({ type: 'tool_end', call: { id: '3', name: 'Edit', input: { file_path: '/src/common/config.ts', old_string: '  version: "0.0.9",', new_string: '  version: "0.0.10",' }, result: 'File edited successfully' } });
   await delay(200);
+  send({ type: 'tool_start', call: { id: '4', name: 'Edit', input: { file_path: 'D:/_Projects/vscode1111/argus/webview/src/components/ToolCall.module.css', old_string: '.toolSummary {\n  color: var(--thinking-fg);\n}', new_string: '.toolSummary {\n  color: var(--thinking-fg);\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}' } } });
+  await delay(400);
+  send({ type: 'tool_end', call: { id: '4', name: 'Edit', input: { file_path: 'D:/_Projects/vscode1111/argus/webview/src/components/ToolCall.module.css', old_string: '.toolSummary {\n  color: var(--thinking-fg);\n}', new_string: '.toolSummary {\n  color: var(--thinking-fg);\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}' }, result: 'File edited successfully' } });
+  await delay(200);
   send({ type: 'text_chunk', text: 'I read the file and ran the tests. Everything looks good!' });
   await delay(100);
   log('info', 'claude exited with code 0');
@@ -173,6 +177,38 @@ async function simulateReads() {
     await delay(200);
   }
   send({ type: 'text_chunk', text: 'Read all 3 files successfully.' });
+  await delay(100);
+  send({ type: 'done' });
+}
+
+async function simulateSearch() {
+  send({ type: 'thinking_start' });
+  await delay(200);
+  send({ type: 'tool_start', call: { id: 's1', name: 'Glob', input: { pattern: 'skills/directus-query/SKILL.md' } } });
+  await delay(300);
+  send({ type: 'tool_end', call: { id: 's1', name: 'Glob', input: { pattern: 'skills/directus-query/SKILL.md' }, result: 'No files found' } });
+  await delay(200);
+  send({ type: 'tool_start', call: { id: 's2', name: 'Glob', input: { pattern: 'src/index.ts' } } });
+  await delay(300);
+  send({ type: 'tool_end', call: { id: 's2', name: 'Glob', input: { pattern: 'src/index.ts' }, result: 'src/index.ts' } });
+  await delay(200);
+  send({ type: 'tool_start', call: { id: 's3', name: 'Glob', input: { pattern: '**/*.ts' } } });
+  await delay(300);
+  send({ type: 'tool_end', call: { id: 's3', name: 'Glob', input: { pattern: '**/*.ts' }, result: 'src/index.ts\nsrc/app.ts\nsrc/utils.ts' } });
+  await delay(200);
+  send({ type: 'tool_start', call: { id: 's4', name: 'Grep', input: { pattern: 'nonexistent' } } });
+  await delay(300);
+  send({ type: 'tool_end', call: { id: 's4', name: 'Grep', input: { pattern: 'nonexistent' }, result: 'No matches found' } });
+  await delay(200);
+  send({ type: 'tool_start', call: { id: 's5', name: 'Grep', input: { pattern: 'useState' } } });
+  await delay(300);
+  send({ type: 'tool_end', call: { id: 's5', name: 'Grep', input: { pattern: 'useState' }, result: 'src/App.tsx' } });
+  await delay(200);
+  send({ type: 'tool_start', call: { id: 's6', name: 'Grep', input: { pattern: 'import' } } });
+  await delay(300);
+  send({ type: 'tool_end', call: { id: 's6', name: 'Grep', input: { pattern: 'import' }, result: 'src/App.tsx\nsrc/Header.tsx' } });
+  await delay(200);
+  send({ type: 'text_chunk', text: 'Search complete.' });
   await delay(100);
   send({ type: 'done' });
 }
@@ -825,6 +861,7 @@ export function DevHarness() {
           <Btn label="stream" onClick={simulateStream} />
           <Btn label="tools" onClick={simulateTools} />
           <Btn label="reads" onClick={simulateReads} bg="#2d6a4f" />
+          <Btn label="search" onClick={simulateSearch} bg="#2d6a4f" />
           <Btn label="todos" onClick={simulateTodos} bg="#5a5a2f" />
           <Btn label="agent" onClick={simulateAgent} bg="#5a5a2f" />
           <Btn label="ask" onClick={simulateAskUser} bg="#3a5a7a" />
@@ -843,6 +880,20 @@ export function DevHarness() {
             send({ type: 'text_chunk', text: 'Done.' });
             send({ type: 'done' });
           }} bg="#6a5a2d" />
+          <Btn label="img" onClick={async () => {
+            send({ type: 'thinking_start' });
+            await delay(100);
+            send({ type: 'tool_start', call: { id: 'img1', name: 'Read', input: { file_path: 'media/argus-icon.png' } } });
+            await delay(300);
+            send({ type: 'tool_end', call: { id: 'img1', name: 'Read', input: { file_path: 'media/argus-icon.png' }, result: '[image data]' } });
+            await delay(200);
+            send({ type: 'tool_start', call: { id: 'img2', name: 'Read', input: { file_path: 'media/argus-icon.ico' } } });
+            await delay(300);
+            send({ type: 'tool_end', call: { id: 'img2', name: 'Read', input: { file_path: 'media/argus-icon.ico' }, result: '[image data]' } });
+            await delay(100);
+            send({ type: 'text_chunk', text: 'Here are the icon files.' });
+            send({ type: 'done' });
+          }} bg="#4a6a2d" />
           <Btn label="diff" onClick={simulateDiff} bg="#4a6a2d" />
           <Btn label="rich+paths" onClick={simulateRichText} bg="#6a4a2d" />
           <Btn label="10K" onClick={simulateStress} bg="#7a5a20" />

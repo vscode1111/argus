@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ToolCallData } from '../types';
 import { postMessage } from '../vscode';
 import { useSettings } from '../contexts/SettingsContext';
@@ -74,7 +74,26 @@ export function ToolCall({ call, sessionDone }: Props) {
   const oldLines = hasDiff ? String(input.old_string || '').split('\n') : [];
   const newLines = hasDiff ? String(input.new_string || '').split('\n') : [];
 
+  const IMAGE_EXTS = /\.(jpe?g|png|gif|bmp|webp|ico|tiff?)$/i;
+  const filePath = (input.file_path as string) || summary;
+  const isImageFile = IMAGE_EXTS.test(filePath);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!viewerOpen || !isImageFile) return;
+    setImagePreview(null);
+    function onMessage(e: MessageEvent) {
+      if (e.data?.type === 'filePreview' && e.data.content?.startsWith('data:image/')) {
+        setImagePreview(e.data.content);
+      }
+    }
+    window.addEventListener('message', onMessage);
+    postMessage({ type: 'readFilePreview', path: filePath });
+    return () => window.removeEventListener('message', onMessage);
+  }, [viewerOpen, isImageFile, filePath]);
+
   const fileViewerContent =
+    isImageFile ? imagePreview ?? undefined :
     name === 'Read' ? result :
     name === 'Write' ? (input.content as string) || undefined :
     name === 'Edit' ? (input.new_string as string) || undefined :
@@ -82,7 +101,7 @@ export function ToolCall({ call, sessionDone }: Props) {
 
   function handleFileClick(e: React.MouseEvent) {
     e.preventDefault();
-    if (fileViewerContent) {
+    if (isImageFile || fileViewerContent) {
       setViewerOpen(true);
     } else {
       postMessage({ type: 'openFile', path: summary });
@@ -344,13 +363,19 @@ export function ToolCall({ call, sessionDone }: Props) {
               </a>
             )}
             {(name === 'Glob' || name === 'Grep') && result && (
-              <a
-                className={styles.toolResultCount}
-                href="#"
-                onClick={e => { e.preventDefault(); setViewerOpen(true); }}
-              >
-                {plural(resultLineCount, name === 'Glob' ? 'file' : 'line of output', name === 'Glob' ? 'files' : 'lines of output')}
-              </a>
+              /^No (?:files|matches) found/i.test(result.trim()) ? (
+                <span className={styles.toolResultEmpty}>{result!.trim()}</span>
+              ) : resultLineCount <= 1 ? (
+                <span className={styles.toolResultInline}>{result!.trim()}</span>
+              ) : (
+                <a
+                  className={styles.toolResultCount}
+                  href="#"
+                  onClick={e => { e.preventDefault(); setViewerOpen(true); }}
+                >
+                  {plural(resultLineCount, name === 'Glob' ? 'file' : 'line of output', name === 'Glob' ? 'files' : 'lines of output')}
+                </a>
+              )
             )}
             {hasDiff && (
               <>
