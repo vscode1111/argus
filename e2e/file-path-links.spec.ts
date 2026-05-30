@@ -48,7 +48,7 @@ test.describe('file path links', () => {
     await expect(messageArea.getByRole('link', { name: /markdown\.tsx:4/ })).toBeVisible();
 
     // Path with line range after "File:" label
-    await expect(messageArea.getByRole('link', { name: /src\\argusServer\.ts:31-48/ })).toBeVisible();
+    await expect(messageArea.getByRole('link', { name: /src\\backend\\index\.ts:31-48/ })).toBeVisible();
 
     // Paths inside table cells
     await expect(messageArea.locator('td').getByRole('link')).toHaveCount(3);
@@ -96,7 +96,7 @@ test.describe('file path links', () => {
   });
 
   test('file path with line range highlights all lines in range', async ({ page }) => {
-    const link = page.getByRole('link', { name: /argusServer\.ts:31-48/ });
+    const link = page.getByRole('link', { name: /backend\\index\.ts:31-48/ });
     await clickAndWaitForModal(link, page, 31);
 
     // First, middle, and last lines in range should all be highlighted
@@ -141,10 +141,10 @@ test.describe('relative file path links', () => {
 
   test('renders relative paths as clickable links', async ({ page }) => {
     await sendDevMessage(page,
-      'Changed files: src/argusServer.ts webview/src/App.tsx and e2e/helpers.ts');
+      'Changed files: src/backend/index.ts webview/src/App.tsx and e2e/helpers.ts');
 
     const messageArea = page.locator('[class*="messageList"], [class*="messages"]');
-    await expect(messageArea.getByRole('link', { name: 'src/argusServer.ts' })).toBeVisible({ timeout: 5_000 });
+    await expect(messageArea.getByRole('link', { name: 'src/backend/index.ts' })).toBeVisible({ timeout: 5_000 });
     await expect(messageArea.getByRole('link', { name: 'webview/src/App.tsx' })).toBeVisible();
     await expect(messageArea.getByRole('link', { name: 'e2e/helpers.ts' })).toBeVisible();
   });
@@ -164,9 +164,9 @@ test.describe('relative file path links', () => {
   });
 
   test('relative path with line number opens at correct line', async ({ page }) => {
-    await sendDevMessage(page, 'Error at src/extension.ts:5');
+    await sendDevMessage(page, 'Error at src/frontend/extension.ts:5');
 
-    const link = page.getByRole('link', { name: 'src/extension.ts:5' });
+    const link = page.getByRole('link', { name: 'src/frontend/extension.ts:5' });
     await clickAndWaitForModal(link, page, 5);
 
     await expect(modalLine(page, 5)).toHaveClass(/highlighted-line/);

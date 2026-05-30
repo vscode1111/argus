@@ -116,21 +116,21 @@ test.describe('slash commands (integration)', () => {
   test('command names are yellow, skill names are white', async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
-    await textarea.pressSequentially('/b');
+    await textarea.pressSequentially('/');
 
     const items = page.locator('[class*="slashMenuItem"]');
     await expect(async () => {
       const count = await items.count();
-      expect(count).toBeGreaterThanOrEqual(2);
+      expect(count).toBeGreaterThanOrEqual(10);
     }).toPass({ timeout: 5_000 });
 
-    // /bump is a command - should have the custom (yellow) class even when highlighted
+    // /bump is a command - should have the custom (yellow) class
     const bumpName = items.filter({ hasText: '/bump' }).locator('[class*="slashMenuName"]');
     await expect(bumpName).toHaveClass(/slashMenuNameCustom/);
 
-    // /backend is a skill - should NOT have the custom class
-    const backendName = items.filter({ hasText: '/backend' }).locator('[class*="slashMenuName"]');
-    await expect(backendName).not.toHaveClass(/slashMenuNameCustom/);
+    // /frontend is a skill - should NOT have the custom class
+    const frontendName = items.filter({ hasText: '/frontend' }).locator('[class*="slashMenuName"]');
+    await expect(frontendName).not.toHaveClass(/slashMenuNameCustom/);
   });
 
   test('command stays yellow when highlighted via keyboard', async ({ page }) => {

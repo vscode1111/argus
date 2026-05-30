@@ -5,8 +5,8 @@ import { ArgusCodeLensProvider } from './providers/CodeLensProvider';
 import { InlineSuggestProvider } from './providers/InlineSuggestProvider';
 import { getSelection } from './utils/workspace';
 import { isInlineCompletionsEnabled, isCodeLensEnabled, getModel } from './utils/config';
-import { startServer } from './argusServer';
-import type { ArgusServer } from './argusServer';
+import { startServer } from '../backend/index';
+import type { ArgusServer } from '../backend/index';
 
 let argusServer: ArgusServer | undefined;
 

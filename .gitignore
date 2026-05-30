@@ -2,6 +2,7 @@ node_modules/
 out/
 dist/
 .argus/
+.docs/
 .playwright-mcp/
 tmp/
 test-results/
@@ -9,3 +10,4 @@ playwright-report/
 yarn-error.log
 media/webview.js
 media/webview.css
+bash.exe.stackdump

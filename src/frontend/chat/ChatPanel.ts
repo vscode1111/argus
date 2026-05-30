@@ -102,6 +102,10 @@ export class ChatPanel {
     } else if (msg.type === 'readFilePreview' && msg.path) {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
       const filePath = path.isAbsolute(msg.path) ? msg.path : path.resolve(root, msg.path);
+      const resolved = path.resolve(filePath);
+      if (!path.isAbsolute(msg.path) && !resolved.startsWith(root + path.sep) && resolved !== root) {
+        return;
+      }
       try {
         const ext = path.extname(filePath).toLowerCase();
         const imageExts: Record<string, string> = {

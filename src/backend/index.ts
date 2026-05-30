@@ -1,6 +1,6 @@
 import { createServer } from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { spawn, execSync, execFileSync } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -38,7 +38,7 @@ function resolveClaudeBin(): string {
 function killProc(proc: ReturnType<typeof spawn>) {
   if (!proc.pid) return;
   if (IS_WIN) {
-    try { execSync(`taskkill /T /F /PID ${proc.pid}`, { stdio: 'ignore' }); } catch {}
+    try { execFileSync('taskkill', ['/T', '/F', '/PID', String(proc.pid)], { stdio: 'ignore' }); } catch {}
   } else {
     proc.kill();
   }
@@ -122,22 +122,6 @@ function getSkills(cwd: string) {
 
 const CONFIG_PATH = process.env.ARGUS_CONFIG || path.join(os.homedir(), '.claude', 'argus.json');
 
-const DEFAULT_CONFIG: ArgusConfig = {
-  verboseTools: false,
-  showTimer: true,
-  showOutput: false,
-  showLogs: true,
-  showLogTime: true,
-  showLogType: true,
-  soundOnComplete: true,
-  notifyOnComplete: true,
-  watchdogEnabled: true,
-  watchdogTimeout: 120,
-  watchdogAutoRetries: 3,
-  watchdogRetryDelay: 5,
-  watchdogDelayFactor: 2,
-};
-
 export interface ArgusConfig {
   verboseTools: boolean;
   showTimer: boolean;
@@ -153,6 +137,22 @@ export interface ArgusConfig {
   watchdogRetryDelay: number;
   watchdogDelayFactor: number;
 }
+
+const DEFAULT_CONFIG: ArgusConfig = {
+  verboseTools: false,
+  showTimer: true,
+  showOutput: false,
+  showLogs: true,
+  showLogTime: true,
+  showLogType: true,
+  soundOnComplete: true,
+  notifyOnComplete: true,
+  watchdogEnabled: true,
+  watchdogTimeout: 120,
+  watchdogAutoRetries: 3,
+  watchdogRetryDelay: 5,
+  watchdogDelayFactor: 2,
+};
 
 function readConfig(): ArgusConfig {
   try {
@@ -195,6 +195,8 @@ const URL_PATTERNS = [
   /(https:\/\/[^\s"]+anthropic[^\s"]*)/i,
 ];
 
+const API_ERROR_RE = /API Error:|Failed to authenticate|Request not allowed|socket connection was closed|overloaded_error|invalid_api_key|permission_error/i;
+
 export interface StartServerOptions {
   port?: number;
   model?: string;
@@ -217,22 +219,23 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
   const wss = new WebSocketServer({ noServer: true });
 
+  const wsAlive = new WeakMap<WebSocket, boolean>();
   const PING_INTERVAL = 15_000;
   const pingTimer = setInterval(() => {
     for (const client of wss.clients) {
-      if ((client as any)._argusAlive === false) {
+      if (wsAlive.get(client) === false) {
         client.terminate();
         continue;
       }
-      (client as any)._argusAlive = false;
+      wsAlive.set(client, false);
       client.ping();
     }
   }, PING_INTERVAL);
   wss.on('close', () => clearInterval(pingTimer));
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-    (ws as any)._argusAlive = true;
-    ws.on('pong', () => { (ws as any)._argusAlive = true; });
+    wsAlive.set(ws, true);
+    ws.on('pong', () => { wsAlive.set(ws, true); });
     const reqUrl = new URL(req.url ?? '/', 'http://localhost');
     let workspaceDir = reqUrl.searchParams.get('dir') || process.cwd();
     let sessionId: string | undefined;
@@ -261,7 +264,6 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     function getRetryDelay(attempt: number, baseDelaySec: number, factor: number): number {
       return baseDelaySec * 1000 * Math.pow(factor, attempt);
     }
-    const API_ERROR_RE = /API Error:|Failed to authenticate|Request not allowed|socket connection was closed|overloaded_error|invalid_api_key|permission_error/i;
 
     let lastEventTime = 0;
     let watchdogActive = false;
@@ -373,7 +375,6 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           let event: Record<string, unknown>;
           try { event = JSON.parse(trimmed); } catch {
             sendLog('warn', `non-JSON stdout: ${trimmed.slice(0, 200)}`);
-            // Detect raw error text from CLI (not wrapped in JSON event)
             const API_ERROR_RAW = /API Error:|Failed to authenticate|Request not allowed|socket connection was closed/i;
             if (API_ERROR_RAW.test(trimmed) && !cliDone) {
               cliDone = true;
@@ -525,7 +526,6 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
             cliDone = true;
             resetStaleTimer();
             watchdogActive = false;
-            // Detect error results from the CLI (API errors, auth failures, etc.)
             if (event.is_error === true || event.subtype === 'error') {
               const errText = typeof event.error === 'string' ? event.error
                 : (event.error as Record<string, unknown>)?.message as string
@@ -661,7 +661,6 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           autoRetryCount = 0;
         }
 
-        // Reset turn-local state
         buffer = '';
         stderrOutput = '';
         textAccum = '';
@@ -739,7 +738,13 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       } else if (msg.type === 'updateSettings') {
         const patch = (msg as { settings?: Partial<ArgusConfig> }).settings;
         if (patch) {
-          const config = { ...readConfig(), ...patch };
+          const allowed: Record<string, boolean> = {};
+          for (const k of Object.keys(DEFAULT_CONFIG)) allowed[k] = true;
+          const filtered: Partial<ArgusConfig> = {};
+          for (const [k, v] of Object.entries(patch)) {
+            if (allowed[k]) (filtered as any)[k] = v;
+          }
+          const config = { ...readConfig(), ...filtered };
           writeConfig(config);
           ws.send(JSON.stringify({ type: 'settings', settings: config }));
         }
@@ -872,6 +877,11 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         }
       } else if (msg.type === 'readFilePreview' && msg.path) {
         const filePath = path.isAbsolute(msg.path) ? msg.path : path.resolve(workspaceDir, msg.path);
+        const resolved = path.resolve(filePath);
+        if (!path.isAbsolute(msg.path) && !resolved.startsWith(workspaceDir + path.sep) && resolved !== workspaceDir) {
+          ws.send(JSON.stringify({ type: 'filePreview', path: msg.path, content: 'Error: path outside workspace' }));
+          return;
+        }
         try {
           const ext = path.extname(filePath).toLowerCase();
           const imageExts: Record<string, string> = {
@@ -920,11 +930,17 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
   });
 
   httpServer.on('upgrade', (req: IncomingMessage, socket, head) => {
-    if (req.url?.startsWith('/agent')) {
-      wss.handleUpgrade(req, socket, head as Buffer, (ws) => {
-        wss.emit('connection', ws, req);
-      });
+    if (!req.url?.startsWith('/agent')) return;
+    const origin = req.headers.origin ?? '';
+    const allowed = !origin || origin.startsWith('vscode-webview:') || /^https?:\/\/localhost(:\d+)?$/.test(origin);
+    if (!allowed) {
+      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+      socket.destroy();
+      return;
     }
+    wss.handleUpgrade(req, socket, head as Buffer, (ws) => {
+      wss.emit('connection', ws, req);
+    });
   });
 
   return new Promise<ArgusServer>((resolve) => {

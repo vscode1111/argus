@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.45",
+  "version": "0.0.46",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "license": "UNLICENSED",
@@ -16,7 +16,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./out/extension.js",
+  "main": "./out/frontend/extension.js",
   "icon": "media/argus-icon.png",
   "scripts": {
     "vscode:prepublish": "npm run build && npm run compile",
