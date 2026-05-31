@@ -6,7 +6,8 @@ import * as fs from 'fs';
 import { captureForegroundWindow, focusCachedWindow } from '../utils/win32Focus';
 import { copyImageToClipboard } from '../utils/win32Clipboard';
 
-import { getServerPort } from '../extension';
+import { getServerPort, getServerNonce } from '../extension';
+import { readFilePreview } from '../../backend/filePreview';
 
 export class ChatPanel {
   private static readonly panels = new Set<ChatPanel>();
@@ -101,29 +102,8 @@ export class ChatPanel {
       this.post({ type: 'workspaceInfo', path: root, version });
     } else if (msg.type === 'readFilePreview' && msg.path) {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-      const filePath = path.isAbsolute(msg.path) ? msg.path : path.resolve(root, msg.path);
-      const resolved = path.resolve(filePath);
-      if (!path.isAbsolute(msg.path) && !resolved.startsWith(root + path.sep) && resolved !== root) {
-        return;
-      }
-      try {
-        const ext = path.extname(filePath).toLowerCase();
-        const imageExts: Record<string, string> = {
-          '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
-          '.gif': 'image/gif', '.bmp': 'image/bmp', '.webp': 'image/webp',
-          '.ico': 'image/x-icon', '.tiff': 'image/tiff', '.tif': 'image/tiff',
-        };
-        const mime = imageExts[ext];
-        if (mime) {
-          const base64 = fs.readFileSync(filePath).toString('base64');
-          this.post({ type: 'filePreview', path: filePath, content: `data:${mime};base64,${base64}` });
-        } else {
-          const content = fs.readFileSync(filePath, 'utf-8');
-          this.post({ type: 'filePreview', path: filePath, content });
-        }
-      } catch (err) {
-        this.outputChannel.appendLine(`[Error] Cannot read file: ${filePath}`);
-      }
+      const result = readFilePreview(msg.path, root);
+      this.post({ type: 'filePreview', ...result });
     } else if (msg.type === 'copyImage' && msg.data) {
       const tmp = path.join(os.tmpdir(), `argus-clip-${Date.now()}.png`);
       try {
@@ -200,8 +180,12 @@ export class ChatPanel {
     const nonce = getNonce();
 
     const port = getServerPort();
+    const wsNonce = getServerNonce();
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
-    const wsUrl = port ? `ws://localhost:${port}/agent${root ? '?dir=' + encodeURIComponent(root) : ''}` : '';
+    const wsParams = new URLSearchParams();
+    if (wsNonce) wsParams.set('nonce', wsNonce);
+    if (root) wsParams.set('dir', root);
+    const wsUrl = port ? `ws://localhost:${port}/agent?${wsParams.toString()}` : '';
 
     const htmlPath = path.join(this.extensionUri.fsPath, 'media', 'chat.html');
     let html = fs.readFileSync(htmlPath, 'utf-8');

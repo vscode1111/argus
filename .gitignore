@@ -11,3 +11,4 @@ yarn-error.log
 media/webview.js
 media/webview.css
 bash.exe.stackdump
+.dev-nonce

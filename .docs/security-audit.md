@@ -1,95 +1,104 @@
 # Security Audit - Argus
 
-Audit date: 2026-05-13
+Initial audit: 2026-05-13. Updated: 2026-06-01.
 
-## Critical
+## Status
+
+| # | Severity | Issue | Status |
+|---|----------|-------|--------|
+| 1 | Critical | Arbitrary file read via readFilePreview | Fixed (path validation added) |
+| 2 | Critical | WebSocket server on 0.0.0.0 | Intentional (remote access planned) |
+| 3 | High | No authentication on WebSocket | Open, see [Remote Access Auth](#remote-access-auth) |
+| 4 | High | Unsanitized `dir` parameter | Open |
+| 5 | Medium | CSP allows ws://localhost:* | Open |
+| 6 | Medium | No try-catch on WS JSON.parse | Fixed |
+| 7 | Medium | Hardcoded dev WS port | Mitigated once auth is added |
+| 8 | Low | Arbitrary URL opening via openUrl | Open |
+| 9 | Low | Stderr forwarded to client | Accepted (dev tool, useful for debugging) |
+
+## Fixed Issues
 
 ### 1. Arbitrary File Read via `readFilePreview`
 
-**Files:** `src/argusServer.ts:715`, `src/chat/ChatPanel.ts:83`
+Relative paths are now validated against the workspace directory. Logic extracted into shared `src/backend/filePreview.ts` used by both `session.ts` and `ChatPanel.ts`. Absolute paths are allowed by design (users click paths from Claude output that can reference files outside the workspace).
 
-Any WebSocket client can read any file on the machine by sending `{ type: "readFilePreview", path: "C:\\Users\\...\\id_rsa" }`. No validation that the path is inside the workspace directory.
+### 6. No try-catch on WebSocket JSON.parse
 
-**Fix:** Validate that the resolved path starts with `workspaceDir` before reading.
+Added in `src/backend/session.ts`. Malformed messages are logged and ignored.
 
-### 2. WebSocket Server Listens on 0.0.0.0
+### Origin validation (new)
 
-**File:** `src/argusServer.ts:752`
+WebSocket upgrade handler checks `Origin` header. Allows `vscode-webview:*`, `http(s)://localhost(:port)`, and empty origin. Rejects cross-site connections with `403`.
 
-`httpServer.listen(PORT)` without a host binds to all network interfaces. In dev mode (port 3001), anyone on the local network can connect.
+## Intentional
 
-**Fix:** Bind to `127.0.0.1` explicitly.
+### 2. WebSocket Server on 0.0.0.0
 
-## High
+The server binds to all interfaces to support remote access over the internet. This is intentional, not a misconfiguration. Requires authentication (issue #3) to be secure.
 
-### 3. No Authentication on WebSocket Connections
+## Open Issues
 
-**File:** `src/argusServer.ts:743`
+### 3. No Authentication on WebSocket
 
-No origin check, no token. Any webpage can connect to `ws://localhost:3001/agent` (cross-site WebSocket hijacking). Combined with #1 this allows silent file exfiltration from any browser tab.
+Currently any client that can reach the port can connect and send commands. This is the primary remaining vulnerability, especially with the server on 0.0.0.0.
 
-**Fix:** Add a random session token to the WS URL; reject connections without valid token. Optionally also check `Origin` header.
+### 4. Unsanitized `dir` Parameter
 
-### 4. Unsanitized `dir` Parameter Used as `cwd`
+The `?dir=` query parameter is used as `cwd` for Claude CLI spawns without validation. An attacker could point it at a directory with a malicious `CLAUDE.md`.
 
-**File:** `src/argusServer.ts:171`
+### 5. CSP allows ws://localhost:*
 
-The `?dir=` query parameter goes directly to `spawn('claude', args, { cwd: workspaceDir })`. Attacker can point Claude CLI at any directory, including one with a malicious `CLAUDE.md` (prompt injection).
+`chat.html` CSP `connect-src` allows WebSocket to any localhost port. Should be tightened to the actual server port once auth is added.
 
-**Fix:** Verify `workspaceDir` exists, is a directory, and optionally restrict to known roots.
+### 8. Arbitrary URL Opening
 
-## Medium
+`vscode.env.openExternal()` accepts unvalidated URLs from the webview. Low risk since the webview is trusted, but could be a vector if the webview is compromised.
 
-### 5. CSP Allows `ws://localhost:*`
+---
 
-**File:** `media/chat.html:6`
+## Remote Access Auth
 
-Content Security Policy allows WebSocket connections to any localhost port. Should restrict to the actual server port.
+**Goal**: allow controlling Argus over the internet with authentication, while keeping the 0.0.0.0 binding.
 
-**Fix:** Inject specific port into CSP: `connect-src ws://localhost:${port};`
+### Design: token-based WebSocket auth
 
-### 6. No try-catch on WebSocket `JSON.parse`
+1. **Token storage**: a random token is generated on first run and stored in `~/.claude/argus-token`. The file is created with `0600` permissions (owner-only read/write). On Windows, permissions are not enforced the same way; the token file sits alongside the existing `argus.json` config.
 
-**File:** `src/argusServer.ts:467`
+2. **Token generation**: 32-byte random hex string via `crypto.randomBytes(32).toString('hex')`. Generated once, persisted across restarts. Can be manually regenerated by deleting the file.
 
-Malformed WebSocket message crashes the connection handler.
+3. **Validation on upgrade**: the HTTP upgrade handler in `src/backend/index.ts` reads the token from the query parameter (`?token=...`) or the `Authorization: Bearer ...` header. Connections without a valid token receive `401 Unauthorized` and the socket is destroyed.
 
-**Fix:** Wrap in try-catch, ignore invalid messages.
+4. **Token injection into webview**: `ChatPanel.ts` reads the token file and appends it to the WebSocket URL: `ws://localhost:PORT/agent?dir=...&token=TOKEN`. The CSP and nonce ensure the token is not accessible to injected scripts.
 
-### 7. Hardcoded Dev WebSocket URL
+5. **Dev mode**: `webview/index.html` (browser dev) reads the token from the server via a one-time HTTP endpoint (`GET /auth-token` with localhost-only access) or from a local file. Alternatively, the dev URL can include the token as a query parameter.
 
-**File:** `webview/index.html:46`
+6. **Origin check update**: the existing Origin validation remains as a defense-in-depth layer. Remote browser clients will have non-localhost origins, so the Origin allowlist must be expanded (or replaced by the token check alone when a valid token is present).
 
-Port 3001 is predictable, making port-scanning trivial for attackers.
+7. **Rate limiting**: failed auth attempts should be rate-limited (e.g., 5 failures per minute per IP) to prevent brute-force token guessing.
 
-**Fix:** Less critical if auth token is added (fix #3).
+### Token flow
 
-## Low
+```
+Server startup:
+  read or generate ~/.claude/argus-token
+  store in memory
 
-### 8. Arbitrary URL Opening via `openUrl`
+WebSocket upgrade request:
+  extract token from ?token= or Authorization header
+  compare with stored token (constant-time)
+  reject with 401 if mismatch
 
-**File:** `src/chat/ChatPanel.ts:78`
+VS Code extension:
+  ChatPanel reads token file
+  injects into WS URL as query param
 
-`vscode.env.openExternal()` with unvalidated URL from webview message. Could trigger phishing or protocol handler attacks.
+Browser dev mode:
+  token passed via URL or fetched from /auth-token endpoint
+```
 
-### 9. Stderr Forwarded to Client
+### Future considerations
 
-**File:** `src/argusServer.ts:416`
-
-Claude CLI stderr goes to WS client as log entries; could leak sensitive info from error messages.
-
-## Attack Scenarios
-
-- **Drive-by hijack:** Any webpage silently opens `ws://localhost:3001/agent`, reads SSH keys/env files/credentials via `readFilePreview`, exfiltrates to attacker server.
-- **Remote code execution:** Same WS connection sends a prompt that triggers Claude CLI's Bash tool to run arbitrary commands.
-- **LAN attack:** Server on 0.0.0.0 means anyone on the same WiFi can connect without the victim visiting any page.
-- **Workspace poisoning:** Attacker's repo contains malicious `.claude/CLAUDE.md` with prompt injection; opening with Argus executes it.
-- **Extension marketplace risk:** If published as VS Code extension, every installer gets an unauthenticated WS server; webpages can port-scan localhost to find it.
-
-## Recommended Fix Priority
-
-1. Add random session token to WS URL (blocks all remote attacks)
-2. Bind to `127.0.0.1` (blocks LAN attacks)
-3. Validate `readFilePreview` paths against workspace root
-4. Tighten CSP to specific port
-5. Add try-catch on WS JSON.parse
+- Token rotation command (`/token rotate` or settings UI button)
+- Multiple tokens for multi-device access
+- Session-based auth with expiry for longer-lived connections
+- HTTPS/WSS with a self-signed cert for encrypted transport (without TLS the token is sent in cleartext)

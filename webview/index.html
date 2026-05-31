@@ -44,8 +44,24 @@
   <script>
     // Bridge to the argus-agent WebSocket plugin running inside the Vite dev server
     window.acquireVsCodeApi = () => {
-      const _dir = new URLSearchParams(window.location.search).get('dir');
-      const _wsUrl = _dir ? 'ws://localhost:3001/agent?dir=' + encodeURIComponent(_dir) : 'ws://localhost:3001/agent';
+      const _params = new URLSearchParams(window.location.search);
+      const _dir = _params.get('dir');
+      let _nonce = _params.get('nonce');
+      let _wsUrl = null;
+
+      function buildWsUrl() {
+        const p = new URLSearchParams();
+        if (_nonce) p.set('nonce', _nonce);
+        if (_dir) p.set('dir', _dir);
+        _wsUrl = 'ws://localhost:3001/agent?' + p.toString();
+      }
+
+      if (!_nonce) {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', 'http://localhost:3001/nonce', false);
+        try { xhr.send(); if (xhr.status === 200) _nonce = xhr.responseText; } catch(e) {}
+      }
+      buildWsUrl();
       let ws;
       const queue = [];
       let ready = false;

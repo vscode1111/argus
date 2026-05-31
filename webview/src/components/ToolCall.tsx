@@ -84,7 +84,10 @@ export function ToolCall({ call, sessionDone }: Props) {
     setImagePreview(null);
     function onMessage(e: MessageEvent) {
       if (e.data?.type === 'filePreview' && e.data.content?.startsWith('data:image/')) {
-        setImagePreview(e.data.content);
+        const p = e.data.path as string | undefined;
+        if (p === filePath || p?.endsWith(filePath) || p?.endsWith(filePath.replace(/\//g, '\\'))) {
+          setImagePreview(e.data.content);
+        }
       }
     }
     window.addEventListener('message', onMessage);

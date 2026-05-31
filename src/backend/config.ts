@@ -37,23 +37,28 @@ export const DEFAULT_CONFIG: ArgusConfig = {
 };
 
 let cachedConfig: ArgusConfig | null = null;
+let cachedMtime = 0;
 
 export function readConfig(): ArgusConfig {
-  if (cachedConfig) return cachedConfig;
-  let config: ArgusConfig;
   try {
+    const mtime = fs.statSync(CONFIG_PATH).mtimeMs;
+    if (cachedConfig && mtime === cachedMtime) return cachedConfig;
     const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
-    config = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    const config = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    cachedConfig = config;
+    cachedMtime = mtime;
+    return config;
   } catch {
-    config = { ...DEFAULT_CONFIG };
+    if (cachedConfig) return cachedConfig;
+    return { ...DEFAULT_CONFIG };
   }
-  cachedConfig = config;
-  return config;
 }
 
 export function writeConfig(config: ArgusConfig): void {
   try {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
     cachedConfig = config;
-  } catch {}
+  } catch (err) {
+    console.error(`[argus] Failed to write config to ${CONFIG_PATH}:`, (err as Error).message);
+  }
 }

@@ -14,6 +14,10 @@ export function getServerPort(): number | undefined {
   return argusServer?.port;
 }
 
+export function getServerNonce(): string | undefined {
+  return argusServer?.nonce;
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // Start the WebSocket server on a dynamic port
   try {

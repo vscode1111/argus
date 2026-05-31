@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import * as vscode from 'vscode';
 import { getInlineDebounceMs, getInlineModel } from '../utils/config';
+import { resolveClaudeBin, IS_WIN } from '../../backend/cli';
 
 const PREFIX_LINES = 40;
 const SUFFIX_LINES = 10;
@@ -54,8 +55,11 @@ export class InlineSuggestProvider implements vscode.InlineCompletionItemProvide
       `Complete the code at the cursor (between prefix and suffix):`;
 
     return new Promise((resolve) => {
-      const proc = spawn('claude', ['--print', '--output-format', 'text', '--model', getInlineModel()], {
+      const claudeBin = resolveClaudeBin();
+      const spawnCmd = IS_WIN && /\s/.test(claudeBin) ? `"${claudeBin}"` : claudeBin;
+      const proc = spawn(spawnCmd, ['--print', '--output-format', 'text', '--model', getInlineModel()], {
         stdio: ['pipe', 'pipe', 'pipe'],
+        shell: IS_WIN,
       });
 
       token.onCancellationRequested(() => { proc.kill(); resolve(null); });

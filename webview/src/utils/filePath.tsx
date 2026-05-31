@@ -50,11 +50,14 @@ function FilePathLink({ path: origPath, line, endLine, display }: { path: string
   );
 }
 
+const MAX_LINKIFY_LENGTH = 5000;
+
 /**
  * Takes a plain text string and returns React nodes with detected file paths
  * rendered as clickable links that open a FileViewerModal on click.
  */
 export function linkifyPaths(text: string): React.ReactNode {
+  if (text.length > MAX_LINKIFY_LENGTH) return text;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
 

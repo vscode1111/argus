@@ -42,7 +42,7 @@ test.describe('file path links', () => {
     const messageArea = page.locator('[class*="messageList"], [class*="messages"]');
 
     // Bare path in paragraph
-    await expect(messageArea.locator('p').getByRole('link', { name: /App\.tsx:390/ }).first()).toBeVisible();
+    await expect(messageArea.locator('p').getByRole('link', { name: /App\.tsx:120/ }).first()).toBeVisible();
 
     // Path inside inline code
     await expect(messageArea.getByRole('link', { name: /markdown\.tsx:4/ })).toBeVisible();
@@ -61,7 +61,7 @@ test.describe('file path links', () => {
   });
 
   test('clicking a file path link opens FileViewerModal with file content', async ({ page }) => {
-    const link = page.getByRole('link', { name: /App\.tsx:390/ }).first();
+    const link = page.getByRole('link', { name: /App\.tsx:120/ }).first();
     await clickAndWaitForModal(link, page);
 
     await expect(modalLine(page, 1)).toContainText('import React');
@@ -84,10 +84,10 @@ test.describe('file path links', () => {
   });
 
   test('file path with line number highlights and scrolls to that line', async ({ page }) => {
-    const link = page.getByRole('link', { name: /App\.tsx:390/ }).first();
-    await clickAndWaitForModal(link, page, 390);
+    const link = page.getByRole('link', { name: /App\.tsx:120/ }).first();
+    await clickAndWaitForModal(link, page, 120);
 
-    await expect(modalLine(page, 390)).toHaveClass(/highlighted-line/);
+    await expect(modalLine(page, 120)).toHaveClass(/highlighted-line/);
 
     // A non-highlighted line should not have the class
     await expect(modalLine(page, 1)).not.toHaveClass(/highlighted-line/);
