@@ -95,7 +95,8 @@ export function Markdown({ children, breaks }: { children: string; breaks?: bool
           return <td>{withLinkedPaths(children)}</td>;
         },
         a({ href, children }) {
-          return <a href={href} style={{ color: 'var(--vscode-textLink-foreground)' }}>{children}</a>;
+          const safe = href && /^https?:\/\/|^#|^mailto:/i.test(href) ? href : undefined;
+          return <a href={safe} style={{ color: 'var(--vscode-textLink-foreground)' }}>{children}</a>;
         },
       }}
     >

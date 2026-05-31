@@ -40,11 +40,12 @@ fe.on('exit', (code, signal) => {
 let be = null;
 
 function startBackend() {
-  be = spawn(process.execPath, [
-    '--watch', '--watch-path=server', '--watch-path=src/backend',
-    '--experimental-strip-types', '--no-warnings=ExperimentalWarning',
+  const tsxBin = path.join(__dirname, '..', 'node_modules', '.bin', isWin ? 'tsx.cmd' : 'tsx');
+  be = spawn(isWin ? `"${tsxBin}"` : tsxBin, [
+    'watch', '--clear-screen=false',
+    '--include', 'server', '--include', 'src/backend',
     'server/index.ts',
-  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  ], { stdio: ['ignore', 'pipe', 'pipe'], shell: isWin });
 
   forward(be.stdout, beTag);
   forward(be.stderr, beTag);

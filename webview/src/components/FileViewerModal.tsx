@@ -190,9 +190,7 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
               wrapLongLines={false}
               lineProps={(lineNumber: number) => {
                 const props: Record<string, unknown> = { 'data-line': lineNumber };
-                const lo = line ?? 0;
-                const hi = endLine ?? lo;
-                if (lo && lineNumber >= lo && lineNumber <= hi) {
+                if (line && lineNumber >= line && lineNumber <= (endLine ?? line)) {
                   props.style = { background: 'var(--diff-added-bg, rgba(55, 148, 255, 0.15))' };
                   props.className = 'highlighted-line';
                 }

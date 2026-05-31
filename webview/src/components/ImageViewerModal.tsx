@@ -10,10 +10,17 @@ interface Props {
   onClose: () => void;
 }
 
-async function copyImageBrowser(src: string) {
-  const res = await fetch(src);
-  const blob = await res.blob();
-  const pngBlob = blob.type === 'image/png' ? blob : await new Promise<Blob>(resolve => {
+function dataUrlToBlob(src: string): Blob | null {
+  const match = src.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const binary = atob(match[2]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: match[1] });
+}
+
+async function toPngBlob(src: string): Promise<Blob> {
+  return new Promise<Blob>(resolve => {
     const img = new Image();
     img.onload = () => {
       const c = document.createElement('canvas');
@@ -24,6 +31,11 @@ async function copyImageBrowser(src: string) {
     };
     img.src = src;
   });
+}
+
+async function copyImageBrowser(src: string) {
+  const blob = dataUrlToBlob(src);
+  const pngBlob = blob?.type === 'image/png' ? blob : await toPngBlob(src);
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
 }
 

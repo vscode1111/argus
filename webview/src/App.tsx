@@ -303,7 +303,9 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'log': {
-      const logs = [...state.logs, { level: action.level, text: action.text, timestamp: action.timestamp }];
+      const MAX_LOGS = 5000;
+      let logs = [...state.logs, { level: action.level, text: action.text, timestamp: action.timestamp }];
+      if (logs.length > MAX_LOGS) logs = logs.slice(logs.length - MAX_LOGS);
       if (state.streaming) {
         return { ...state, logs, streaming: { ...state.streaming, lastEventTime: Date.now() } };
       }

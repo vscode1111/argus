@@ -1,201 +1,19 @@
 import { createServer } from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { spawn, execFileSync } from 'child_process';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import type { IncomingMessage } from 'http';
 
-const IS_WIN = process.platform === 'win32';
+import { IS_WIN, resolveClaudeBin, killProc, plural, classifyError, URL_PATTERNS, API_ERROR_RE } from './cli';
+import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
+import { getSkills } from './skills';
 
-function plural(count: number, singular: string, pluralForm?: string): string {
-  return `${count} ${count === 1 ? singular : (pluralForm ?? singular + 's')}`;
-}
-
-let resolvedClaudeBin: string | null = null;
-function resolveClaudeBin(): string {
-  if (resolvedClaudeBin) return resolvedClaudeBin;
-  if (!IS_WIN) { resolvedClaudeBin = 'claude'; return 'claude'; }
-  try {
-    const out = execFileSync('where', ['claude.cmd'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    const hit = out.split(/\r?\n/).map(l => l.trim()).find(Boolean);
-    if (hit && fs.existsSync(hit)) { resolvedClaudeBin = hit; return hit; }
-  } catch {}
-  const nvmHome = process.env.NVM_HOME;
-  if (nvmHome) {
-    try {
-      const versions = fs.readdirSync(nvmHome).filter(d => /^v\d/.test(d)).sort().reverse();
-      for (const v of versions) {
-        const candidate = path.join(nvmHome, v, 'claude.cmd');
-        if (fs.existsSync(candidate)) { resolvedClaudeBin = candidate; return candidate; }
-      }
-    } catch {}
-  }
-  resolvedClaudeBin = 'claude';
-  return 'claude';
-}
-
-function killProc(proc: ReturnType<typeof spawn>) {
-  if (!proc.pid) return;
-  if (IS_WIN) {
-    try { execFileSync('taskkill', ['/T', '/F', '/PID', String(proc.pid)], { stdio: 'ignore' }); } catch {}
-  } else {
-    proc.kill();
-  }
-}
-
-function readSkillDescription(skillDir: string): string | undefined {
-  const skillFile = path.join(skillDir, 'SKILL.md');
-  try {
-    const content = fs.readFileSync(skillFile, 'utf-8');
-    const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
-    if (match) {
-      const descMatch = match[1].match(/^description:\s*(.+)$/m);
-      if (descMatch) return descMatch[1].trim();
-    }
-  } catch {}
-  return undefined;
-}
-
-function readSkillsDir(dir: string, scope: 'global' | 'project') {
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir, { withFileTypes: true })
-    .filter(e => e.isDirectory())
-    .map(e => ({ name: e.name, scope, kind: 'skill' as const, description: readSkillDescription(path.join(dir, e.name)) }));
-}
-
-function readCommandsDir(dir: string, scope: 'global' | 'project') {
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir, { withFileTypes: true })
-    .filter(e => e.isFile() && e.name.endsWith('.md'))
-    .map(e => {
-      const name = e.name.replace(/\.md$/, '');
-      let description: string | undefined;
-      try {
-        const content = fs.readFileSync(path.join(dir, e.name), 'utf-8');
-        const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-        if (fmMatch) {
-          const descMatch = fmMatch[1].match(/^description:\s*(.+)$/m);
-          if (descMatch) description = descMatch[1].trim();
-        }
-        if (!description) {
-          const firstLine = content.split('\n')[0]?.trim();
-          if (firstLine && firstLine !== '---') description = firstLine;
-        }
-      } catch {}
-      return { name, scope, kind: 'command' as const, description };
-    });
-}
-
-const BUILTIN_COMMANDS: { name: string; scope: 'builtin'; description: string }[] = [
-  { name: 'clear', scope: 'builtin', description: 'Clear conversation history' },
-  { name: 'compact', scope: 'builtin', description: 'Compact conversation to save context' },
-  { name: 'context', scope: 'builtin', description: 'Show context window usage' },
-  { name: 'cost', scope: 'builtin', description: 'Show token usage and cost' },
-  { name: 'diff', scope: 'builtin', description: 'Show file changes since start' },
-  { name: 'doctor', scope: 'builtin', description: 'Check installation health' },
-  { name: 'help', scope: 'builtin', description: 'Show available commands' },
-  { name: 'hooks', scope: 'builtin', description: 'Manage event hooks' },
-  { name: 'ide', scope: 'builtin', description: 'IDE integration status' },
-  { name: 'init', scope: 'builtin', description: 'Initialize project with CLAUDE.md' },
-  { name: 'login', scope: 'builtin', description: 'Sign in to your account' },
-  { name: 'logout', scope: 'builtin', description: 'Sign out of your account' },
-  { name: 'memory', scope: 'builtin', description: 'Edit CLAUDE.md memory files' },
-  { name: 'model', scope: 'builtin', description: 'Switch or show current model' },
-  { name: 'permissions', scope: 'builtin', description: 'View or update tool permissions' },
-  { name: 'plan', scope: 'builtin', description: 'Create and execute a plan' },
-  { name: 'security-review', scope: 'builtin', description: 'Review code for vulnerabilities' },
-  { name: 'status', scope: 'builtin', description: 'Show session and account info' },
-  { name: 'terminal-setup', scope: 'builtin', description: 'Install shell integration' },
-  { name: 'vim', scope: 'builtin', description: 'Toggle vim keybindings' },
-];
-
-function getSkills(cwd: string) {
-  return [
-    ...BUILTIN_COMMANDS,
-    ...readCommandsDir(path.join(os.homedir(), '.claude', 'commands'), 'global'),
-    ...readCommandsDir(path.join(cwd, '.claude', 'commands'), 'project'),
-    ...readSkillsDir(path.join(os.homedir(), '.claude', 'skills'), 'global'),
-    ...readSkillsDir(path.join(cwd, '.claude', 'skills'), 'project'),
-  ];
-}
-
-const CONFIG_PATH = process.env.ARGUS_CONFIG || path.join(os.homedir(), '.claude', 'argus.json');
-
-export interface ArgusConfig {
-  verboseTools: boolean;
-  showTimer: boolean;
-  showOutput: boolean;
-  showLogs: boolean;
-  showLogTime: boolean;
-  showLogType: boolean;
-  soundOnComplete: boolean;
-  notifyOnComplete: boolean;
-  watchdogEnabled: boolean;
-  watchdogTimeout: number;
-  watchdogAutoRetries: number;
-  watchdogRetryDelay: number;
-  watchdogDelayFactor: number;
-}
-
-const DEFAULT_CONFIG: ArgusConfig = {
-  verboseTools: false,
-  showTimer: true,
-  showOutput: false,
-  showLogs: true,
-  showLogTime: true,
-  showLogType: true,
-  soundOnComplete: true,
-  notifyOnComplete: true,
-  watchdogEnabled: true,
-  watchdogTimeout: 120,
-  watchdogAutoRetries: 3,
-  watchdogRetryDelay: 5,
-  watchdogDelayFactor: 2,
-};
-
-function readConfig(): ArgusConfig {
-  try {
-    const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
-  } catch {
-    return { ...DEFAULT_CONFIG };
-  }
-}
-
-function writeConfig(config: ArgusConfig): void {
-  try {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
-  } catch {}
-}
+export type { ArgusConfig } from './config';
 
 const DEFAULT_MODEL = process.env.ARGUS_MODEL ?? "claude-opus-4-6";
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
-
-const AUTH_PATTERNS = [/auth/i, /login/i, /token/i, /unauthorized/i, /401/i, /403/i, /credential/i, /oauth/i, /api[_ ]?key/i];
-const SESSION_PATTERNS = [/session/i, /resume/i, /expired/i, /not found.*session/i];
-
-type ErrorKind = 'auth' | 'not_found' | 'session' | 'generic';
-
-function classifyError(stderr: string, exitCode: number | null): { message: string; errorKind: ErrorKind } {
-  const text = stderr.trim();
-  if (text) {
-    if (AUTH_PATTERNS.some(p => p.test(text))) return { message: text, errorKind: 'auth' };
-    if (SESSION_PATTERNS.some(p => p.test(text))) return { message: text, errorKind: 'session' };
-  }
-  if (exitCode === 1 && text) return { message: text, errorKind: 'auth' };
-  return { message: text || `claude exited with code ${exitCode}`, errorKind: 'generic' };
-}
-
-const URL_PATTERNS = [
-  /(https:\/\/[^\s"]+oauth[^\s"]*)/i,
-  /(https:\/\/claude\.ai\/[^\s"]+)/i,
-  /(https:\/\/console\.anthropic\.com\/[^\s"]+)/i,
-  /(https:\/\/[^\s"]+anthropic[^\s"]*)/i,
-];
-
-const API_ERROR_RE = /API Error:|Failed to authenticate|Request not allowed|socket connection was closed|overloaded_error|invalid_api_key|permission_error/i;
 
 export interface StartServerOptions {
   port?: number;
@@ -251,6 +69,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     let cliDone = false;
     let userStopped = false;
     let suppressCliOutput = false;
+    let pendingFollowUp: { answers: Record<string, string>; toolId: string; mode?: string } | undefined;
     const pendingBgTasks = new Set<string>();
     let totalBgTasks = 0;
     let turnInputTokens = 0;
@@ -270,7 +89,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     let watchdogRetrying = false;
     let watchdogRetryTimer: ReturnType<typeof setTimeout> | null = null;
     const watchdogInterval = setInterval(() => {
-      if (!watchdogActive || cliDone || lastEventTime === 0) return;
+      if (!watchdogActive || cliDone || lastEventTime === 0 || pendingAskTools.size > 0) return;
       const cfg = readConfig();
       if (!cfg.watchdogEnabled) return;
       const elapsed = (Date.now() - lastEventTime) / 1000;
@@ -363,6 +182,32 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       ws.send(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
     };
 
+    function flushAskFollowUp() {
+      if (!pendingFollowUp) return;
+      const { answers, toolId, mode } = pendingFollowUp;
+      pendingFollowUp = undefined;
+      const tc = toolMap.get(toolId);
+      const questions = (tc?.input as Record<string, unknown>)?.questions as Array<{
+        question: string;
+        options?: Array<{ label: string; description?: string }>;
+      }> | undefined;
+      const answerLines = Object.entries(answers).map(([q, a]) => {
+        const qDef = questions?.find(qd => qd.question === q);
+        const optIdx = qDef?.options?.findIndex(o => o.label === a);
+        const optDesc = qDef?.options?.find(o => o.label === a)?.description;
+        let line = `Question: "${q}"\nSelected: "${a}"`;
+        if (optIdx !== undefined && optIdx >= 0) line += ` (option ${optIdx + 1} of ${qDef!.options!.length})`;
+        if (optDesc) line += `\nDescription: ${optDesc}`;
+        return line;
+      }).join('\n\n');
+      const followUp = `The user selected the following answers. Proceed with exactly these choices:\n\n${answerLines}`;
+      setTimeout(() => {
+        suppressCliOutput = false;
+        const synthetic = JSON.stringify({ type: 'send', text: followUp, mode, _silent: true, _askResume: true });
+        ws.emit('message', Buffer.from(synthetic));
+      }, 200);
+    }
+
     const attachProcHandlers = (proc: ReturnType<typeof spawn>) => {
       proc.stdout!.on('data', (chunk: Buffer) => {
         buffer += chunk.toString();
@@ -398,6 +243,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
             toolMap.clear();
             answeredTools.clear();
             pendingAskTools.clear();
+            pendingFollowUp = undefined;
             resetStaleTimer();
             watchdogActive = true;
             ws.send(JSON.stringify({ type: 'thinking_start', reused: true }));
@@ -481,6 +327,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
             const toolId = event.tool_use_id as string;
             if (answeredTools.has(toolId)) {
               answeredTools.delete(toolId);
+              if (toolMap.get(toolId)?.name === 'AskUserQuestion') suppressCliOutput = true;
               sendLog('info', `Suppressing CLI echo for ${toolId} (already answered)`);
             } else if (pendingAskTools.has(toolId)) {
               suppressCliOutput = true;
@@ -503,6 +350,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
                 const toolId = block.tool_use_id as string;
                 if (answeredTools.has(toolId)) {
                   answeredTools.delete(toolId);
+                  if (toolMap.get(toolId)?.name === 'AskUserQuestion') suppressCliOutput = true;
                   sendLog('info', `Suppressing CLI echo for ${toolId} (already answered)`);
                   continue;
                 }
@@ -533,7 +381,9 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
               const { errorKind } = classifyError(errText, 1);
               ws.send(JSON.stringify({ type: 'error', text: errText, errorKind }));
             }
-            if (pendingAskTools.size === 0) {
+            if (pendingFollowUp) {
+              flushAskFollowUp();
+            } else if (pendingAskTools.size === 0) {
               ws.send(JSON.stringify({ type: 'done', ...(pendingBgTasks.size > 0 ? { pendingBackgroundTasks: pendingBgTasks.size, totalBackgroundTasks: totalBgTasks } : {}) }));
             }
           } else if (!['content_block_start', 'content_block_stop', 'message_start', 'message_stop', 'message_delta', 'ping', 'rate_limit_event'].includes(event.type as string)) {
@@ -607,7 +457,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     });
 
     ws.on('message', (data: Buffer) => {
-      const msg = JSON.parse(data.toString()) as {
+      let msg: {
         type: string;
         text?: string;
         images?: Array<{ data: string; mediaType: string; name?: string }>;
@@ -616,10 +466,19 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         _askResume?: boolean;
         path?: string;
       };
+      try { msg = JSON.parse(data.toString()); } catch {
+        sendLog('warn', `Malformed WS message: ${data.toString().slice(0, 200)}`);
+        return;
+      }
 
       if (msg.type === 'send' && msg.text?.trim() === '/clear') {
         sessionId = undefined;
-        if (currentProc) killProc(currentProc);
+        if (currentProc) {
+          const proc = currentProc;
+          currentProc = undefined;
+          currentProcKey = undefined;
+          killProc(proc);
+        }
         pendingBgTasks.clear();
         totalBgTasks = 0;
         ws.send(JSON.stringify({ type: 'clear' }));
@@ -644,7 +503,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
           '--input-format', 'stream-json',
           '--model', MODEL,
           '--tools', tools.join(','),
-          '--allowedTools', tools.join(','),
+          '--allowedTools', tools.filter(t => t !== 'AskUserQuestion').join(','),
         ];
         if (isPlan) {
           baseArgs.push('--permission-mode', 'plan');
@@ -673,6 +532,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         toolMap.clear();
         answeredTools.clear();
         pendingAskTools.clear();
+        pendingFollowUp = undefined;
 
         const canReuse = currentProc?.stdin?.writable === true && currentProcKey === procKey;
         let proc: ReturnType<typeof spawn>;
@@ -839,40 +699,21 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
         pendingAskTools.delete(answerId);
         answeredTools.add(answerId);
-        if (pendingAskTools.size === 0) suppressCliOutput = false;
-        if (currentProc?.stdin?.writable && !cliDone) {
-          ws.send(JSON.stringify({
-            type: 'tool_end',
-            call: { id: answerId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: content },
-          }));
-          const toolResult = JSON.stringify({ type: 'tool_result', tool_use_id: answerId, content });
-          sendLog('info', `Sending tool answer for ${answerId}: ${content.slice(0, 100)}`);
-          currentProc.stdin.write(toolResult + '\n');
+
+        ws.send(JSON.stringify({
+          type: 'tool_end',
+          call: { id: answerId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: content },
+        }));
+        sendLog('info', `Tool answer for ${answerId}: ${content.slice(0, 100)}`);
+
+        if (pendingAskTools.size === 0 && sessionId && answers && Object.keys(answers).length > 0) {
+          pendingFollowUp = { answers, toolId: answerId, mode: msg.mode };
+          if (cliDone) flushAskFollowUp();
         } else {
-          sendLog('info', `Tool answer (fallback) for ${answerId}: ${content.slice(0, 100)}`);
-          const tc2 = toolMap.get(answerId);
-          ws.send(JSON.stringify({
-            type: 'tool_end',
-            call: { id: answerId, name: tc2?.name ?? 'AskUserQuestion', input: tc2?.input ?? {}, result: content },
-          }));
-          const willResume = pendingAskTools.size === 0 && sessionId && answers && Object.keys(answers).length > 0;
-          if (willResume) {
-            const answerLines = Object.entries(answers!)
-              .map(([q, a]) => `- ${q}: ${a}`)
-              .join('\n');
-            const followUp = `Here are my answers:\n${answerLines}`;
-            setTimeout(() => {
-              suppressCliOutput = false;
-              const synthetic = JSON.stringify({ type: 'send', text: followUp, mode: msg.mode, _silent: true, _askResume: true });
-              ws.emit('message', Buffer.from(synthetic));
-            }, 200);
-          } else {
-            if (currentProc?.stdin?.writable) {
-              currentProc.stdin.end();
-            }
-            if (pendingAskTools.size === 0 && cliDone) {
-              setTimeout(() => ws.send(JSON.stringify({ type: 'done' })), 100);
-            }
+          if (pendingAskTools.size === 0) suppressCliOutput = false;
+          if (currentProc?.stdin?.writable) currentProc.stdin.end();
+          if (pendingAskTools.size === 0 && cliDone) {
+            setTimeout(() => ws.send(JSON.stringify({ type: 'done' })), 100);
           }
         }
       } else if (msg.type === 'readFilePreview' && msg.path) {
