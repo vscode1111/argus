@@ -171,9 +171,12 @@ async function simulateReads() {
   send({ type: 'thinking_start' });
   await delay(200);
   for (const f of files) {
-    send({ type: 'tool_start', call: { id: f.id, name: 'Read', input: { file_path: f.path } } });
+    const input: Record<string, unknown> = { file_path: f.path };
+    if (f.id === 'r1') { input.limit = 80; }
+    if (f.id === 'r3') { input.offset = 5; input.limit = 15; }
+    send({ type: 'tool_start', call: { id: f.id, name: 'Read', input } });
     await delay(500);
-    send({ type: 'tool_end', call: { id: f.id, name: 'Read', input: { file_path: f.path }, result: f.result } });
+    send({ type: 'tool_end', call: { id: f.id, name: 'Read', input, result: f.result } });
     await delay(200);
   }
   send({ type: 'text_chunk', text: 'Read all 3 files successfully.' });

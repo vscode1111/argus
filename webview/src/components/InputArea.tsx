@@ -132,7 +132,6 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     if (!el) return;
     const text = el.value.trim();
     if (!text && images.length === 0) return;
-    if (isStreaming) return;
     if (text) setHistory(prev => [text, ...prev]);
     historyIndex.current = -1;
     savedDraft.current = '';
@@ -406,7 +405,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
             {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} workspacePath={workspacePath} version={version} />}
           </div>
         </div>
-        <button className={styles.btnSend} disabled={isStreaming} onClick={send}>Send</button>
+        <button className={styles.btnSend} onClick={send}>Send</button>
       </div>
       {viewerIndex !== null && images[viewerIndex] && (
         <ImageViewerModal

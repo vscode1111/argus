@@ -32,7 +32,8 @@ export type LoginState =
 
 export type ContentBlock =
   | { type: 'text'; text: string }
-  | { type: 'tool'; call: ToolCallData };
+  | { type: 'tool'; call: ToolCallData }
+  | { type: 'user_inject'; text: string };
 
 export type UIMessage = {
   id: string;

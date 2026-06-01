@@ -56,7 +56,7 @@ function AppInner() {
   useEffect(() => {
     const VALID_TYPES = new Set<AppAction['type']>([
       'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
-      'tool_start', 'tool_end', 'done', 'error', 'clear',
+      'tool_start', 'tool_end', 'done', 'error', 'clear', 'user_inject',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
       'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'retry_status', 'retry_clean', 'ws_status',
     ]);

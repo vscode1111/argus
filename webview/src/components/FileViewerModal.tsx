@@ -97,7 +97,7 @@ const isDataUrl = (s: string) => s.startsWith('data:image/');
 export function FileViewerModal({ path, content, line, endLine, copyText, onClose }: Props) {
   // Default to dark unless VS Code explicitly marks the theme as light.
   const isDark = !document.body.classList.contains('vscode-light');
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'path' | 'cmd' | false>(false);
 
   useEscapeKey(onClose);
 
@@ -129,11 +129,19 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
     postMessage({ type: 'openFile', path, line });
   }
 
-  function handleCopy(e: React.MouseEvent) {
+  function handleCopyPath(e: React.MouseEvent) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(path).then(() => {
+      setCopied('path');
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  function handleCopyCmd(e: React.MouseEvent) {
     e.stopPropagation();
     if (!copyText) return;
     navigator.clipboard.writeText(copyText).then(() => {
-      setCopied(true);
+      setCopied('cmd');
       setTimeout(() => setCopied(false), 1500);
     });
   }
@@ -149,9 +157,21 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
         <div className={modal.header}>
           <div className={modal.titleRow}>
             <span className={modal.title} title={path}>{path}</span>
+            <button className={modal.btnIcon} onClick={handleCopyPath} title="Copy path to clipboard" aria-label="Copy path">
+              {copied === 'path' ? (
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M2 8L6 12L14 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <rect x="5" y="1" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                  <path d="M5 4H3.5A1.5 1.5 0 0 0 2 5.5v8A1.5 1.5 0 0 0 3.5 15h7A1.5 1.5 0 0 0 12 13.5V12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+              )}
+            </button>
             {copyText && (
-              <button className={modal.btnIcon} onClick={handleCopy} title="Copy command to clipboard" aria-label="Copy command">
-                {copied ? (
+              <button className={modal.btnIcon} onClick={handleCopyCmd} title="Copy command to clipboard" aria-label="Copy command">
+                {copied === 'cmd' ? (
                   <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                     <path d="M2 8L6 12L14 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
@@ -190,7 +210,9 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
               wrapLongLines={false}
               lineProps={(lineNumber: number) => {
                 const props: Record<string, unknown> = { 'data-line': lineNumber };
-                if (line && lineNumber >= line && lineNumber <= (endLine ?? line)) {
+                const end = endLine ?? line;
+                const rangeSize = line && end ? end - line + 1 : 0;
+                if (line && rangeSize <= 30 && lineNumber >= line && lineNumber <= end!) {
                   props.style = { background: 'var(--diff-added-bg, rgba(55, 148, 255, 0.15))' };
                   props.className = 'highlighted-line';
                 }

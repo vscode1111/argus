@@ -2,6 +2,7 @@ import React from 'react';
 import { StreamingState } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
+import { UserInjectBlock } from './UserInjectBlock';
 import { Markdown } from '../utils/markdown';
 import { StreamingTimer } from './StreamingTimer';
 import { WorkingIndicator } from './WorkingIndicator';
@@ -43,11 +44,11 @@ export function StreamingMessage({ streaming, logCount }: Props) {
         if (firstPendingAskIdx >= 0 && i > firstPendingAskIdx && block.type === 'text') {
           return null;
         }
-        return block.type === 'tool'
-          ? <ToolCall key={block.call.id} call={block.call} />
-          : <div key={`text-${i}`} className={msg.messageContent}>
-              <Markdown>{block.text}</Markdown>
-            </div>;
+        if (block.type === 'tool') return <ToolCall key={block.call.id} call={block.call} />;
+        if (block.type === 'user_inject') return <UserInjectBlock key={`inject-${i}`} text={block.text} />;
+        return <div key={`text-${i}`} className={msg.messageContent}>
+          <Markdown>{block.text}</Markdown>
+        </div>;
       })}
       {streaming.retryStatus && <WorkingIndicator logCount={logCount} retryStatus={streaming.retryStatus} />}
       {showTimer && <StreamingTimer startTime={startTime} lastEventTime={lastEventTime} hideIdle={!!streaming.askPausedAt} />}

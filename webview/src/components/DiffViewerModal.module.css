@@ -7,13 +7,15 @@
 
 .body {
   padding: 0 !important;
+}
+
+.scroll {
   overflow: auto !important;
-  flex: 1 !important;
 }
 
 .table {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
   font-family: var(--font-mono);
   font-size: 13px;
   align-content: start;

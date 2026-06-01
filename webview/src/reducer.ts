@@ -37,6 +37,7 @@ export type AppAction =
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number }
   | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; timedOut?: boolean }
   | { type: 'retry_clean' }
+  | { type: 'user_inject'; text: string }
   | { type: 'ws_status'; connected: boolean };
 
 let nextMsgId = 0;
@@ -90,6 +91,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
       }
       return { ...state, streaming: { ...state.streaming, blocks, lastEventTime: Date.now(), retryStatus: null } };
     }
+
+    case 'user_inject':
+      if (!state.streaming) return state;
+      return { ...state, streaming: { ...state.streaming, blocks: [...state.streaming.blocks, { type: 'user_inject', text: action.text }], lastEventTime: Date.now() } };
 
     case 'tool_start':
       if (!state.streaming) return state;

@@ -23,6 +23,37 @@
 .streaming { opacity: 0.9; }
 .streaming.empty { padding: 0; background: none; }
 
+.userInject {
+  background: var(--user-msg-bg);
+  padding: 4px 8px;
+  border-radius: 6px;
+  width: fit-content;
+  max-width: 85%;
+  margin: 8px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  position: relative;
+}
+
+.userInject:hover .userInjectCopy { opacity: 0.6; }
+.userInjectCopy:hover { opacity: 1 !important; }
+
+.userInjectCopy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
 .messageContent { line-height: 1.5; }
 .messageContent:empty { display: none; }
 .messageContent p { margin: 0 0 8px; }

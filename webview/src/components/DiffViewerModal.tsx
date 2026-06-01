@@ -149,6 +149,7 @@ export function DiffViewerModal({ path, oldString, newString, onClose }: Props) 
           </div>
         </div>
         <div className={[modal.body, styles.body].join(' ')}>
+          <div className={styles.scroll}>
           <div className={styles.table}>
             {rows.map((row, i) => (
               <React.Fragment key={i}>
@@ -170,6 +171,7 @@ export function DiffViewerModal({ path, oldString, newString, onClose }: Props) 
                 )}
               </React.Fragment>
             ))}
+          </div>
           </div>
         </div>
       </div>

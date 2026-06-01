@@ -177,6 +177,29 @@ function handleSend(s: SessionState, msg: { text?: string; images?: Array<{ data
   const text = msg.text ?? '';
   const images = msg.images;
 
+  // Mid-turn: write to stdin silently, CLI merges it into the active turn
+  if (s.currentProc?.stdin?.writable && !s.cliDone && !msg._silent && !msg._askResume) {
+    s.lastMessage = { text, images, mode: msg.mode };
+    const contentBlocks: Array<Record<string, unknown>> = [];
+    if (images && images.length > 0) {
+      for (const img of images) {
+        if (img.mediaType.startsWith('text/')) {
+          contentBlocks.push({ type: 'text', text: `[Attached file: ${img.name ?? 'file.txt'}]\n${Buffer.from(img.data, 'base64').toString('utf-8')}` });
+        } else if (img.mediaType === 'application/pdf') {
+          contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
+        } else {
+          contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
+        }
+      }
+    }
+    if (text) contentBlocks.push({ type: 'text', text });
+    const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: contentBlocks } });
+    s.sendLog('info', `Mid-turn inject: ${stdinMsg.length} bytes to stdin`);
+    s.currentProc.stdin.write(stdinMsg + '\n');
+    s.ws.send(JSON.stringify({ type: 'user_inject', text }));
+    return;
+  }
+
   if (!msg._silent) {
     s.ws.send(JSON.stringify({ type: 'message', message: { id: String(Date.now()), role: 'user', content: text, images } }));
   }

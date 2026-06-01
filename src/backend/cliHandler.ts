@@ -150,6 +150,8 @@ function handleUserEvent(s: SessionState, event: Record<string, unknown>): void 
       const content = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
       s.sendLog('debug', `tool_result ${toolId}: ${String(content).slice(0, 100)}`);
       s.ws.send(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content } }));
+    } else if (block.type === 'text' && block.text) {
+      s.ws.send(JSON.stringify({ type: 'user_inject', text: block.text }));
     }
   }
 }

@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { UIMessage, ErrorKind, LoginState } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
+import { UserInjectBlock } from './UserInjectBlock';
 import { WorkingIndicator } from './WorkingIndicator';
 import { Markdown } from '../utils/markdown';
 import { linkifyPaths } from '../utils/filePath';
@@ -161,11 +162,11 @@ export function ChatMessage({ message, login, logCount }: Props) {
         if (firstPendingAskIdx >= 0 && i > firstPendingAskIdx && block.type === 'text') {
           return null;
         }
-        return block.type === 'tool'
-          ? <ToolCall key={block.call.id} call={block.call} sessionDone={sessionDone} />
-          : <div key={`text-${i}`} className={msg.messageContent}>
-              <Markdown>{block.text}</Markdown>
-            </div>;
+        if (block.type === 'tool') return <ToolCall key={block.call.id} call={block.call} sessionDone={sessionDone} />;
+        if (block.type === 'user_inject') return <UserInjectBlock key={`inject-${i}`} text={block.text} />;
+        return <div key={`text-${i}`} className={msg.messageContent}>
+          <Markdown>{block.text}</Markdown>
+        </div>;
       }) : content && (
         <div className={msg.messageContent}>
           <Markdown>{content}</Markdown>
