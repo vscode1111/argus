@@ -28,6 +28,9 @@ export function handleCliEvent(s: SessionState, event: Record<string, unknown>):
 
   if (event.type === 'system') {
     handleSystemEvent(s, event);
+  } else if (event.type === 'stream_event') {
+    const inner = event.event as Record<string, unknown> | undefined;
+    if (inner?.type === 'content_block_delta') handleDelta(s, inner);
   } else if (event.type === 'content_block_delta') {
     handleDelta(s, event);
   } else if (event.type === 'assistant') {

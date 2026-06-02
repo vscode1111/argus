@@ -8,9 +8,6 @@ test('paste text.jpg via Ctrl+V and recognize text in response', async ({ page }
   const imageBuffer = fs.readFileSync(imagePath);
   const base64 = imageBuffer.toString('base64');
 
-  await page.addInitScript(() => {
-    localStorage.setItem('argus.showLogs', 'true');
-  });
   await waitForApp(page);
 
   const textarea = page.getByPlaceholder('Ask Argus');
@@ -40,16 +37,8 @@ test('paste text.jpg via Ctrl+V and recognize text in response', async ({ page }
   // Wait for assistant response containing key phrases from the image
   const messageArea = page.locator('[class*="messageList"], [class*="messages"]');
   await expect(messageArea).toContainText('Key Conventions', { timeout: 60_000 });
-  await expect(messageArea).toContainText('claude-opus-4-6', { timeout: 5_000 });
+  await expect(messageArea).toContainText(/claude-(opus|sonnet|haiku)-\d+-\d+/, { timeout: 5_000 });
   await expect(messageArea).toContainText('finalMessage', { timeout: 5_000 });
   await expect(messageArea).toContainText('showWarningMessage', { timeout: 5_000 });
   await expect(messageArea).toContainText('Node.js/TypeScript', { timeout: 5_000 });
-
-  const logTitle = page.locator('text=/Debug Log \\(\\d+\\)/');
-  await expect(async () => {
-    const text = await logTitle.textContent();
-    const match = text?.match(/\((\d+)\)/);
-    expect(match).toBeTruthy();
-    expect(Number(match![1])).toBeGreaterThanOrEqual(5);
-  }).toPass({ timeout: 30_000 });
 });

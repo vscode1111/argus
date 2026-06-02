@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 export function getModel(): string {
-  return vscode.workspace.getConfiguration('argus').get<string>('model') ?? 'claude-opus-4-6';
+  return vscode.workspace.getConfiguration('argus').get<string>('model') ?? '';
 }
 
 export function isInlineCompletionsEnabled(): boolean {

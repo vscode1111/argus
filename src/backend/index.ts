@@ -9,7 +9,7 @@ import { handleConnection } from './session';
 
 export type { ArgusConfig } from './config';
 
-const DEFAULT_MODEL = process.env.ARGUS_MODEL ?? "claude-opus-4-6";
+const DEFAULT_MODEL = process.env.ARGUS_MODEL ?? '';
 
 export interface StartServerOptions {
   port?: number;

@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.49",
+  "version": "0.0.50",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "license": "UNLICENSED",
@@ -150,13 +150,7 @@
       "properties": {
         "argus.model": {
           "type": "string",
-          "default": "claude-opus-4-6",
-          "enum": [
-            "claude-opus-4-6",
-            "claude-sonnet-4-6",
-            "claude-haiku-4-5"
-          ],
-          "description": "Claude model to use"
+          "description": "Claude model to use (leave empty to use the CLI default)"
         },
         "argus.inlineCompletions.enabled": {
           "type": "boolean",

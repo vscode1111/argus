@@ -32,7 +32,7 @@ AI coding assistant for VS Code, powered by Claude.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `argus.model` | `claude-opus-4-6` | Model used by the chat |
+| `argus.model` | _(CLI default)_ | Model used by the chat (any CLI-supported name; leave empty to use the CLI default) |
 | `argus.inlineCompletions.enabled` | `false` | Enable inline code completions |
 | `argus.inlineCompletions.debounceMs` | `500` | Debounce delay for inline completions |
 | `argus.codeLens.enabled` | `true` | Show "Ask Argus" code lens |

@@ -375,9 +375,6 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
       </div>
       <div className={styles.btnGroup}>
         <div className={styles.btnRow}>
-          {isStreaming && (
-            <button className={styles.btnStop} onClick={() => { postMessage({ type: 'stop' }); onStop?.(); }}>Stop</button>
-          )}
           <button
             className={[styles.modePill, mode === 'plan' ? styles.modePlan : ''].filter(Boolean).join(' ')}
             onClick={() => setMode(m => m === 'edit' ? 'plan' : 'edit')}
@@ -405,7 +402,20 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
             {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} workspacePath={workspacePath} version={version} />}
           </div>
         </div>
-        <button className={styles.btnSend} onClick={send}>Send</button>
+        <div className={styles.sendRow}>
+          <button className={styles.btnSend} onClick={send} title="Send" aria-label="Send">
+            <svg width="16" height="20" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M8 17V3M8 3L3.5 7.5M8 3L12.5 7.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          {isStreaming && (
+            <button className={styles.btnStop} onClick={() => { postMessage({ type: 'stop' }); onStop?.(); }} title="Stop" aria-label="Stop">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="1" y="1" width="10" height="10" rx="1"/>
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
       {viewerIndex !== null && images[viewerIndex] && (
         <ImageViewerModal

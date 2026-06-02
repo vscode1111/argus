@@ -210,10 +210,11 @@ function handleSend(s: SessionState, msg: { text?: string; images?: Array<{ data
     '--print', '--verbose',
     '--output-format', 'stream-json',
     '--input-format', 'stream-json',
-    '--model', s.model,
+    '--include-partial-messages',
     '--tools', tools.join(','),
     '--allowedTools', tools.filter(t => t !== 'AskUserQuestion').join(','),
   ];
+  if (s.model) baseArgs.push('--model', s.model);
   if (isPlan) {
     baseArgs.push('--permission-mode', 'plan', '--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
   }
