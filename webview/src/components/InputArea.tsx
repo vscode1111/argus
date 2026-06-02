@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ImageAttachment } from '../types';
 import { postMessage } from '../vscode';
 import { SettingsModal } from './SettingsModal';
+import { AccountUsageModal } from './AccountUsageModal';
 import { ImageViewerModal } from './ImageViewerModal';
 import styles from './InputArea.module.css';
 import settings from './SettingsModal.module.css';
@@ -50,6 +51,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [mode, setMode] = useState<'plan' | 'edit'>('edit');
+  const [accountUsageOpen, setAccountUsageOpen] = useState(false);
   const historyIndex = useRef(-1);
   const savedDraft = useRef('');
   const dragging = useRef(false);
@@ -231,6 +233,15 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     ? skills.filter(s => s.name.toLowerCase().includes(slashQuery.toLowerCase()))
     : [];
 
+  // "Account & usage..." action surfaces when the query is a prefix of "account"/"usage"
+  // (e.g. "/usage"), so it stays out of the way on a bare "/".
+  const accountQuery = (slashQuery ?? '').toLowerCase();
+  const showAccountAction = accountQuery.length > 0 && (
+    'account'.startsWith(accountQuery) || 'usage'.startsWith(accountQuery)
+  );
+  const accountActionIndex = filteredSkills.length; // last item when shown
+  const totalDropdownItems = filteredSkills.length + (showAccountAction ? 1 : 0);
+
   function selectSkill(name: string) {
     const el = textareaRef.current;
     if (el) {
@@ -248,8 +259,24 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     setSlashQuery(null);
   }
 
+  // Clear the in-progress "/..." token from the textarea and open the modal.
+  function openAccountUsage() {
+    const el = textareaRef.current;
+    if (el) {
+      const ctx = getSlashContext();
+      if (ctx) {
+        const cursor = el.selectionStart ?? 0;
+        el.value = el.value.slice(0, ctx.slashIndex) + el.value.slice(cursor);
+        el.setSelectionRange(ctx.slashIndex, ctx.slashIndex);
+      }
+      adjustHeight();
+    }
+    setSlashQuery(null);
+    setAccountUsageOpen(true);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (slashQuery !== null && filteredSkills.length > 0) {
+    if (slashQuery !== null && totalDropdownItems > 0) {
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         setHighlightIndex(i => Math.max(0, i - 1));
@@ -257,12 +284,16 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setHighlightIndex(i => Math.min(filteredSkills.length - 1, i + 1));
+        setHighlightIndex(i => Math.min(totalDropdownItems - 1, i + 1));
         return;
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
-        selectSkill(filteredSkills[highlightIndex].name);
+        if (highlightIndex < filteredSkills.length) {
+          selectSkill(filteredSkills[highlightIndex].name);
+        } else {
+          openAccountUsage();
+        }
         return;
       }
       if (e.key === 'Escape') {
@@ -310,7 +341,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
       {slashQuery !== null && (
         <div className={styles.slashMenu} style={{ left: 0 }}>
           <div className={styles.slashMenuHeader}>Slash Commands</div>
-          {filteredSkills.length === 0 && (
+          {filteredSkills.length === 0 && !showAccountAction && (
             <div className={styles.slashMenuEmpty}>
               {skillsLoaded.current ? 'No matching commands' : 'Loading...'}
             </div>
@@ -330,6 +361,19 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
               )}
             </div>
           ))}
+          {showAccountAction && (
+            <>
+              <div className={styles.slashMenuHeader}>Model</div>
+              <div
+                ref={highlightIndex === accountActionIndex ? el => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                className={[styles.slashMenuItem, highlightIndex === accountActionIndex ? styles.slashMenuItemActive : ''].filter(Boolean).join(' ')}
+                onMouseDown={e => e.preventDefault()}
+                onClick={openAccountUsage}
+              >
+                <span className={styles.slashMenuName}>Account &amp; usage...</span>
+              </div>
+            </>
+          )}
         </div>
       )}
       <div
@@ -424,6 +468,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
           onClose={() => setViewerIndex(null)}
         />
       )}
+      {accountUsageOpen && <AccountUsageModal onClose={() => setAccountUsageOpen(false)} />}
     </div>
   );
 

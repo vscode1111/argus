@@ -7,6 +7,7 @@ import { IS_WIN, resolveClaudeBin, killProc, plural, classifyError, API_ERROR_RE
 import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
 import { getSkills } from './skills';
 import { readFilePreview } from './filePreview';
+import { fetchAccountInfo, fetchUsage } from './accountUsage';
 import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { createSessionState, type SessionState } from './sessionState';
@@ -102,6 +103,7 @@ export function handleConnection(ws: WebSocket, workspaceDir: string, model: str
       _silent?: boolean;
       _askResume?: boolean;
       path?: string;
+      force?: boolean;
     };
     try { msg = JSON.parse(data.toString()); } catch {
       s.sendLog('warn', `Malformed WS message: ${data.toString().slice(0, 200)}`);
@@ -163,6 +165,26 @@ export function handleConnection(ws: WebSocket, workspaceDir: string, model: str
     } else if (msg.type === 'readFilePreview' && msg.path) {
       const result = readFilePreview(msg.path, workspaceDir);
       ws.send(JSON.stringify({ type: 'filePreview', ...result }));
+    } else if (msg.type === 'getAccountUsage') {
+      // Prefer the live usage API (all windows, immediately); fall back to
+      // windows accumulated from streamed rate_limit_events if it is unavailable.
+      const accountP = fetchAccountInfo();
+      const usageP = fetchUsage(msg.force);
+      // Phase 1: send account as soon as it resolves so the modal renders it
+      // immediately (matching the official panel) instead of waiting on usage,
+      // which can be slow or rate-limited. `usagePending` keeps the usage section
+      // in a loading state. Registered before usageP's handler so it always wins
+      // ordering when both resolve together.
+      accountP.then((account) => {
+        ws.send(JSON.stringify({ type: 'accountUsage', account, usagePending: true }));
+      });
+      // Phase 2: account + usage once usage resolves.
+      Promise.all([accountP, usageP]).then(([account, usage]) => {
+        const rateLimits = usage.windows.length > 0 ? usage.windows : Array.from(s.rateLimits.values());
+        // Only surface the fetch error when there is no fallback data to show.
+        const usageError = rateLimits.length === 0 ? usage.error : undefined;
+        ws.send(JSON.stringify({ type: 'accountUsage', account, rateLimits, usageError, usagePending: false }));
+      });
     } else if (msg.type === 'stop') {
       handleStop(s);
     } else if (msg.type === 'newSession') {

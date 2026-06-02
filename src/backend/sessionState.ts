@@ -1,6 +1,7 @@
 import type { spawn } from 'child_process';
 import type { WebSocket } from 'ws';
 import type { WatchdogState } from './watchdog';
+import type { RateLimitInfo } from './accountUsage';
 
 export interface SessionState {
   ws: WebSocket;
@@ -26,6 +27,7 @@ export interface SessionState {
   staleTimer: ReturnType<typeof setTimeout> | null;
   lastMessage: { text: string; images?: Array<{ data: string; mediaType: string; name?: string }>; mode?: string } | null;
   receivedDeltas: boolean;
+  rateLimits: Map<string, RateLimitInfo>;
   watchdog: { state: WatchdogState; interval: ReturnType<typeof setInterval> };
   sendLog: (level: 'debug' | 'info' | 'warn' | 'error', text: string) => void;
   resetStaleTimer: () => void;
@@ -58,6 +60,7 @@ export function createSessionState(ws: WebSocket, workspaceDir: string, model: s
     staleTimer: null,
     lastMessage: null,
     receivedDeltas: false,
+    rateLimits: new Map(),
     watchdog: undefined!,
     sendLog: undefined!,
     resetStaleTimer: undefined!,

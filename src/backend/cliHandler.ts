@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import type { spawn } from 'child_process';
 import { plural, classifyError, API_ERROR_RE } from './cli';
+import { parseRateLimitEvent } from './accountUsage';
 import type { SessionState } from './sessionState';
 
 const MAX_CONTEXT = 200_000;
@@ -26,7 +27,10 @@ export function handleCliEvent(s: SessionState, event: Record<string, unknown>):
     s.sendLog('info', 'Background task notification: starting autonomous turn');
   }
 
-  if (event.type === 'system') {
+  if (event.type === 'rate_limit_event') {
+    const info = parseRateLimitEvent(event);
+    if (info) s.rateLimits.set(info.rateLimitType, info);
+  } else if (event.type === 'system') {
     handleSystemEvent(s, event);
   } else if (event.type === 'stream_event') {
     const inner = event.event as Record<string, unknown> | undefined;
