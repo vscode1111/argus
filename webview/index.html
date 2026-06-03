@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self' 'unsafe-inline'; connect-src ws://localhost:* http://localhost:*; img-src data: 'self';" />
+    content="default-src 'self' 'unsafe-inline'; connect-src ws: wss: http: https:; img-src data: 'self';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="/argus-icon.ico" type="image/x-icon" />
   <title>Argus - Dev</title>
@@ -49,16 +49,20 @@
       let _nonce = _params.get('nonce');
       let _wsUrl = null;
 
+      // Derive the backend host from the page so LAN devices (e.g. a phone on
+      // the same WiFi) reach the dev machine instead of their own localhost.
+      const _host = window.location.hostname || 'localhost';
+
       function buildWsUrl() {
         const p = new URLSearchParams();
         if (_nonce) p.set('nonce', _nonce);
         if (_dir) p.set('dir', _dir);
-        _wsUrl = 'ws://localhost:3001/agent?' + p.toString();
+        _wsUrl = 'ws://' + _host + ':3001/agent?' + p.toString();
       }
 
       if (!_nonce) {
         const xhr = new XMLHttpRequest();
-        xhr.open('GET', 'http://localhost:3001/nonce', false);
+        xhr.open('GET', 'http://' + _host + ':3001/nonce', false);
         try { xhr.send(); if (xhr.status === 200) _nonce = xhr.responseText; } catch(e) {}
       }
       buildWsUrl();

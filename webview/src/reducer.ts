@@ -38,6 +38,7 @@ export type AppAction =
   | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; timedOut?: boolean }
   | { type: 'retry_clean' }
   | { type: 'user_inject'; text: string }
+  | { type: 'sessionLoaded'; id: string; messages: UIMessage[] }
   | { type: 'ws_status'; connected: boolean };
 
 let nextMsgId = 0;
@@ -244,6 +245,11 @@ export function reducer(state: AppState, action: AppAction): AppState {
 
     case 'clear':
       return { ...state, messages: [], streaming: null, isStreaming: false, logs: [], contextUsage: null };
+
+    case 'sessionLoaded':
+      // Replace the conversation with the replayed transcript and drop any
+      // in-flight streaming/usage state from the previous session.
+      return { ...state, messages: action.messages, streaming: null, isStreaming: false, contextUsage: null };
 
     case 'prefill':
       return { ...state, prefill: action.text + '\x00' + Date.now() };

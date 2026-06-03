@@ -110,9 +110,12 @@ test.describe('account & usage', () => {
     await expect(rows.nth(0).locator('[class*="progressBar"]')).toHaveClass(/progressMedium/);
     await expect(rows.nth(1).locator('[class*="progressBar"]')).not.toHaveClass(/progressMedium|progressHigh/);
 
-    // Reset labels: minutes for the 5hr window, days for the weekly window.
+    // Reset labels: relative countdown (minutes for the 5hr window, days for the
+    // weekly window) followed by the absolute reset time (e.g. "· Sun 9:00 PM").
     await expect(rows.nth(0).locator('[class*="resetLabel"]')).toHaveText(/Resets in \d+m/);
     await expect(rows.nth(1).locator('[class*="resetLabel"]')).toHaveText(/Resets in \d+d/);
+    await expect(rows.nth(0).locator('[class*="resetLabel"]'))
+      .toHaveText(/· (Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2}:\d{2} (AM|PM)/);
   });
 
   test('high utilization uses the high (red) color tier', async ({ page }) => {

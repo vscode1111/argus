@@ -2,9 +2,11 @@ import React, { useEffect, useReducer, useRef, useCallback } from 'react';
 import { MessageList, MessageListHandle } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
+import { SessionHistoryModal } from './components/SessionHistoryModal';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { postMessage } from './vscode';
 import { reducer, initialState, type AppAction } from './reducer';
+import { SessionSummary } from './types';
 
 function playCompletionSound(): void {
   try {
@@ -37,6 +39,11 @@ function AppInner() {
   const wasStreaming = React.useRef(false);
   const hadPendingAsk = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
+  const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [sessionTitle, setSessionTitle] = React.useState('');
+  const [showSessionBar, setShowSessionBar] = React.useState(() => {
+    try { return localStorage.getItem('argus.showSessionBar') !== 'false'; } catch { return true; }
+  });
   const [logWidth, setLogWidth] = React.useState(320);
   const [logHeight, setLogHeight] = React.useState(180);
   const dragging = React.useRef(false);
@@ -56,7 +63,7 @@ function AppInner() {
   useEffect(() => {
     const VALID_TYPES = new Set<AppAction['type']>([
       'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
-      'tool_start', 'tool_end', 'done', 'error', 'clear', 'user_inject',
+      'tool_start', 'tool_end', 'done', 'error', 'clear', 'user_inject', 'sessionLoaded',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
       'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'retry_status', 'retry_clean', 'ws_status',
     ]);
@@ -128,6 +135,36 @@ function AppInner() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // Header session name: derive from sessionList replies (which carry currentId +
+  // titles). The same machinery as the history modal, so no backend change needed.
+  // Re-fetch when a session is resumed (sessionLoaded) and reset on a fresh chat
+  // (clear), since neither is a streaming transition.
+  useEffect(() => {
+    function onSessionMsg(e: MessageEvent) {
+      const t = e.data?.type;
+      if (t === 'sessionList' && Array.isArray(e.data.sessions)) {
+        const cur = (e.data.sessions as SessionSummary[]).find(s => s.id === e.data.currentId);
+        setSessionTitle(cur?.title ?? '');
+      } else if (t === 'sessionLoaded') {
+        postMessage({ type: 'listSessions' });
+      } else if (t === 'clear') {
+        setSessionTitle('');
+      }
+    }
+    window.addEventListener('message', onSessionMsg);
+    return () => window.removeEventListener('message', onSessionMsg);
+  }, []);
+
+  // Refresh the header title on mount and whenever a turn finishes (the CLI may
+  // have just generated or updated the session's ai-title).
+  useEffect(() => {
+    if (!state.isStreaming) postMessage({ type: 'listSessions' });
+  }, [state.isStreaming]);
+
+  useEffect(() => {
+    try { localStorage.setItem('argus.showSessionBar', String(showSessionBar)); } catch {}
+  }, [showSessionBar]);
+
   useEffect(() => {
     if (!state.workspacePath) return;
     const name = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
@@ -186,8 +223,54 @@ function AppInner() {
 
   const logPanel = <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} onClose={() => setShowLogs(false)} />;
 
+  const topRightActions = (
+    <div className={showSessionBar ? 'topRightActions topRightActionsFull' : 'topRightActions'}>
+      {showSessionBar && (
+        <>
+          {sessionTitle && <span className="sessionName" title={sessionTitle}>{sessionTitle}</span>}
+          <button
+            className="btn-icon"
+            title="Session history"
+            aria-label="Session history"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 3v5h5" />
+              <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+              <path d="M12 7v5l4 2" />
+            </svg>
+          </button>
+          <button
+            className="btn-icon"
+            title="New chat"
+            aria-label="New chat"
+            onClick={() => postMessage({ type: 'newSession' })}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              <line x1="12" y1="8" x2="12" y2="14" />
+              <line x1="9" y1="11" x2="15" y2="11" />
+            </svg>
+          </button>
+        </>
+      )}
+      <button
+        className="btn-icon"
+        title={showSessionBar ? 'Hide session bar' : 'Show session bar'}
+        aria-label={showSessionBar ? 'Hide session bar' : 'Show session bar'}
+        onClick={() => setShowSessionBar(v => !v)}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          {showSessionBar ? <polyline points="13 17 18 12 13 7" /> : <polyline points="11 17 6 12 11 7" />}
+          {showSessionBar ? <polyline points="6 17 11 12 6 7" /> : <polyline points="18 17 13 12 18 7" />}
+        </svg>
+      </button>
+    </div>
+  );
+
   return (
     <div className="app">
+      {historyOpen && <SessionHistoryModal onClose={() => setHistoryOpen(false)} />}
       <div className="content">
         {showLogs && isNarrow && (
           <>
@@ -195,7 +278,8 @@ function AppInner() {
             <div className="logDividerH" onMouseDown={onTopDividerMouseDown} />
           </>
         )}
-        <div className="chatPane">
+        <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
+          {topRightActions}
           <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
           <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} wsConnected={state.wsConnected} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
         </div>

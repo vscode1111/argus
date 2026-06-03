@@ -70,7 +70,11 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
   httpServer.on('upgrade', (req: IncomingMessage, socket, head) => {
     if (!req.url?.startsWith('/agent')) return;
     const origin = req.headers.origin ?? '';
-    const allowed = !origin || origin.startsWith('vscode-webview:') || /^https?:\/\/localhost(:\d+)?$/.test(origin);
+    const allowed = !origin
+      || origin.startsWith('vscode-webview:')
+      || /^https?:\/\/localhost(:\d+)?$/.test(origin)
+      // Allow private-LAN origins so dev devices on the same network (phone, tablet) can connect.
+      || /^https?:\/\/(127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin);
     if (!allowed) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();

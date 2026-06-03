@@ -12,6 +12,7 @@ import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { createSessionState, type SessionState } from './sessionState';
 import { attachProcHandlers } from './cliHandler';
+import { listSessions, loadSession, deleteSession, renameSession } from './sessions';
 
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
@@ -104,6 +105,8 @@ export function handleConnection(ws: WebSocket, workspaceDir: string, model: str
       _askResume?: boolean;
       path?: string;
       force?: boolean;
+      id?: string;
+      title?: string;
     };
     try { msg = JSON.parse(data.toString()); } catch {
       s.sendLog('warn', `Malformed WS message: ${data.toString().slice(0, 200)}`);
@@ -188,9 +191,32 @@ export function handleConnection(ws: WebSocket, workspaceDir: string, model: str
     } else if (msg.type === 'stop') {
       handleStop(s);
     } else if (msg.type === 'newSession') {
+      // Fresh start: abandon the current turn, reset the session, and clear the
+      // webview (same teardown as /clear so every newSession caller behaves the
+      // same - the top-right New chat button, the error-block button, and the
+      // argus.newSession command).
       s.sessionId = undefined;
+      if (s.currentProc) {
+        const proc = s.currentProc;
+        s.currentProc = undefined;
+        s.currentProcKey = undefined;
+        killProc(proc);
+      }
       s.pendingBgTasks.clear();
       s.totalBgTasks = 0;
+      s.lastMessage = null;
+      ws.send(JSON.stringify({ type: 'clear' }));
+    } else if (msg.type === 'listSessions') {
+      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(workspaceDir), currentId: s.sessionId }));
+    } else if (msg.type === 'resumeSession' && msg.id) {
+      handleResumeSession(s, msg.id);
+    } else if (msg.type === 'deleteSession' && msg.id) {
+      deleteSession(msg.id, workspaceDir);
+      if (s.sessionId === msg.id) s.sessionId = undefined;
+      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(workspaceDir), currentId: s.sessionId }));
+    } else if (msg.type === 'renameSession' && msg.id && typeof msg.title === 'string') {
+      renameSession(msg.id, workspaceDir, msg.title);
+      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(workspaceDir), currentId: s.sessionId }));
     }
   });
 }
@@ -333,6 +359,28 @@ function handleToolAnswer(s: SessionState, msg: { type: string; id?: string; ans
       setTimeout(() => s.ws.send(JSON.stringify({ type: 'done' })), 100);
     }
   }
+}
+
+// Switch the live session to a stored one: tear down any current proc (detaching
+// first so its close handler stays quiet, like /clear), point sessionId at the
+// chosen transcript so the next send spawns with `--resume`, and replay the
+// stored conversation into the UI.
+function handleResumeSession(s: SessionState, id: string) {
+  if (s.currentProc) {
+    const proc = s.currentProc;
+    s.currentProc = undefined;
+    s.currentProcKey = undefined;
+    killProc(proc);
+  }
+  s.cliDone = false;
+  s.userStopped = false;
+  s.pendingBgTasks.clear();
+  s.totalBgTasks = 0;
+  s.lastMessage = null;
+  s.sessionId = id;
+  const messages = loadSession(id, s.workspaceDir);
+  s.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);
+  s.ws.send(JSON.stringify({ type: 'sessionLoaded', id, messages }));
 }
 
 function handleStop(s: SessionState) {
