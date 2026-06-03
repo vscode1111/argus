@@ -53,6 +53,13 @@ export type UIMessage = {
 
 export type Outcome = 'success' | 'stopped' | 'error' | 'retried' | 'background_waiting' | 'background_done';
 
+export type SessionSummary = {
+  id: string;
+  title: string;
+  lastPrompt: string;
+  updatedAt: number; // epoch ms
+};
+
 export type RetryStatus = {
   attempt: number;
   maxRetries: number;

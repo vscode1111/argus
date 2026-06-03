@@ -52,6 +52,66 @@ body.dev-harness-visible {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
+}
+
+/* Hide mode: a flat surface docked flush in the top-right corner (top/right edges
+   are the screen, so only the bottom and left borders show) - same visual
+   language as the full header below. */
+.topRightActions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--assistant-bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-right: none;
+  border-bottom-left-radius: 6px;
+  padding: 3px 4px;
+}
+/* Hide mode only: a little transparency so the content faintly shows through. */
+.topRightActions:not(.topRightActionsFull) {
+  background: color-mix(in srgb, var(--assistant-bg) 80%, transparent);
+}
+/* Show mode: stretch into a clean full-width header (only the bottom border
+   shows), session name on the left and the buttons pushed to the right. */
+.topRightActionsFull {
+  left: 0;
+  border-left: none;
+  border-bottom-left-radius: 0;
+  padding-left: 10px;
+  /* Match the log panel toolbar height (30px) exactly so the two headers align. */
+  height: 30px;
+  padding-top: 0;
+  padding-bottom: 0;
+  justify-content: flex-end;
+}
+.topRightActionsFull .sessionName {
+  margin-right: auto;
+  min-width: 0;
+  max-width: none;
+}
+.topRightActions .btn-icon {
+  background: transparent;
+  border: none;
+  opacity: 0.75;
+}
+.topRightActions .btn-icon:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.15);
+}
+.topRightActions .sessionName {
+  align-self: center;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--fg);
 }
 
 .content {
@@ -68,6 +128,13 @@ body.dev-harness-visible {
   flex: 1;
   overflow: hidden;
   min-width: 0;
+  position: relative;
+}
+/* When the session bar is expanded into a full-width header, it overlaps the top
+   of the chat (the header is absolutely positioned). Pad the chat down by the
+   header height so the first message isn't hidden behind it. */
+.chatPane.sessionBarExpanded {
+  padding-top: 32px;
 }
 
 .logDivider {

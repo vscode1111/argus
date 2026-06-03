@@ -37,6 +37,7 @@ export function LogPanel({ logs, onClear, onClose }: LogPanelProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const userScrolledUp = useRef(false);
+  const lastScrollTop = useRef(0);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { showLogTime, showLogType, setShowLogTime, setShowLogType } = useSettings();
@@ -48,8 +49,18 @@ export function LogPanel({ logs, onClear, onClose }: LogPanelProps) {
     const el = listRef.current;
     if (!el) return;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    userScrolledUp.current = dist > 80;
-    setShowScrollBtn(dist > 80);
+    // Only an actual upward move counts as the user taking over. Content growth
+    // and our own scrollIntoView never decrease scrollTop, so a late scroll event
+    // fired after a burst of new entries no longer falsely pauses autoscroll.
+    const movedUp = el.scrollTop < lastScrollTop.current - 2;
+    lastScrollTop.current = el.scrollTop;
+    if (dist < 80) {
+      userScrolledUp.current = false;
+      setShowScrollBtn(false);
+    } else if (movedUp) {
+      userScrolledUp.current = true;
+      setShowScrollBtn(true);
+    }
   }
 
   function scrollToBottom() {
@@ -61,11 +72,13 @@ export function LogPanel({ logs, onClear, onClose }: LogPanelProps) {
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    // dist already includes the just-appended entry (~24-60px), so use a generous threshold
-    if (dist < 200) {
+    // Autoscroll as long as the user hasn't deliberately scrolled up. We gate on
+    // the userScrolledUp flag (only updated by real scroll events) instead of the
+    // current content-growth distance: a burst of log entries can append more
+    // than any fixed threshold in a single render, which previously stopped the
+    // autoscroll mid-stream and never re-engaged.
+    if (!userScrolledUp.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'auto' });
-      userScrolledUp.current = false;
       setShowScrollBtn(false);
     }
   }, [logs]);
@@ -98,7 +111,7 @@ export function LogPanel({ logs, onClear, onClose }: LogPanelProps) {
         </div>
       </div>
       <div className={styles.listWrapper}>
-        <div className={styles.list} ref={listRef} onScroll={handleScroll}>
+        <div className={styles.list} ref={listRef} onScroll={handleScroll} data-testid="log-list">
           {logs.length === 0 && (
             <div className={styles.empty}>No log entries yet. Send a message to see communication logs.</div>
           )}

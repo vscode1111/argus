@@ -55,13 +55,32 @@ function rateLimitOrder(type: string): number {
 }
 
 function formatReset(resetsAt: number): string {
-  const diffMs = resetsAt * 1000 - Date.now();
+  const target = resetsAt * 1000;
+  const diffMs = target - Date.now();
   if (diffMs <= 0) return 'Resets soon';
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 60) return `Resets in ${diffMin}m`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `Resets in ${diffHr}h`;
-  return `Resets in ${Math.floor(diffHr / 24)}d`;
+
+  // Relative countdown (two-unit precision).
+  const totalMin = Math.floor(diffMs / 60_000);
+  let rel: string;
+  if (totalMin < 60) {
+    rel = `${totalMin}m`;
+  } else {
+    const totalHr = Math.floor(totalMin / 60);
+    if (totalHr < 24) {
+      const m = totalMin % 60;
+      rel = m > 0 ? `${totalHr}h ${m}m` : `${totalHr}h`;
+    } else {
+      const days = Math.floor(totalHr / 24);
+      const h = totalHr % 24;
+      rel = h > 0 ? `${days}d ${h}h` : `${days}d`;
+    }
+  }
+
+  // Absolute reset moment, like the official panel (e.g. "Sun 9:00 PM").
+  const d = new Date(target);
+  const day = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `Resets in ${rel} · ${day} ${time}`;
 }
 
 export function AccountUsageModal({ onClose }: Props) {

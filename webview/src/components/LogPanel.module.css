@@ -190,7 +190,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--vscode-focusBorder, #007fd4);
   background: var(--vscode-editorWidget-background, var(--assistant-bg));
   color: var(--vscode-foreground);
   font-size: 14px;
