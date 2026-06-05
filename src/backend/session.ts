@@ -12,7 +12,7 @@ import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { createSessionState, type SessionState } from './sessionState';
 import { attachProcHandlers } from './cliHandler';
-import { listSessions, loadSession, deleteSession, renameSession } from './sessions';
+import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listDir } from './sessions';
 
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
@@ -217,6 +217,10 @@ export function handleConnection(ws: WebSocket, workspaceDir: string, model: str
     } else if (msg.type === 'renameSession' && msg.id && typeof msg.title === 'string') {
       renameSession(msg.id, workspaceDir, msg.title);
       ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(workspaceDir), currentId: s.sessionId }));
+    } else if (msg.type === 'listWorkspaces') {
+      ws.send(JSON.stringify({ type: 'workspaceList', workspaces: listWorkspaces(), currentPath: workspaceDir }));
+    } else if (msg.type === 'listDir') {
+      ws.send(JSON.stringify({ type: 'dirList', ...listDir(typeof msg.path === 'string' ? msg.path : undefined) }));
     }
   });
 }

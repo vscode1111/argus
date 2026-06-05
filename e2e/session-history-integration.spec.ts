@@ -86,4 +86,50 @@ test.describe('session history (integration)', () => {
     await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
     await expect(dialog2.getByText(newTitle)).toBeVisible({ timeout: 10_000 });
   });
+
+  test('renames the current session inline from the header and it persists', async ({ page }) => {
+    test.setTimeout(180_000);
+    await waitForApp(page);
+
+    // 1. Create a real session. When the turn finishes the app re-fetches the
+    //    session list, which populates the header title (and its current id), so
+    //    the clickable rename button appears.
+    await sendAndWait(page, 'Reply with just "OK".');
+
+    // The header title doubles as the rename button (its accessible name is the
+    // title text, so we target it by its global class, not by role/name).
+    const nameBtn = page.locator('button.sessionNameBtn');
+    await expect(nameBtn).toBeVisible({ timeout: 20_000 });
+    const original = (await nameBtn.textContent())?.trim() ?? '';
+
+    // 2. Escape must cancel: open the inline editor, type, press Escape, and the
+    //    title is left untouched.
+    await nameBtn.click();
+    const editor = page.locator('input.sessionNameInput');
+    await expect(editor).toBeVisible();
+    await editor.fill('scub-should-not-stick');
+    await editor.press('Escape');
+    await expect(page.locator('input.sessionNameInput')).toHaveCount(0);
+    await expect(nameBtn).toHaveText(original);
+
+    // 3. Commit a new title from the header with Enter.
+    const newTitle = `scub-header-renamed-${Date.now()}`;
+    await nameBtn.click();
+    const editor2 = page.locator('input.sessionNameInput');
+    await expect(editor2).toBeVisible();
+    await editor2.fill(newTitle);
+    await editor2.press('Enter');
+
+    // Optimistic: the header label updates immediately to the new title.
+    await expect(page.locator('input.sessionNameInput')).toHaveCount(0);
+    await expect(page.locator('button.sessionNameBtn')).toHaveText(newTitle, { timeout: 10_000 });
+
+    // 4. Prove it persisted to disk: open the history modal (rebuilt from the
+    //    transcript files) and confirm the renamed current session is listed.
+    await page.getByRole('button', { name: 'Session history' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Session History' });
+    await expect(dialog).toBeVisible();
+    await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
+    await expect(dialog.getByText(newTitle)).toBeVisible({ timeout: 10_000 });
+  });
 });

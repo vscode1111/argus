@@ -60,6 +60,24 @@ export type SessionSummary = {
   updatedAt: number; // epoch ms
 };
 
+export type WorkspaceSummary = {
+  path: string;
+  name: string;
+  sessions: number;
+  updatedAt: number; // epoch ms
+};
+
+export type DirEntry = {
+  name: string;
+  path: string;
+};
+
+export type DirListing = {
+  path: string;          // resolved directory; '' is the synthetic "This PC" level
+  parent: string | null; // null at the synthetic root
+  entries: DirEntry[];   // sub-directories only
+};
+
 export type RetryStatus = {
   attempt: number;
   maxRetries: number;

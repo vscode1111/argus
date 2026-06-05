@@ -58,6 +58,7 @@
       }
 
       function connect() {
+        ready = false;
         if (ws) {
           ws.onopen = ws.onclose = ws.onmessage = ws.onerror = null;
           try { ws.close(); } catch(e) {}
@@ -104,11 +105,26 @@
         }
       });
 
+      // Switch workspace in place: rewrite the dir query param and reconnect, so
+      // the same panel reattaches to a different project's agent + history.
+      function switchWorkspace(dir) {
+        try {
+          var u = new URL(WS_URL);
+          u.searchParams.set('dir', dir);
+          WS_URL = u.toString();
+        } catch (e) { return; }
+        clearTimeout(reconnectTimer);
+        attempt = 0;
+        connect();
+      }
+
       // Override acquireVsCodeApi so the React app uses our proxy
       window.acquireVsCodeApi = function() {
         return {
           postMessage: function(msg) {
-            if (msg && VS_ONLY[msg.type]) {
+            if (msg && msg.type === 'switchWorkspace') {
+              switchWorkspace(msg.dir);
+            } else if (msg && VS_ONLY[msg.type]) {
               realApi.postMessage(msg);
             } else if (ready) {
               ws.send(JSON.stringify(msg));

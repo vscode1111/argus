@@ -45,7 +45,7 @@
     // Bridge to the argus-agent WebSocket plugin running inside the Vite dev server
     window.acquireVsCodeApi = () => {
       const _params = new URLSearchParams(window.location.search);
-      const _dir = _params.get('dir');
+      let _dir = _params.get('dir');
       let _nonce = _params.get('nonce');
       let _wsUrl = null;
 
@@ -86,6 +86,7 @@
       }
 
       function connect() {
+        ready = false;
         if (ws) {
           ws.onopen = ws.onclose = ws.onmessage = ws.onerror = null;
           try { ws.close(); } catch(e) {}
@@ -122,8 +123,21 @@
         }
       });
 
+      // Switch workspace in place: repoint the dir query param and reconnect.
+      function switchWorkspace(dir) {
+        _dir = dir;
+        buildWsUrl();
+        clearTimeout(reconnectTimer);
+        attempt = 0;
+        connect();
+      }
+
       return {
         postMessage: (msg) => {
+          if (msg && msg.type === 'switchWorkspace') {
+            switchWorkspace(msg.dir);
+            return;
+          }
           console.log('[-> agent]', msg);
           if (ready) {
             ws.send(JSON.stringify(msg));

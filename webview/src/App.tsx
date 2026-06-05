@@ -3,10 +3,12 @@ import { MessageList, MessageListHandle } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
 import { SessionHistoryModal } from './components/SessionHistoryModal';
+import { WorkspaceMenu } from './components/WorkspaceMenu';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { postMessage } from './vscode';
 import { reducer, initialState, type AppAction } from './reducer';
 import { SessionSummary } from './types';
+import { basename } from './utils/path';
 
 function playCompletionSound(): void {
   try {
@@ -41,6 +43,9 @@ function AppInner() {
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [sessionTitle, setSessionTitle] = React.useState('');
+  const [sessionId, setSessionId] = React.useState<string | null>(null);
+  const [editingName, setEditingName] = React.useState(false);
+  const [nameDraft, setNameDraft] = React.useState('');
   const [showSessionBar, setShowSessionBar] = React.useState(() => {
     try { return localStorage.getItem('argus.showSessionBar') !== 'false'; } catch { return true; }
   });
@@ -86,7 +91,7 @@ function AppInner() {
       if (soundOnComplete && !wasStopped) playCompletionSound();
       if (notifyOnComplete && !wasStopped && typeof Notification !== 'undefined') {
         if (Notification.permission === 'granted') {
-          const projectName = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
+          const projectName = basename(state.workspacePath);
           const title = projectName ? `Argus/${projectName}` : 'Argus';
           const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
           const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
@@ -107,7 +112,7 @@ function AppInner() {
     if (hasPendingAsk && !hadPendingAsk.current) {
       if (soundOnComplete) playCompletionSound();
       if (notifyOnComplete && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        const projectName = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
+        const projectName = basename(state.workspacePath);
         const title = projectName ? `Argus/${projectName}` : 'Argus';
         const n = new Notification(title, { body: 'Waiting for your answer' });
         n.onclick = () => {
@@ -145,10 +150,13 @@ function AppInner() {
       if (t === 'sessionList' && Array.isArray(e.data.sessions)) {
         const cur = (e.data.sessions as SessionSummary[]).find(s => s.id === e.data.currentId);
         setSessionTitle(cur?.title ?? '');
+        setSessionId(e.data.currentId ?? null);
       } else if (t === 'sessionLoaded') {
         postMessage({ type: 'listSessions' });
       } else if (t === 'clear') {
         setSessionTitle('');
+        setSessionId(null);
+        setEditingName(false);
       }
     }
     window.addEventListener('message', onSessionMsg);
@@ -167,7 +175,7 @@ function AppInner() {
 
   useEffect(() => {
     if (!state.workspacePath) return;
-    const name = state.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop();
+    const name = basename(state.workspacePath);
     document.title = name ? `${name}` : 'Argus';
   }, [state.workspacePath]);
 
@@ -221,25 +229,67 @@ function AppInner() {
 
   const scrollToBottom = useCallback(() => messageListRef.current?.scrollToBottom(), []);
 
+  function startNameEdit() {
+    if (!sessionId) return;
+    setNameDraft(sessionTitle);
+    setEditingName(true);
+  }
+  function commitNameEdit() {
+    const title = nameDraft.trim();
+    if (title && sessionId && title !== sessionTitle) {
+      postMessage({ type: 'renameSession', id: sessionId, title });
+      setSessionTitle(title); // optimistic; server also replies with a fresh sessionList
+    }
+    setEditingName(false);
+  }
+
+  // Reconnect the panel to a different workspace in place: reset the UI to a clean
+  // slate, point the header at the new path, then have the WS bridge tear down the
+  // socket and reopen it with the new ?dir= (a fresh server-side session).
+  function switchWorkspace(path: string) {
+    dispatch({ type: 'clear' });
+    dispatch({ type: 'workspaceInfo', path });
+    setSessionTitle('');
+    setSessionId(null);
+    setEditingName(false);
+    postMessage({ type: 'switchWorkspace', dir: path });
+    postMessage({ type: 'listSessions' }); // queued, flushed after reconnect for the new ws
+  }
+
   const logPanel = <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} onClose={() => setShowLogs(false)} />;
+
+  const workspaceName = basename(state.workspacePath);
 
   const topRightActions = (
     <div className={showSessionBar ? 'topRightActions topRightActionsFull' : 'topRightActions'}>
       {showSessionBar && (
         <>
-          {sessionTitle && <span className="sessionName" title={sessionTitle}>{sessionTitle}</span>}
-          <button
-            className="btn-icon"
-            title="Session history"
-            aria-label="Session history"
-            onClick={() => setHistoryOpen(true)}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 3v5h5" />
-              <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
-              <path d="M12 7v5l4 2" />
-            </svg>
-          </button>
+          <div className="headerLeft">
+            {editingName ? (
+            <input
+              className="sessionName sessionNameInput"
+              value={nameDraft}
+              autoFocus
+              maxLength={200}
+              onChange={e => setNameDraft(e.target.value)}
+              onBlur={commitNameEdit}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commitNameEdit(); }
+                else if (e.key === 'Escape') { e.preventDefault(); setEditingName(false); }
+              }}
+            />
+          ) : sessionId ? (
+            <button
+              className="sessionName sessionNameBtn"
+              title="Rename session"
+              onClick={startNameEdit}
+            >
+              {sessionTitle || 'Untitled'}
+            </button>
+          ) : sessionTitle ? (
+            <span className="sessionName" title={sessionTitle}>{sessionTitle}</span>
+          ) : null}
+          </div>
           <button
             className="btn-icon"
             title="New chat"
@@ -252,6 +302,37 @@ function AppInner() {
               <line x1="9" y1="11" x2="15" y2="11" />
             </svg>
           </button>
+          <button
+            className="btn-icon"
+            title="Session history"
+            aria-label="Session history"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+          </button>
+          <button
+            className="btn-icon"
+            title="Refresh current session"
+            aria-label="Refresh current session"
+            disabled={!sessionId}
+            onClick={() => { if (sessionId) postMessage({ type: 'resumeSession', id: sessionId }); }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 3v5h5" />
+              <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+              <path d="M12 7v5l4 2" />
+            </svg>
+          </button>
+          {workspaceName && (
+            <WorkspaceMenu currentPath={state.workspacePath} name={workspaceName} onSelect={switchWorkspace} />
+          )}
         </>
       )}
       <button
