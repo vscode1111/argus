@@ -1,0 +1,276 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--assistant-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  z-index: 100;
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+}
+
+.title {
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.refreshBtn {
+  background: transparent;
+  border: none;
+  color: var(--thinking-fg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 4px;
+  opacity: 0.7;
+}
+.refreshBtn:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.15);
+}
+.refreshBtn:disabled {
+  cursor: default;
+}
+.refreshBtn.refreshing svg {
+  animation: workspaceHistorySpin 0.8s linear infinite;
+}
+
+@keyframes workspaceHistorySpin {
+  to { transform: rotate(360deg); }
+}
+
+.close {
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  opacity: 0.6;
+  border-radius: 4px;
+}
+.close:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.15);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px 16px 0;
+}
+
+.tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--thinking-fg);
+  cursor: pointer;
+  padding: 6px 8px;
+  font-size: 0.9em;
+  font-weight: 600;
+  border-radius: 4px 4px 0 0;
+}
+.tab:hover {
+  background: rgba(128, 128, 128, 0.1);
+}
+.tabActive {
+  color: var(--fg);
+  border-bottom-color: var(--vscode-focusBorder, var(--btn-bg));
+}
+
+.searchRow {
+  padding: 4px 16px 6px;
+}
+
+.browsePath {
+  padding: 8px 16px 9px;
+  font-size: 0.82em;
+  color: var(--fg);
+  opacity: 0.8;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.browseRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.browseRow:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.folderIcon {
+  flex-shrink: 0;
+  color: var(--vscode-charts-blue, #75beff);
+  opacity: 0.9;
+}
+
+.upIcon {
+  flex-shrink: 0;
+  width: 15px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--thinking-fg);
+  letter-spacing: 1px;
+}
+
+.browseName {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.browseFooter {
+  padding: 8px 16px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.openBtn {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--btn-bg);
+  color: var(--btn-fg, #fff);
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+}
+.openBtn:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground, var(--btn-bg));
+}
+.openBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.92em;
+  outline: none;
+}
+.search:focus {
+  border-color: var(--vscode-focusBorder, var(--btn-bg));
+}
+
+.body {
+  padding: 4px 8px 12px;
+  overflow-y: auto;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.row:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+.rowCurrent {
+  background: var(--user-msg-bg, #2ea04370);
+}
+.rowCurrent:hover {
+  background: var(--user-msg-bg, #2ea04370);
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rowTitle {
+  font-size: 0.92em;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowPath {
+  font-size: 0.82em;
+  color: var(--thinking-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowCount {
+  flex-shrink: 0;
+  min-width: 2.5em;
+  text-align: right;
+  font-size: 0.85em;
+  color: var(--thinking-fg);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.rowTime {
+  flex-shrink: 0;
+  min-width: 4.5em;
+  text-align: right;
+  font-size: 0.85em;
+  color: var(--thinking-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.placeholder {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--thinking-fg);
+  font-size: 0.92em;
+}

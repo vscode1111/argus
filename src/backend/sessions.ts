@@ -18,6 +18,13 @@ export interface SessionSummary {
   updatedAt: number; // mtime in ms
 }
 
+export interface WorkspaceSummary {
+  path: string;    // real absolute cwd recovered from transcripts
+  name: string;    // basename for display
+  sessions: number;
+  updatedAt: number; // latest transcript mtime in ms
+}
+
 interface ReplayTool {
   id: string;
   name: string;
@@ -112,6 +119,118 @@ export function listSessions(workspaceDir: string): SessionSummary[] {
   }
   out.sort((a, b) => b.updatedAt - a.updatedAt);
   return out;
+}
+
+// Enumerate the workspaces the CLI has been run in. The per-project folder name
+// is a lossy encoding of the cwd (encodeDir collapses ':' '\' '_' all to '-'),
+// so the real path can't be decoded from it; instead we recover the exact cwd
+// from the `cwd` field stored inside the transcript records. Folders are ordered
+// by their most recent transcript mtime; workspaces whose path no longer exists
+// on disk are dropped.
+export function listWorkspaces(): WorkspaceSummary[] {
+  const root = projectsRoot();
+  let names: string[];
+  try { names = fs.readdirSync(root); } catch { return []; }
+  const out: WorkspaceSummary[] = [];
+  for (const name of names) {
+    const dir = path.join(root, name);
+    let files: Array<{ full: string; mtime: number }> = [];
+    try {
+      for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith('.jsonl')) continue;
+        const full = path.join(dir, f);
+        try {
+          const st = fs.statSync(full);
+          if (st.isFile() && st.size > 0) files.push({ full, mtime: st.mtimeMs });
+        } catch {}
+      }
+    } catch { continue; }
+    if (!files.length) continue;
+    files.sort((a, b) => b.mtime - a.mtime);
+    const cwd = readCwd(files);
+    if (!cwd || !fs.existsSync(cwd)) continue;
+    out.push({ path: cwd, name: path.basename(cwd) || cwd, sessions: files.length, updatedAt: files[0].mtime });
+  }
+  out.sort((a, b) => b.updatedAt - a.updatedAt);
+  return out;
+}
+
+export interface DirEntry {
+  name: string;
+  path: string;
+}
+
+export interface DirListing {
+  path: string;          // resolved directory; '' is the synthetic "This PC" level
+  parent: string | null; // null at the synthetic root (no further up)
+  entries: DirEntry[];   // sub-directories only
+}
+
+// Synthetic top level for the folder explorer: '' represents "This PC" - the list
+// of drive roots on Windows (or '/' on POSIX). Lets the user walk up past a drive
+// root to switch drives.
+const DRIVES_ROOT = '';
+
+function listDrives(): DirEntry[] {
+  if (process.platform === 'win32') {
+    const out: DirEntry[] = [];
+    for (let c = 65; c <= 90; c++) {
+      const root = `${String.fromCharCode(c)}:\\`;
+      try { if (fs.existsSync(root)) out.push({ name: root, path: root }); } catch {}
+    }
+    return out;
+  }
+  return [{ name: '/', path: '/' }];
+}
+
+// Parent of a path within the explorer model: a filesystem root (e.g. 'C:\' or
+// '/') reports the synthetic drives root as its parent; the drives root has none.
+function parentOf(p: string): string | null {
+  if (p === DRIVES_ROOT) return null;
+  const par = path.dirname(p);
+  return par === p ? DRIVES_ROOT : par;
+}
+
+// List the immediate sub-directories of `target` for the Workspace History
+// "Browse" tab. undefined target opens at the user's home directory; DRIVES_ROOT
+// ('') yields the drive list. Directory-only, sorted case-insensitively; tolerates
+// unreadable entries (permissions, removed media) by returning an empty list that
+// is still navigable upward.
+export function listDir(target?: string): DirListing {
+  if (target === DRIVES_ROOT) {
+    return { path: DRIVES_ROOT, parent: null, entries: listDrives() };
+  }
+  const dir = target && target.length ? path.resolve(target) : os.homedir();
+  const entries: DirEntry[] = [];
+  try {
+    for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+      let isDir = d.isDirectory();
+      if (!isDir && d.isSymbolicLink()) {
+        try { isDir = fs.statSync(path.join(dir, d.name)).isDirectory(); } catch { isDir = false; }
+      }
+      if (isDir) entries.push({ name: d.name, path: path.join(dir, d.name) });
+    }
+  } catch {
+    // Unreadable directory: empty listing, still navigable up via `parent`.
+  }
+  entries.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  return { path: dir, parent: parentOf(dir), entries };
+}
+
+// Recover the real cwd by scanning transcripts newest-first for the first record
+// that carries a `cwd` string.
+function readCwd(files: Array<{ full: string; mtime: number }>): string | null {
+  for (const { full } of files) {
+    let content: string;
+    try { content = fs.readFileSync(full, 'utf8'); } catch { continue; }
+    for (const line of content.split(/\r?\n/)) {
+      if (!line) continue;
+      let o: { cwd?: unknown };
+      try { o = JSON.parse(line); } catch { continue; }
+      if (typeof o.cwd === 'string' && o.cwd) return o.cwd;
+    }
+  }
+  return null;
 }
 
 // A tool_result's content can be a string or an array of content blocks; flatten
