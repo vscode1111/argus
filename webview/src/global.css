@@ -16,6 +16,8 @@
   --diff-added-bg: rgba(80, 200, 120, 0.15);
   --diff-removed-bg: rgba(255, 80, 80, 0.15);
   --user-msg-bg: #2ea04370;
+  /* Bright, high-contrast blue for @path mentions (input box + chat bubbles) */
+  --mention-fg: #4fc1ff;
   --font: var(--vscode-font-family);
   --font-mono: var(--vscode-editor-font-family);
   --font-size: 13px;
@@ -248,6 +250,10 @@ body.dev-harness-visible {
 .file-path-link:hover {
   border-bottom-style: solid;
   text-decoration: none;
+}
+
+.mention-path {
+  color: var(--mention-fg);
 }
 
 .code-block-wrapper:hover .code-copy-btn { opacity: 0.6 !important; }

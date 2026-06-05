@@ -104,8 +104,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!uri) return;
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       const filePath = root ? path.relative(root, uri.fsPath) : uri.fsPath;
+      // Prefix with "@" so the Claude CLI treats it as a file/dir reference (and pulls in its
+      // content) rather than plain text; "@" mentions are parsed with forward slashes.
+      const mention = '@' + filePath.replace(/\\/g, '/');
       const panel = ChatPanel.focusOrCreate(context.extensionUri);
-      panel.sendWithContext(filePath + ' ');
+      panel.sendWithContext(mention + ' ');
     }),
 
     vscode.commands.registerCommand('argus.reviewSelection', () => {

@@ -25,6 +25,26 @@ interface Skill {
   description?: string;
 }
 
+// Match "@path" mentions at a word boundary (start of input or after whitespace), so emails
+// like a@b.com aren't highlighted. Used by the highlight overlay to color paths blue.
+const MENTION_RE = /(?<=^|\s)@\S+/g;
+
+function renderHighlight(value: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  MENTION_RE.lastIndex = 0;
+  while ((m = MENTION_RE.exec(value)) !== null) {
+    if (m.index > last) out.push(value.slice(last, m.index));
+    out.push(<span key={key++} className={styles.mention}>{m[0]}</span>);
+    last = m.index + m[0].length;
+  }
+  // Trailing text plus a newline so a final empty line keeps height (matches the textarea caret).
+  out.push(value.slice(last) + '\n');
+  return out;
+}
+
 interface Props {
   isStreaming: boolean;
   prefill: string;
@@ -52,6 +72,8 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [mode, setMode] = useState<'plan' | 'edit'>('edit');
   const [accountUsageOpen, setAccountUsageOpen] = useState(false);
+  const [text, setText] = useState('');
+  const highlightRef = useRef<HTMLDivElement>(null);
   const historyIndex = useRef(-1);
   const savedDraft = useRef('');
   const dragging = useRef(false);
@@ -63,9 +85,10 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   hasImagesRef.current = images.length > 0;
 
   function adjustHeight() {
-    if (wrapperHeight !== null) return; // user has manually resized
     const el = textareaRef.current;
     if (!el) return;
+    setText(el.value); // keep the @-mention highlight overlay in sync
+    if (wrapperHeight !== null) return; // user has manually resized
     el.style.height = 'auto';
     const maxH = window.innerHeight * MAX_HEIGHT_RATIO_AUTO;
     el.style.height = Math.min(el.scrollHeight, maxH) + 'px';
@@ -139,6 +162,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     savedDraft.current = '';
     el.value = '';
     el.style.height = 'auto';
+    setText('');
     setSlashQuery(null);
     postMessage({ type: 'send', text, images: images.length > 0 ? images : undefined, mode });
     setImages([]);
@@ -381,16 +405,22 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
         ref={wrapperRef}
         style={wrapperHeight !== null ? { height: wrapperHeight } : undefined}
       >
-        <textarea
-          ref={textareaRef}
-          className={[styles.textarea, images.length > 0 && styles.hasImages].filter(Boolean).join(' ')}
-          placeholder={PLACEHOLDER_TEXT}
-          rows={images.length > 0 ? TEXTAREA_ROWS_WITH_IMAGES : TEXTAREA_ROWS_DEFAULT}
-          onInput={() => { adjustHeight(); updateSlashState(); }}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          onBlur={() => setSlashQuery(null)}
-        />
+        <div className={[styles.editorStack, images.length > 0 && styles.hasImages].filter(Boolean).join(' ')}>
+          <div className={styles.highlight} ref={highlightRef} aria-hidden="true">
+            {renderHighlight(text)}
+          </div>
+          <textarea
+            ref={textareaRef}
+            className={styles.textarea}
+            placeholder={PLACEHOLDER_TEXT}
+            rows={images.length > 0 ? TEXTAREA_ROWS_WITH_IMAGES : TEXTAREA_ROWS_DEFAULT}
+            onInput={() => { adjustHeight(); updateSlashState(); }}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onBlur={() => setSlashQuery(null)}
+            onScroll={e => { if (highlightRef.current) highlightRef.current.scrollTop = e.currentTarget.scrollTop; }}
+          />
+        </div>
         {images.length > 0 && (
           <div className={styles.imagePreviews} onMouseDown={e => { e.preventDefault(); textareaRef.current?.focus(); }}>
             {images.map((img, i) => {

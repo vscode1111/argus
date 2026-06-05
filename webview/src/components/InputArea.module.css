@@ -145,15 +145,48 @@
 }
 .inputWrapper:focus-within { border-color: var(--vscode-focusBorder); }
 
-.textarea {
+/* Overlay editor: a backdrop div renders the same text with @-mentions colored,
+   sitting behind a transparent-glyph textarea so the colored tokens show through. */
+.editorStack {
+  position: relative;
   flex: 1;
-  background: transparent;
-  color: var(--input-fg);
-  border: none;
+  display: flex;
+  min-height: 0;
   border-bottom: 1px solid transparent;
+}
+
+.highlight {
+  position: absolute;
+  inset: 0;
+  margin: 0;
   padding: 8px;
+  box-sizing: border-box;
   font-family: var(--font);
   font-size: var(--font-size);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  color: var(--input-fg);
+  pointer-events: none;
+}
+
+.mention {
+  color: var(--mention-fg);
+}
+
+.textarea {
+  flex: 1;
+  position: relative;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--input-fg);
+  border: none;
+  padding: 8px;
+  box-sizing: border-box;
+  font-family: var(--font);
+  font-size: var(--font-size);
+  line-height: 1.4;
   resize: none;
   outline: none;
   min-height: 0;
@@ -164,6 +197,10 @@
 .textarea::-webkit-scrollbar { width: 6px; }
 .textarea::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)); border-radius: 3px; }
 .textarea::-webkit-scrollbar-track { background: transparent; }
+.textarea::selection {
+  /* glyphs are transparent; show a selection band so selecting stays visible */
+  background: var(--vscode-editor-selectionBackground, rgba(120,160,255,0.35));
+}
 .hasImages {
   border-bottom-color: var(--border);
 }
