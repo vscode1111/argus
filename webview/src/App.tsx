@@ -3,6 +3,7 @@ import { MessageList, MessageListHandle } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
 import { SessionHistoryModal } from './components/SessionHistoryModal';
+import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { postMessage } from './vscode';
@@ -42,6 +43,7 @@ function AppInner() {
   const hadPendingAsk = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [accountUsageOpen, setAccountUsageOpen] = React.useState(false);
   const [sessionTitle, setSessionTitle] = React.useState('');
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const [editingName, setEditingName] = React.useState(false);
@@ -333,6 +335,16 @@ function AppInner() {
           {workspaceName && (
             <WorkspaceMenu currentPath={state.workspacePath} name={workspaceName} onSelect={switchWorkspace} />
           )}
+          <button
+            className="btn-icon"
+            title="Account & usage"
+            aria-label="Account & usage"
+            onClick={() => setAccountUsageOpen(true)}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+          </button>
         </>
       )}
       <button
@@ -352,6 +364,7 @@ function AppInner() {
   return (
     <div className="app">
       {historyOpen && <SessionHistoryModal onClose={() => setHistoryOpen(false)} />}
+      {accountUsageOpen && <AccountUsageModal onClose={() => setAccountUsageOpen(false)} />}
       <div className="content">
         {showLogs && isNarrow && (
           <>

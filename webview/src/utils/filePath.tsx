@@ -90,6 +90,36 @@ export function linkifyPaths(text: string): React.ReactNode {
   return <>{parts}</>;
 }
 
+// Matches "@path" mentions at a word boundary (start or after whitespace), so emails
+// like a@b.com aren't highlighted.
+const MENTION_RE = /(?<=^|\s)@\S+/g;
+
+/**
+ * Like linkifyPaths, but additionally colors "@path" mentions blue (matching the input box).
+ * Non-mention spans are still run through linkifyPaths so absolute paths stay clickable.
+ */
+export function linkifyWithMentions(text: string): React.ReactNode {
+  if (text.length > MAX_LINKIFY_LENGTH) return text;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  MENTION_RE.lastIndex = 0;
+
+  while ((match = MENTION_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<React.Fragment key={`t${lastIndex}`}>{linkifyPaths(text.slice(lastIndex, match.index))}</React.Fragment>);
+    }
+    parts.push(<span key={`m${match.index}`} className="mention-path">{match[0]}</span>);
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (parts.length === 0) return linkifyPaths(text);
+  if (lastIndex < text.length) {
+    parts.push(<React.Fragment key={`t${lastIndex}`}>{linkifyPaths(text.slice(lastIndex))}</React.Fragment>);
+  }
+  return <>{parts}</>;
+}
+
 /**
  * Recursively processes React children, linkifying file paths in string nodes.
  */

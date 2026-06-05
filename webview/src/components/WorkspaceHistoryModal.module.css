@@ -15,6 +15,7 @@
   z-index: 100;
   width: 460px;
   max-width: calc(100vw - 32px);
+  height: calc(100vh - 64px);
   max-height: calc(100vh - 64px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   display: flex;
@@ -114,7 +115,7 @@
 
 .browsePath {
   padding: 8px 16px 9px;
-  font-size: 0.82em;
+  font-size: 0.95em;
   color: var(--fg);
   opacity: 0.8;
   border-bottom: 1px solid var(--border);
@@ -145,11 +146,7 @@
 
 .upIcon {
   flex-shrink: 0;
-  width: 15px;
-  text-align: center;
-  font-weight: 700;
   color: var(--thinking-fg);
-  letter-spacing: 1px;
 }
 
 .browseName {
@@ -202,6 +199,8 @@
 }
 
 .body {
+  flex: 1;
+  min-height: 0;
   padding: 4px 8px 12px;
   overflow-y: auto;
 }

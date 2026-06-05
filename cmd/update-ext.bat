@@ -20,19 +20,18 @@ call code.cmd --list-extensions --show-versions | %SystemRoot%\System32\find.exe
 
 echo.
 echo === Restart VS Code to activate the new version ===
-echo WARNING: this closes ALL VS Code windows and discards unsaved changes.
 echo Do NOT run this from inside VS Code's integrated terminal.
-choice /c YN /n /m "Restart VS Code now? [Y/N] "
-if errorlevel 2 goto :norestart
+tasklist /fi "imagename eq Code.exe" 2>nul | %SystemRoot%\System32\find.exe /i "Code.exe" >nul
+if errorlevel 1 (
+    echo VS Code is not running - the new version will load on next launch.
+    goto :done
+)
 
+echo Closing all VS Code windows and restarting...
 taskkill /f /im Code.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
 start "" code.cmd
 echo VS Code restarted (previous windows restored if window.restoreWindows is "all").
-goto :done
-
-:norestart
-echo Skipped - click "Restart Extensions" in VS Code manually.
 
 :done
 echo.
