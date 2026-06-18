@@ -36,7 +36,12 @@ test.describe('session history (integration)', () => {
     //    is replayed back into the message list.
     await dialog.locator('[class*="rowCurrent"]').click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByText('scub-7731')).toBeVisible({ timeout: 10_000 });
+    // Scope to the replayed message bubbles: the resumed session's title also
+    // renders the token in the header rename button, which would otherwise make
+    // a bare getByText match two elements (strict-mode violation).
+    await expect(
+      page.locator('[class*="messageContent"]').filter({ hasText: 'scub-7731' }).first()
+    ).toBeVisible({ timeout: 10_000 });
 
     // 4. Continue the conversation. Because resume spawns the CLI with
     //    `--resume <sessionId>`, the model must still know the earlier token.

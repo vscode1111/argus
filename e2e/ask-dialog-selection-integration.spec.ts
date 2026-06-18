@@ -46,18 +46,16 @@ test('selecting non-first option: Claude acknowledges the correct choice', async
     expect(text).toContain('Gamma');
   }).toPass({ timeout: 60_000 });
 
-  // Claude must NOT reference "Alpha" in its final response text
-  // (the option labels appear in the dialog, so scope the check to the response paragraph)
-  const responseParagraphs = page.locator('[class*="message_"] p, [class*="streamingContent"] p');
+  // Claude's final reply (markdown text in messageContent) must reference the
+  // chosen label. Scope to assistant messages: the user prompt lists every label
+  // and the dialog UI shows them too, but neither is inside an assistant
+  // messageContent block, so this isolates Claude's actual response without
+  // relying on a specific <p> wrapper being rendered.
+  const assistantText = page.locator('[class*="assistant"] [class*="messageContent"]');
   await expect(async () => {
-    const count = await responseParagraphs.count();
-    expect(count).toBeGreaterThan(0);
-    for (let i = 0; i < count; i++) {
-      const text = await responseParagraphs.nth(i).textContent();
-      if (text && text.includes('Gamma')) return;
-    }
-    throw new Error('No response paragraph contains "Gamma"');
-  }).toPass({ timeout: 10_000 });
+    const texts = await assistantText.allTextContents();
+    expect(texts.some(t => t.includes('Gamma'))).toBe(true);
+  }).toPass({ timeout: 20_000 });
 });
 
 test('selecting last option: Claude acknowledges correct choice', async ({ page }) => {

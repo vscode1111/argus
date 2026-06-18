@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useDraggable } from '../hooks/useDraggable';
 import { useSettings } from '../contexts/SettingsContext';
 import { postMessage } from '../vscode';
 import styles from './SettingsModal.module.css';
@@ -89,34 +90,8 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
 
   useEscapeKey(onClose);
 
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
-
-  const onMouseMove = useCallback((e: MouseEvent) => {
-    if (!dragRef.current) return;
-    const dx = e.clientX - dragRef.current.startX;
-    const dy = e.clientY - dragRef.current.startY;
-    setOffset({ x: dragRef.current.origX + dx, y: dragRef.current.origY + dy });
-  }, []);
-
-  const onMouseUp = useCallback(() => {
-    dragRef.current = null;
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-  }, [onMouseMove]);
-
-  const onDragStart = useCallback((e: React.MouseEvent) => {
-    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: offset.x, origY: offset.y };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }, [offset, onMouseMove, onMouseUp]);
-
-  useEffect(() => {
-    return () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-  }, [onMouseMove, onMouseUp]);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const drag = useDraggable(modalRef);
 
   return (
     <>
@@ -125,10 +100,12 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
         className={styles.dropdown}
         role="dialog"
         aria-label="Settings"
-        style={{ transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))` }}
+        ref={modalRef}
+        style={drag.style}
       >
-        <div className={styles.dragHandle} onMouseDown={onDragStart} />
+        <div className={styles.dragHandle} onPointerDown={drag.onPointerDown} />
         <button className={styles.closeBtn} onClick={onClose} aria-label="Close settings" title="Close">&times;</button>
+        <div className={styles.scroll}>
         <div className={styles.tabBar}>
           <button className={[styles.tab, tab === 'general' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('general')}>General</button>
           <button className={[styles.tab, tab === 'watchdog' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('watchdog')}>Watchdog</button>
@@ -160,16 +137,11 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
               <span className={styles.settingLabel} title="Show a browser notification when a response finishes">Notify on complete</span>
               <Toggle id="toggle-notify" checked={notifyOnComplete} onChange={setNotifyOnComplete} />
             </label>
-            {notifyOnComplete && hasNotificationAPI && notifPerm !== 'granted' && (
+            {notifyOnComplete && hasNotificationAPI && notifPerm === 'default' && (
               <div className={styles.settingRow} style={{ paddingTop: 0 }}>
-                {notifPerm === 'default' && (
-                  <button className={styles.grantBtn} onClick={handleGrantNotifications}>
-                    Grant permission
-                  </button>
-                )}
-                {notifPerm === 'denied' && (
-                  <span className={styles.permDenied}>Blocked in browser settings</span>
-                )}
+                <button className={styles.grantBtn} onClick={handleGrantNotifications}>
+                  Grant permission
+                </button>
               </div>
             )}
           </div>
@@ -212,6 +184,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             </div>
           </div>
         )}
+        </div>
         {hasDevHarness && (
           <button
             className={styles.devCorner}

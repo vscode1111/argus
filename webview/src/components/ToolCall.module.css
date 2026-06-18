@@ -177,6 +177,7 @@
 .askDialog {
   margin: 4px 0;
   border: 1px solid var(--border);
+  border-top: 3px solid var(--modal-accent);
   border-radius: 4px;
   background: var(--tool-bg);
   width: fit-content;

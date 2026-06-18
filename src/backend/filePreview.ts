@@ -16,8 +16,15 @@ export function readFilePreview(
     : path.resolve(workspaceDir, requestedPath);
   const resolved = path.resolve(filePath);
 
-  if (!path.isAbsolute(requestedPath) && !resolved.startsWith(workspaceDir + path.sep) && resolved !== workspaceDir) {
-    return { path: requestedPath, content: 'Error: path outside workspace' };
+  // Containment check for relative paths. Compare via path.relative so the guard
+  // is robust to separator style (forward vs back slash) and drive-letter casing
+  // in workspaceDir - a raw string startsWith on `workspaceDir + sep` wrongly
+  // rejected valid paths when workspaceDir used '/' on win32.
+  if (!path.isAbsolute(requestedPath)) {
+    const rel = path.relative(path.resolve(workspaceDir), resolved);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      return { path: requestedPath, content: 'Error: path outside workspace' };
+    }
   }
 
   try {

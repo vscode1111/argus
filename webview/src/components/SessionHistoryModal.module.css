@@ -1,128 +1,9 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-}
-
-.modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--assistant-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  z-index: 100;
-  width: 420px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 64px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  display: flex;
-  flex-direction: column;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px 8px;
-}
-
-.title {
-  font-size: 1.05em;
-  font-weight: 600;
-}
-
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.refreshBtn {
-  background: transparent;
-  border: none;
-  color: var(--thinking-fg);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px;
-  border-radius: 4px;
-  opacity: 0.7;
-}
-.refreshBtn:hover:not(:disabled) {
-  opacity: 1;
-  background: rgba(128, 128, 128, 0.15);
-}
-.refreshBtn:disabled {
-  cursor: default;
-}
-.refreshBtn.refreshing svg {
-  animation: sessionHistorySpin 0.8s linear infinite;
-}
-
-@keyframes sessionHistorySpin {
-  to { transform: rotate(360deg); }
-}
-
-.close {
-  background: transparent;
-  border: none;
-  color: var(--fg);
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  padding: 2px 6px;
-  opacity: 0.6;
-  border-radius: 4px;
-}
-.close:hover {
-  opacity: 1;
-  background: rgba(128, 128, 128, 0.15);
-}
-
-.searchRow {
-  padding: 4px 16px 6px;
-}
-
-.search {
-  width: 100%;
-  box-sizing: border-box;
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  color: var(--fg);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 0.92em;
-  outline: none;
-}
-.search:focus {
-  border-color: var(--vscode-focusBorder, var(--btn-bg));
-}
-
-.body {
-  padding: 4px 8px 12px;
-  overflow-y: auto;
-}
+/* Overlay, modal shell, header, close, refresh, search and body come from
+   shared/centeredModal.module.css. Only the per-row specifics live here.
+   `row` composes the shared row so the hover-reveal rules below match. */
 
 .row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.row:hover {
-  background: rgba(128, 128, 128, 0.12);
-}
-.rowCurrent {
-  background: var(--user-msg-bg, #2ea04370);
-}
-.rowCurrent:hover {
-  background: var(--user-msg-bg, #2ea04370);
+  composes: row from './shared/centeredModal.module.css';
 }
 
 .rowMain {
@@ -202,11 +83,4 @@
   padding: 3px 6px;
   font-size: 0.92em;
   outline: none;
-}
-
-.placeholder {
-  padding: 24px 0;
-  text-align: center;
-  color: var(--thinking-fg);
-  font-size: 0.92em;
 }

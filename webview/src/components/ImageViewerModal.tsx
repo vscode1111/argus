@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { postMessage } from '../vscode';
+import { CopyIcon } from './shared/icons';
 import styles from './ImageViewerModal.module.css';
 
 interface Props {
@@ -86,10 +87,7 @@ export function ImageViewerModal({ src, alt, onClose }: Props) {
       <div className={styles.container} role="dialog" aria-modal="true" aria-label="Image viewer" onClick={e => e.stopPropagation()}>
         <div className={styles.toolbar}>
           <button className={styles.copyBtn} onClick={handleCopy} title="Copy image (Ctrl+C)">
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect x="5" y="1" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M5 4H3.5A1.5 1.5 0 0 0 2 5.5v8A1.5 1.5 0 0 0 3.5 15h7A1.5 1.5 0 0 0 12 13.5V12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
+            <CopyIcon />
           </button>
           <button className={styles.close} aria-label="Close" autoFocus onClick={onClose}>×</button>
         </div>
