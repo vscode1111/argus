@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { useEscapeKey } from '../hooks/useEscapeKey';
+import React, { useState } from 'react';
 import { postMessage } from '../vscode';
+import { Modal } from './shared/Modal';
+import { RefreshButton } from './shared/RefreshButton';
+import { useWebviewMessage } from '../hooks/useWebviewMessage';
 import styles from './AccountUsageModal.module.css';
 
 interface AccountInfo {
@@ -93,10 +94,8 @@ export function AccountUsageModal({ onClose }: Props) {
   const [accountLoading, setAccountLoading] = useState(true);
   const [usageLoading, setUsageLoading] = useState(true);
 
-  useEscapeKey(onClose);
-
-  useEffect(() => {
-    function handleMessage(e: MessageEvent) {
+  useWebviewMessage(
+    (e: MessageEvent) => {
       if (e.data?.type !== 'accountUsage') return;
       const d = e.data;
       setAccount(d.account ?? null);
@@ -105,11 +104,9 @@ export function AccountUsageModal({ onClose }: Props) {
       setRateLimits(Array.isArray(d.rateLimits) ? d.rateLimits : []);
       setUsageError(typeof d.usageError === 'string' ? d.usageError : undefined);
       setUsageLoading(false);
-    }
-    window.addEventListener('message', handleMessage);
-    postMessage({ type: 'getAccountUsage' });
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
+    },
+    () => postMessage({ type: 'getAccountUsage' }),
+  );
 
   // Manual refresh: force a fresh fetch, bypassing the server's 60s usage cache.
   function refresh() {
@@ -123,14 +120,8 @@ export function AccountUsageModal({ onClose }: Props) {
     (a, b) => rateLimitOrder(a.rateLimitType) - rateLimitOrder(b.rateLimitType)
   );
 
-  return createPortal(
-    <>
-      <div className={styles.overlay} onClick={onClose} aria-hidden="true" />
-      <div className={styles.modal} role="dialog" aria-label="Account & Usage">
-        <div className={styles.header}>
-          <span className={styles.title}>Account &amp; Usage</span>
-          <button className={styles.close} onClick={onClose} aria-label="Close">&times;</button>
-        </div>
+  return (
+    <Modal title="Account & Usage" ariaLabel="Account & Usage" onClose={onClose} width={380}>
         <div className={styles.body}>
           {accountLoading && <div className={styles.placeholder}>Loading...</div>}
           {!accountLoading && account && !account.loggedIn && (
@@ -150,19 +141,7 @@ export function AccountUsageModal({ onClose }: Props) {
 
               <div className={styles.usageTitleRow}>
                 <span className={styles.sectionTitle}>Usage</span>
-                <button
-                  className={[styles.refreshBtn, usageLoading ? styles.refreshing : ''].filter(Boolean).join(' ')}
-                  onClick={refresh}
-                  disabled={usageLoading}
-                  aria-label="Refresh usage"
-                  title="Refresh usage data"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="23 4 23 10 17 10" />
-                    <polyline points="1 20 1 14 7 14" />
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                  </svg>
-                </button>
+                <RefreshButton spinning={usageLoading} onClick={refresh} label="Refresh usage" title="Refresh usage data" size={13} />
               </div>
               {sortedLimits.length === 0 && (
                 <div className={styles.usageHint}>
@@ -207,9 +186,7 @@ export function AccountUsageModal({ onClose }: Props) {
             Manage usage on claude.ai
           </button>
         </div>
-      </div>
-    </>,
-    document.body
+    </Modal>
   );
 }
 

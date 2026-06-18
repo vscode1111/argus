@@ -127,6 +127,29 @@ function AppInner() {
     hadPendingAsk.current = hasPendingAsk;
   }, [hasPendingAsk, soundOnComplete, notifyOnComplete]);
 
+  // Dev harness hooks: fire the completion sound / notification directly so they
+  // can be tested without running a full turn (bypasses the toggle gating).
+  useEffect(() => {
+    const onTestSound = () => playCompletionSound();
+    const onTestNotify = () => {
+      if (typeof Notification === 'undefined') return;
+      const fire = () => {
+        const projectName = basename(state.workspacePath);
+        const title = projectName ? `Argus/${projectName}` : 'Argus';
+        const n = new Notification(title, { body: 'Test notification' });
+        n.onclick = () => { postMessage({ type: 'focusPanel' }); window.focus(); n.close(); };
+      };
+      if (Notification.permission === 'granted') fire();
+      else Notification.requestPermission().then(p => { if (p === 'granted') fire(); });
+    };
+    window.addEventListener('argus:test-sound', onTestSound);
+    window.addEventListener('argus:test-notify', onTestNotify);
+    return () => {
+      window.removeEventListener('argus:test-sound', onTestSound);
+      window.removeEventListener('argus:test-notify', onTestNotify);
+    };
+  }, [state.workspacePath]);
+
   useEffect(() => {
     if (state.isStreaming) {
       postMessage({ type: 'streamingState', active: true });

@@ -183,6 +183,20 @@ function listDrives(): DirEntry[] {
   return [{ name: '/', path: '/' }];
 }
 
+// Resolve a path to the nearest existing directory by walking up its ancestors.
+// A typo like 'C:\Users\Admi2' or a path to a file collapses to the closest real
+// directory ('C:\Users'); falls back to the home directory if nothing exists.
+function nearestExistingDir(p: string): string {
+  let cur = p;
+  for (let i = 0; i < 64; i++) {
+    try { if (fs.statSync(cur).isDirectory()) return cur; } catch { /* missing */ }
+    const par = path.dirname(cur);
+    if (par === cur) break; // reached a filesystem root that doesn't exist
+    cur = par;
+  }
+  return os.homedir();
+}
+
 // Parent of a path within the explorer model: a filesystem root (e.g. 'C:\' or
 // '/') reports the synthetic drives root as its parent; the drives root has none.
 function parentOf(p: string): string | null {
@@ -200,7 +214,8 @@ export function listDir(target?: string): DirListing {
   if (target === DRIVES_ROOT) {
     return { path: DRIVES_ROOT, parent: null, entries: listDrives() };
   }
-  const dir = target && target.length ? path.resolve(target) : os.homedir();
+  const requested = target && target.length ? path.resolve(target) : os.homedir();
+  const dir = nearestExistingDir(requested);
   const entries: DirEntry[] = [];
   try {
     for (const d of fs.readdirSync(dir, { withFileTypes: true })) {

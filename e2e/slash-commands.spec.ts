@@ -141,6 +141,9 @@ test.describe('slash commands', () => {
     await textarea.focus();
     await textarea.pressSequentially('/e2');
     await sendSkills(page, SKILLS);
+    // Wait for the injected menu to render the filtered item before pressing Tab,
+    // otherwise the keypress can land before the highlighted command exists.
+    await expect(page.locator('[class*="slashMenuItem"]')).toHaveCount(1);
     await page.keyboard.press('Tab');
 
     await expect(page.locator('[class*="slashMenuHeader"]')).not.toBeVisible();
@@ -188,6 +191,9 @@ test.describe('slash commands', () => {
     await sendSkills(page, SKILLS);
 
     await expect(page.locator('[class*="slashMenuHeader"]')).toBeVisible();
+    // Wait for the injected item to render so the menu's key handler is ready
+    // before Escape (avoids a keypress racing the post-inject re-render).
+    await expect(page.locator('[class*="slashMenuItem"]')).toHaveCount(1);
     await page.keyboard.press('Escape');
 
     await expect(page.locator('[class*="slashMenuHeader"]')).not.toBeVisible();

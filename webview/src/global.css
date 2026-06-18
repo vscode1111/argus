@@ -18,6 +18,8 @@
   --user-msg-bg: #2ea04370;
   /* Bright, high-contrast blue for @path mentions (input box + chat bubbles) */
   --mention-fg: #4fc1ff;
+  /* Green accent line across the top edge of every modal */
+  --modal-accent: #90ee90;
   --font: var(--vscode-font-family);
   --font-mono: var(--vscode-editor-font-family);
   --font-size: 13px;
@@ -43,10 +45,6 @@ body {
   font-family: var(--font);
   font-size: var(--font-size);
   overflow: hidden;
-}
-
-body.dev-harness-visible {
-  padding-bottom: 30px;
 }
 
 .app {

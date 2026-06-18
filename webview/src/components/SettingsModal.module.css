@@ -16,11 +16,25 @@
   background: var(--assistant-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 28px 0 20px;
+  padding: 28px 0 0;
   z-index: 100;
-  min-width: 200px;
+  min-width: 240px;
+  max-width: calc(100vw - 32px);
+  min-height: 180px;
+  max-height: calc(100vh - 64px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-  border-top: 3px solid #90ee90;
+  border-top: 3px solid var(--modal-accent);
+  display: flex;
+  flex-direction: column;
+  resize: both;
+  overflow: hidden;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 22px;
 }
 
 .dragHandle {
@@ -165,12 +179,6 @@
 }
 .grantBtn:hover { opacity: 0.85; }
 
-.permDenied {
-  font-size: 0.82em;
-  color: var(--error-fg, #f44);
-  opacity: 0.8;
-}
-
 .numberInput {
   width: 56px;
   background: var(--input-bg);
@@ -197,7 +205,7 @@
 .devCorner {
   position: absolute;
   bottom: 4px;
-  right: 6px;
+  left: 8px;
   background: transparent;
   border: none;
   color: var(--thinking-fg);

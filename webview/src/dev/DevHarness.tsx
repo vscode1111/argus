@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
+import { useEscapeKey } from '../hooks/useEscapeKey';
+import styles from './DevHarness.module.css';
 
 function send(data: object) {
   window.dispatchEvent(new MessageEvent('message', { data }));
@@ -813,13 +815,19 @@ interface BtnProps {
   label: string;
   onClick: () => void;
   bg?: string;
+  desc?: string;
 }
 
-function Btn({ label, onClick, bg = '#0e639c' }: BtnProps) {
+function Btn({ label, onClick, bg = '#0e639c', desc }: BtnProps) {
   return (
-    <button style={{ ...BTN_STYLES, background: bg }} onClick={onClick}>
-      {label}
-    </button>
+    <tr>
+      <td className={styles.btnCell}>
+        <button style={{ ...BTN_STYLES, background: bg }} onClick={onClick}>
+          {label}
+        </button>
+      </td>
+      <td className={styles.descCell}>{desc}</td>
+    </tr>
   );
 }
 
@@ -830,8 +838,41 @@ export function DevHarness() {
     } catch { return false; }
   });
 
+  const close = useCallback(() => setVisible(false), []);
+
+  // Draggable position: null until the user drags, then explicit top/left.
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+
+  const onHeaderPointerDown = useCallback((e: React.PointerEvent) => {
+    // Ignore drags that start on a button or the search input.
+    if ((e.target as HTMLElement).closest('button, input')) return;
+    const rect = modalRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+    const onMove = (ev: PointerEvent) => {
+      const d = dragRef.current;
+      const el = modalRef.current;
+      if (!d || !el) return;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const x = Math.min(Math.max(0, ev.clientX - d.dx), window.innerWidth - w);
+      const y = Math.min(Math.max(0, ev.clientY - d.dy), window.innerHeight - h);
+      setPos({ x, y });
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, []);
+
   React.useEffect(() => {
-    document.body.classList.toggle('dev-harness-visible', visible);
     try { localStorage.setItem('argus.showDevHarness', String(visible)); } catch {}
   }, [visible]);
 
@@ -841,74 +882,113 @@ export function DevHarness() {
     return () => window.removeEventListener('devharness-toggle', handler);
   }, []);
 
+  useEscapeKey(close);
+
+  // Run a mock action but keep the modal open. There's no backdrop, so the
+  // chat behind stays visible and usable; drag the modal aside to watch results.
+  const run = useCallback((fn: () => void) => () => { fn(); }, []);
+
+  const [query, setQuery] = useState('');
+
+  // Pin the modal's position on the first keystroke so filtering (which
+  // shrinks the modal) doesn't re-center it vertically and shift the top edge.
+  const onSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const rect = modalRef.current?.getBoundingClientRect();
+    if (rect) setPos(p => p ?? { x: rect.left, y: rect.top });
+    setQuery(e.target.value);
+  }, []);
+
   if (!visible) return null;
 
+  const buttons: BtnProps[] = [
+    { label: 'sound:play', desc: 'Play the completion sound directly (tests "Sound on complete")', onClick: run(() => window.dispatchEvent(new Event('argus:test-sound'))), bg: '#6a5a2d' },
+    { label: 'notify:fire', desc: 'Fire a completion notification directly (tests "Notify on complete")', onClick: run(() => window.dispatchEvent(new Event('argus:test-notify'))), bg: '#6a5a2d' },
+    { label: 'user msg', desc: 'Inject a user message bubble into the chat', onClick: run(() => send({
+      type: 'message',
+      message: { id: String(Date.now()), role: 'user', content: 'Can you help me refactor this component?' },
+    })) },
+    { label: 'stream', desc: 'Simulate a streaming assistant reply (thinking, markdown, code, table) with logs', onClick: run(simulateStream) },
+    { label: 'tools', desc: 'Simulate Read/Bash/Edit tool calls with results and a final reply', onClick: run(simulateTools) },
+    { label: 'reads', desc: 'Simulate three Read tool calls, incl. offset/limit ranges, for FileViewerModal line highlighting', onClick: run(simulateReads), bg: '#2d6a4f' },
+    { label: 'search', desc: 'Simulate Glob/Grep search tool calls with hit and no-match results', onClick: run(simulateSearch), bg: '#2d6a4f' },
+    { label: 'todos', desc: 'Simulate a TodoWrite checklist progressing from pending to all completed', onClick: run(simulateTodos), bg: '#5a5a2f' },
+    { label: 'agent', desc: 'Simulate two sub-agent (Task) tool calls (Explore + code-reviewer)', onClick: run(simulateAgent), bg: '#5a5a2f' },
+    { label: 'ask', desc: 'Open an AskUserQuestion dialog (multi-tab, single/multi-select)', onClick: run(simulateAskUser), bg: '#3a5a7a' },
+    { label: 'ask:answer', desc: 'Resolve the pending AskUserQuestion with an answer and follow-up reply', onClick: run(simulateAskAnswer), bg: '#3a5a7a' },
+    { label: 'todos', desc: 'Simulate a TodoWrite checklist progressing from pending to all completed', onClick: run(simulateTodos), bg: '#2d5a6a' },
+    { label: 'logs', desc: 'Emit a sequence of debug/info/warn log entries into the log panel', onClick: run(simulateLogs), bg: '#5a3e7a' },
+    { label: 'err:auth', desc: 'Show an auth error block (Login action)', onClick: run(() => simulateError('auth')), bg: '#7a2020' },
+    { label: 'err:session', desc: 'Show a session-not-found error block (New session action)', onClick: run(() => simulateError('session')), bg: '#7a2020' },
+    { label: 'err:generic', desc: 'Show a generic error block (Retry action)', onClick: run(() => simulateError('generic')), bg: '#7a2020' },
+    { label: 'login:url', desc: 'Show the login panel with an OAuth authorize URL', onClick: run(simulateLoginUrl), bg: '#5a6a2f' },
+    { label: 'login:ok', desc: 'Simulate a successful login result', onClick: run(simulateLoginSuccess), bg: '#2d6a4f' },
+    { label: 'login:fail', desc: 'Simulate a failed login (invalid authorization code)', onClick: run(simulateLoginFail), bg: '#7a2020' },
+    { label: 'notify', desc: 'Quick reply that completes a turn (fires sound/notification on complete)', onClick: run(async () => {
+      send({ type: 'thinking_start' });
+      await delay(300);
+      send({ type: 'text_chunk', text: 'Done.' });
+      send({ type: 'done' });
+    }), bg: '#6a5a2d' },
+    { label: 'img', desc: 'Simulate Read tool calls on image files (renders image previews)', onClick: run(async () => {
+      send({ type: 'thinking_start' });
+      await delay(100);
+      send({ type: 'tool_start', call: { id: 'img1', name: 'Read', input: { file_path: 'media/argus-icon.png' } } });
+      await delay(300);
+      send({ type: 'tool_end', call: { id: 'img1', name: 'Read', input: { file_path: 'media/argus-icon.png' }, result: '[image data]' } });
+      await delay(200);
+      send({ type: 'tool_start', call: { id: 'img2', name: 'Read', input: { file_path: 'media/argus-icon.ico' } } });
+      await delay(300);
+      send({ type: 'tool_end', call: { id: 'img2', name: 'Read', input: { file_path: 'media/argus-icon.ico' }, result: '[image data]' } });
+      await delay(100);
+      send({ type: 'text_chunk', text: 'Here are the icon files.' });
+      send({ type: 'done' });
+    }), bg: '#4a6a2d' },
+    { label: 'diff', desc: 'Simulate two Edit tool calls (markdown + TypeScript) for DiffViewerModal', onClick: run(simulateDiff), bg: '#4a6a2d' },
+    { label: 'rich+paths', desc: 'Render rich markdown with clickable file paths, line refs, and a table', onClick: run(simulateRichText), bg: '#6a4a2d' },
+    { label: '10K', desc: 'Stress test: 10,000 log entries + 20 multi-tool assistant messages', onClick: run(simulateStress), bg: '#7a5a20' },
+    { label: 'clear', desc: 'Clear all messages and logs', onClick: run(() => send({ type: 'clear' })), bg: '#444' },
+    { label: 'prefill', desc: 'Prefill the input box with sample text', onClick: run(() => send({ type: 'prefill', text: 'Explain this function' })), bg: '#444' },
+  ];
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? buttons.filter(b => b.label.toLowerCase().includes(q) || (b.desc ?? '').toLowerCase().includes(q))
+    : buttons;
+
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      background: '#1a1a2e',
-      borderTop: '1px solid #444',
-      padding: '5px 10px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      zIndex: 9999,
-    }}>
-          <Btn label="user msg" onClick={() => send({
-            type: 'message',
-            message: { id: String(Date.now()), role: 'user', content: 'Can you help me refactor this component?' },
-          })} />
-          <Btn label="stream" onClick={simulateStream} />
-          <Btn label="tools" onClick={simulateTools} />
-          <Btn label="reads" onClick={simulateReads} bg="#2d6a4f" />
-          <Btn label="search" onClick={simulateSearch} bg="#2d6a4f" />
-          <Btn label="todos" onClick={simulateTodos} bg="#5a5a2f" />
-          <Btn label="agent" onClick={simulateAgent} bg="#5a5a2f" />
-          <Btn label="ask" onClick={simulateAskUser} bg="#3a5a7a" />
-          <Btn label="ask:answer" onClick={simulateAskAnswer} bg="#3a5a7a" />
-          <Btn label="todos" onClick={simulateTodos} bg="#2d5a6a" />
-          <Btn label="logs" onClick={simulateLogs} bg="#5a3e7a" />
-          <Btn label="err:auth" onClick={() => simulateError('auth')} bg="#7a2020" />
-          <Btn label="err:session" onClick={() => simulateError('session')} bg="#7a2020" />
-          <Btn label="err:generic" onClick={() => simulateError('generic')} bg="#7a2020" />
-          <Btn label="login:url" onClick={simulateLoginUrl} bg="#5a6a2f" />
-          <Btn label="login:ok" onClick={simulateLoginSuccess} bg="#2d6a4f" />
-          <Btn label="login:fail" onClick={simulateLoginFail} bg="#7a2020" />
-          <Btn label="notify" onClick={async () => {
-            send({ type: 'thinking_start' });
-            await delay(300);
-            send({ type: 'text_chunk', text: 'Done.' });
-            send({ type: 'done' });
-          }} bg="#6a5a2d" />
-          <Btn label="img" onClick={async () => {
-            send({ type: 'thinking_start' });
-            await delay(100);
-            send({ type: 'tool_start', call: { id: 'img1', name: 'Read', input: { file_path: 'media/argus-icon.png' } } });
-            await delay(300);
-            send({ type: 'tool_end', call: { id: 'img1', name: 'Read', input: { file_path: 'media/argus-icon.png' }, result: '[image data]' } });
-            await delay(200);
-            send({ type: 'tool_start', call: { id: 'img2', name: 'Read', input: { file_path: 'media/argus-icon.ico' } } });
-            await delay(300);
-            send({ type: 'tool_end', call: { id: 'img2', name: 'Read', input: { file_path: 'media/argus-icon.ico' }, result: '[image data]' } });
-            await delay(100);
-            send({ type: 'text_chunk', text: 'Here are the icon files.' });
-            send({ type: 'done' });
-          }} bg="#4a6a2d" />
-          <Btn label="diff" onClick={simulateDiff} bg="#4a6a2d" />
-          <Btn label="rich+paths" onClick={simulateRichText} bg="#6a4a2d" />
-          <Btn label="10K" onClick={simulateStress} bg="#7a5a20" />
-          <Btn label="clear" onClick={() => send({ type: 'clear' })} bg="#444" />
-          <Btn label="prefill" onClick={() => send({ type: 'prefill', text: 'Explain this function' })} bg="#444" />
-          <button
-            onClick={() => setVisible(false)}
-            style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}
-            title="Close dev toolbar"
-          >
-            ✕
-          </button>
-    </div>
+    <>
+      <div
+        ref={modalRef}
+        className={styles.modal}
+        role="dialog"
+        aria-label="Dev Harness"
+        style={pos ? { top: pos.y, left: pos.x, transform: 'none' } : undefined}
+      >
+        <div className={styles.header} onPointerDown={onHeaderPointerDown}>
+          <span className={styles.title}>Dev Harness</span>
+          <input
+            className={styles.search}
+            type="text"
+            placeholder="Filter buttons..."
+            aria-label="Filter buttons"
+            value={query}
+            onChange={onSearchChange}
+          />
+          <button className={styles.close} onClick={close} aria-label="Close" title="Close dev harness">&times;</button>
+        </div>
+        <div className={styles.body}>
+          <table className={styles.table}>
+            <tbody>
+              {filtered.map((b, i) => (
+                <Btn key={`${b.label}-${i}`} label={b.label} desc={b.desc} bg={b.bg} onClick={b.onClick} />
+              ))}
+              {filtered.length === 0 && (
+                <tr><td className={styles.empty} colSpan={2}>No buttons match "{query}"</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }

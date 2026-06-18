@@ -2,9 +2,20 @@ import { test, expect, type Page } from '@playwright/test';
 import { waitForApp } from './helpers';
 
 function send(page: Page, data: object) {
-  return page.evaluate((d) => {
-    window.dispatchEvent(new MessageEvent('message', { data: d }));
-  }, data);
+  // Dispatch the synthetic extension message, then wait for React to flush and
+  // commit the resulting update before resolving. These events are injected in
+  // the same tick (unlike real WS frames, which arrive in separate ticks), so
+  // without a flush boundary React 18 can batch/defer them under load and a
+  // later event (e.g. `done`) can commit against state that an earlier event
+  // (e.g. `text_chunk`) has not been applied to yet, dropping the chunk.
+  return page.evaluate(
+    (d) =>
+      new Promise<void>((resolve) => {
+        window.dispatchEvent(new MessageEvent('message', { data: d }));
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+    data
+  );
 }
 
 test.describe('stop does not produce error', () => {

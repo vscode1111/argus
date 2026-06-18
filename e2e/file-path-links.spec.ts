@@ -1,14 +1,25 @@
 import { test, expect } from '@playwright/test';
 import { waitForApp } from './helpers';
 
-function clickDevButton(page: import('@playwright/test').Page, label: string) {
-  return page.evaluate((lbl) => {
+async function clickDevButton(page: import('@playwright/test').Page, label: string) {
+  const found = await page.evaluate((lbl) => {
     const btns = document.querySelectorAll('#dev-harness button');
     for (const b of btns) {
-      if (b.textContent === lbl) { (b as HTMLButtonElement).click(); return true; }
+      if (b.textContent === lbl) {
+        (b as HTMLButtonElement).click();
+        // The harness is a draggable, non-closing floating modal; dismiss it so
+        // its box does not occlude links we click next (Playwright actionable
+        // clicks fail on occluded elements).
+        window.dispatchEvent(new CustomEvent('devharness-toggle'));
+        return true;
+      }
     }
     return false;
   }, label);
+  // The harness unmounts asynchronously; wait for it to go so its own
+  // role="dialog" no longer shadows the file/image modal we open next.
+  await expect(page.locator('#dev-harness [role="dialog"]')).toHaveCount(0, { timeout: 5_000 });
+  return found;
 }
 
 // The modal's SyntaxHighlighter lines have data-line attributes.
@@ -16,14 +27,31 @@ function clickDevButton(page: import('@playwright/test').Page, label: string) {
 const modalLine = (page: import('@playwright/test').Page, n: number) =>
   page.locator(`[data-line="${n}"]`);
 
+// Click a file-path link and wait for its FileViewerModal. The click is retried
+// only until the dialog opens (tolerates a missed click / slow WS preview), but
+// never re-clicked once it is open - a second click would land on the modal's
+// overlay and close it, causing the modal to oscillate open/closed under load.
+// The target line is then awaited separately, without any further clicking.
 async function clickAndWaitForModal(
   link: import('@playwright/test').Locator,
   page: import('@playwright/test').Page,
   lineNo = 1,
 ) {
+  await openModalViaLink(link, page);
+  await expect(modalLine(page, lineNo)).toBeVisible({ timeout: 10_000 });
+}
+
+async function openModalViaLink(
+  link: import('@playwright/test').Locator,
+  page: import('@playwright/test').Page,
+) {
+  // The file/image modal is portaled to <body>; the dev harness is also a
+  // role="dialog" but lives under #dev-harness. Exclude it so a still-open
+  // harness is not mistaken for the modal (which would skip the link click).
+  const dialog = page.locator('[role="dialog"]:not(#dev-harness *)');
   await expect(async () => {
-    await link.click();
-    await expect(modalLine(page, lineNo)).toBeVisible({ timeout: 5_000 });
+    if ((await dialog.count()) === 0) await link.click();
+    await expect(dialog).toBeVisible({ timeout: 3_000 });
   }).toPass({ timeout: 20_000 });
 }
 
@@ -205,10 +233,10 @@ test.describe('image file preview', () => {
     link: import('@playwright/test').Locator,
     page: import('@playwright/test').Page,
   ) {
-    await expect(async () => {
-      await link.click();
-      await expect(modalImage(page)).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 20_000 });
+    // Same as clickAndWaitForModal: retry the click only until the dialog opens,
+    // then await the <img> without re-clicking (a re-click would close the modal).
+    await openModalViaLink(link, page);
+    await expect(modalImage(page)).toBeVisible({ timeout: 10_000 });
   }
 
   test('clicking an image path opens FileViewerModal with <img> instead of code', async ({ page }) => {

@@ -15,12 +15,12 @@ const SESSIONS = [
   { id: '33333333-3333-3333-3333-333333333333', title: 'scub-oldest-session', lastPrompt: 'an older request', updatedAt: NOW - 2 * 86_400_000 },
 ];
 
-// Open the modal via the history button, then wait for the real (dev server)
-// reply to land so a following mock dispatch is the final write that wins.
+// Open the modal via the history button. Under ?mock=1 the dev bridge drops the
+// real listSessions request, so no server reply races the sessionList the caller
+// injects next - the injected list is the only write and wins deterministically.
 async function openModal(page: Page) {
   await page.getByRole('button', { name: 'Session history' }).click();
   await expect(page.getByRole('dialog', { name: 'Session History' })).toBeVisible();
-  await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 15_000 });
 }
 
 test.describe('session history', () => {

@@ -37,9 +37,6 @@
       background: var(--vscode-editor-background, #1e1e1e);
       overflow: hidden;
     }
-    body.dev-harness-visible {
-      padding-bottom: 30px;
-    }
   </style>
   <script>
     // Bridge to the argus-agent WebSocket plugin running inside the Vite dev server
@@ -48,6 +45,16 @@
       let _dir = _params.get('dir');
       let _nonce = _params.get('nonce');
       let _wsUrl = null;
+
+      // E2e mock isolation: when ?mock=1, do not forward these data-query messages
+      // to the live dev backend. Their async replies (the dev machine's real
+      // skills/sessions) would otherwise clobber the data that mock tests inject
+      // via window.dispatchEvent. readFilePreview/copyImage/getAccountUsage are
+      // intentionally NOT suppressed: the image-preview mock tests need a real WS
+      // roundtrip, and the account-usage mock test waits for the real reply before
+      // injecting.
+      const _mock = _params.get('mock') === '1';
+      const _MOCK_SUPPRESSED = new Set(['getSkills', 'listSessions']);
 
       // Derive the backend host from the page so LAN devices (e.g. a phone on
       // the same WiFi) reach the dev machine instead of their own localhost.
@@ -136,6 +143,10 @@
         postMessage: (msg) => {
           if (msg && msg.type === 'switchWorkspace') {
             switchWorkspace(msg.dir);
+            return;
+          }
+          if (_mock && msg && _MOCK_SUPPRESSED.has(msg.type)) {
+            console.log('[mock] suppressed', msg.type);
             return;
           }
           console.log('[-> agent]', msg);

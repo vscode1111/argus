@@ -233,6 +233,10 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     const textBeforeCursor = el.value.slice(0, cursor);
     const slashIndex = textBeforeCursor.lastIndexOf('/');
     if (slashIndex === -1) return null;
+    // Only treat "/" as a command trigger at a word boundary (start of input or after
+    // whitespace), so a path-like token such as "werwer/" doesn't open the menu.
+    const charBefore = slashIndex > 0 ? textBeforeCursor[slashIndex - 1] : '';
+    if (charBefore !== '' && !/\s/.test(charBefore)) return null;
     const textAfterSlash = textBeforeCursor.slice(slashIndex + 1);
     // Close if there's whitespace between "/" and cursor - user moved past the word
     if (/[\s\n]/.test(textAfterSlash)) return null;
