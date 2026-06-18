@@ -6,7 +6,7 @@ import { SessionHistoryModal } from './components/SessionHistoryModal';
 import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
-import { postMessage } from './vscode';
+import { postMessage, isVsCode } from './vscode';
 import { reducer, initialState, type AppAction } from './reducer';
 import { SessionSummary } from './types';
 import { basename } from './utils/path';
@@ -33,6 +33,28 @@ function playCompletionSound(): void {
       play();
     }
   } catch {}
+}
+
+function notifTitle(workspacePath: string): string {
+  const projectName = basename(workspacePath);
+  return projectName ? `Argus/${projectName}` : 'Argus';
+}
+
+function fireNotification(title: string, body: string): void {
+  // VS Code webviews can't surface web Notifications to the OS, so route to the
+  // extension host, which shows a native VS Code notification instead. In the
+  // browser dev/app window the Notification API works directly.
+  if (isVsCode) {
+    postMessage({ type: 'notify', title, body });
+    return;
+  }
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const n = new Notification(title, { body });
+  n.onclick = () => {
+    postMessage({ type: 'focusPanel' });
+    window.focus();
+    n.close();
+  };
 }
 
 function AppInner() {
@@ -91,19 +113,10 @@ function AppInner() {
       const lastAssistant = [...state.messages].reverse().find(m => m.role === 'assistant');
       const wasStopped = lastAssistant?.outcome === 'stopped';
       if (soundOnComplete && !wasStopped) playCompletionSound();
-      if (notifyOnComplete && !wasStopped && typeof Notification !== 'undefined') {
-        if (Notification.permission === 'granted') {
-          const projectName = basename(state.workspacePath);
-          const title = projectName ? `Argus/${projectName}` : 'Argus';
-          const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
-          const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
-          const n = new Notification(title, { body });
-          n.onclick = () => {
-            postMessage({ type: 'focusPanel' });
-            window.focus();
-            n.close();
-          };
-        }
+      if (notifyOnComplete && !wasStopped) {
+        const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
+        const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
+        fireNotification(notifTitle(state.workspacePath), body);
       }
     }
     wasStreaming.current = state.isStreaming;
@@ -113,15 +126,8 @@ function AppInner() {
   useEffect(() => {
     if (hasPendingAsk && !hadPendingAsk.current) {
       if (soundOnComplete) playCompletionSound();
-      if (notifyOnComplete && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        const projectName = basename(state.workspacePath);
-        const title = projectName ? `Argus/${projectName}` : 'Argus';
-        const n = new Notification(title, { body: 'Waiting for your answer' });
-        n.onclick = () => {
-          postMessage({ type: 'focusPanel' });
-          window.focus();
-          n.close();
-        };
+      if (notifyOnComplete) {
+        fireNotification(notifTitle(state.workspacePath), 'Waiting for your answer');
       }
     }
     hadPendingAsk.current = hasPendingAsk;
@@ -132,15 +138,11 @@ function AppInner() {
   useEffect(() => {
     const onTestSound = () => playCompletionSound();
     const onTestNotify = () => {
+      const title = notifTitle(state.workspacePath);
+      if (isVsCode) { fireNotification(title, 'Test notification'); return; }
       if (typeof Notification === 'undefined') return;
-      const fire = () => {
-        const projectName = basename(state.workspacePath);
-        const title = projectName ? `Argus/${projectName}` : 'Argus';
-        const n = new Notification(title, { body: 'Test notification' });
-        n.onclick = () => { postMessage({ type: 'focusPanel' }); window.focus(); n.close(); };
-      };
-      if (Notification.permission === 'granted') fire();
-      else Notification.requestPermission().then(p => { if (p === 'granted') fire(); });
+      if (Notification.permission === 'granted') fireNotification(title, 'Test notification');
+      else Notification.requestPermission().then(p => { if (p === 'granted') fireNotification(title, 'Test notification'); });
     };
     window.addEventListener('argus:test-sound', onTestSound);
     window.addEventListener('argus:test-notify', onTestNotify);

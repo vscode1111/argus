@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ImageAttachment } from '../types';
-import { postMessage } from '../vscode';
+import { postMessage, isVsCode } from '../vscode';
 import { SettingsModal } from './SettingsModal';
 import { AccountUsageModal } from './AccountUsageModal';
 import { ImageViewerModal } from './ImageViewerModal';
@@ -167,7 +167,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     postMessage({ type: 'send', text, images: images.length > 0 ? images : undefined, mode });
     setImages([]);
     onSend?.();
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    if (!isVsCode && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission();
     }
   }

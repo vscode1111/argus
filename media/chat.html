@@ -36,7 +36,7 @@
       var WS_URL = '{{wsUrl}}';
       if (!WS_URL) return; // no server available
 
-      var VS_ONLY = { openFile: 1, openUrl: 1, focusPanel: 1, getInfo: 1, readFilePreview: 1, copyImage: 1, webviewReady: 1, streamingState: 1 };
+      var VS_ONLY = { openFile: 1, openUrl: 1, focusPanel: 1, getInfo: 1, readFilePreview: 1, copyImage: 1, webviewReady: 1, streamingState: 1, notify: 1 };
       var realApi = acquireVsCodeApi();
       var ws;
       var queue = [];

@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import { captureForegroundWindow, focusCachedWindow } from '../utils/win32Focus';
 import { copyImageToClipboard } from '../utils/win32Clipboard';
+import { showWindowsToast } from '../utils/win32Toast';
 
 import { getServerPort, getServerNonce } from '../extension';
 import { readFilePreview } from '../../backend/filePreview';
@@ -85,7 +86,7 @@ export class ChatPanel {
     this.post({ type: 'clear' }); // App.tsx dispatches clear (clears UI immediately)
   }
 
-  private async onWebviewMessage(msg: { type: string; path?: string; line?: number; url?: string; data?: string; mediaType?: string; active?: boolean; outcome?: string }): Promise<void> {
+  private async onWebviewMessage(msg: { type: string; path?: string; line?: number; url?: string; data?: string; mediaType?: string; active?: boolean; outcome?: string; title?: string; body?: string }): Promise<void> {
     if (msg.type === 'openFile' && msg.path) {
       const uri = vscode.Uri.file(msg.path);
       const opts: vscode.TextDocumentShowOptions = { preview: true, viewColumn: vscode.ViewColumn.One };
@@ -122,6 +123,24 @@ export class ChatPanel {
       this.outputChannel.appendLine(`[${new Date().toISOString()}] focusPanel received`);
       focusCachedWindow((text) => this.outputChannel.appendLine(`[${new Date().toISOString()}] ${text}`));
       this.panel.reveal(undefined, false);
+    } else if (msg.type === 'notify') {
+      // The webview Notification API can't reach the OS from inside a VS Code
+      // webview, so the webview routes here. On Windows we fire a real OS toast
+      // (shows even when VS Code isn't focused); elsewhere we fall back to an
+      // in-VS Code notification with an "Open" action.
+      const title = msg.title || 'Argus';
+      const body = msg.body || '';
+      const log = (t: string) => this.outputChannel.appendLine(`[${new Date().toISOString()}] ${t}`);
+      const toastShown = process.platform === 'win32' && showWindowsToast(title, body, log);
+      if (!toastShown) {
+        const text = body ? `${title}: ${body}` : title;
+        vscode.window.showInformationMessage(text, 'Open').then((action) => {
+          if (action === 'Open') {
+            focusCachedWindow(log);
+            this.panel.reveal(undefined, false);
+          }
+        });
+      }
     }
   }
 

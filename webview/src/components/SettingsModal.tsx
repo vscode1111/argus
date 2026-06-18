@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useDraggable } from '../hooks/useDraggable';
 import { useSettings } from '../contexts/SettingsContext';
-import { postMessage } from '../vscode';
+import { postMessage, isVsCode } from '../vscode';
 import styles from './SettingsModal.module.css';
 
 interface ToggleProps {
@@ -137,11 +137,21 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
               <span className={styles.settingLabel} title="Show a browser notification when a response finishes">Notify on complete</span>
               <Toggle id="toggle-notify" checked={notifyOnComplete} onChange={setNotifyOnComplete} />
             </label>
-            {notifyOnComplete && hasNotificationAPI && notifPerm === 'default' && (
+            {notifyOnComplete && !isVsCode && (
               <div className={styles.settingRow} style={{ paddingTop: 0 }}>
-                <button className={styles.grantBtn} onClick={handleGrantNotifications}>
-                  Grant permission
-                </button>
+                {!hasNotificationAPI ? (
+                  <span className={styles.notifHint}>Notifications are not supported in this window.</span>
+                ) : notifPerm === 'granted' ? (
+                  <span className={styles.notifHintOk}>Browser notifications are allowed.</span>
+                ) : notifPerm === 'denied' ? (
+                  <span className={styles.notifHint}>
+                    Blocked in the browser. Allow notifications for this site in your browser settings, then reload.
+                  </span>
+                ) : (
+                  <button className={styles.grantBtn} onClick={handleGrantNotifications}>
+                    Grant permission
+                  </button>
+                )}
               </div>
             )}
           </div>
