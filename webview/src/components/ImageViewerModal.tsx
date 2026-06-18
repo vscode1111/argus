@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks/useEscapeKey';
-import { postMessage } from '../vscode';
+import { postMessage, isVsCode } from '../vscode';
 import { CopyIcon } from './shared/icons';
 import styles from './ImageViewerModal.module.css';
 
@@ -62,7 +62,7 @@ export function ImageViewerModal({ src, alt, onClose }: Props) {
 
   const handleCopy = useCallback(async () => {
     let ok = false;
-    if (window.location.protocol === 'vscode-webview:') {
+    if (isVsCode) {
       ok = await copyImageExtension(src);
     } else {
       try { await copyImageBrowser(src); ok = true; } catch {}

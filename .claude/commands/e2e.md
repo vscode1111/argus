@@ -26,6 +26,6 @@ Argument: $ARGUMENTS
 
 ## Rules
 
-- Always run from the project root `d:\_Projects\vscode1111\argus`.
+- Always run from the project root `d:\_Projects\scub111g\argus`.
 - If tests fail, show the failure summary and suggest next steps.
 - Do not modify any test files unless the user explicitly asks.

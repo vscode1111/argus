@@ -85,9 +85,9 @@ async function simulateTools() {
   log('debug', 'tool_result toolu_003: File edited successfully');
   send({ type: 'tool_end', call: { id: '3', name: 'Edit', input: { file_path: '/src/common/config.ts', old_string: '  version: "0.0.9",', new_string: '  version: "0.0.10",' }, result: 'File edited successfully' } });
   await delay(200);
-  send({ type: 'tool_start', call: { id: '4', name: 'Edit', input: { file_path: 'D:/_Projects/vscode1111/argus/webview/src/components/ToolCall.module.css', old_string: '.toolSummary {\n  color: var(--thinking-fg);\n}', new_string: '.toolSummary {\n  color: var(--thinking-fg);\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}' } } });
+  send({ type: 'tool_start', call: { id: '4', name: 'Edit', input: { file_path: 'D:/_Projects/scub111g/argus/webview/src/components/ToolCall.module.css', old_string: '.toolSummary {\n  color: var(--thinking-fg);\n}', new_string: '.toolSummary {\n  color: var(--thinking-fg);\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}' } } });
   await delay(400);
-  send({ type: 'tool_end', call: { id: '4', name: 'Edit', input: { file_path: 'D:/_Projects/vscode1111/argus/webview/src/components/ToolCall.module.css', old_string: '.toolSummary {\n  color: var(--thinking-fg);\n}', new_string: '.toolSummary {\n  color: var(--thinking-fg);\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}' }, result: 'File edited successfully' } });
+  send({ type: 'tool_end', call: { id: '4', name: 'Edit', input: { file_path: 'D:/_Projects/scub111g/argus/webview/src/components/ToolCall.module.css', old_string: '.toolSummary {\n  color: var(--thinking-fg);\n}', new_string: '.toolSummary {\n  color: var(--thinking-fg);\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}' }, result: 'File edited successfully' } });
   await delay(200);
   send({ type: 'text_chunk', text: 'I read the file and ran the tests. Everything looks good!' });
   await delay(100);
@@ -99,7 +99,7 @@ async function simulateReads() {
   const files = [
     {
       id: 'r1',
-      path: 'D:/_Projects/vscode1111/common-scripts/package.json',
+      path: 'D:/_Projects/scub111g/common-scripts/package.json',
       result: `     1→{
      2→  "name": "common-scripts",
      3→  "version": "1.0.0",
@@ -119,7 +119,7 @@ async function simulateReads() {
     },
     {
       id: 'r2',
-      path: 'D:/_Projects/vscode1111/common-scripts/README.md',
+      path: 'D:/_Projects/scub111g/common-scripts/README.md',
       result: `     1→# common-scripts
      2→
      3→Personal automation toolkit for Windows system management.
@@ -142,7 +142,7 @@ async function simulateReads() {
     },
     {
       id: 'r3',
-      path: 'D:/_Projects/vscode1111/common-scripts/src/scripts/cleaningComputer.ts',
+      path: 'D:/_Projects/scub111g/common-scripts/src/scripts/cleaningComputer.ts',
       result: `     1→import { callWithTimer } from '@common/time';
      2→import { eraseDirectory } from '@common/files';
      3→import { consoleLog } from '@common/log';
@@ -709,24 +709,24 @@ async function simulateRichText() {
     '## Code Review Results\n',
     'I found several issues in the codebase:\n',
     '### 1. Missing null check\n',
-    'D:\\_Projects\\vscode1111\\argus\\webview\\src\\App.tsx:120\n',
+    'D:\\_Projects\\scub111g\\argus\\webview\\src\\App.tsx:120\n',
     'The `state` variable can be `undefined` when the component first mounts, but it\'s accessed without a guard.\n',
     '### 2. Unused import\n',
-    '`D:\\_Projects\\vscode1111\\argus\\webview\\src\\utils\\markdown.tsx:4`\n',
+    '`D:\\_Projects\\scub111g\\argus\\webview\\src\\utils\\markdown.tsx:4`\n',
     'The `remarkBreaks` import is only used conditionally. Consider lazy loading.\n',
     '### 3. Hardcoded path in config\n',
-    'File: D:\\_Projects\\vscode1111\\argus\\src\\backend\\index.ts:31-48\n',
+    'File: D:\\_Projects\\scub111g\\argus\\src\\backend\\index.ts:31-48\n',
     '```ts\nconst MODEL = process.env.ARGUS_MODEL ?? "claude-opus-4-6";\n```\n',
     'This should be read from a config file instead.\n',
     '| File | Line | Severity |\n',
     '|------|------|----------|\n',
-    '| D:\\_Projects\\vscode1111\\argus\\webview\\src\\App.tsx:120 | 120 | High |\n',
-    '| D:\\_Projects\\vscode1111\\argus\\package.json | 5 | Low |\n',
-    '| D:\\_Projects\\vscode1111\\argus\\webview\\src\\utils\\filePath.tsx:9 | 9 | Medium |\n',
-    '\nAlso check **D:\\_Projects\\vscode1111\\argus\\src\\frontend\\extension.ts** for the activation entry point.\n',
-    'And the _config_ at D:\\_Projects\\vscode1111\\argus\\src\\frontend\\utils\\config.ts handles settings.\n',
+    '| D:\\_Projects\\scub111g\\argus\\webview\\src\\App.tsx:120 | 120 | High |\n',
+    '| D:\\_Projects\\scub111g\\argus\\package.json | 5 | Low |\n',
+    '| D:\\_Projects\\scub111g\\argus\\webview\\src\\utils\\filePath.tsx:9 | 9 | Medium |\n',
+    '\nAlso check **D:\\_Projects\\scub111g\\argus\\src\\frontend\\extension.ts** for the activation entry point.\n',
+    'And the _config_ at D:\\_Projects\\scub111g\\argus\\src\\frontend\\utils\\config.ts handles settings.\n',
     '\n### 4. App icon\n',
-    'The icon used in the context menu: D:\\_Projects\\vscode1111\\argus\\media\\argus-icon.png',
+    'The icon used in the context menu: D:\\_Projects\\scub111g\\argus\\media\\argus-icon.png',
   ].join('') });
   await delay(100);
   send({ type: 'done' });

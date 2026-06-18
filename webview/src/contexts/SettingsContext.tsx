@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { postMessage } from '../vscode';
+import { postMessage, isVsCode } from '../vscode';
 import type { ArgusSettings } from '../types';
 
 const DEFAULTS: ArgusSettings = {
@@ -93,7 +93,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const setNotifyOnComplete = useCallback((v: boolean) => {
     update({ notifyOnComplete: v });
-    if (v && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    if (v && !isVsCode && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission();
     }
   }, [update]);

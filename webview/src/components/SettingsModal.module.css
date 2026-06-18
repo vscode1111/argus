@@ -179,6 +179,17 @@
 }
 .grantBtn:hover { opacity: 0.85; }
 
+.notifHint {
+  font-size: 0.82em;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.35;
+}
+.notifHintOk {
+  font-size: 0.82em;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.85;
+}
+
 .numberInput {
   width: 56px;
   background: var(--input-bg);

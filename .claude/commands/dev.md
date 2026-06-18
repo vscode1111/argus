@@ -28,6 +28,6 @@ Argument: $ARGUMENTS
 
 ## Rules
 
-- Always run from the project root `d:\_Projects\vscode1111\argus`.
+- Always run from the project root `d:\_Projects\scub111g\argus`.
 - When starting, run in background so the user can continue working.
 - Do not modify any source files.
