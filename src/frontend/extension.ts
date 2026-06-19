@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
+import { execFile } from 'child_process';
 import { ChatPanel } from './chat/ChatPanel';
 import { ArgusCodeLensProvider } from './providers/CodeLensProvider';
 import { InlineSuggestProvider } from './providers/InlineSuggestProvider';
@@ -9,6 +12,27 @@ import { startServer } from '../backend/index';
 import type { ArgusServer } from '../backend/index';
 
 let argusServer: ArgusServer | undefined;
+let extensionId = 'local.argus';
+
+// Toast click-to-focus delivery. A clicked toast can only launch a URI, and the
+// background extension host cannot switch virtual desktops (only a process holding
+// foreground/input rights can). So the toast launches `argus-focus://` -> a
+// windowless launcher (argus-focus.vbs) that runs argus-focus-switch.ps1; that
+// freshly-spawned, foreground-righted helper does the actual SwitchToThisWindow.
+export const FOCUS_PROTOCOL = 'argus-focus';
+
+function registerFocusProtocol(extensionUri: vscode.Uri): void {
+  if (process.platform !== 'win32') return;
+  const vbs = vscode.Uri.joinPath(extensionUri, 'media', 'argus-focus.vbs').fsPath;
+  const ps1 = vscode.Uri.joinPath(extensionUri, 'media', 'argus-focus-switch.ps1').fsPath;
+  // vbs (windowless) runs the focus PowerShell passed as arg 0; %1 (the URI) is ignored.
+  const command = `wscript.exe "${vbs}" "${ps1}" "%1"`;
+  const base = `HKCU\\Software\\Classes\\${FOCUS_PROTOCOL}`;
+  const add = (args: string[]) => execFile('reg', args, () => { /* best-effort */ });
+  add(['add', base, '/ve', '/d', 'URL:Argus Focus', '/f']);
+  add(['add', base, '/v', 'URL Protocol', '/d', '', '/f']);
+  add(['add', `${base}\\shell\\open\\command`, '/ve', '/d', command, '/f']);
+}
 
 export function getServerPort(): number | undefined {
   return argusServer?.port;
@@ -18,7 +42,27 @@ export function getServerNonce(): string | undefined {
   return argusServer?.nonce;
 }
 
+/** Extension id (publisher.name), used to build the `vscode://` toast click-to-focus URI. */
+export function getExtensionId(): string {
+  return extensionId;
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  extensionId = context.extension.id;
+
+  // Focus a chat panel when a notification toast is clicked. The argus-focus://
+  // protocol runs a fresh, foreground-righted helper that switches to the VS Code
+  // window (a background process can't switch virtual desktops). The vscode://<id>/
+  // focus URI handler is a secondary path for the installed stable instance.
+  registerFocusProtocol(context.extensionUri);
+  context.subscriptions.push(
+    vscode.window.registerUriHandler({
+      handleUri: (uri) => {
+        if (uri.path === '/focus') ChatPanel.revealForActivation(context.extensionUri);
+      },
+    })
+  );
+
   // Start the WebSocket server on a dynamic port
   try {
     argusServer = await startServer({ port: 0, model: getModel() });

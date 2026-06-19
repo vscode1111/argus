@@ -3,11 +3,11 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-import { captureForegroundWindow, focusCachedWindow } from '../utils/win32Focus';
+import { captureForegroundWindow, focusCachedWindow, focusDiag } from '../utils/win32Focus';
 import { copyImageToClipboard } from '../utils/win32Clipboard';
 import { showWindowsToast } from '../utils/win32Toast';
 
-import { getServerPort, getServerNonce } from '../extension';
+import { getServerPort, getServerNonce, FOCUS_PROTOCOL } from '../extension';
 import { readFilePreview } from '../../backend/filePreview';
 
 export class ChatPanel {
@@ -76,6 +76,21 @@ export class ChatPanel {
     return ChatPanel.createNew(extensionUri);
   }
 
+  /** Reveal the last-focused panel and take focus (used by the toast click-to-focus URI handler). */
+  public static revealForActivation(extensionUri: vscode.Uri): ChatPanel {
+    const target = ChatPanel.lastFocused ?? ChatPanel.panels.values().next().value;
+    focusDiag(`revealForActivation: panels=${ChatPanel.panels.size} hasTarget=${!!target}`);
+    if (target) {
+      // Bring the VS Code OS window forward first - this crosses virtual desktops,
+      // which neither panel.reveal() nor the vscode:// protocol launch do on their own.
+      focusCachedWindow((t) => target.outputChannel.appendLine(`[${new Date().toISOString()}] ${t}`));
+      target.panel.reveal(undefined, false); // preserveFocus=false: focus the panel
+      ChatPanel.lastFocused = target;
+      return target;
+    }
+    return ChatPanel.createNew(extensionUri);
+  }
+
   public sendWithContext(prefix: string): void {
     this.panel.reveal();
     this.post({ type: 'prefill', text: prefix });
@@ -126,12 +141,16 @@ export class ChatPanel {
     } else if (msg.type === 'notify') {
       // The webview Notification API can't reach the OS from inside a VS Code
       // webview, so the webview routes here. On Windows we fire a real OS toast
-      // (shows even when VS Code isn't focused); elsewhere we fall back to an
-      // in-VS Code notification with an "Open" action.
+      // (shows even when VS Code isn't focused); clicking it activates the
+      // `argus-focus://` protocol, whose windowless helper drops a signal file that
+      // this extension host watches and turns into an in-process focus (see
+      // registerFocusProtocol/watchFocusSignal in extension.ts). Elsewhere we fall
+      // back to an in-VS Code notification with an "Open" action.
       const title = msg.title || 'Argus';
       const body = msg.body || '';
       const log = (t: string) => this.outputChannel.appendLine(`[${new Date().toISOString()}] ${t}`);
-      const toastShown = process.platform === 'win32' && showWindowsToast(title, body, log);
+      const focusUri = `${FOCUS_PROTOCOL}://focus`;
+      const toastShown = process.platform === 'win32' && showWindowsToast(title, body, log, focusUri);
       if (!toastShown) {
         const text = body ? `${title}: ${body}` : title;
         vscode.window.showInformationMessage(text, 'Open').then((action) => {
