@@ -254,6 +254,18 @@ body {
   color: var(--mention-fg);
 }
 
+/* Highlight only the single line the viewer scrolled to (Read offset / file:line
+   link). Code lines are inline by default, so display:block lets the band span the
+   full row. Uses VS Code's own go-to-line range color (neutral, theme-adaptive);
+   normal text selection is left untouched. */
+.fileViewerBody .highlighted-line {
+  display: block;
+  background: var(--vscode-editor-rangeHighlightBackground, rgba(120, 160, 255, 0.12));
+  /* A left accent bar (inset shadow, so no layout shift) marks the line as a
+     deliberate jump target, distinct from a stray grey selection. */
+  box-shadow: inset 2px 0 0 0 var(--vscode-focusBorder, #4fc1ff);
+}
+
 .code-block-wrapper:hover .code-copy-btn { opacity: 0.6 !important; }
 .code-block-wrapper .code-copy-btn:hover { opacity: 1 !important; background: var(--tool-bg); }
 

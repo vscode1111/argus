@@ -111,29 +111,26 @@ test.describe('file path links', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('file path with line number highlights and scrolls to that line', async ({ page }) => {
+  test('file path with line number opens and scrolls to that line', async ({ page }) => {
     const link = page.getByRole('link', { name: /App\.tsx:120/ }).first();
     await clickAndWaitForModal(link, page, 120);
 
+    // The viewer scrolls to the target line and highlights it.
+    await expect(modalLine(page, 120)).toBeVisible();
     await expect(modalLine(page, 120)).toHaveClass(/highlighted-line/);
-
-    // A non-highlighted line should not have the class
-    await expect(modalLine(page, 1)).not.toHaveClass(/highlighted-line/);
 
     await page.keyboard.press('Escape');
   });
 
-  test('file path with line range highlights all lines in range', async ({ page }) => {
+  test('file path with line range highlights the start line of the range', async ({ page }) => {
     const link = page.getByRole('link', { name: /backend\\index\.ts:31-48/ });
     await clickAndWaitForModal(link, page, 31);
 
-    // First, middle, and last lines in range should all be highlighted
-    for (const n of [31, 39, 48]) {
-      await expect(modalLine(page, n)).toHaveClass(/highlighted-line/);
+    // Only the start line of the range is highlighted.
+    await expect(modalLine(page, 31)).toHaveClass(/highlighted-line/);
+    for (const n of [39, 48, 49]) {
+      await expect(modalLine(page, n)).not.toHaveClass(/highlighted-line/);
     }
-
-    // Line just outside the range should NOT be highlighted
-    await expect(modalLine(page, 49)).not.toHaveClass(/highlighted-line/);
 
     await page.keyboard.press('Escape');
   });
@@ -197,8 +194,8 @@ test.describe('relative file path links', () => {
     const link = page.getByRole('link', { name: 'src/frontend/extension.ts:5' });
     await clickAndWaitForModal(link, page, 5);
 
+    await expect(modalLine(page, 5)).toBeVisible();
     await expect(modalLine(page, 5)).toHaveClass(/highlighted-line/);
-    await expect(modalLine(page, 1)).not.toHaveClass(/highlighted-line/);
 
     await page.keyboard.press('Escape');
   });

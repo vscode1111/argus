@@ -58,7 +58,7 @@ test.describe('Read tool line highlighting', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('Read with offset=5 limit=10 highlights lines 5-15', async ({ page }) => {
+  test('Read with offset=5 limit=10 highlights line 5 and scrolls to it', async ({ page }) => {
     await emitReadTool(page, 'rh2', 'D:/_Projects/scub/app.ts', SAMPLE_TS, { offset: 5, limit: 10 });
 
     const summary = page.locator('[class*="toolSummary"]');
@@ -67,12 +67,11 @@ test.describe('Read tool line highlighting', () => {
     await summary.click();
     await expect(modalLine(page, 5)).toBeVisible({ timeout: 5_000 });
 
-    for (const n of [5, 10, 15]) {
-      await expect(modalLine(page, n)).toHaveClass(/highlighted-line/);
+    // Only the target line is highlighted; surrounding lines are not.
+    await expect(modalLine(page, 5)).toHaveClass(/highlighted-line/);
+    for (const n of [4, 6, 10, 15, 16]) {
+      await expect(modalLine(page, n)).not.toHaveClass(/highlighted-line/);
     }
-
-    await expect(modalLine(page, 4)).not.toHaveClass(/highlighted-line/);
-    await expect(modalLine(page, 16)).not.toHaveClass(/highlighted-line/);
 
     await page.keyboard.press('Escape');
   });

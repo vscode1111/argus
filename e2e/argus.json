@@ -2,11 +2,14 @@
   "verboseTools": false,
   "showTimer": true,
   "showOutput": false,
-  "showLogs": true,
+  "showLogs": false,
   "showLogTime": true,
   "showLogType": true,
   "soundOnComplete": true,
   "notifyOnComplete": true,
+  "watchdogEnabled": true,
   "watchdogTimeout": 120,
-  "watchdogAutoRetries": 3
+  "watchdogAutoRetries": 3,
+  "watchdogRetryDelay": 5,
+  "watchdogDelayFactor": 2
 }
