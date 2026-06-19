@@ -89,14 +89,13 @@ interface Props {
   path: string;
   content: string;
   line?: number;
-  endLine?: number;
   copyText?: string;
   onClose: () => void;
 }
 
 const isDataUrl = (s: string) => s.startsWith('data:image/');
 
-export function FileViewerModal({ path, content, line, endLine, copyText, onClose }: Props) {
+export function FileViewerModal({ path, content, line, copyText, onClose }: Props) {
   // Default to dark unless VS Code explicitly marks the theme as light.
   const isDark = !document.body.classList.contains('vscode-light');
   const { copied, copy } = useCopyFeedback();
@@ -170,7 +169,7 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
             <button className={modal.close} aria-label="Close" onClick={onClose}>×</button>
           </div>
         </div>
-        <div className={modal.body} ref={bodyRef}>
+        <div className={`${modal.body} fileViewerBody`} ref={bodyRef}>
           {isImage ? (
             <div className={styles.imageBody}>
               <img src={content} alt={filename} />
@@ -186,16 +185,11 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
               showLineNumbers
               wrapLines
               wrapLongLines={false}
-              lineProps={(lineNumber: number) => {
-                const props: Record<string, unknown> = { 'data-line': lineNumber };
-                const end = endLine ?? line;
-                const rangeSize = line && end ? end - line + 1 : 0;
-                if (line && rangeSize <= 30 && lineNumber >= line && lineNumber <= end!) {
-                  props.style = { background: 'var(--diff-added-bg, rgba(55, 148, 255, 0.15))' };
-                  props.className = 'highlighted-line';
-                }
-                return props;
-              }}
+              lineProps={(lineNumber: number) =>
+                line && lineNumber === line
+                  ? { 'data-line': lineNumber, className: 'highlighted-line' }
+                  : { 'data-line': lineNumber }
+              }
               customStyle={{
                 margin: 0,
                 borderRadius: 0,
@@ -206,7 +200,7 @@ export function FileViewerModal({ path, content, line, endLine, copyText, onClos
                 background: 'transparent',
                 height: '100%',
               }}
-              codeTagProps={{ style: { fontFamily: 'var(--font-mono)' } }}
+              codeTagProps={{ style: { fontFamily: 'var(--font-mono)', background: 'transparent' } }}
             >
               {code}
             </SyntaxHighlighter>

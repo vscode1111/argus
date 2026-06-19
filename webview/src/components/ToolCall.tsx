@@ -405,8 +405,7 @@ export function ToolCall({ call, sessionDone }: Props) {
             ? (summary !== bashCommand && summary ? `${summary}: ${bashCommand}` : bashCommand || summary)
             : ((input.file_path as string) || summary)}
           content={(fileViewerContent ?? result)!}
-          line={name === 'Read' && (input.offset != null || input.limit != null) ? ((input.offset as number) ?? 1) : undefined}
-          endLine={name === 'Read' && input.limit != null ? (input.offset != null ? (input.offset as number) + (input.limit as number) : (input.limit as number)) : undefined}
+          line={name === 'Read' && input.offset != null ? (input.offset as number) : undefined}
           copyText={name === 'Bash' ? bashCommand || undefined : undefined}
           onClose={() => setViewerOpen(false)}
         />
