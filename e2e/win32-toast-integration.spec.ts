@@ -29,6 +29,16 @@ test.describe('win32 toast (real OS)', () => {
     expect(ok).toBe(true);
   });
 
+  test('fires with a protocol-activation launch URI (click-to-focus)', () => {
+    test.skip(process.platform !== 'win32', 'Windows-only OS toast');
+    const logs: string[] = [];
+    const log = (m: string) => logs.push(m);
+    // The launch URI is injected as a `launch` attribute; it must round-trip
+    // through the toast XML without breaking the WinRT chain.
+    const ok = showWindowsToast('Argus e2e', 'scub-toast-launch', log, 'vscode://local.argus/focus');
+    expect(ok, logs.join('\n')).toBe(true);
+  });
+
   test('registers the Argus AppUserModelId in HKCU', () => {
     test.skip(process.platform !== 'win32', 'Windows-only OS toast');
     showWindowsToast('Argus e2e', 'scub-toast-reg');
@@ -39,5 +49,16 @@ test.describe('win32 toast (real OS)', () => {
       { encoding: 'utf8' }
     );
     expect(out).toContain('Argus');
+  });
+
+  test('registers a CustomActivator CLSID so protocol toasts stay activatable', () => {
+    test.skip(process.platform !== 'win32', 'Windows-only OS toast');
+    showWindowsToast('Argus e2e', 'scub-toast-activator');
+    const out = execFileSync(
+      'reg',
+      ['query', 'HKCU\\Software\\Classes\\AppUserModelId\\Argus.Chat', '/v', 'CustomActivator'],
+      { encoding: 'utf8' }
+    );
+    expect(out).toContain('CustomActivator');
   });
 });

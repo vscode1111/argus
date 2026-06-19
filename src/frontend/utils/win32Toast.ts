@@ -8,9 +8,21 @@ import koffi from 'koffi';
 // We register a lightweight AppUserModelId under HKCU so the toast is attributed
 // to "Argus" (no admin, no Start Menu shortcut). Title/body are XML-escaped, so
 // user text can't break the toast XML.
+//
+// Click-to-focus uses protocol activation: when a `launchUri` is given, the toast
+// carries `activationType='protocol' launch='<uri>'`, so clicking it makes Windows
+// ShellExecute the URI (e.g. `vscode://local.argus/focus`). That route needs no
+// COM activator and, crucially, no cross-thread callback into Node - WinRT fires
+// the in-process Activated event on a thread-pool thread, which a koffi JS callback
+// can't service safely.
 
 const APP_ID = 'Argus.Chat';
 const APP_NAME = 'Argus';
+// A stub activator CLSID is required for a COM-server-less app's protocol-activation
+// toasts to stay activatable in the Action Center. We never back it with a COM server
+// (protocol activation is dispatched by the shell, not the activator), so any fixed
+// GUID works; non-protocol activation types would break, but we only use protocol.
+const ACTIVATOR_CLSID = '{8f2b6d41-1c7a-4e93-9a6f-2d5b0e3c4a18}';
 
 // WinRT IInspectable occupies vtable slots 0..5; runtime-class methods follow.
 const IDX_QueryInterface = 0;
@@ -110,13 +122,21 @@ function activate(a: Api, classId: string, iid: Buffer): unknown {
 
 function registerAumid(a: Api): void {
   if (aumidRegistered) return;
-  const data = Buffer.from(`${APP_NAME}\0`, 'utf16le');
-  a.RegSetKeyValueW(HKEY_CURRENT_USER, `Software\\Classes\\AppUserModelId\\${APP_ID}`, 'DisplayName', REG_SZ, data, data.length);
+  const key = `Software\\Classes\\AppUserModelId\\${APP_ID}`;
+  const name = Buffer.from(`${APP_NAME}\0`, 'utf16le');
+  a.RegSetKeyValueW(HKEY_CURRENT_USER, key, 'DisplayName', REG_SZ, name, name.length);
+  // Stub activator so protocol-activation toasts remain clickable from the Action Center.
+  const clsid = Buffer.from(`${ACTIVATOR_CLSID}\0`, 'utf16le');
+  a.RegSetKeyValueW(HKEY_CURRENT_USER, key, 'CustomActivator', REG_SZ, clsid, clsid.length);
   aumidRegistered = true;
 }
 
-/** Returns true if the toast was shown, false if unavailable/failed (caller can fall back). */
-export function showWindowsToast(title: string, body: string, log?: (text: string) => void): boolean {
+/**
+ * Shows a real OS toast. When `launchUri` is set, clicking the toast activates that
+ * URI via the shell (protocol activation), e.g. a `vscode://` URI that focuses VS Code.
+ * Returns true if the toast was shown, false if unavailable/failed (caller can fall back).
+ */
+export function showWindowsToast(title: string, body: string, log?: (text: string) => void, launchUri?: string): boolean {
   const a = getApi();
   if (!a) return false;
   try {
@@ -132,7 +152,8 @@ export function showWindowsToast(title: string, body: string, log?: (text: strin
     check('QI IXmlDocumentIO', vcall(inspect, IDX_QueryInterface, a.P_QI, IID_IXmlDocumentIO, ioHolder));
     const xmlIO = koffi.decode(ioHolder, 'void *');
 
-    const xml = `<toast><visual><binding template='ToastGeneric'><text>${xmlEscape(title)}</text><text>${xmlEscape(body)}</text></binding></visual></toast>`;
+    const launchAttr = launchUri ? ` activationType='protocol' launch='${xmlEscape(launchUri)}'` : '';
+    const xml = `<toast${launchAttr}><visual><binding template='ToastGeneric'><text>${xmlEscape(title)}</text><text>${xmlEscape(body)}</text></binding></visual></toast>`;
     check('LoadXml', vcall(xmlIO, IDX_LoadXml, a.P_LoadXml, hstr(a, xml)));
 
     const docHolder = koffi.alloc('void *', 1);
