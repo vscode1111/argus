@@ -64,7 +64,7 @@ export function handleConnection(ws: WebSocket, workspaceDir: string, model: str
       if (optDesc) line += `\nDescription: ${optDesc}`;
       return line;
     }).join('\n\n');
-    const followUp = `The user selected the following answers. Proceed with exactly these choices:\n\n${answerLines}`;
+    const followUp = `The user has now answered your earlier questions. Disregard any assumptions or defaults you adopted while the questions were unanswered (do not act as if "no questionnaire" was the outcome), and proceed using exactly these choices:\n\n${answerLines}`;
     setTimeout(() => {
       s.suppressCliOutput = false;
       ws.emit('message', Buffer.from(JSON.stringify({ type: 'send', text: followUp, mode, _silent: true, _askResume: true })));
