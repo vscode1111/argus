@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import type { spawn } from 'child_process';
-import { plural, classifyError, API_ERROR_RE } from './cli';
+import { plural, classifyError, API_ERROR_RE, killProc } from './cli';
 import { parseRateLimitEvent } from './accountUsage';
 import type { SessionState } from './sessionState';
 
@@ -12,7 +12,7 @@ export function handleCliEvent(s: SessionState, event: Record<string, unknown>):
     s.watchdog.state.lastEventTime = Date.now();
   }
 
-  if (s.cliDone && (event.type === 'content_block_delta' || event.type === 'assistant' || event.type === 'message_start')) {
+  if (s.cliDone && s.pendingAskTools.size === 0 && (event.type === 'content_block_delta' || event.type === 'assistant' || event.type === 'message_start')) {
     s.cliDone = false;
     s.textAccum = '';
     s.receivedDeltas = false;
@@ -102,7 +102,22 @@ function handleAssistant(s: SessionState, event: Record<string, unknown>): void 
       s.sendLog('info', `tool_start: ${block.name} (${block.id})`);
       s.toolMap.set(block.id as string, { name: block.name as string, input: block.input });
       s.ws.send(JSON.stringify({ type: 'tool_start', call: { id: block.id, name: block.name, input: block.input } }));
-      if (block.name === 'AskUserQuestion') s.pendingAskTools.add(block.id as string);
+      if (block.name === 'AskUserQuestion') {
+        // The CLI no longer pauses on a tool that's outside --allowedTools: it
+        // hands the model a synthetic "Answer questions?" result and lets it
+        // barrel ahead on its own defaults (all suppressed -> invisible in the
+        // chat, and the user's real answers never get injected). Enforce the
+        // pause ourselves: make the question a hard turn boundary by stopping
+        // generation now and suppressing anything the model already streamed
+        // past it. Setting cliDone=true lets handleToolAnswer flush the real
+        // answers via a clean --resume once the user responds.
+        s.pendingAskTools.add(block.id as string);
+        s.suppressCliOutput = true;
+        s.cliDone = true;
+        s.watchdog.state.active = false;
+        if (s.currentProc) killProc(s.currentProc);
+        break;
+      }
     }
   }
   s.receivedDeltas = false;

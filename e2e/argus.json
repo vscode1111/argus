@@ -2,7 +2,7 @@
   "verboseTools": false,
   "showTimer": true,
   "showOutput": false,
-  "showLogs": false,
+  "showLogs": true,
   "showLogTime": true,
   "showLogType": true,
   "soundOnComplete": true,
