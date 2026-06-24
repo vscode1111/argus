@@ -16,6 +16,8 @@ const DEFAULTS: ArgusSettings = {
   watchdogAutoRetries: 3,
   watchdogRetryDelay: 5,
   watchdogDelayFactor: 2,
+  allowNetworkAccess: true,
+  allowedOrigins: '',
 };
 
 interface SettingsContextValue extends ArgusSettings {
@@ -33,6 +35,8 @@ interface SettingsContextValue extends ArgusSettings {
   setWatchdogAutoRetries: (v: number) => void;
   setWatchdogRetryDelay: (v: number) => void;
   setWatchdogDelayFactor: (v: number) => void;
+  setAllowNetworkAccess: (v: boolean) => void;
+  setAllowedOrigins: (v: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
@@ -51,6 +55,8 @@ const SettingsContext = createContext<SettingsContextValue>({
   setWatchdogAutoRetries: () => {},
   setWatchdogRetryDelay: () => {},
   setWatchdogDelayFactor: () => {},
+  setAllowNetworkAccess: () => {},
+  setAllowedOrigins: () => {},
 });
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
@@ -90,6 +96,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const setWatchdogAutoRetries = useCallback((v: number) => update({ watchdogAutoRetries: v }), [update]);
   const setWatchdogRetryDelay = useCallback((v: number) => update({ watchdogRetryDelay: v }), [update]);
   const setWatchdogDelayFactor = useCallback((v: number) => update({ watchdogDelayFactor: v }), [update]);
+  const setAllowNetworkAccess = useCallback((v: boolean) => update({ allowNetworkAccess: v }), [update]);
+  const setAllowedOrigins = useCallback((v: string) => update({ allowedOrigins: v }), [update]);
 
   const setNotifyOnComplete = useCallback((v: boolean) => {
     update({ notifyOnComplete: v });
@@ -105,6 +113,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setVerboseTools, setShowTimer, setShowOutput, setShowLogs,
       setShowLogTime, setShowLogType, setSoundOnComplete, setNotifyOnComplete,
       setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor,
+      setAllowNetworkAccess, setAllowedOrigins,
     }}>
       {children}
     </SettingsContext.Provider>

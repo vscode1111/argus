@@ -67,6 +67,11 @@ export type WorkspaceSummary = {
   updatedAt: number; // epoch ms
 };
 
+export type GlobalSessionSummary = SessionSummary & {
+  workspacePath: string; // real absolute cwd the session belongs to
+  workspaceName: string; // basename for display
+};
+
 export type DirEntry = {
   name: string;
   path: string;
@@ -115,4 +120,6 @@ export type ArgusSettings = {
   watchdogAutoRetries: number;
   watchdogRetryDelay: number;
   watchdogDelayFactor: number;
+  allowNetworkAccess: boolean;
+  allowedOrigins: string;
 };

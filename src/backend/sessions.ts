@@ -25,6 +25,11 @@ export interface WorkspaceSummary {
   updatedAt: number; // latest transcript mtime in ms
 }
 
+export interface GlobalSessionSummary extends SessionSummary {
+  workspacePath: string; // real absolute cwd the session belongs to
+  workspaceName: string; // basename for display
+}
+
 interface ReplayTool {
   id: string;
   name: string;
@@ -152,6 +157,68 @@ export function listWorkspaces(): WorkspaceSummary[] {
     out.push({ path: cwd, name: path.basename(cwd) || cwd, sessions: files.length, updatedAt: files[0].mtime });
   }
   out.sort((a, b) => b.updatedAt - a.updatedAt);
+  return out;
+}
+
+// Cap the global "Recent sessions" scan: reading each transcript fully for its
+// title/last-prompt is the expensive part, so we only do it for the N most-recent
+// sessions across all projects (after the cheap stat-based sort).
+const MAX_GLOBAL_SESSIONS = 200;
+
+// Enumerate recent sessions across every project the CLI has run in, newest first.
+// Like listWorkspaces, the real cwd is recovered from the transcript records (the
+// folder name is a lossy encoding); each session carries its workspace path so the
+// UI can switch to that workspace and resume. Workspaces whose path no longer
+// exists are dropped. To keep this responsive, sessions are first sorted by mtime
+// from stat() alone, then only the MAX_GLOBAL_SESSIONS most recent are read for
+// their title/last-prompt metadata.
+export function listAllSessions(): GlobalSessionSummary[] {
+  const root = projectsRoot();
+  let names: string[];
+  try { names = fs.readdirSync(root); } catch { return []; }
+  const candidates: Array<{ id: string; full: string; mtime: number; cwd: string; name: string }> = [];
+  for (const name of names) {
+    const dir = path.join(root, name);
+    let stat: fs.Stats;
+    try { stat = fs.statSync(dir); } catch { continue; }
+    if (!stat.isDirectory()) continue;
+    const files: Array<{ full: string; mtime: number }> = [];
+    const ids: Array<{ id: string; full: string; mtime: number }> = [];
+    try {
+      for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith('.jsonl')) continue;
+        const id = f.slice(0, -'.jsonl'.length);
+        if (!UUID_RE.test(id)) continue;
+        const full = path.join(dir, f);
+        try {
+          const st = fs.statSync(full);
+          if (st.isFile() && st.size > 0) {
+            files.push({ full, mtime: st.mtimeMs });
+            ids.push({ id, full, mtime: st.mtimeMs });
+          }
+        } catch {}
+      }
+    } catch { continue; }
+    if (!files.length) continue;
+    files.sort((a, b) => b.mtime - a.mtime);
+    const cwd = readCwd(files);
+    if (!cwd || !fs.existsSync(cwd)) continue;
+    const wsName = path.basename(cwd) || cwd;
+    for (const e of ids) candidates.push({ ...e, cwd, name: wsName });
+  }
+  candidates.sort((a, b) => b.mtime - a.mtime);
+  const out: GlobalSessionSummary[] = [];
+  for (const c of candidates.slice(0, MAX_GLOBAL_SESSIONS)) {
+    const meta = readSessionMeta(c.full);
+    out.push({
+      id: c.id,
+      title: meta.title || meta.lastPrompt || 'Untitled',
+      lastPrompt: meta.lastPrompt,
+      updatedAt: c.mtime,
+      workspacePath: c.cwd,
+      workspaceName: c.name,
+    });
+  }
   return out;
 }
 

@@ -18,6 +18,12 @@ export interface ArgusConfig {
   watchdogAutoRetries: number;
   watchdogRetryDelay: number;
   watchdogDelayFactor: number;
+  // Master switch for non-local WS access: when false, only localhost/loopback and
+  // the VS Code webview can connect (LAN ranges and allowedOrigins are rejected).
+  allowNetworkAccess: boolean;
+  // Extra origin hosts (IPs/hostnames) allowed to connect over WS, comma-separated.
+  // Only honored while allowNetworkAccess is true.
+  allowedOrigins: string;
 }
 
 export const DEFAULT_CONFIG: ArgusConfig = {
@@ -34,6 +40,8 @@ export const DEFAULT_CONFIG: ArgusConfig = {
   watchdogAutoRetries: 3,
   watchdogRetryDelay: 5,
   watchdogDelayFactor: 2,
+  allowNetworkAccess: true,
+  allowedOrigins: '',
 };
 
 let cachedConfig: ArgusConfig | null = null;

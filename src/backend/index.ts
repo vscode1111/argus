@@ -6,14 +6,30 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage } from 'http';
 
 import { handleConnection } from './session';
+import { readConfig } from './config';
 
 export type { ArgusConfig } from './config';
 
 const DEFAULT_MODEL = process.env.ARGUS_MODEL ?? '';
+// Extra origin hosts (IPs or hostnames) allowed to connect, comma-separated.
+// e.g. ARGUS_ALLOWED_ORIGINS="45.45.45.45,dev.example.com" - used for the VLESS
+// reverse-mesh entry IP so a remote phone reaches this dev box over the tunnel.
+const DEFAULT_ALLOWED_ORIGINS = process.env.ARGUS_ALLOWED_ORIGINS ?? '';
 
 export interface StartServerOptions {
   port?: number;
   model?: string;
+  allowedOrigins?: string;
+}
+
+// Build a matcher for `http(s)://<host>(:port)` from a comma-separated host list.
+function buildOriginMatcher(list: string): (origin: string) => boolean {
+  const patterns = list
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean)
+    .map((host) => new RegExp(`^https?:\\/\\/${host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(:\\d+)?$`));
+  return (origin: string) => patterns.some((re) => re.test(origin));
 }
 
 export interface ArgusServer {
@@ -70,11 +86,22 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
   httpServer.on('upgrade', (req: IncomingMessage, socket, head) => {
     if (!req.url?.startsWith('/agent')) return;
     const origin = req.headers.origin ?? '';
-    const allowed = !origin
+    const cfg = readConfig();
+    // Local access is always allowed: no Origin, the VS Code webview, and localhost/loopback.
+    const localOk = !origin
       || origin.startsWith('vscode-webview:')
-      || /^https?:\/\/localhost(:\d+)?$/.test(origin)
-      // Allow private-LAN origins so dev devices on the same network (phone, tablet) can connect.
-      || /^https?:\/\/(127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin);
+      || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    // Non-local access (LAN ranges + configured extra origins) is gated by allowNetworkAccess.
+    const networkOk = cfg.allowNetworkAccess !== false && (
+      // Private-LAN origins so dev devices on the same network (phone, tablet) can connect.
+      /^https?:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)
+      // Extra origins from options / ARGUS_ALLOWED_ORIGINS / argus.json allowedOrigins
+      // (e.g. the VLESS reverse-mesh entry IP so a remote phone reaches this dev box over the tunnel).
+      || buildOriginMatcher(
+        [options.allowedOrigins, DEFAULT_ALLOWED_ORIGINS, cfg.allowedOrigins].filter(Boolean).join(','),
+      )(origin)
+    );
+    const allowed = localOk || networkOk;
     if (!allowed) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();

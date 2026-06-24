@@ -75,8 +75,10 @@ powershell -NoProfile -Command \
 printf '' > "$ROOT/chromium-1217/INSTALLATION_COMPLETE"
 ```
 
-(A throwaway Node script that loops over all four components is the convenient form -
-download, `Expand-Archive`, verify exe, write marker.)
+This is now packaged as `scripts/install-browsers-manual.js` (run `node scripts/install-browsers-manual.js`),
+which loops over all four components from the Playwright registry - download, `Expand-Archive`,
+verify exe, write marker - so the workaround is a single command. Pass `--force` to re-extract,
+`--all` for every browser.
 
 ## Verifying success
 

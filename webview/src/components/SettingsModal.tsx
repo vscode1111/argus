@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useEscapeKey } from '../hooks/useEscapeKey';
-import { useDraggable } from '../hooks/useDraggable';
+import { useDialogGeometry } from '../hooks/useDialogGeometry';
 import { useSettings } from '../contexts/SettingsContext';
 import { postMessage, isVsCode } from '../vscode';
 import styles from './SettingsModal.module.css';
@@ -61,16 +61,43 @@ function NumberInput({ id, value, onChange, min = 1, step, disabled }: NumberInp
   );
 }
 
+interface TextInputProps {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+function TextInput({ id, value, onChange, placeholder, disabled }: TextInputProps) {
+  const [text, setText] = useState(value);
+  useEffect(() => { setText(value); }, [value]);
+  const commit = () => { if (text !== value) onChange(text); };
+  return (
+    <input
+      id={id}
+      type="text"
+      className={styles.textInput}
+      placeholder={placeholder}
+      disabled={disabled}
+      value={text}
+      onChange={e => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+    />
+  );
+}
+
 interface Props {
   onClose: () => void;
   workspacePath: string;
   version: string;
 }
 
-type Tab = 'general' | 'watchdog' | 'info';
+type Tab = 'general' | 'watchdog' | 'network' | 'info';
 
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
-  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor } = useSettings();
+  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setAllowNetworkAccess, setAllowedOrigins } = useSettings();
   useEffect(() => { postMessage({ type: 'getSettings' }); }, []);
   const [tab, setTabState] = useState<Tab>(() => (localStorage.getItem('argus.settingsTab') as Tab) || 'general');
   const setTab = (t: Tab) => { setTabState(t); localStorage.setItem('argus.settingsTab', t); };
@@ -91,7 +118,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   useEscapeKey(onClose);
 
   const modalRef = useRef<HTMLDivElement>(null);
-  const drag = useDraggable(modalRef);
+  const drag = useDialogGeometry(modalRef, { persistKey: 'settings' });
 
   return (
     <>
@@ -109,6 +136,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
         <div className={styles.tabBar}>
           <button className={[styles.tab, tab === 'general' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('general')}>General</button>
           <button className={[styles.tab, tab === 'watchdog' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('watchdog')}>Watchdog</button>
+          <button className={[styles.tab, tab === 'network' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('network')}>Network</button>
           <button className={[styles.tab, tab === 'info' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('info')}>Info</button>
         </div>
         {tab === 'general' && (
@@ -178,6 +206,19 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
               <span className={styles.settingLabel} title="Multiplier applied each retry: delay = base * factor^attempt. Set to 1 for fixed delay">Delay factor</span>
               <NumberInput id="input-delay-factor" value={watchdogDelayFactor} onChange={setWatchdogDelayFactor} min={1} step={0.5} disabled={!watchdogEnabled} />
             </label>
+          </div>
+        )}
+        {tab === 'network' && (
+          <div className={styles.tabContent}>
+            <label className={styles.settingRow} htmlFor="toggle-network">
+              <span className={styles.settingLabel} title="Allow devices other than this machine (LAN/tunnel) to connect. When off, only localhost can connect. Turning this off from a remote device will disconnect it.">Network access</span>
+              <Toggle id="toggle-network" checked={allowNetworkAccess} onChange={setAllowNetworkAccess} />
+            </label>
+            <div className={[styles.settingColumn, !allowNetworkAccess ? styles.settingDisabled : ''].filter(Boolean).join(' ')}>
+              <label className={styles.settingLabel} htmlFor="input-origins" title="Extra hosts (IPs or hostnames) allowed to connect, comma-separated. Private-LAN ranges are already allowed when network access is on.">Allowed origins</label>
+              <TextInput id="input-origins" value={allowedOrigins} onChange={setAllowedOrigins} placeholder="45.45.45.45, dev.example.com" disabled={!allowNetworkAccess} />
+              <span className={styles.fieldHint}>Comma-separated hosts. Used for tunnels or reverse proxies that aren't on the local LAN.</span>
+            </div>
           </div>
         )}
         {tab === 'info' && (

@@ -283,6 +283,25 @@ function AppInner() {
     postMessage({ type: 'listSessions' }); // queued, flushed after reconnect for the new ws
   }
 
+  // Resume a session that may live in another workspace (from the Session History
+  // "All workspaces" tab). When it belongs to the current workspace, resume in place;
+  // otherwise switch the panel to that workspace first - the reconnect queue
+  // flushes `resumeSession` to the new connection, whose workspaceDir matches the
+  // session, so the transcript replays and the next send spawns with `--resume`.
+  function resumeWorkspaceSession(path: string, id: string) {
+    if (path === state.workspacePath) {
+      postMessage({ type: 'resumeSession', id });
+      return;
+    }
+    dispatch({ type: 'clear' });
+    dispatch({ type: 'workspaceInfo', path });
+    setSessionTitle('');
+    setSessionId(null);
+    setEditingName(false);
+    postMessage({ type: 'switchWorkspace', dir: path });
+    postMessage({ type: 'resumeSession', id }); // queued, flushed after reconnect for the new ws
+  }
+
   const logPanel = <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} onClose={() => setShowLogs(false)} />;
 
   const workspaceName = basename(state.workspacePath);
@@ -388,7 +407,7 @@ function AppInner() {
 
   return (
     <div className="app">
-      {historyOpen && <SessionHistoryModal onClose={() => setHistoryOpen(false)} />}
+      {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
       {accountUsageOpen && <AccountUsageModal onClose={() => setAccountUsageOpen(false)} />}
       <div className="content">
         {showLogs && isNarrow && (

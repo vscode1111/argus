@@ -31,6 +31,31 @@
   opacity: 0;
 }
 
+/* "All workspaces" rows: stacked title + workspace name, no hover-reveal actions,
+   so the timestamp stays visible (no fade like the per-workspace rows above). */
+.allRowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rowSub {
+  font-size: 0.82em;
+  color: var(--thinking-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowTimeStatic {
+  flex-shrink: 0;
+  font-size: 0.85em;
+  color: var(--thinking-fg);
+  font-variant-numeric: tabular-nums;
+}
+
 .editBtn,
 .deleteBtn {
   position: absolute;
