@@ -206,6 +206,38 @@
   outline-offset: -1px;
 }
 
+.settingColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 12px;
+}
+
+.textInput {
+  width: 100%;
+  background: var(--input-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 0.88em;
+  font-family: var(--vscode-editor-font-family, monospace);
+  box-sizing: border-box;
+}
+.textInput:focus {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+.textInput:disabled {
+  opacity: 0.5;
+}
+
+.fieldHint {
+  font-size: 0.82em;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.35;
+}
+
 .settingUnit {
   font-size: 0.82em;
   color: var(--thinking-fg);

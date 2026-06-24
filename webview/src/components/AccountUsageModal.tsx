@@ -121,7 +121,7 @@ export function AccountUsageModal({ onClose }: Props) {
   );
 
   return (
-    <Modal title="Account & Usage" ariaLabel="Account & Usage" onClose={onClose} width={380}>
+    <Modal title="Account & Usage" ariaLabel="Account & Usage" onClose={onClose} width={380} persistKey="accountUsage">
         <div className={styles.body}>
           {accountLoading && <div className={styles.placeholder}>Loading...</div>}
           {!accountLoading && account && !account.loggedIn && (

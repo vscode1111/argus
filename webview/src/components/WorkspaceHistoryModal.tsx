@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { postMessage } from '../vscode';
+import { getDialogState, patchDialogState } from '../utils/dialogState';
 import { WorkspaceSummary, DirListing } from '../types';
 import { plural } from '../utils/text';
 import { relativeTime } from '../utils/time';
@@ -30,7 +31,9 @@ function FolderIcon() {
 // ~/.claude/projects); "Browse" is a folder explorer over the whole machine.
 // Either way, picking a folder reconnects the panel to that workspace in place.
 export function WorkspaceHistoryModal({ currentPath, onSelect, onClose }: Props) {
-  const [tab, setTab] = useState<Tab>('recent');
+  // Remember the selected tab in-memory (reset on page refresh).
+  const [tab, setTabState] = useState<Tab>(() => (getDialogState('workspaceHistory')?.tab as Tab) || 'recent');
+  const setTab = (t: Tab) => { setTabState(t); patchDialogState('workspaceHistory', { tab: t }); };
 
   // Recent tab state
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
@@ -65,6 +68,15 @@ export function WorkspaceHistoryModal({ currentPath, onSelect, onClose }: Props)
     },
     () => postMessage({ type: 'listWorkspaces' }),
   );
+
+  // If the restored tab is "Browse", open the folder explorer at home on mount.
+  useEffect(() => {
+    if (tab === 'browse' && !browseLoaded.current) {
+      browseLoaded.current = true;
+      browseTo(undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Re-scan recent workspaces from disk; spinner stops when workspaceList lands.
   function refresh() {
@@ -120,17 +132,18 @@ export function WorkspaceHistoryModal({ currentPath, onSelect, onClose }: Props)
       onClose={onClose}
       width={460}
       fullHeight
+      persistKey="workspaceHistory"
       // Escape cancels an in-progress path edit before it closes the modal.
       onEscape={() => { if (editingPath) setEditingPath(false); else onClose(); }}
       headerActions={tab === 'recent'
         ? <RefreshButton spinning={refreshing} onClick={refresh} label="Refresh workspaces" title="Refresh workspace list" />
         : undefined}
     >
-      <div className={styles.tabs} role="tablist">
+      <div className={shell.tabs} role="tablist">
         <button
           role="tab"
           aria-selected={tab === 'recent'}
-          className={[styles.tab, tab === 'recent' ? styles.tabActive : ''].filter(Boolean).join(' ')}
+          className={[shell.tab, tab === 'recent' ? shell.tabActive : ''].filter(Boolean).join(' ')}
           onClick={() => setTab('recent')}
         >
           Recent
@@ -138,7 +151,7 @@ export function WorkspaceHistoryModal({ currentPath, onSelect, onClose }: Props)
         <button
           role="tab"
           aria-selected={tab === 'browse'}
-          className={[styles.tab, tab === 'browse' ? styles.tabActive : ''].filter(Boolean).join(' ')}
+          className={[shell.tab, tab === 'browse' ? shell.tabActive : ''].filter(Boolean).join(' ')}
           onClick={openBrowse}
         >
           Browse

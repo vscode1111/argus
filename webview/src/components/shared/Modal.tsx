@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
-import { useDraggable } from '../../hooks/useDraggable';
+import { useDialogGeometry } from '../../hooks/useDialogGeometry';
 import shell from './centeredModal.module.css';
 
 interface Props {
@@ -10,6 +10,9 @@ interface Props {
   onClose: () => void;
   width?: number;
   fullHeight?: boolean;
+  // When set, the modal remembers its position and size (in-memory, reset on
+  // page refresh) so reopening restores them.
+  persistKey?: string;
   // Extra controls rendered in the header before the close button (e.g. a
   // RefreshButton). The close button is always appended.
   headerActions?: React.ReactNode;
@@ -22,17 +25,15 @@ interface Props {
 // Centered, draggable portal shell shared by the Account/Session/Workspace
 // modals: overlay, draggable header (title + actions + close) and a flex body.
 // Each modal supplies only its own content below the header.
-export function Modal({ title, ariaLabel, onClose, width, fullHeight, headerActions, onEscape, children }: Props) {
+export function Modal({ title, ariaLabel, onClose, width, fullHeight, persistKey, headerActions, onEscape, children }: Props) {
   const modalRef = useRef<HTMLDivElement>(null);
-  const drag = useDraggable(modalRef);
+  // Geometry hook applies width/height imperatively (so CSS resize + persistence
+  // work); React's style only carries the drag position.
+  const drag = useDialogGeometry(modalRef, { persistKey, defaultWidth: width, fullHeight });
 
   useEscapeKey(onEscape ?? onClose);
 
-  const style: React.CSSProperties = {
-    ...(width ? { width } : null),
-    ...(fullHeight ? { height: 'calc(100vh - 64px)' } : null),
-    ...drag.style,
-  };
+  const style: React.CSSProperties | undefined = drag.style;
 
   return createPortal(
     <>

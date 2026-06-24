@@ -1,32 +1,6 @@
-/* Overlay, modal shell, header, close, refresh, search, body, row and
-   placeholder come from shared/centeredModal.module.css. Only the tab bar,
-   folder browser and recent-row specifics live here. */
-
-.tabs {
-  display: flex;
-  gap: 4px;
-  padding: 4px 16px 0;
-}
-
-.tab {
-  flex: 1;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--thinking-fg);
-  cursor: pointer;
-  padding: 6px 8px;
-  font-size: 0.9em;
-  font-weight: 600;
-  border-radius: 4px 4px 0 0;
-}
-.tab:hover {
-  background: rgba(128, 128, 128, 0.1);
-}
-.tabActive {
-  color: var(--fg);
-  border-bottom-color: var(--vscode-focusBorder, var(--btn-bg));
-}
+/* Overlay, modal shell, header, close, refresh, search, body, row, tab bar and
+   placeholder come from shared/centeredModal.module.css. Only the folder browser
+   and recent-row specifics live here. */
 
 .browsePath {
   padding: 8px 16px 9px;
