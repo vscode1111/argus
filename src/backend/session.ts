@@ -22,6 +22,8 @@ export interface ConnectionHooks {
   onSettingsChange?: () => void;
   // Current count of open client sockets, for the Settings "Network" tab.
   getClientCount?: () => number;
+  // Actual port this HTTP/WebSocket server is listening on, for the Settings "Network" tab.
+  getServerPort?: () => number;
 }
 
 export function handleConnection(
@@ -142,6 +144,8 @@ export function handleConnection(
       ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
     } else if (msg.type === 'getClientCount') {
       ws.send(JSON.stringify({ type: 'clientCount', count: hooks.getClientCount?.() ?? 0 }));
+    } else if (msg.type === 'getServerInfo') {
+      ws.send(JSON.stringify({ type: 'serverInfo', port: hooks.getServerPort?.() ?? 0 }));
     } else if (msg.type === 'updateSettings') {
       const patch = (msg as { settings?: Partial<ArgusConfig> }).settings;
       if (patch) {

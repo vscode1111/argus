@@ -100,15 +100,19 @@ type Tab = 'general' | 'watchdog' | 'network' | 'info';
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setAllowNetworkAccess, setAllowedOrigins } = useSettings();
   const [activeClients, setActiveClients] = useState<number | null>(null);
+  const [serverPort, setServerPort] = useState<number | null>(null);
   useEffect(() => {
     postMessage({ type: 'getSettings' });
     postMessage({ type: 'getClientCount' });
+    postMessage({ type: 'getServerInfo' });
     // The server also pushes clientCount whenever a connection opens or closes,
     // so this stays live while the modal is open.
     const onMessage = (e: MessageEvent) => {
       const msg = e.data;
       if (msg && msg.type === 'clientCount' && typeof msg.count === 'number') {
         setActiveClients(msg.count);
+      } else if (msg && msg.type === 'serverInfo' && typeof msg.port === 'number') {
+        setServerPort(msg.port);
       }
     };
     window.addEventListener('message', onMessage);
@@ -250,6 +254,14 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 Used for tunnels or reverse proxies<br />
                 that aren't on the local LAN.
               </span>
+            </div>
+            <div className={styles.clientCount} title="HTTP endpoint this server is listening on (serves the nonce and the WebSocket upgrade)">
+              <span className={styles.settingLabel}>HTTP address</span>
+              <span className={styles.clientCountValue} data-testid="http-address">{serverPort ? `http://localhost:${serverPort}` : '-'}</span>
+            </div>
+            <div className={styles.clientCount} title="WebSocket endpoint clients connect to (shares the HTTP port)">
+              <span className={styles.settingLabel}>WebSocket address</span>
+              <span className={styles.clientCountValue} data-testid="ws-address">{serverPort ? `ws://localhost:${serverPort}/agent` : '-'}</span>
             </div>
             <div className={styles.clientCount} title="WebSocket clients currently connected to this server (this window counts as one)">
               <span className={styles.settingLabel}>Active connections</span>
