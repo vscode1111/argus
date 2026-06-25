@@ -23,7 +23,6 @@ async function openBrowse(page: Page) {
 
 test.describe('workspace browse / folder explorer (integration)', () => {
   test('lists real folders, walks up to This PC (drives), and back down', async ({ page }) => {
-    test.setTimeout(120_000);
     await waitForApp(page);
 
     const { dialog, breadcrumb } = await openBrowse(page);
@@ -58,7 +57,6 @@ test.describe('workspace browse / folder explorer (integration)', () => {
   });
 
   test('opens the browsed folder as the workspace', async ({ page }) => {
-    test.setTimeout(120_000);
     await waitForApp(page);
 
     const { dialog, breadcrumb } = await openBrowse(page);

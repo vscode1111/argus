@@ -14,7 +14,6 @@ async function sendAndWait(page: Page, text: string) {
 
 test.describe('session history (integration)', () => {
   test('creates a session, lists it, resumes it, and continues context', async ({ page }) => {
-    test.setTimeout(240_000);
     await waitForApp(page);
 
     // 1. Establish a fact in a fresh session. The unique token lets us prove later
@@ -54,7 +53,6 @@ test.describe('session history (integration)', () => {
   });
 
   test('renames a session and the new title survives a backend re-list', async ({ page }) => {
-    test.setTimeout(180_000);
     await waitForApp(page);
 
     // 1. Create a real session so a transcript exists to rename.
@@ -93,7 +91,6 @@ test.describe('session history (integration)', () => {
   });
 
   test('renames the current session inline from the header and it persists', async ({ page }) => {
-    test.setTimeout(180_000);
     await waitForApp(page);
 
     // 1. Create a real session. When the turn finishes the app re-fetches the

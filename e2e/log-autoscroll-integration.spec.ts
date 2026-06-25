@@ -20,11 +20,11 @@ function bottomDistance(page: Page): Promise<number> {
 }
 
 test('debug log auto-scrolls to the bottom throughout a stream', async ({ page }) => {
-  test.setTimeout(120_000);
 
   await waitForApp(page);
 
-  // The log panel is shown by default, so its scroll container must be present.
+  // The log panel is shown by default (e2e/argus.json sets showLogs:true), so its
+  // scroll container must be present.
   const logList = page.locator(LOG_LIST);
   await expect(logList).toBeVisible();
 

@@ -12,7 +12,10 @@ const chromiumOptions = {
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 60_000,
+  // Tiered timeouts: mock tests are fast and never touch the real CLI, so a
+  // short global timeout makes them fail fast. Integration tests drive the real
+  // Claude CLI and get a single, bounded per-project override below.
+  timeout: 30_000,
   outputDir: './test-results',
   fullyParallel: true,
   workers: 4,
@@ -24,10 +27,15 @@ export default defineConfig({
       use: chromiumOptions,
     },
     {
+      // One bounded timeout for every integration test (no per-test overrides).
+      // 90s comfortably covers real multi-turn CLI runs while capping a hang at
+      // 90s instead of the old 2x120s; retries off so a hang isn't paid twice.
       name: 'integration',
       testMatch: /-integration\.spec/,
       use: chromiumOptions,
       dependencies: ['mock'],
+      timeout: 90_000,
+      retries: 0,
     },
   ],
   use: {

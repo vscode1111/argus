@@ -85,9 +85,18 @@ export function useDialogGeometry(ref: React.RefObject<HTMLElement>, opts: Optio
     window.addEventListener('pointerup', onUp);
   }, [ref, persistKey]);
 
+  // Snap the live element back to its default geometry (used by "Reset layout").
+  const reset = useCallback(() => {
+    setPos(null);
+    const el = ref.current;
+    if (!el) return;
+    el.style.width = defaultWidth ? `${defaultWidth}px` : '';
+    el.style.height = fullHeight ? 'calc(100vh - 64px)' : '';
+  }, [ref, defaultWidth, fullHeight]);
+
   const style: React.CSSProperties | undefined = pos
     ? { top: pos.y, left: pos.x, transform: 'none' }
     : undefined;
 
-  return { pos, setPos, onPointerDown, style };
+  return { pos, setPos, onPointerDown, style, reset };
 }

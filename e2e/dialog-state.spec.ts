@@ -2,8 +2,9 @@ import { test, expect, type Page } from '@playwright/test';
 import { waitForApp } from './helpers';
 
 // The Session History modal stands in for all centered dialogs: position, size,
-// and tab selection are remembered in an in-memory store that survives close /
-// reopen but resets on a full page refresh (see webview/src/utils/dialogState.ts).
+// and tab selection are remembered in a localStorage-backed store that survives
+// close / reopen AND a full page refresh, and is wiped by the Settings
+// "Reset layout" button (see webview/src/utils/dialogState.ts).
 
 async function openModal(page: Page) {
   await page.getByRole('button', { name: 'Session history' }).click();
@@ -64,14 +65,35 @@ test.describe('dialog state persistence', () => {
     expect(Math.abs(reopened.height - 480)).toBeLessThan(3);
   });
 
-  test('resets to defaults after a page refresh', async ({ page }) => {
+  test('persists tab and size across a page refresh', async ({ page }) => {
     let dialog = await openModal(page);
     await dialog.getByRole('tab', { name: 'All workspaces' }).click();
     await dialog.evaluate((el) => { el.style.width = '560px'; });
     await page.waitForTimeout(50);
     await closeModal(page);
 
-    // A full refresh re-evaluates the module, dropping the in-memory store.
+    // localStorage survives a full refresh, so the layout comes back.
+    await waitForApp(page);
+    dialog = await openModal(page);
+    await expect(dialog.getByRole('tab', { name: 'All workspaces' })).toHaveAttribute('aria-selected', 'true');
+    const box = await dialog.boundingBox();
+    if (!box) throw new Error('no dialog box');
+    expect(Math.abs(box.width - 560)).toBeLessThan(3);
+  });
+
+  test('"Reset layout" wipes the saved tab and size', async ({ page }) => {
+    let dialog = await openModal(page);
+    await dialog.getByRole('tab', { name: 'All workspaces' }).click();
+    await dialog.evaluate((el) => { el.style.width = '560px'; });
+    await page.waitForTimeout(50);
+    await closeModal(page);
+
+    // Reset layout from Settings, then refresh: everything is back to defaults.
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    await page.getByRole('button', { name: 'Reset dialog layout' }).click();
+    await page.keyboard.press('Escape');
+
     await waitForApp(page);
     dialog = await openModal(page);
     await expect(dialog.getByRole('tab', { name: 'This workspace' })).toHaveAttribute('aria-selected', 'true');

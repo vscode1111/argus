@@ -33,7 +33,6 @@ function parentDir(p: string): string {
 
 test.describe('workspace browse / editable path (integration)', () => {
   test('typing a valid path navigates the explorer there', async ({ page }) => {
-    test.setTimeout(120_000);
     await waitForApp(page);
 
     const { dialog, breadcrumb } = await openBrowse(page);
@@ -56,7 +55,6 @@ test.describe('workspace browse / editable path (integration)', () => {
   });
 
   test('typing an invalid path falls back to the nearest existing directory', async ({ page }) => {
-    test.setTimeout(120_000);
     await waitForApp(page);
 
     const { dialog, breadcrumb } = await openBrowse(page);

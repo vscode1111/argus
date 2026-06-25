@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Adds "New chat here" to the right-click menu of drive roots (This PC -> C:\, D:\ ...).
+; Double-click to install for the current user (HKCU, no admin needed).
+; Paths are hardcoded to D:\_Projects\scub111g\argus - regenerate if the project moves.
+
+[HKEY_CURRENT_USER\Software\Classes\Drive\shell\ZZArgusNewChat]
+@="New chat here"
+"Icon"="D:\\_Projects\\scub111g\\argus\\media\\argus-icon.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\Drive\shell\ZZArgusNewChat\command]
+@="wscript.exe \"D:\\_Projects\\scub111g\\argus\\scripts\\launch.vbs\" \"%V\""

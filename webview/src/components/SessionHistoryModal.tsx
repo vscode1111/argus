@@ -6,6 +6,7 @@ import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
 import { useWebviewMessage } from '../hooks/useWebviewMessage';
 import { relativeTime } from '../utils/time';
+import { fmtLineCount } from '../utils/text';
 import shell from './shared/centeredModal.module.css';
 import styles from './SessionHistoryModal.module.css';
 
@@ -13,7 +14,9 @@ interface Props {
   currentPath: string;
   // Resume a session that may belong to another workspace ("All workspaces" tab):
   // App switches the panel to that workspace first (if needed), then resumes.
-  onResumeWorkspaceSession: (workspacePath: string, sessionId: string) => void;
+  // `lines` (the session's content size) is forwarded so the loading overlay can
+  // label the spinner, e.g. "Loading… 17k lines".
+  onResumeWorkspaceSession: (workspacePath: string, sessionId: string, lines?: number) => void;
   onClose: () => void;
 }
 
@@ -87,14 +90,16 @@ export function SessionHistoryModal({ currentPath, onResumeWorkspaceSession, onC
     postMessage({ type: 'listAllSessions' });
   }
 
-  function resume(id: string) {
-    postMessage({ type: 'resumeSession', id });
+  function resume(id: string, lines: number) {
+    // Route through the same App handler as the "All workspaces" tab so the
+    // loading spinner is shown; for a same-workspace id it just posts resumeSession.
+    onResumeWorkspaceSession(currentPath, id, lines);
     onClose();
   }
 
   // Resume a global session: switch to its workspace first when it differs.
   function resumeGlobal(s: GlobalSessionSummary) {
-    onResumeWorkspaceSession(s.workspacePath, s.id);
+    onResumeWorkspaceSession(s.workspacePath, s.id, s.lines);
     onClose();
   }
 
@@ -197,7 +202,7 @@ export function SessionHistoryModal({ currentPath, onResumeWorkspaceSession, onC
                 <div
                   key={s.id}
                   className={[styles.row, s.id === currentId ? shell.rowCurrent : '', editingId === s.id ? styles.rowEditing : ''].filter(Boolean).join(' ')}
-                  onClick={() => editingId === s.id ? undefined : resume(s.id)}
+                  onClick={() => editingId === s.id ? undefined : resume(s.id, s.lines)}
                   title={s.lastPrompt || s.title}
                 >
                   <div className={styles.rowMain}>
@@ -222,6 +227,7 @@ export function SessionHistoryModal({ currentPath, onResumeWorkspaceSession, onC
                   </div>
                   {editingId !== s.id && (
                     <>
+                      <span className={styles.rowCount}>{s.lines > 0 ? fmtLineCount(s.lines) : ''}</span>
                       <span className={styles.rowTime}>{relativeTime(s.updatedAt)}</span>
                       <button
                         className={styles.editBtn}
@@ -284,6 +290,7 @@ export function SessionHistoryModal({ currentPath, onResumeWorkspaceSession, onC
                     <span className={styles.rowTitle}>{s.title}</span>
                     <span className={styles.rowSub}>{s.workspaceName}</span>
                   </div>
+                  <span className={styles.rowCount}>{s.lines > 0 ? fmtLineCount(s.lines) : ''}</span>
                   <span className={styles.rowTimeStatic}>{relativeTime(s.updatedAt)}</span>
                 </div>
               ))

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useDialogGeometry } from '../hooks/useDialogGeometry';
+import { clearDialogState } from '../utils/dialogState';
 import { useSettings } from '../contexts/SettingsContext';
 import { postMessage, isVsCode } from '../vscode';
 import styles from './SettingsModal.module.css';
@@ -98,9 +99,24 @@ type Tab = 'general' | 'watchdog' | 'network' | 'info';
 
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setAllowNetworkAccess, setAllowedOrigins } = useSettings();
-  useEffect(() => { postMessage({ type: 'getSettings' }); }, []);
+  const [activeClients, setActiveClients] = useState<number | null>(null);
+  useEffect(() => {
+    postMessage({ type: 'getSettings' });
+    postMessage({ type: 'getClientCount' });
+    // The server also pushes clientCount whenever a connection opens or closes,
+    // so this stays live while the modal is open.
+    const onMessage = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg && msg.type === 'clientCount' && typeof msg.count === 'number') {
+        setActiveClients(msg.count);
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
   const [tab, setTabState] = useState<Tab>(() => (localStorage.getItem('argus.settingsTab') as Tab) || 'general');
   const setTab = (t: Tab) => { setTabState(t); localStorage.setItem('argus.settingsTab', t); };
+  const [layoutCleared, setLayoutCleared] = useState(false);
   const hasDevHarness = !!document.getElementById('dev-harness');
   const hasNotificationAPI = typeof Notification !== 'undefined';
   const [notifPerm, setNotifPerm] = useState(() => hasNotificationAPI ? Notification.permission : 'unavailable');
@@ -119,6 +135,16 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
 
   const modalRef = useRef<HTMLDivElement>(null);
   const drag = useDialogGeometry(modalRef, { persistKey: 'settings' });
+
+  // Forget every dialog's remembered position/size/tab (and the Settings tab),
+  // then snap this modal back to its default geometry so the reset is visible.
+  function handleClearLayout() {
+    clearDialogState();
+    localStorage.removeItem('argus.settingsTab');
+    drag.reset();
+    setLayoutCleared(true);
+    setTimeout(() => setLayoutCleared(false), 1500);
+  }
 
   return (
     <>
@@ -173,7 +199,9 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                   <span className={styles.notifHintOk}>Browser notifications are allowed.</span>
                 ) : notifPerm === 'denied' ? (
                   <span className={styles.notifHint}>
-                    Blocked in the browser. Allow notifications for this site in your browser settings, then reload.
+                    Blocked in the browser.<br />
+                    Allow notifications for this site<br />
+                    in your browser settings, then reload.
                   </span>
                 ) : (
                   <button className={styles.grantBtn} onClick={handleGrantNotifications}>
@@ -217,7 +245,15 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             <div className={[styles.settingColumn, !allowNetworkAccess ? styles.settingDisabled : ''].filter(Boolean).join(' ')}>
               <label className={styles.settingLabel} htmlFor="input-origins" title="Extra hosts (IPs or hostnames) allowed to connect, comma-separated. Private-LAN ranges are already allowed when network access is on.">Allowed origins</label>
               <TextInput id="input-origins" value={allowedOrigins} onChange={setAllowedOrigins} placeholder="45.45.45.45, dev.example.com" disabled={!allowNetworkAccess} />
-              <span className={styles.fieldHint}>Comma-separated hosts. Used for tunnels or reverse proxies that aren't on the local LAN.</span>
+              <span className={styles.fieldHint}>
+                Comma-separated hosts.<br />
+                Used for tunnels or reverse proxies<br />
+                that aren't on the local LAN.
+              </span>
+            </div>
+            <div className={styles.clientCount} title="WebSocket clients currently connected to this server (this window counts as one)">
+              <span className={styles.settingLabel}>Active connections</span>
+              <span className={styles.clientCountValue} data-testid="active-connections">{activeClients ?? '-'}</span>
             </div>
           </div>
         )}
@@ -246,6 +282,14 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             dev
           </button>
         )}
+        <button
+          className={styles.resetCorner}
+          onClick={handleClearLayout}
+          aria-label="Reset dialog layout"
+          title="Forget the saved position, size, and tab of all dialogs"
+        >
+          {layoutCleared ? 'Layout reset' : 'Reset layout'}
+        </button>
       </div>
     </>
   );

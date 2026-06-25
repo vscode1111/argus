@@ -58,6 +58,7 @@ export type SessionSummary = {
   title: string;
   lastPrompt: string;
   updatedAt: number; // epoch ms
+  lines: number; // total lines of text/code across the transcript
 };
 
 export type WorkspaceSummary = {

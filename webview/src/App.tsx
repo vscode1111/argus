@@ -5,11 +5,13 @@ import { LogPanel } from './components/LogPanel';
 import { SessionHistoryModal } from './components/SessionHistoryModal';
 import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
+import { AutoFileViewer } from './components/AutoFileViewer';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { postMessage, isVsCode } from './vscode';
 import { reducer, initialState, type AppAction } from './reducer';
 import { SessionSummary } from './types';
 import { basename } from './utils/path';
+import { fmtLineCount } from './utils/text';
 
 function playCompletionSound(): void {
   try {
@@ -66,8 +68,19 @@ function AppInner() {
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [accountUsageOpen, setAccountUsageOpen] = React.useState(false);
+  const [initialFile, setInitialFile] = React.useState<string | null>(null);
+  // Spinner overlay shown while a session resume or workspace switch is in flight
+  // (a big transcript replay or a WS reconnect can take a few seconds).
+  const [loadingSession, setLoadingSession] = React.useState(false);
+  // Known content size (line count) of the session being resumed, shown beside the
+  // spinner (e.g. "Loading… 17k lines"); 0 when unknown (a plain workspace switch).
+  const [loadSize, setLoadSize] = React.useState(0);
+  const loadTimer = React.useRef<number | null>(null);
   const [sessionTitle, setSessionTitle] = React.useState('');
   const [sessionId, setSessionId] = React.useState<string | null>(null);
+  // Line count of the current session, kept in sync from sessionList replies so the
+  // header "Refresh current session" button can label its loading spinner.
+  const [sessionLines, setSessionLines] = React.useState(0);
   const [editingName, setEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState('');
   const [showSessionBar, setShowSessionBar] = React.useState(() => {
@@ -82,10 +95,16 @@ function AppInner() {
   const dragStartH = React.useRef(0);
 
   useEffect(() => {
-    const dir = new URLSearchParams(window.location.search).get('dir');
+    const params = new URLSearchParams(window.location.search);
+    const dir = params.get('dir');
     if (dir) {
       console.log('[Argus] Invoked from directory:', dir);
       dispatch({ type: 'workspaceInfo', path: dir });
+    }
+    const file = params.get('file');
+    if (file) {
+      console.log('[Argus] Invoked to open file:', file);
+      setInitialFile(file);
     }
   }, []);
 
@@ -178,11 +197,15 @@ function AppInner() {
         const cur = (e.data.sessions as SessionSummary[]).find(s => s.id === e.data.currentId);
         setSessionTitle(cur?.title ?? '');
         setSessionId(e.data.currentId ?? null);
+        setSessionLines(cur?.lines ?? 0);
+        endSessionLoad(); // a fresh list means a workspace reconnect finished
       } else if (t === 'sessionLoaded') {
         postMessage({ type: 'listSessions' });
+        endSessionLoad(); // the resumed transcript has been replayed
       } else if (t === 'clear') {
         setSessionTitle('');
         setSessionId(null);
+        setSessionLines(0);
         setEditingName(false);
       }
     }
@@ -270,10 +293,26 @@ function AppInner() {
     setEditingName(false);
   }
 
+  // Show the spinner overlay until the resumed transcript / new workspace lands.
+  // `size` is the session's known line count (0 = unknown, e.g. a workspace switch),
+  // shown as a label beside the spinner. A safety timeout clears it so the spinner
+  // can never get permanently stuck.
+  function beginSessionLoad(size = 0) {
+    setLoadingSession(true);
+    setLoadSize(size);
+    if (loadTimer.current) window.clearTimeout(loadTimer.current);
+    loadTimer.current = window.setTimeout(() => setLoadingSession(false), 30_000);
+  }
+  function endSessionLoad() {
+    setLoadingSession(false);
+    if (loadTimer.current) { window.clearTimeout(loadTimer.current); loadTimer.current = null; }
+  }
+
   // Reconnect the panel to a different workspace in place: reset the UI to a clean
   // slate, point the header at the new path, then have the WS bridge tear down the
   // socket and reopen it with the new ?dir= (a fresh server-side session).
   function switchWorkspace(path: string) {
+    beginSessionLoad();
     dispatch({ type: 'clear' });
     dispatch({ type: 'workspaceInfo', path });
     setSessionTitle('');
@@ -288,7 +327,8 @@ function AppInner() {
   // otherwise switch the panel to that workspace first - the reconnect queue
   // flushes `resumeSession` to the new connection, whose workspaceDir matches the
   // session, so the transcript replays and the next send spawns with `--resume`.
-  function resumeWorkspaceSession(path: string, id: string) {
+  function resumeWorkspaceSession(path: string, id: string, lines = 0) {
+    beginSessionLoad(lines);
     if (path === state.workspacePath) {
       postMessage({ type: 'resumeSession', id });
       return;
@@ -350,6 +390,19 @@ function AppInner() {
           </button>
           <button
             className="btn-icon"
+            title="Refresh current session"
+            aria-label="Refresh current session"
+            disabled={!sessionId}
+            onClick={() => { if (sessionId) { beginSessionLoad(sessionLines); postMessage({ type: 'resumeSession', id: sessionId }); } }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 3v5h5" />
+              <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+              <path d="M12 7v5l4 2" />
+            </svg>
+          </button>
+          <button
+            className="btn-icon"
             title="Session history"
             aria-label="Session history"
             onClick={() => setHistoryOpen(true)}
@@ -361,19 +414,6 @@ function AppInner() {
               <line x1="3" y1="6" x2="3.01" y2="6" />
               <line x1="3" y1="12" x2="3.01" y2="12" />
               <line x1="3" y1="18" x2="3.01" y2="18" />
-            </svg>
-          </button>
-          <button
-            className="btn-icon"
-            title="Refresh current session"
-            aria-label="Refresh current session"
-            disabled={!sessionId}
-            onClick={() => { if (sessionId) postMessage({ type: 'resumeSession', id: sessionId }); }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 3v5h5" />
-              <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
-              <path d="M12 7v5l4 2" />
             </svg>
           </button>
           {workspaceName && (
@@ -409,6 +449,7 @@ function AppInner() {
     <div className="app">
       {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
       {accountUsageOpen && <AccountUsageModal onClose={() => setAccountUsageOpen(false)} />}
+      {initialFile && <AutoFileViewer path={initialFile} onClose={() => setInitialFile(null)} />}
       <div className="content">
         {showLogs && isNarrow && (
           <>
@@ -420,6 +461,14 @@ function AppInner() {
           {topRightActions}
           <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
           <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} wsConnected={state.wsConnected} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
+          {loadingSession && (
+            <div className="sessionLoader" role="status" aria-live="polite" aria-busy="true" aria-label="Loading session">
+              <div className="sessionSpinner" />
+              {loadSize > 0 && (
+                <div className="sessionLoaderText">Loading… {fmtLineCount(loadSize)} lines</div>
+              )}
+            </div>
+          )}
         </div>
         {showLogs && !isNarrow && (
           <>
