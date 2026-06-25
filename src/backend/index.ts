@@ -56,6 +56,57 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
   const wss = new WebSocketServer({ noServer: true });
 
+  // Remembers each live connection's Origin so it can be re-checked when the
+  // Network settings change (not only at upgrade time).
+  const wsOrigin = new WeakMap<WebSocket, string>();
+
+  // Whether an Origin may connect, given the current config. Local origins (no
+  // Origin, the VS Code webview, localhost/loopback) are always allowed; non-local
+  // origins (private-LAN ranges + configured extra hosts) are gated by
+  // allowNetworkAccess. Reads config fresh so edits to argus.json apply at once.
+  function originAllowed(origin: string): boolean {
+    const localOk = !origin
+      || origin.startsWith('vscode-webview:')
+      || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    if (localOk) return true;
+    const cfg = readConfig();
+    return cfg.allowNetworkAccess !== false && (
+      /^https?:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)
+      || buildOriginMatcher(
+        [options.allowedOrigins, DEFAULT_ALLOWED_ORIGINS, cfg.allowedOrigins].filter(Boolean).join(','),
+      )(origin)
+    );
+  }
+
+  // Drop any live connection whose Origin is no longer allowed. Called after a
+  // settings change so turning Network access off (or removing an allowed origin)
+  // disconnects remote clients immediately instead of only blocking new upgrades.
+  function enforceOrigins(): void {
+    for (const client of wss.clients) {
+      if (!originAllowed(wsOrigin.get(client) ?? '')) {
+        try { client.close(4403, 'Network access revoked'); } catch { /* already closing */ }
+      }
+    }
+  }
+
+  // Number of currently-open client sockets. Counts only OPEN (readyState 1) so a
+  // socket mid-close (during its own 'close' event) is excluded, regardless of when
+  // ws removes it from wss.clients.
+  function clientCount(): number {
+    let n = 0;
+    for (const client of wss.clients) if (client.readyState === 1) n++;
+    return n;
+  }
+
+  // Push the live client count to every open client. Sent on connect/disconnect so
+  // the Settings "Network" tab reflects connections opening and closing in real time.
+  function broadcastClientCount(): void {
+    const msg = JSON.stringify({ type: 'clientCount', count: clientCount() });
+    for (const client of wss.clients) {
+      if (client.readyState === 1) { try { client.send(msg); } catch { /* closing */ } }
+    }
+  }
+
   const wsAlive = new WeakMap<WebSocket, boolean>();
   const PING_INTERVAL = 15_000;
   const pingTimer = setInterval(() => {
@@ -72,7 +123,9 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     wsAlive.set(ws, true);
+    wsOrigin.set(ws, req.headers.origin ?? '');
     ws.on('pong', () => { wsAlive.set(ws, true); });
+    ws.on('close', () => broadcastClientCount());
     const reqUrl = new URL(req.url ?? '/', 'http://localhost');
     const rawDir = reqUrl.searchParams.get('dir') || process.cwd();
     const workspaceDir = resolve(rawDir);
@@ -80,29 +133,13 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       ws.close(4400, 'Invalid workspace directory');
       return;
     }
-    handleConnection(ws, workspaceDir, MODEL);
+    handleConnection(ws, workspaceDir, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount });
+    broadcastClientCount();
   });
 
   httpServer.on('upgrade', (req: IncomingMessage, socket, head) => {
     if (!req.url?.startsWith('/agent')) return;
-    const origin = req.headers.origin ?? '';
-    const cfg = readConfig();
-    // Local access is always allowed: no Origin, the VS Code webview, and localhost/loopback.
-    const localOk = !origin
-      || origin.startsWith('vscode-webview:')
-      || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    // Non-local access (LAN ranges + configured extra origins) is gated by allowNetworkAccess.
-    const networkOk = cfg.allowNetworkAccess !== false && (
-      // Private-LAN origins so dev devices on the same network (phone, tablet) can connect.
-      /^https?:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)
-      // Extra origins from options / ARGUS_ALLOWED_ORIGINS / argus.json allowedOrigins
-      // (e.g. the VLESS reverse-mesh entry IP so a remote phone reaches this dev box over the tunnel).
-      || buildOriginMatcher(
-        [options.allowedOrigins, DEFAULT_ALLOWED_ORIGINS, cfg.allowedOrigins].filter(Boolean).join(','),
-      )(origin)
-    );
-    const allowed = localOk || networkOk;
-    if (!allowed) {
+    if (!originAllowed(req.headers.origin ?? '')) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();
       return;

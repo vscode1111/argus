@@ -6,6 +6,9 @@ import { waitForApp } from './helpers';
 // proves it holds up with real async data: in particular that restoring a
 // previously-selected lazy tab on reopen actually re-fires its real backend
 // load (listAllSessions for Session History, listDir for Workspace History).
+//
+// The store is localStorage-backed, so geometry/tab survive a full page refresh;
+// the Settings "Reset layout" button wipes the whole store (every dialog) at once.
 
 // Drag the modal by its handle, then resize it to a fixed 560x480. The handle
 // defaults to the shared modal header; SettingsModal uses a thin drag bar, so it
@@ -33,7 +36,6 @@ async function dragAndResize(
 
 test.describe('dialog state persistence (integration)', () => {
   test('Session History: tab + geometry persist across reopen, and the restored lazy tab re-loads from the backend', async ({ page }) => {
-    test.setTimeout(120_000);
     await waitForApp(page);
 
     // Open and switch to the lazy "All workspaces" tab; the real backend scans
@@ -69,8 +71,7 @@ test.describe('dialog state persistence (integration)', () => {
     expect(Math.abs(reopened.height - 480)).toBeLessThan(3);
   });
 
-  test('Session History: a full page refresh resets tab and size to defaults', async ({ page }) => {
-    test.setTimeout(120_000);
+  test('Session History: tab and size survive a full page refresh, and "Reset layout" clears them', async ({ page }) => {
     await waitForApp(page);
 
     await page.getByRole('button', { name: 'Session history' }).click();
@@ -82,19 +83,34 @@ test.describe('dialog state persistence (integration)', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
 
-    // A real reload re-evaluates the webview module, dropping the in-memory store.
+    // localStorage survives a real reload, so the tab and width come back.
+    await waitForApp(page);
+    await page.getByRole('button', { name: 'Session history' }).click();
+    dialog = page.getByRole('dialog', { name: 'Session History' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('tab', { name: 'All workspaces' })).toHaveAttribute('aria-selected', 'true');
+    let box = await dialog.boundingBox();
+    if (!box) throw new Error('no dialog box');
+    expect(Math.abs(box.width - 560)).toBeLessThan(3);
+    await page.keyboard.press('Escape');
+
+    // Reset layout, then refresh: tab and size fall back to defaults.
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    await page.getByRole('button', { name: 'Reset dialog layout' }).click();
+    await page.keyboard.press('Escape');
+
     await waitForApp(page);
     await page.getByRole('button', { name: 'Session history' }).click();
     dialog = page.getByRole('dialog', { name: 'Session History' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('tab', { name: 'This workspace' })).toHaveAttribute('aria-selected', 'true');
-    const box = await dialog.boundingBox();
+    box = await dialog.boundingBox();
     if (!box) throw new Error('no dialog box');
     expect(Math.abs(box.width - 440)).toBeLessThan(3); // default width restored
   });
 
   test('Workspace History: the restored "Browse" tab re-opens the real folder explorer on reopen', async ({ page }) => {
-    test.setTimeout(120_000);
     await waitForApp(page);
 
     await page.getByRole('button', { name: 'Switch workspace' }).click();
@@ -117,8 +133,7 @@ test.describe('dialog state persistence (integration)', () => {
     await expect(dialog.getByRole('button', { name: 'Open this folder' })).toBeEnabled({ timeout: 30_000 });
   });
 
-  test('Account & Usage: position and size persist across reopen and reset on refresh', async ({ page }) => {
-    test.setTimeout(120_000);
+  test('Account & Usage: position and size persist across reopen and across a refresh', async ({ page }) => {
     await waitForApp(page);
 
     async function openAccount() {
@@ -152,16 +167,15 @@ test.describe('dialog state persistence (integration)', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
 
-    // A refresh drops the in-memory geometry; the width returns to its 380 default.
+    // localStorage survives a refresh, so the resized width persists.
     await waitForApp(page);
     dialog = await openAccount();
     const afterRefresh = await dialog.boundingBox();
     if (!afterRefresh) throw new Error('no box');
-    expect(Math.abs(afterRefresh.width - 380)).toBeLessThan(3);
+    expect(Math.abs(afterRefresh.width - 560)).toBeLessThan(3);
   });
 
-  test('Settings: geometry resets on refresh while the tab survives it (localStorage)', async ({ page }) => {
-    test.setTimeout(120_000);
+  test('Settings: tab and geometry both survive a refresh, and "Reset layout" clears them', async ({ page }) => {
     await waitForApp(page);
 
     async function openSettings() {
@@ -181,7 +195,7 @@ test.describe('dialog state persistence (integration)', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
 
-    // Reopen: tab restored (localStorage) and geometry restored (in-memory store).
+    // Reopen: both tab and geometry are restored from localStorage.
     dialog = await openSettings();
     await expect(dialog.getByRole('button', { name: 'Network' })).toHaveClass(/tabActive/);
     const reopened = await dialog.boundingBox();
@@ -194,13 +208,98 @@ test.describe('dialog state persistence (integration)', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
 
-    // After a refresh the tab persists (localStorage) but the geometry is reset
-    // (in-memory store cleared), so the width is no longer the resized 560.
+    // After a refresh, tab and geometry both persist (localStorage).
     await waitForApp(page);
     dialog = await openSettings();
     await expect(dialog.getByRole('button', { name: 'Network' })).toHaveClass(/tabActive/);
-    const afterRefresh = await dialog.boundingBox();
+    let afterRefresh = await dialog.boundingBox();
+    if (!afterRefresh) throw new Error('no box');
+    expect(Math.abs(afterRefresh.width - 560)).toBeLessThan(3);
+
+    // "Reset layout" clears the stored tab + geometry; the live modal snaps back
+    // to default width immediately, and after a refresh the tab is default too.
+    // (The drag+resize left the modal's footer partly below the viewport, so pull
+    // it back on-screen first; the reset recenters it regardless.)
+    await dialog.evaluate((el) => { (el as HTMLElement).style.top = '40px'; });
+    await dialog.getByRole('button', { name: 'Reset dialog layout' }).click();
+    afterRefresh = await dialog.boundingBox();
     if (!afterRefresh) throw new Error('no box');
     expect(afterRefresh.width).toBeLessThan(520);
+    await page.keyboard.press('Escape');
+
+    await waitForApp(page);
+    dialog = await openSettings();
+    await expect(dialog.getByRole('button', { name: 'General' })).toHaveClass(/tabActive/);
+    const cleared = await dialog.boundingBox();
+    if (!cleared) throw new Error('no box');
+    expect(cleared.width).toBeLessThan(520);
+  });
+
+  test('"Reset layout" clears EVERY dialog at once (cross-dialog), and the wipe survives a refresh', async ({ page }) => {
+    await waitForApp(page);
+
+    async function openSessionHistory() {
+      await page.getByRole('button', { name: 'Session history' }).click();
+      const d = page.getByRole('dialog', { name: 'Session History' });
+      await expect(d).toBeVisible();
+      return d;
+    }
+    async function openAccount() {
+      const textarea = page.getByPlaceholder('Ask Argus');
+      await textarea.focus();
+      await textarea.pressSequentially('/usage');
+      const action = page.locator('[class*="slashMenuItem"]', { hasText: 'Account & usage' });
+      await expect(action).toBeVisible();
+      await action.click();
+      const d = page.getByRole('dialog', { name: 'Account & Usage' });
+      await expect(d).toBeVisible();
+      return d;
+    }
+
+    // Seed non-default state in two different dialogs: Session History (lazy tab +
+    // resize) and Account & Usage (resize). Both write into the shared store.
+    let sessions = await openSessionHistory();
+    await sessions.getByRole('tab', { name: 'All workspaces' }).click();
+    await sessions.evaluate((el) => { el.style.width = '560px'; });
+    await page.waitForTimeout(80);
+    await page.keyboard.press('Escape');
+    await expect(sessions).toHaveCount(0);
+
+    let account = await openAccount();
+    await account.evaluate((el) => { el.style.width = '560px'; });
+    await page.waitForTimeout(80);
+    await page.keyboard.press('Escape');
+    await expect(account).toHaveCount(0);
+
+    // The store now holds entries for both dialogs.
+    const seeded = await page.evaluate(() => localStorage.getItem('argus.dialogState'));
+    expect(seeded).toContain('sessionHistory');
+    expect(seeded).toContain('account');
+
+    // One "Reset layout" click from Settings wipes the whole store (the open
+    // Settings modal may re-record its own default size, but no other dialog's).
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    await page.getByRole('button', { name: 'Reset dialog layout' }).click();
+    const afterReset = await page.evaluate(() => localStorage.getItem('argus.dialogState'));
+    expect(afterReset ?? '').not.toContain('sessionHistory');
+    expect(afterReset ?? '').not.toContain('account');
+    await page.keyboard.press('Escape');
+
+    // The wipe persists through a real refresh: both dialogs are back to defaults.
+    await waitForApp(page);
+
+    sessions = await openSessionHistory();
+    await expect(sessions.getByRole('tab', { name: 'This workspace' })).toHaveAttribute('aria-selected', 'true');
+    let box = await sessions.boundingBox();
+    if (!box) throw new Error('no session box');
+    expect(Math.abs(box.width - 440)).toBeLessThan(3); // default width
+    await page.keyboard.press('Escape');
+    await expect(sessions).toHaveCount(0);
+
+    account = await openAccount();
+    box = await account.boundingBox();
+    if (!box) throw new Error('no account box');
+    expect(Math.abs(box.width - 380)).toBeLessThan(3); // default width
   });
 });

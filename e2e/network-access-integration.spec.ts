@@ -105,4 +105,30 @@ test.describe('network access (integration)', () => {
     await setNetworkAccess(page, true);
     await expectOrigin('http://10.1.2.3', nonce, 'open');
   });
+
+  test('turning Network access off disconnects a live non-local client at once', async ({ page }) => {
+    await waitForApp(page);
+    const nonce = await getNonce();
+
+    await openNetworkTab(page);
+    await setNetworkAccess(page, true);
+
+    // Open a live connection from a private-LAN origin and keep it open.
+    const ws = new WebSocket('ws://localhost:3001/agent?nonce=' + nonce, { origin: 'http://10.9.9.9' });
+    const closeCode = new Promise<number>((resolve) => ws.on('close', (code) => resolve(code)));
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => resolve());
+      ws.on('unexpected-response', (_req, res) => reject(new Error('upgrade failed: ' + res.statusCode)));
+      ws.on('error', reject);
+    });
+
+    // Flip the kill switch off: the live client must be dropped without a restart.
+    await setNetworkAccess(page, false);
+    const code = await Promise.race([
+      closeCode,
+      new Promise<string>((r) => setTimeout(() => r('still-open'), 10_000)),
+    ]);
+    ws.terminate();
+    expect(code).toBe(4403);
+  });
 });

@@ -25,7 +25,6 @@ async function openAllWorkspaces(page: Page) {
 
 test.describe('session history - all workspaces (integration)', () => {
   test('lists global sessions spanning multiple workspaces and filters by search', async ({ page }) => {
-    test.setTimeout(120_000);
     await waitForApp(page);
 
     const { dialog, search } = await openAllWorkspaces(page);
@@ -61,7 +60,6 @@ test.describe('session history - all workspaces (integration)', () => {
   });
 
   test('the two tabs show different shapes of data', async ({ page }) => {
-    test.setTimeout(120_000);
     await waitForApp(page);
 
     // Default "This workspace" tab: per-session rows carry rename/delete actions
@@ -83,7 +81,6 @@ test.describe('session history - all workspaces (integration)', () => {
   });
 
   test('resuming a session from another workspace switches the workspace and replays', async ({ page }) => {
-    test.setTimeout(120_000);
     await waitForApp(page);
 
     // The panel starts in the argus workspace (from the ?dir= query in waitForApp).

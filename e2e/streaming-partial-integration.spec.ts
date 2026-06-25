@@ -10,7 +10,6 @@ import { waitForApp } from './helpers';
 // rapid chunks can collapse into a single MutationObserver event.
 
 test('long response streams as many text_chunk frames, not one block', async ({ page }) => {
-  test.setTimeout(120_000);
 
   // Collect every text_chunk frame received over the WS connection to the backend.
   const textChunks: string[] = [];

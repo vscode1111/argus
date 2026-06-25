@@ -1,7 +1,7 @@
-// In-memory geometry/tab store for dialogs. Module-level, so a dialog reopens
-// where it was left (position, size, selected tab) while the page lives, but
-// everything resets on a full page refresh because the module is re-evaluated.
-// Intentionally NOT sessionStorage/localStorage, which would survive a refresh.
+// Per-dialog geometry/tab store for centered dialogs. Persisted to localStorage
+// so a dialog reopens where it was left (position, size, selected tab) and the
+// layout survives a full page refresh. Cleared on demand via clearDialogState()
+// (the Settings "Reset layout" button).
 
 export interface DialogState {
   pos?: { x: number; y: number };
@@ -9,12 +9,40 @@ export interface DialogState {
   tab?: string;
 }
 
-const store = new Map<string, DialogState>();
+const STORAGE_KEY = 'argus.dialogState';
+
+function readStore(): Record<string, DialogState> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStore(store: Record<string, DialogState>): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    // Ignore quota errors / unavailable storage; geometry is non-critical.
+  }
+}
 
 export function getDialogState(key: string): DialogState | undefined {
-  return store.get(key);
+  return readStore()[key];
 }
 
 export function patchDialogState(key: string, patch: Partial<DialogState>): void {
-  store.set(key, { ...store.get(key), ...patch });
+  const store = readStore();
+  store[key] = { ...store[key], ...patch };
+  writeStore(store);
+}
+
+export function clearDialogState(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Ignore unavailable storage.
+  }
 }

@@ -17,7 +17,19 @@ import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
 
-export function handleConnection(ws: WebSocket, workspaceDir: string, model: string): void {
+export interface ConnectionHooks {
+  // Re-check live connections after a settings change (e.g. Network access toggle).
+  onSettingsChange?: () => void;
+  // Current count of open client sockets, for the Settings "Network" tab.
+  getClientCount?: () => number;
+}
+
+export function handleConnection(
+  ws: WebSocket,
+  workspaceDir: string,
+  model: string,
+  hooks: ConnectionHooks = {},
+): void {
   const s = createSessionState(ws, workspaceDir, model);
 
   s.sendLog = (level, text) => {
@@ -128,6 +140,8 @@ export function handleConnection(ws: WebSocket, workspaceDir: string, model: str
       handleSend(s, msg);
     } else if (msg.type === 'getSettings') {
       ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
+    } else if (msg.type === 'getClientCount') {
+      ws.send(JSON.stringify({ type: 'clientCount', count: hooks.getClientCount?.() ?? 0 }));
     } else if (msg.type === 'updateSettings') {
       const patch = (msg as { settings?: Partial<ArgusConfig> }).settings;
       if (patch) {
@@ -138,6 +152,9 @@ export function handleConnection(ws: WebSocket, workspaceDir: string, model: str
         const config = { ...readConfig(), ...filtered };
         writeConfig(config);
         ws.send(JSON.stringify({ type: 'settings', settings: config }));
+        // Re-check live connections so a Network-access change applies at once
+        // (e.g. turning it off disconnects remote clients without a restart).
+        hooks.onSettingsChange?.();
       }
     } else if (msg.type === 'getInfo') {
       let version = '';

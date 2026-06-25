@@ -11,5 +11,7 @@
   "watchdogTimeout": 120,
   "watchdogAutoRetries": 3,
   "watchdogRetryDelay": 5,
-  "watchdogDelayFactor": 2
+  "watchdogDelayFactor": 2,
+  "allowNetworkAccess": true,
+  "allowedOrigins": ""
 }

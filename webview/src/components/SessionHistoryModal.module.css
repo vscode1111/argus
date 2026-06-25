@@ -23,12 +23,26 @@
 
 .rowTime {
   flex-shrink: 0;
+  min-width: 4.5em;
+  text-align: right;
   font-size: 0.85em;
   color: var(--thinking-fg);
   font-variant-numeric: tabular-nums;
 }
 .row:hover .rowTime {
   opacity: 0;
+}
+
+/* Line-count column: fixed-width, right-aligned cell before the time so the
+   counts line up vertically (mirrors WorkspaceHistoryModal's session-count column). */
+.rowCount {
+  flex-shrink: 0;
+  min-width: 2.5em;
+  text-align: right;
+  font-size: 0.85em;
+  color: var(--thinking-fg);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
 }
 
 /* "All workspaces" rows: stacked title + workspace name, no hover-reveal actions,
@@ -51,6 +65,8 @@
 
 .rowTimeStatic {
   flex-shrink: 0;
+  min-width: 4.5em;
+  text-align: right;
   font-size: 0.85em;
   color: var(--thinking-fg);
   font-variant-numeric: tabular-nums;

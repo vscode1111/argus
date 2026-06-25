@@ -13,7 +13,6 @@ async function sendAndWait(page: Page, text: string) {
 
 test.describe('new chat (integration)', () => {
   test('New chat resets the session so earlier context is gone', async ({ page }) => {
-    test.setTimeout(240_000);
     await waitForApp(page);
 
     // 1. Establish a unique token in the current session.

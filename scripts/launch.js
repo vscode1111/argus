@@ -11,9 +11,21 @@ const CHROME_PATHS = {
 const CHROME_PATH = CHROME_PATHS[process.platform] || "google-chrome";
 const BASE_URL = "http://localhost:5173";
 
-const dir = process.argv[2];
+// The single arg may be a folder (open as workspace) or a file (open its
+// parent folder as workspace and show the file). Context-menu verbs pass
+// either, so branch on the filesystem type.
+const target = process.argv[2];
 const params = new URLSearchParams();
-if (dir) params.set("dir", dir);
+if (target) {
+  let isDir = false;
+  try { isDir = fs.statSync(target).isDirectory(); } catch {}
+  if (isDir) {
+    params.set("dir", target);
+  } else {
+    params.set("dir", path.dirname(target));
+    params.set("file", target);
+  }
+}
 const nonceFile = path.join(__dirname, "..", ".dev-nonce");
 try { params.set("nonce", fs.readFileSync(nonceFile, "utf-8").trim()); } catch {}
 const qs = params.toString();

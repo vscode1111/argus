@@ -238,6 +238,21 @@
   line-height: 1.35;
 }
 
+.clientCount {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+.clientCountValue {
+  font-family: var(--vscode-editor-font-family);
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-textLink-foreground);
+}
+
 .settingUnit {
   font-size: 0.82em;
   color: var(--thinking-fg);
@@ -259,6 +274,21 @@
   opacity: 0.6;
 }
 .devCorner:hover { opacity: 1; }
+
+.resetCorner {
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--thinking-fg);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  opacity: 0.6;
+}
+.resetCorner:hover { opacity: 1; }
 
 .infoRow {
   display: flex;

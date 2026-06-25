@@ -16,6 +16,7 @@ export interface SessionSummary {
   title: string;
   lastPrompt: string;
   updatedAt: number; // mtime in ms
+  lines: number; // total lines of text/code across the transcript
 }
 
 export interface WorkspaceSummary {
@@ -80,25 +81,68 @@ function resolveProjectDir(workspaceDir: string): string | null {
   return null;
 }
 
-// Reads a transcript only for its metadata: the latest title and user prompt.
+// Count the newline-delimited lines in a string (an empty string is 0 lines).
+function textLines(s: unknown): number {
+  if (typeof s !== 'string' || s.length === 0) return 0;
+  let n = 1;
+  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++;
+  return n;
+}
+
+// Sum the text lines of any string values nested inside a tool_use input object
+// (file contents, bash commands, etc.) so code passed to tools is counted too.
+function countInputLines(input: unknown): number {
+  if (typeof input === 'string') return textLines(input);
+  if (Array.isArray(input)) return input.reduce<number>((a, v) => a + countInputLines(v), 0);
+  if (input && typeof input === 'object') {
+    let n = 0;
+    for (const v of Object.values(input as Record<string, unknown>)) n += countInputLines(v);
+    return n;
+  }
+  return 0;
+}
+
+// Count the text lines of a single user/assistant message content (string, or an
+// array of content blocks). Covers plain text, thinking, tool inputs, and
+// tool_result output; image blocks (base64) are skipped.
+function countMessageLines(content: unknown): number {
+  if (typeof content === 'string') return textLines(content);
+  if (!Array.isArray(content)) return 0;
+  let n = 0;
+  for (const b of content as Array<Record<string, unknown>>) {
+    switch (b?.type) {
+      case 'text': n += textLines(b.text); break;
+      case 'thinking': n += textLines(b.thinking); break;
+      case 'tool_use': n += countInputLines(b.input); break;
+      case 'tool_result': n += countMessageLines(b.content); break;
+      // 'image' and others contribute no lines.
+    }
+  }
+  return n;
+}
+
+// Reads a transcript for its metadata: the latest title and user prompt, plus a
+// total line count (text/code volume) used to gauge how large the session is.
 // A user-set `custom-title` (written by the official client when you rename a
 // session) takes precedence over the AI-generated `ai-title`. All event types
-// may appear multiple times; the last of each wins.
-function readSessionMeta(file: string): { title: string; lastPrompt: string } {
+// may appear multiple times; the last of each title/prompt wins.
+function readSessionMeta(file: string): { title: string; lastPrompt: string; lines: number } {
   let aiTitle = '';
   let customTitle = '';
   let lastPrompt = '';
+  let lines = 0;
   let content: string;
-  try { content = fs.readFileSync(file, 'utf8'); } catch { return { title: '', lastPrompt }; }
+  try { content = fs.readFileSync(file, 'utf8'); } catch { return { title: '', lastPrompt, lines }; }
   for (const line of content.split(/\r?\n/)) {
     if (!line) continue;
-    let o: { type?: string; aiTitle?: unknown; customTitle?: unknown; lastPrompt?: unknown };
+    let o: { type?: string; aiTitle?: unknown; customTitle?: unknown; lastPrompt?: unknown; message?: { content?: unknown } };
     try { o = JSON.parse(line); } catch { continue; }
     if (o.type === 'custom-title' && typeof o.customTitle === 'string') customTitle = o.customTitle;
     else if (o.type === 'ai-title' && typeof o.aiTitle === 'string') aiTitle = o.aiTitle;
     else if (o.type === 'last-prompt' && typeof o.lastPrompt === 'string') lastPrompt = o.lastPrompt;
+    else if ((o.type === 'user' || o.type === 'assistant') && o.message) lines += countMessageLines(o.message.content);
   }
-  return { title: customTitle || aiTitle, lastPrompt };
+  return { title: customTitle || aiTitle, lastPrompt, lines };
 }
 
 export function listSessions(workspaceDir: string): SessionSummary[] {
@@ -120,6 +164,7 @@ export function listSessions(workspaceDir: string): SessionSummary[] {
       title: meta.title || meta.lastPrompt || 'Untitled',
       lastPrompt: meta.lastPrompt,
       updatedAt: stat.mtimeMs,
+      lines: meta.lines,
     });
   }
   out.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -215,6 +260,7 @@ export function listAllSessions(): GlobalSessionSummary[] {
       title: meta.title || meta.lastPrompt || 'Untitled',
       lastPrompt: meta.lastPrompt,
       updatedAt: c.mtime,
+      lines: meta.lines,
       workspacePath: c.cwd,
       workspaceName: c.name,
     });
