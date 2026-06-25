@@ -20,7 +20,10 @@ interface Options {
  * once dragged it switches to explicit top/left (transform: none). Size is
  * applied imperatively to the element (not through React's controlled style) so
  * the native CSS `resize` grabber owns width/height afterwards without React
- * resetting it on re-render; a ResizeObserver records the user's resizes.
+ * resetting it on re-render. Size is recorded only when the user actually drags
+ * the bottom-right resize grabber, not on content-driven size changes (e.g.
+ * switching tabs), so a content-height modal never persists a size the user
+ * never set.
  */
 export function useDialogGeometry(ref: React.RefObject<HTMLElement>, opts: Options = {}) {
   const { persistKey, defaultWidth, fullHeight } = opts;
@@ -40,16 +43,24 @@ export function useDialogGeometry(ref: React.RefObject<HTMLElement>, opts: Optio
       if (fullHeight) el.style.height = 'calc(100vh - 64px)';
     }
     if (!persistKey) return;
-    let raf = 0;
-    const ro = new ResizeObserver(() => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const e = ref.current;
-        if (e) patchDialogState(persistKey, { size: { w: e.offsetWidth, h: e.offsetHeight } });
-      });
-    });
-    ro.observe(el);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+    // Record size only when the user drags the native CSS resize grabber
+    // (bottom-right corner). Content-driven size changes (e.g. switching tabs on
+    // a modal whose height follows its content) must NOT persist a size the user
+    // never set, so we deliberately do not use a ResizeObserver here.
+    const RESIZE_ZONE = 18;
+    const onResizeDown = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      const inGrabber = e.clientX >= r.right - RESIZE_ZONE && e.clientY >= r.bottom - RESIZE_ZONE;
+      if (!inGrabber) return;
+      const onUp = () => {
+        window.removeEventListener('pointerup', onUp);
+        const cur = ref.current;
+        if (cur) patchDialogState(persistKey, { size: { w: cur.offsetWidth, h: cur.offsetHeight } });
+      };
+      window.addEventListener('pointerup', onUp);
+    };
+    el.addEventListener('pointerdown', onResizeDown);
+    return () => { el.removeEventListener('pointerdown', onResizeDown); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

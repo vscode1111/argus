@@ -17,6 +17,22 @@ async function closeModal(page: Page) {
   await expect(page.getByRole('dialog', { name: 'Session History' })).toHaveCount(0);
 }
 
+// Simulate a manual resize via the native CSS grabber: the geometry hook only
+// persists size when a pointerdown lands in the bottom-right grabber zone and is
+// followed by a pointerup (content-driven size changes must NOT persist).
+async function resizeModal(page: Page, w: number, h?: number) {
+  const dialog = page.getByRole('dialog', { name: 'Session History' });
+  await dialog.evaluate((el, [width, height]) => {
+    const r = el.getBoundingClientRect();
+    el.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, pointerId: 1, clientX: r.right - 4, clientY: r.bottom - 4,
+    }));
+    (el as HTMLElement).style.width = `${width}px`;
+    if (height != null) (el as HTMLElement).style.height = `${height}px`;
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+  }, [w, h] as [number, number | undefined]);
+}
+
 test.describe('dialog state persistence', () => {
   test.beforeEach(async ({ page }) => {
     await waitForApp(page);
@@ -44,12 +60,7 @@ test.describe('dialog state persistence', () => {
     await page.mouse.move(start.x + start.width / 2 - 80, start.y + 70, { steps: 5 });
     await page.mouse.up();
 
-    await dialog.evaluate((el) => {
-      el.style.width = '560px';
-      el.style.height = '480px';
-    });
-    // Let the ResizeObserver (rAF-batched) record the new size.
-    await page.waitForTimeout(50);
+    await resizeModal(page, 560, 480);
 
     const moved = await dialog.boundingBox();
     if (!moved) throw new Error('no dialog box');
@@ -68,8 +79,7 @@ test.describe('dialog state persistence', () => {
   test('persists tab and size across a page refresh', async ({ page }) => {
     let dialog = await openModal(page);
     await dialog.getByRole('tab', { name: 'All workspaces' }).click();
-    await dialog.evaluate((el) => { el.style.width = '560px'; });
-    await page.waitForTimeout(50);
+    await resizeModal(page, 560);
     await closeModal(page);
 
     // localStorage survives a full refresh, so the layout comes back.
@@ -81,11 +91,37 @@ test.describe('dialog state persistence', () => {
     expect(Math.abs(box.width - 560)).toBeLessThan(3);
   });
 
+  test('does not persist size when the user only switches tabs (no manual resize)', async ({ page }) => {
+    let dialog = await openModal(page);
+    const before = await dialog.boundingBox();
+    if (!before) throw new Error('no dialog box');
+
+    // Switch tabs (a content change) but never touch the resize grabber.
+    await dialog.getByRole('tab', { name: 'All workspaces' }).click();
+    await dialog.getByRole('tab', { name: 'This workspace' }).click();
+
+    // No size should have been recorded for this dialog.
+    const stored = await page.evaluate(() => {
+      const raw = localStorage.getItem('argus.dialogState');
+      if (!raw) return null;
+      const all = JSON.parse(raw) as Record<string, { size?: unknown }>;
+      const entry = Object.values(all).find((e) => e && 'size' in e);
+      return entry ? entry.size ?? null : null;
+    });
+    expect(stored).toBeNull();
+
+    await closeModal(page);
+    dialog = await openModal(page);
+    const after = await dialog.boundingBox();
+    if (!after) throw new Error('no reopened box');
+    // Width stays at the default - it was not silently pinned to a content size.
+    expect(Math.abs(after.width - before.width)).toBeLessThan(3);
+  });
+
   test('"Reset layout" wipes the saved tab and size', async ({ page }) => {
     let dialog = await openModal(page);
     await dialog.getByRole('tab', { name: 'All workspaces' }).click();
-    await dialog.evaluate((el) => { el.style.width = '560px'; });
-    await page.waitForTimeout(50);
+    await resizeModal(page, 560);
     await closeModal(page);
 
     // Reset layout from Settings, then refresh: everything is back to defaults.

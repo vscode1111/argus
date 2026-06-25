@@ -10,6 +10,25 @@ import { waitForApp } from './helpers';
 // The store is localStorage-backed, so geometry/tab survive a full page refresh;
 // the Settings "Reset layout" button wipes the whole store (every dialog) at once.
 
+// Simulate a manual resize via the native CSS grabber: the geometry hook only
+// persists size when a pointerdown lands in the bottom-right grabber zone and is
+// followed by a pointerup (content-driven size changes must NOT persist).
+async function resizeViaGrabber(
+  dialog: ReturnType<Page['getByRole']>,
+  w: number,
+  h?: number,
+) {
+  await dialog.evaluate((el, [width, height]) => {
+    const r = el.getBoundingClientRect();
+    el.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, pointerId: 1, clientX: r.right - 4, clientY: r.bottom - 4,
+    }));
+    (el as HTMLElement).style.width = `${width}px`;
+    if (height != null) (el as HTMLElement).style.height = `${height}px`;
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+  }, [w, h] as [number, number | undefined]);
+}
+
 // Drag the modal by its handle, then resize it to a fixed 560x480. The handle
 // defaults to the shared modal header; SettingsModal uses a thin drag bar, so it
 // passes its own handle locator.
@@ -26,12 +45,7 @@ async function dragAndResize(
   await page.mouse.down();
   await page.mouse.move(start.x + start.width / 2 - 90, hy + 70, { steps: 5 });
   await page.mouse.up();
-  await dialog.evaluate((el) => {
-    el.style.width = '560px';
-    el.style.height = '480px';
-  });
-  // Let the rAF-batched ResizeObserver record the new size.
-  await page.waitForTimeout(80);
+  await resizeViaGrabber(dialog, 560, 480);
 }
 
 test.describe('dialog state persistence (integration)', () => {
@@ -78,8 +92,7 @@ test.describe('dialog state persistence (integration)', () => {
     let dialog = page.getByRole('dialog', { name: 'Session History' });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('tab', { name: 'All workspaces' }).click();
-    await dialog.evaluate((el) => { el.style.width = '560px'; });
-    await page.waitForTimeout(80);
+    await resizeViaGrabber(dialog, 560);
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
 
@@ -260,14 +273,12 @@ test.describe('dialog state persistence (integration)', () => {
     // resize) and Account & Usage (resize). Both write into the shared store.
     let sessions = await openSessionHistory();
     await sessions.getByRole('tab', { name: 'All workspaces' }).click();
-    await sessions.evaluate((el) => { el.style.width = '560px'; });
-    await page.waitForTimeout(80);
+    await resizeViaGrabber(sessions, 560);
     await page.keyboard.press('Escape');
     await expect(sessions).toHaveCount(0);
 
     let account = await openAccount();
-    await account.evaluate((el) => { el.style.width = '560px'; });
-    await page.waitForTimeout(80);
+    await resizeViaGrabber(account, 560);
     await page.keyboard.press('Escape');
     await expect(account).toHaveCount(0);
 

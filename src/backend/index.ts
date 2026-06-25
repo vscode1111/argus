@@ -133,7 +133,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       ws.close(4400, 'Invalid workspace directory');
       return;
     }
-    handleConnection(ws, workspaceDir, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount });
+    const serverPort = req.socket.localPort ?? PORT;
+    handleConnection(ws, workspaceDir, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort });
     broadcastClientCount();
   });
 
