@@ -98,9 +98,14 @@ interface Props {
 type Tab = 'general' | 'watchdog' | 'network' | 'info';
 
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
-  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setAllowNetworkAccess, setAllowedOrigins } = useSettings();
+  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setAllowNetworkAccess, setAllowedOrigins, daemonPort, setDaemonPort, daemonIdleMs, setDaemonIdleMs } = useSettings();
   const [activeClients, setActiveClients] = useState<number | null>(null);
   const [serverPort, setServerPort] = useState<number | null>(null);
+  const [restarting, setRestarting] = useState(false);
+  // Set when the daemon restarts onto a different port and this (browser) tab can't
+  // follow it (it is same-origin to the old port) - surfaces a clickable new URL.
+  const [movedUrl, setMovedUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   useEffect(() => {
     postMessage({ type: 'getSettings' });
     postMessage({ type: 'getClientCount' });
@@ -112,12 +117,43 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
       if (msg && msg.type === 'clientCount' && typeof msg.count === 'number') {
         setActiveClients(msg.count);
       } else if (msg && msg.type === 'serverInfo' && typeof msg.port === 'number') {
+        // A fresh connection (incl. after a restart) reports the live port; clear the
+        // restart spinner and any "moved" notice once we're talking to the new daemon.
         setServerPort(msg.port);
+        setRestarting(false);
+        setMovedUrl(null);
+      } else if (msg && msg.type === 'daemonRestarting' && typeof msg.port === 'number') {
+        setServerPort(msg.port);
+        setRestarting(false);
+        if (!isVsCode && typeof location !== 'undefined' && String(msg.port) !== location.port) {
+          setMovedUrl(msg.url); // this tab can't follow a port change - show the new URL
+        }
+      } else if (msg && msg.type === 'ws_status' && msg.connected) {
+        // After any (re)connect - including the new daemon after a restart - refresh
+        // the live port and client count so the address rows reflect the new daemon.
+        postMessage({ type: 'getServerInfo' });
+        postMessage({ type: 'getClientCount' });
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, []);
+
+  function openExternal(url: string): void {
+    postMessage({ type: 'openUrl', url });
+    if (!isVsCode && typeof window !== 'undefined') window.open(url, '_blank');
+  }
+  function copyText(text: string): void {
+    try { navigator.clipboard?.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* */ }
+  }
+  function handleRestart(): void {
+    setRestarting(true);
+    postMessage({ type: 'restartDaemon' });
+    // Safety net: drop the spinner if nothing comes back (e.g. dev server no-op).
+    setTimeout(() => setRestarting(false), 8000);
+  }
+  const httpUrl = serverPort ? `http://localhost:${serverPort}` : '';
+  const wsUrl = serverPort ? `ws://localhost:${serverPort}/agent` : '';
   const [tab, setTabState] = useState<Tab>(() => (localStorage.getItem('argus.settingsTab') as Tab) || 'general');
   const setTab = (t: Tab) => { setTabState(t); localStorage.setItem('argus.settingsTab', t); };
   const [layoutCleared, setLayoutCleared] = useState(false);
@@ -255,17 +291,46 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 that aren't on the local LAN.
               </span>
             </div>
-            <div className={styles.clientCount} title="HTTP endpoint this server is listening on (serves the nonce and the WebSocket upgrade)">
+            <div className={styles.clientCount} title="HTTP endpoint this server is listening on - click to open in a browser">
               <span className={styles.settingLabel}>HTTP address</span>
-              <span className={styles.clientCountValue} data-testid="http-address">{serverPort ? `http://localhost:${serverPort}` : '-'}</span>
+              {httpUrl
+                ? <span className={[styles.clientCountValue, styles.addrLink].join(' ')} data-testid="http-address" role="link" tabIndex={0} title="Open in browser" onClick={() => openExternal(httpUrl + '/')}>{httpUrl}</span>
+                : <span className={styles.clientCountValue} data-testid="http-address">-</span>}
             </div>
-            <div className={styles.clientCount} title="WebSocket endpoint clients connect to (shares the HTTP port)">
+            <div className={styles.clientCount} title="WebSocket endpoint clients connect to (shares the HTTP port) - click to copy">
               <span className={styles.settingLabel}>WebSocket address</span>
-              <span className={styles.clientCountValue} data-testid="ws-address">{serverPort ? `ws://localhost:${serverPort}/agent` : '-'}</span>
+              {wsUrl
+                ? <span className={[styles.clientCountValue, styles.addrLink].join(' ')} data-testid="ws-address" role="button" tabIndex={0} title="Click to copy" onClick={() => copyText(wsUrl)}>{copied ? 'Copied!' : wsUrl}</span>
+                : <span className={styles.clientCountValue} data-testid="ws-address">-</span>}
             </div>
             <div className={styles.clientCount} title="WebSocket clients currently connected to this server (this window counts as one)">
               <span className={styles.settingLabel}>Active connections</span>
               <span className={styles.clientCountValue} data-testid="active-connections">{activeClients ?? '-'}</span>
+            </div>
+            <label className={styles.settingRow} htmlFor="input-daemon-port">
+              <span className={styles.settingLabel} title="Fixed port the always-on daemon listens on (default 3017). The extension and the browser UI read the actual port from the discovery file, so they adapt automatically. Applies to the daemon after a restart (yarn daemon:stop).">Daemon port</span>
+              <NumberInput id="input-daemon-port" value={daemonPort} onChange={setDaemonPort} min={1} />
+            </label>
+            <label className={styles.settingRow} htmlFor="input-daemon-idle">
+              <span className={styles.settingLabel} title="The always-on daemon self-exits after this many minutes with zero connected clients. Applies to the daemon after a restart (yarn daemon:stop).">Daemon idle timeout (min)</span>
+              <NumberInput id="input-daemon-idle" value={Math.round(daemonIdleMs / 60000)} onChange={(m) => setDaemonIdleMs(Math.max(1, m) * 60000)} min={1} />
+            </label>
+            <div className={styles.settingColumn}>
+              <span className={styles.fieldHint}>Daemon port and idle timeout.<br />Apply after a daemon restart.</span>
+              <button
+                className={styles.restartBtn}
+                onClick={handleRestart}
+                disabled={restarting}
+                title="Restart the daemon to apply the port / idle timeout. This disconnects all connected clients and ends any running turn."
+              >
+                {restarting ? 'Restarting daemon...' : 'Apply (restart daemon)'}
+              </button>
+              {movedUrl && (
+                <span className={styles.fieldHint}>
+                  Daemon moved to a new port. Reconnect at{' '}
+                  <span className={styles.addrLink} role="link" tabIndex={0} onClick={() => openExternal(movedUrl)}>{movedUrl}</span>
+                </span>
+              )}
             </div>
           </div>
         )}

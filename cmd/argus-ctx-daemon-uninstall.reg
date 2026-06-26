@@ -1,0 +1,9 @@
+Windows Registry Editor Version 5.00
+
+; Removes the "Start Argus daemon" and "Stop Argus daemon" file context-menu
+; entries. The leading "-" on each key path deletes it (and its \command subkey).
+; Double-click to import.
+
+[-HKEY_CURRENT_USER\Software\Classes\*\shell\ZZArgusDaemonStart]
+
+[-HKEY_CURRENT_USER\Software\Classes\*\shell\ZZArgusDaemonStop]

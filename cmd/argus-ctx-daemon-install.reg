@@ -1,0 +1,22 @@
+Windows Registry Editor Version 5.00
+
+; "Start Argus daemon" / "Stop Argus daemon" entries on the right-click menu of
+; any file (the `*` class). Double-click this .reg to import. Paths are absolute
+; for this machine's checkout (D:\_Projects\scub111g\argus); if you move the repo,
+; regenerate them. ZZ prefix sorts both entries to the bottom of the menu.
+; Start requires a compiled build (run `yarn compile` once) so out\backend\daemon.js
+; exists; both launchers run windowless via wscript.exe (no console flash).
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\ZZArgusDaemonStart]
+@="Start Argus daemon"
+"Icon"="D:\\_Projects\\scub111g\\argus\\media\\argus-icon.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\ZZArgusDaemonStart\command]
+@="wscript.exe \"D:\\_Projects\\scub111g\\argus\\scripts\\daemon.vbs\""
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\ZZArgusDaemonStop]
+@="Stop Argus daemon"
+"Icon"="D:\\_Projects\\scub111g\\argus\\media\\argus-icon.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\ZZArgusDaemonStop\command]
+@="wscript.exe \"D:\\_Projects\\scub111g\\argus\\scripts\\daemon-stop.vbs\""

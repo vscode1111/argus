@@ -18,6 +18,8 @@ const DEFAULTS: ArgusSettings = {
   watchdogDelayFactor: 2,
   allowNetworkAccess: true,
   allowedOrigins: '',
+  daemonPort: 3017,
+  daemonIdleMs: 10 * 60 * 1000,
 };
 
 interface SettingsContextValue extends ArgusSettings {
@@ -37,6 +39,8 @@ interface SettingsContextValue extends ArgusSettings {
   setWatchdogDelayFactor: (v: number) => void;
   setAllowNetworkAccess: (v: boolean) => void;
   setAllowedOrigins: (v: string) => void;
+  setDaemonPort: (v: number) => void;
+  setDaemonIdleMs: (v: number) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
@@ -57,6 +61,8 @@ const SettingsContext = createContext<SettingsContextValue>({
   setWatchdogDelayFactor: () => {},
   setAllowNetworkAccess: () => {},
   setAllowedOrigins: () => {},
+  setDaemonPort: () => {},
+  setDaemonIdleMs: () => {},
 });
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
@@ -98,6 +104,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const setWatchdogDelayFactor = useCallback((v: number) => update({ watchdogDelayFactor: v }), [update]);
   const setAllowNetworkAccess = useCallback((v: boolean) => update({ allowNetworkAccess: v }), [update]);
   const setAllowedOrigins = useCallback((v: string) => update({ allowedOrigins: v }), [update]);
+  const setDaemonPort = useCallback((v: number) => update({ daemonPort: v }), [update]);
+  const setDaemonIdleMs = useCallback((v: number) => update({ daemonIdleMs: v }), [update]);
 
   const setNotifyOnComplete = useCallback((v: boolean) => {
     update({ notifyOnComplete: v });
@@ -113,7 +121,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setVerboseTools, setShowTimer, setShowOutput, setShowLogs,
       setShowLogTime, setShowLogType, setSoundOnComplete, setNotifyOnComplete,
       setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor,
-      setAllowNetworkAccess, setAllowedOrigins,
+      setAllowNetworkAccess, setAllowedOrigins, setDaemonPort, setDaemonIdleMs,
     }}>
       {children}
     </SettingsContext.Provider>

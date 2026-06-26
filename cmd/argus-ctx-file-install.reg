@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; "Open Argus (daemon)" entry on the right-click menu of any file (the `*` class).
+; Double-click this .reg to import. Paths are absolute for this machine's checkout;
+; if you move the repo, regenerate them. ZZ prefix sorts it to the bottom.
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\ZZArgusOpenFile]
+@="Open Argus (daemon)"
+"Icon"="D:\\_Projects\\scub111g\\argus\\media\\argus-icon.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\ZZArgusOpenFile\command]
+@="wscript.exe \"D:\\_Projects\\scub111g\\argus\\scripts\\open-daemon-ui.vbs\" \"%1\""

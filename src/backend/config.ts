@@ -24,6 +24,12 @@ export interface ArgusConfig {
   // Extra origin hosts (IPs/hostnames) allowed to connect over WS, comma-separated.
   // Only honored while allowNetworkAccess is true.
   allowedOrigins: string;
+  // Fixed port the always-on daemon listens on. Env ARGUS_DAEMON_PORT overrides it.
+  // Changing this needs a daemon restart (yarn daemon:stop; it re-spawns on next use).
+  daemonPort: number;
+  // Idle timeout in ms: the daemon self-exits after this long with zero connected
+  // clients. Env ARGUS_DAEMON_IDLE_MS overrides it. Needs a daemon restart to apply.
+  daemonIdleMs: number;
 }
 
 export const DEFAULT_CONFIG: ArgusConfig = {
@@ -42,6 +48,8 @@ export const DEFAULT_CONFIG: ArgusConfig = {
   watchdogDelayFactor: 2,
   allowNetworkAccess: true,
   allowedOrigins: '',
+  daemonPort: 3017,
+  daemonIdleMs: 10 * 60 * 1000,
 };
 
 let cachedConfig: ArgusConfig | null = null;

@@ -124,7 +124,7 @@ export async function fetchUsage(force = false): Promise<UsageResult> {
 export function fetchAccountInfo(): Promise<AccountInfo> {
   return new Promise((resolve) => {
     const bin = resolveClaudeBin();
-    execFile(bin, ['auth', 'status', '--json'], { timeout: 10_000, shell: IS_WIN }, (err, stdout) => {
+    execFile(bin, ['auth', 'status', '--json'], { timeout: 10_000, shell: IS_WIN, windowsHide: true }, (err, stdout) => {
       if (err) {
         resolve({ loggedIn: false });
         return;

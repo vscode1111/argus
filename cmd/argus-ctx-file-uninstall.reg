@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; Removes the "Open Argus (daemon)" file context-menu entry. The leading "-" on the
+; key path deletes it (and its \command subkey). Double-click to import.
+
+[-HKEY_CURRENT_USER\Software\Classes\*\shell\ZZArgusOpenFile]

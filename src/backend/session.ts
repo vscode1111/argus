@@ -24,6 +24,8 @@ export interface ConnectionHooks {
   getClientCount?: () => number;
   // Actual port this HTTP/WebSocket server is listening on, for the Settings "Network" tab.
   getServerPort?: () => number;
+  // Restart the daemon (browser-served "Apply" button). Undefined for the dev server.
+  onRestartRequest?: () => void;
 }
 
 export function handleConnection(
@@ -142,6 +144,9 @@ export function handleConnection(
       handleSend(s, msg);
     } else if (msg.type === 'getSettings') {
       ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
+    } else if (msg.type === 'restartDaemon') {
+      // Browser-served UI: restart the daemon in place. No-op on the dev server.
+      hooks.onRestartRequest?.();
     } else if (msg.type === 'getClientCount') {
       ws.send(JSON.stringify({ type: 'clientCount', count: hooks.getClientCount?.() ?? 0 }));
     } else if (msg.type === 'getServerInfo') {
@@ -331,7 +336,7 @@ function handleSend(s: SessionState, msg: { text?: string; images?: Array<{ data
     const claudeBin = resolveClaudeBin();
     const spawnCmd = IS_WIN && /\s/.test(claudeBin) ? `"${claudeBin}"` : claudeBin;
     s.sendLog('info', `Spawning claude: ${args.join(' ')}`);
-    proc = spawn(spawnCmd, args, { cwd: s.workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN });
+    proc = spawn(spawnCmd, args, { cwd: s.workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN, windowsHide: true });
     s.currentProc = proc;
     s.currentProcKey = procKey;
     attachProcHandlers(s, proc);

@@ -10,5 +10,6 @@ playwright-report/
 yarn-error.log
 media/webview.js
 media/webview.css
+media/ws-bridge.js
 bash.exe.stackdump
 .dev-nonce
