@@ -123,4 +123,6 @@ export type ArgusSettings = {
   watchdogDelayFactor: number;
   allowNetworkAccess: boolean;
   allowedOrigins: string;
+  daemonPort: number;
+  daemonIdleMs: number;
 };

@@ -19,7 +19,7 @@ export function createLoginHandler(ws: WebSocket, sendLog: (level: 'debug' | 'in
     sendLog('info', 'Starting claude login');
     const loginBin = resolveClaudeBin();
     const loginCmd = IS_WIN && /\s/.test(loginBin) ? `"${loginBin}"` : loginBin;
-    const lp = spawn(loginCmd, ['auth', 'login'], { cwd: workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN });
+    const lp = spawn(loginCmd, ['auth', 'login'], { cwd: workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN, windowsHide: true });
     proc = lp;
     let output = '';
     let resolved = false;

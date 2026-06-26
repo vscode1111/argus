@@ -11,7 +11,57 @@
 <body style="background:var(--vscode-editor-background,#1e1e1e);overflow:hidden">
   <div id="root"><div class="app-loader"><div class="app-spinner"></div></div></div>
   <div id="dev-harness"></div>
+  <div id="daemon-down" style="display:none">
+    <div class="daemon-down-box">
+      <div class="daemon-down-title">Starting Argus daemon...</div>
+      <div class="daemon-down-hint">The extension launches it automatically. If this persists, run <code>cmd\start-argus-daemon.bat</code> and click Retry. It self-exits when idle.</div>
+      <button id="daemon-retry" class="daemon-down-btn">Retry</button>
+    </div>
+  </div>
   <style nonce="{{nonce}}">
+    #daemon-down {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--vscode-editor-background, #1e1e1e);
+      z-index: 1000;
+    }
+    .daemon-down-box {
+      max-width: 360px;
+      padding: 24px;
+      text-align: center;
+      color: var(--vscode-foreground, #ccc);
+    }
+    .daemon-down-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .daemon-down-hint {
+      font-size: 12px;
+      opacity: 0.8;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .daemon-down-hint code {
+      background: var(--vscode-textCodeBlock-background, #2a2a2a);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .daemon-down-btn {
+      background: var(--vscode-button-background, #0e639c);
+      color: var(--vscode-button-foreground, #fff);
+      border: none;
+      padding: 6px 18px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .daemon-down-btn:hover {
+      background: var(--vscode-button-hoverBackground, #1177bb);
+    }
     .app-loader {
       display: flex;
       align-items: center;
@@ -29,108 +79,70 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
+  <script nonce="{{nonce}}" src="{{wsBridgeUri}}"></script>
   <script nonce="{{nonce}}">
-    // WebSocket bridge: route Claude-related messages over WS,
-    // VS Code-specific messages stay on postMessage
-    (function() {
+    // VS Code webview shim. Connect-only: WS_URL is baked from the daemon's discovery
+    // file at panel-open time and may be empty (daemon down). The webview CSP blocks
+    // HTTP, so the webview can't re-resolve the nonce itself - the extension reads the
+    // discovery file and pushes a fresh URL via the `wsUrl` message (reply to
+    // `needWsUrl`), which also covers a daemon restart. Reconnect/queue live in
+    // ws-bridge.js (createArgusBridge); here we add the async URL refresh, the
+    // daemon-down overlay, and VS_ONLY routing to the real VS Code postMessage.
+    (function () {
       var WS_URL = '{{wsUrl}}';
-      if (!WS_URL) return; // no server available
-
-      var VS_ONLY = { openFile: 1, openUrl: 1, focusPanel: 1, getInfo: 1, readFilePreview: 1, copyImage: 1, webviewReady: 1, streamingState: 1, notify: 1 };
+      var VS_ONLY = { openFile: 1, openUrl: 1, focusPanel: 1, getInfo: 1, readFilePreview: 1, copyImage: 1, webviewReady: 1, streamingState: 1, notify: 1, needWsUrl: 1, restartDaemon: 1 };
       var realApi = acquireVsCodeApi();
-      var ws;
-      var queue = [];
-      var ready = false;
-      var reconnectTimer;
-      var attempt = 0;
-      var DELAYS = [1000, 2000, 4000, 8000, 10000];
 
-      function dispatch(data) {
-        window.dispatchEvent(new MessageEvent('message', { data: data }));
+      var daemonDownEl = document.getElementById('daemon-down');
+      function showDaemonDown(show) {
+        if (daemonDownEl) daemonDownEl.style.display = show ? 'flex' : 'none';
       }
+      // Ask the extension for a fresh daemon URL (it reads the discovery file).
+      function requestWsUrl() { realApi.postMessage({ type: 'needWsUrl' }); }
 
-      function scheduleReconnect() {
-        clearTimeout(reconnectTimer);
-        var delay = DELAYS[Math.min(attempt, DELAYS.length - 1)];
-        attempt++;
-        console.warn('[argus-ws] reconnecting in ' + delay + 'ms (attempt ' + attempt + ')');
-        reconnectTimer = setTimeout(connect, delay);
-      }
-
-      function connect() {
-        ready = false;
-        if (ws) {
-          ws.onopen = ws.onclose = ws.onmessage = ws.onerror = null;
-          try { ws.close(); } catch(e) {}
-        }
-        ws = new WebSocket(WS_URL);
-
-        ws.onopen = function() {
-          ready = true;
-          attempt = 0;
-          dispatch({ type: 'ws_status', connected: true });
-          queue.splice(0).forEach(function(m) { ws.send(JSON.stringify(m)); });
-        };
-
-        ws.onmessage = function(event) {
-          dispatch(JSON.parse(event.data));
-        };
-
-        ws.onerror = function(e) { console.error('[argus-ws] error', e); };
-
-        ws.onclose = function() {
-          ready = false;
-          dispatch({ type: 'ws_status', connected: false });
-          scheduleReconnect();
-        };
-      }
-
-      connect();
-
-      // Reconnect when tab becomes visible (catches sleep/resume)
-      document.addEventListener('visibilitychange', function() {
-        if (!document.hidden && !ready) {
-          clearTimeout(reconnectTimer);
-          attempt = 0;
-          connect();
+      var bridge = window.createArgusBridge({
+        nextUrl: function () { return WS_URL || null; },
+        onStatus: function (connected) {
+          if (connected) { showDaemonDown(false); return; }
+          // Disconnected: ask the extension for a fresh URL (covers daemon restart /
+          // first boot with no URL). Show the overlay only when we have nothing.
+          if (!WS_URL) showDaemonDown(true);
+          requestWsUrl();
         }
       });
 
-      // Listen for extension->webview messages that need forwarding to WS
-      window.addEventListener('message', function(event) {
+      var retryBtn = document.getElementById('daemon-retry');
+      if (retryBtn) retryBtn.addEventListener('click', requestWsUrl);
+
+      // Extension -> webview messages handled here (not by the React app).
+      window.addEventListener('message', function (event) {
         var data = event.data;
-        if (data && data.type === 'newSession') {
-          if (ready) ws.send(JSON.stringify({ type: 'newSession' }));
-          else queue.push({ type: 'newSession' });
+        if (!data) return;
+        if (data.type === 'wsUrl') {
+          WS_URL = data.url || '';
+          if (WS_URL) { showDaemonDown(false); bridge.reconnectNow(); }
+          else showDaemonDown(true);
+        } else if (data.type === 'newSession') {
+          bridge.post({ type: 'newSession' });
         }
       });
 
-      // Switch workspace in place: rewrite the dir query param and reconnect, so
-      // the same panel reattaches to a different project's agent + history.
+      // Switch workspace in place: rewrite the dir query param and reconnect.
       function switchWorkspace(dir) {
         try {
           var u = new URL(WS_URL);
           u.searchParams.set('dir', dir);
           WS_URL = u.toString();
         } catch (e) { return; }
-        clearTimeout(reconnectTimer);
-        attempt = 0;
-        connect();
+        bridge.reconnectNow();
       }
 
-      // Override acquireVsCodeApi so the React app uses our proxy
-      window.acquireVsCodeApi = function() {
+      window.acquireVsCodeApi = function () {
         return {
-          postMessage: function(msg) {
-            if (msg && msg.type === 'switchWorkspace') {
-              switchWorkspace(msg.dir);
-            } else if (msg && VS_ONLY[msg.type]) {
-              realApi.postMessage(msg);
-            } else if (ready) {
-              ws.send(JSON.stringify(msg));
-            } else {
-              queue.push(msg);
-            }
+          postMessage: function (msg) {
+            if (msg && msg.type === 'switchWorkspace') switchWorkspace(msg.dir);
+            else if (msg && VS_ONLY[msg.type]) realApi.postMessage(msg);
+            else bridge.post(msg);
           }
         };
       };

@@ -1,17 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as os from 'os';
 import * as fs from 'fs';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { ChatPanel } from './chat/ChatPanel';
 import { ArgusCodeLensProvider } from './providers/CodeLensProvider';
 import { InlineSuggestProvider } from './providers/InlineSuggestProvider';
 import { getSelection } from './utils/workspace';
-import { isInlineCompletionsEnabled, isCodeLensEnabled, getModel } from './utils/config';
-import { startServer } from '../backend/index';
-import type { ArgusServer } from '../backend/index';
+import { isInlineCompletionsEnabled, isCodeLensEnabled } from './utils/config';
+import { readDaemonInfo, clearDaemonInfo, isProcessAlive, type DaemonInfo } from '../backend/daemonInfo';
 
-let argusServer: ArgusServer | undefined;
 let extensionId = 'local.argus';
 
 // Toast click-to-focus delivery. A clicked toast can only launch a URI, and the
@@ -34,12 +31,76 @@ function registerFocusProtocol(extensionUri: vscode.Uri): void {
   add(['add', `${base}\\shell\\open\\command`, '/ve', '/d', command, '/f']);
 }
 
-export function getServerPort(): number | undefined {
-  return argusServer?.port;
+// Connect-only: the extension does not host a server. It reads the daemon's
+// discovery file (written by `server/daemon.ts`) fresh on every panel open and
+// reconnect, so a daemon restart (new nonce/port) is picked up. Returns undefined
+// when the daemon is not running, which drives the "daemon not running" panel state.
+export function readDaemon(): DaemonInfo | undefined {
+  const info = readDaemonInfo();
+  // A hard-killed daemon leaves a stale discovery file with a dead pid. Treat that
+  // as "no daemon" so ChatPanel.buildWsUrl falls through to ensureDaemon() and spawns
+  // a fresh one, instead of baking a URL to a dead process and failing forever.
+  if (info && !isProcessAlive(info.pid)) return undefined;
+  return info;
 }
 
-export function getServerNonce(): string | undefined {
-  return argusServer?.nonce;
+// Auto-spawn: if no daemon is running, launch the compiled daemon windowless and
+// detached so it outlives this extension host and self-exits when idle. Called when
+// a panel needs a connection. The daemon's single-instance guard makes concurrent
+// launches safe (a second one exits early); we also debounce here to avoid spawning
+// a burst of short-lived processes while the first is still coming up.
+let lastDaemonSpawn = 0;
+function spawnDaemon(extensionPath: string, force: boolean): void {
+  const daemonJs = path.join(extensionPath, 'out', 'backend', 'daemon.js');
+  if (!fs.existsSync(daemonJs)) {
+    console.error('[Argus] cannot start daemon: not found at', daemonJs, '(run `yarn compile`)');
+    return;
+  }
+  try {
+    // process.execPath is the VS Code (Electron) binary; ELECTRON_RUN_AS_NODE makes
+    // it behave as plain Node so we need no separate node install on PATH. force adds
+    // ARGUS_DAEMON_FORCE_START so a restart's replacement skips the single-instance
+    // guard and retries the port while the old one releases it.
+    const env: NodeJS.ProcessEnv = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+    if (force) env.ARGUS_DAEMON_FORCE_START = '1';
+    const child = spawn(process.execPath, [daemonJs], {
+      cwd: extensionPath,
+      detached: true,
+      windowsHide: true,
+      stdio: 'ignore',
+      env,
+    });
+    child.unref();
+    console.log(force ? '[Argus] restarted daemon' : '[Argus] auto-started daemon');
+  } catch (err) {
+    console.error('[Argus] failed to start daemon:', err);
+  }
+}
+
+export function ensureDaemon(extensionPath: string): void {
+  const info = readDaemonInfo();
+  if (info && isProcessAlive(info.pid)) return; // already running
+  if (Date.now() - lastDaemonSpawn < 5000) return; // a spawn is likely still starting
+  lastDaemonSpawn = Date.now();
+  spawnDaemon(extensionPath, false);
+}
+
+// Explicit restart (Settings "Apply" button in the VS Code panel): hard-kill the
+// running daemon, clear its discovery file, then spawn a fresh one that reads the
+// updated config (new port/idle). The webview's reconnect loop picks up the new
+// port from the rewritten discovery file.
+export function restartDaemon(extensionPath: string): void {
+  const info = readDaemonInfo();
+  if (info && isProcessAlive(info.pid)) {
+    try {
+      if (process.platform === 'win32') execFile('taskkill', ['/F', '/T', '/PID', String(info.pid)], () => { /* best-effort */ });
+      else process.kill(info.pid);
+    } catch { /* already gone */ }
+  }
+  clearDaemonInfo();
+  lastDaemonSpawn = Date.now();
+  // Let the OS release the port, then force-spawn (retries the port if needed).
+  setTimeout(() => spawnDaemon(extensionPath, true), 300);
 }
 
 /** Extension id (publisher.name), used to build the `vscode://` toast click-to-focus URI. */
@@ -62,14 +123,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     })
   );
-
-  // Start the WebSocket server on a dynamic port
-  try {
-    argusServer = await startServer({ port: 0, model: getModel() });
-    console.log('[Argus] WebSocket server started on port', argusServer.port);
-  } catch (err) {
-    console.error('[Argus] Failed to start WebSocket server:', err);
-  }
 
   const codeLensProvider = new ArgusCodeLensProvider();
   let codeLensDisposable: vscode.Disposable | undefined;
@@ -169,8 +222,5 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {
-  if (argusServer) {
-    argusServer.close();
-    argusServer = undefined;
-  }
+  // Connect-only: nothing to tear down. The shared daemon self-exits when idle.
 }

@@ -9,7 +9,7 @@ export function resolveClaudeBin(): string {
   if (resolvedClaudeBin) return resolvedClaudeBin;
   if (!IS_WIN) { resolvedClaudeBin = 'claude'; return 'claude'; }
   try {
-    const out = execFileSync('where', ['claude.cmd'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const out = execFileSync('where', ['claude.cmd'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
     const hit = out.split(/\r?\n/).map(l => l.trim()).find(Boolean);
     if (hit && fs.existsSync(hit)) { resolvedClaudeBin = hit; return hit; }
   } catch {}
@@ -30,7 +30,7 @@ export function resolveClaudeBin(): string {
 export function killProc(proc: ReturnType<typeof spawn>) {
   if (!proc.pid) return;
   if (IS_WIN) {
-    try { execFileSync('taskkill', ['/T', '/F', '/PID', String(proc.pid)], { stdio: 'ignore' }); } catch {}
+    try { execFileSync('taskkill', ['/T', '/F', '/PID', String(proc.pid)], { stdio: 'ignore', windowsHide: true }); } catch {}
   } else {
     proc.kill();
   }

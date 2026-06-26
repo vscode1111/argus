@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' 'unsafe-inline'; connect-src ws: wss: http: https:; img-src data: 'self';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/argus-icon.ico" type="image/x-icon" />
+  <link rel="stylesheet" href="/webview.css" />
+  <title>Argus</title>
+  <style>
+    /* VS Code Dark 2026 theme variables (no VS Code host to inject them here). */
+    :root {
+      --vscode-editor-background: #121314;
+      --vscode-editor-foreground: #BBBEBF;
+      --vscode-panel-border: #2A2B2CFF;
+      --vscode-input-background: #191A1B;
+      --vscode-input-foreground: #bfbfbf;
+      --vscode-button-background: #297AA0;
+      --vscode-button-foreground: #FFFFFF;
+      --vscode-button-hoverBackground: #2B7DA3;
+      --vscode-editor-selectionBackground: #276782dd;
+      --vscode-sideBar-background: #191A1B;
+      --vscode-textCodeBlock-background: #242526;
+      --vscode-errorForeground: #f48771;
+      --vscode-descriptionForeground: #8C8C8C;
+      --vscode-font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", sans-serif;
+      --vscode-editor-font-family: "Cascadia Code", "Courier New", monospace;
+      --vscode-font-size: 13px;
+      --vscode-focusBorder: #3994BCB3;
+      --vscode-textLink-foreground: #48A0C7;
+      --vscode-symbolIcon-functionForeground: #d2a8ff;
+      --vscode-scrollbarSlider-background: #83848533;
+    }
+    html, body {
+      background: var(--vscode-editor-background, #1e1e1e);
+      overflow: hidden;
+    }
+    .app-loader {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: var(--vscode-editor-background, #1e1e1e);
+    }
+    .app-spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--vscode-panel-border, #474747);
+      border-top-color: var(--vscode-button-background, #0e639c);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="vscode-dark">
+  <div id="root"><div class="app-loader"><div class="app-spinner"></div></div></div>
+  <div id="dev-harness"></div>
+  <script src="/ws-bridge.js"></script>
+  <script>
+    // Browser-mode shim for the daemon-served UI. Same-origin: the page is served by
+    // the daemon's own HTTP server, so the WebSocket and /nonce live on this very
+    // host:port. Only URL resolution is host-specific; reconnect/queue live in
+    // ws-bridge.js (createArgusBridge). No VS Code host here, so every message goes
+    // over the WebSocket.
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var dir = params.get('dir');
+      var nonce = params.get('nonce');
+      var wsProto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      var host = window.location.host; // e.g. localhost:3017
+
+      function refreshNonce() {
+        // Re-fetch before each connect so an open tab recovers after a daemon restart.
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', '/nonce', false);
+          xhr.send();
+          if (xhr.status === 200 && xhr.responseText) nonce = xhr.responseText;
+        } catch (e) {}
+      }
+      function nextUrl() {
+        refreshNonce();
+        var p = new URLSearchParams();
+        if (nonce) p.set('nonce', nonce);
+        if (dir) p.set('dir', dir);
+        return wsProto + host + '/agent?' + p.toString();
+      }
+
+      var bridge = window.createArgusBridge({ nextUrl: nextUrl });
+      window.acquireVsCodeApi = function () {
+        return {
+          postMessage: function (msg) {
+            if (msg && msg.type === 'switchWorkspace') { dir = msg.dir; bridge.reconnectNow(); }
+            else bridge.post(msg);
+          }
+        };
+      };
+    })();
+  </script>
+  <script src="/webview.js"></script>
+</body>
+</html>

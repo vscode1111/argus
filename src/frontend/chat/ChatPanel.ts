@@ -7,7 +7,7 @@ import { captureForegroundWindow, focusCachedWindow, focusDiag } from '../utils/
 import { copyImageToClipboard } from '../utils/win32Clipboard';
 import { showWindowsToast } from '../utils/win32Toast';
 
-import { getServerPort, getServerNonce, FOCUS_PROTOCOL } from '../extension';
+import { readDaemon, ensureDaemon, restartDaemon, FOCUS_PROTOCOL } from '../extension';
 import { readFilePreview } from '../../backend/filePreview';
 
 export class ChatPanel {
@@ -134,6 +134,17 @@ export class ChatPanel {
     } else if (msg.type === 'streamingState') {
       if (msg.active) this.startSpin();
       else this.stopSpin(msg.outcome);
+    } else if (msg.type === 'restartDaemon') {
+      // Settings "Apply": restart the daemon so a new port/idle config takes effect.
+      // The webview's reconnect loop then picks up the new port from the discovery file.
+      restartDaemon(this.extensionUri.fsPath);
+    } else if (msg.type === 'needWsUrl') {
+      // The webview lost (or never had) its connection and is asking for a fresh
+      // daemon URL. The webview CSP blocks HTTP, so it cannot re-resolve the nonce
+      // itself - only the extension can read the discovery file. Reply with the
+      // current URL (empty if the daemon is still down) so the bridge reconnects or
+      // shows the "daemon not running" state.
+      this.post({ type: 'wsUrl', url: this.buildWsUrl() });
     } else if (msg.type === 'focusPanel') {
       this.outputChannel.appendLine(`[${new Date().toISOString()}] focusPanel received`);
       focusCachedWindow((text) => this.outputChannel.appendLine(`[${new Date().toISOString()}] ${text}`));
@@ -210,20 +221,32 @@ export class ChatPanel {
     this.panel.webview.postMessage(data);
   }
 
+  // Resolve the daemon's connection URL fresh from its discovery file. Empty when
+  // the daemon is not running (drives the "daemon not running" state in chat.html).
+  // Re-read on every call so a daemon restart (new port/nonce) is picked up.
+  private buildWsUrl(): string {
+    const info = readDaemon();
+    if (!info) {
+      // Daemon not running - launch it. It writes its discovery file once listening;
+      // the webview's overlay retry loop (needWsUrl) then re-reads it and connects.
+      ensureDaemon(this.extensionUri.fsPath);
+      return '';
+    }
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+    const wsParams = new URLSearchParams();
+    wsParams.set('nonce', info.nonce);
+    if (root) wsParams.set('dir', root);
+    return `ws://localhost:${info.port}/agent?${wsParams.toString()}`;
+  }
+
   private getHtml(): string {
     const webview = this.panel.webview;
     const mediaPath = vscode.Uri.joinPath(this.extensionUri, 'media');
     const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaPath, 'webview.css'));
     const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaPath, 'webview.js'));
+    const wsBridgeUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaPath, 'ws-bridge.js'));
     const nonce = getNonce();
-
-    const port = getServerPort();
-    const wsNonce = getServerNonce();
-    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
-    const wsParams = new URLSearchParams();
-    if (wsNonce) wsParams.set('nonce', wsNonce);
-    if (root) wsParams.set('dir', root);
-    const wsUrl = port ? `ws://localhost:${port}/agent?${wsParams.toString()}` : '';
+    const wsUrl = this.buildWsUrl();
 
     const htmlPath = path.join(this.extensionUri.fsPath, 'media', 'chat.html');
     let html = fs.readFileSync(htmlPath, 'utf-8');
@@ -231,6 +254,7 @@ export class ChatPanel {
       .replace(/\{\{nonce\}\}/g, nonce)
       .replace('{{cssUri}}', cssUri.toString())
       .replace('{{jsUri}}', jsUri.toString())
+      .replace('{{wsBridgeUri}}', wsBridgeUri.toString())
       .replace('{{cspSource}}', webview.cspSource)
       .replace('{{wsUrl}}', wsUrl);
     return html;

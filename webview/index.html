@@ -38,9 +38,52 @@
       overflow: hidden;
     }
   </style>
-  <!-- WebSocket bridge that shims acquireVsCodeApi() for browser dev mode.
-       Classic script from /public so it runs before the deferred React entry. -->
-  <script src="/dev-bridge.js"></script>
+  <!-- Shared bridge factory + dev shim. Classic scripts from /public so they run
+       before the deferred React entry, which calls acquireVsCodeApi() on mount. -->
+  <script src="/ws-bridge.js"></script>
+  <script>
+    // Dev-mode shim: connect to the Vite-hosted agent backend on :3001, refreshing
+    // the nonce via XHR before each connect (it rotates on server restart). Only the
+    // URL resolution and mock-suppression are dev-specific; reconnect/queue live in
+    // ws-bridge.js (createArgusBridge).
+    window.acquireVsCodeApi = function () {
+      var params = new URLSearchParams(window.location.search);
+      var dir = params.get('dir');
+      var nonce = params.get('nonce');
+      // ?mock=1 isolates e2e mock tests: do not forward these data-query messages to
+      // the live dev backend (their async replies would clobber injected mock data).
+      var mock = params.get('mock') === '1';
+      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1 };
+      // Derive host from the page so a LAN device reaches the dev machine, not its own localhost.
+      var host = window.location.hostname || 'localhost';
+
+      function refreshNonce() {
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', 'http://' + host + ':3001/nonce', false);
+          xhr.send();
+          if (xhr.status === 200 && xhr.responseText) nonce = xhr.responseText;
+        } catch (e) {}
+      }
+      function nextUrl() {
+        refreshNonce();
+        var p = new URLSearchParams();
+        if (nonce) p.set('nonce', nonce);
+        if (dir) p.set('dir', dir);
+        return 'ws://' + host + ':3001/agent?' + p.toString();
+      }
+
+      var bridge = window.createArgusBridge({ nextUrl: nextUrl });
+      return {
+        postMessage: function (msg) {
+          if (msg && msg.type === 'switchWorkspace') { dir = msg.dir; bridge.reconnectNow(); return; }
+          if (mock && msg && MOCK_SUPPRESSED[msg.type]) { console.log('[mock] suppressed', msg.type); return; }
+          console.log('[-> agent]', msg);
+          bridge.post(msg);
+        }
+      };
+    };
+  </script>
 </head>
 
 <body class="vscode-dark">
