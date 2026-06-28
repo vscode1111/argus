@@ -13,5 +13,11 @@
   "watchdogRetryDelay": 5,
   "watchdogDelayFactor": 2,
   "allowNetworkAccess": true,
-  "allowedOrigins": ""
+  "allowedOrigins": "",
+  "daemonPort": 3001,
+  "daemonIdleMs": 600000,
+  "model": "",
+  "runtimeDefaultModel": "",
+  "effort": "high",
+  "thinking": true
 }

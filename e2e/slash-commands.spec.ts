@@ -29,7 +29,7 @@ test.describe('slash commands', () => {
     await textarea.focus();
     await textarea.pressSequentially('/');
 
-    const menu = page.locator('[class*="slashMenuHeader"]');
+    const menu = page.locator('[class*="slashMenuHeader"]').first();
     await expect(menu).toBeVisible();
     await expect(menu).toHaveText('Slash Commands');
   });
@@ -40,8 +40,9 @@ test.describe('slash commands', () => {
     await textarea.pressSequentially('/');
     await sendSkills(page, SKILLS);
 
+    // +2 for the "Switch model..." and "Account & usage..." action items from the Model section.
     const items = page.locator('[class*="slashMenuItem"]');
-    await expect(items).toHaveCount(SKILLS.length);
+    await expect(items).toHaveCount(SKILLS.length + 2);
 
     // First item should be "clear" with its description
     const first = items.nth(0);
@@ -100,7 +101,8 @@ test.describe('slash commands', () => {
     await textarea.focus();
     await textarea.pressSequentially('/');
     await sendSkills(page, SKILLS);
-    await expect(page.locator('[class*="slashMenuItem"]')).toHaveCount(SKILLS.length);
+    // +2 for the "Switch model..." and "Account & usage..." action items from the Model section.
+    await expect(page.locator('[class*="slashMenuItem"]')).toHaveCount(SKILLS.length + 2);
 
     await textarea.pressSequentially('de');
     const items = page.locator('[class*="slashMenuItem"]');

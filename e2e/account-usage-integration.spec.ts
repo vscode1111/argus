@@ -58,7 +58,7 @@ async function openModal(page: Page) {
   const action = page.locator('[class*="slashMenuItem"]', { hasText: 'Account & usage' });
   await expect(action).toBeVisible();
   await action.click();
-  await expect(page.getByRole('dialog', { name: 'Account & Usage' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Account' })).toBeVisible();
 }
 
 test.describe('account & usage (integration)', () => {
@@ -69,7 +69,7 @@ test.describe('account & usage (integration)', () => {
   test('fetches real account info from `claude auth status`', async ({ page }) => {
     await openModal(page);
 
-    const dialog = page.getByRole('dialog', { name: 'Account & Usage' });
+    const dialog = page.getByRole('dialog', { name: 'Account' });
 
     // Wait for the server to answer getAccountUsage (spawns the CLI).
     await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
@@ -92,7 +92,7 @@ test.describe('account & usage (integration)', () => {
     await openModal(page);
     await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
 
-    const dialog = page.getByRole('dialog', { name: 'Account & Usage' });
+    const dialog = page.getByRole('dialog', { name: 'Account' });
     await expect(dialog).toContainText('Usage');
 
     // The live /oauth/usage endpoint returns all windows immediately (no message
@@ -121,7 +121,7 @@ test.describe('account & usage (integration)', () => {
     await openModal(page);
     await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
 
-    const dialog = page.getByRole('dialog', { name: 'Account & Usage' });
+    const dialog = page.getByRole('dialog', { name: 'Account' });
 
     // Only the known windows the API returned are rendered (codename windows like
     // `tangelo`/`iguana_necktie` and null windows like Opus must be filtered out).

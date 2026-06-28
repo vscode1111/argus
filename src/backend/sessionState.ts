@@ -7,6 +7,8 @@ export interface SessionState {
   ws: WebSocket;
   workspaceDir: string;
   model: string;
+  effort: string;
+  thinking: boolean;
   sessionId: string | undefined;
   currentProc: ReturnType<typeof spawn> | undefined;
   currentProcKey: string | undefined;
@@ -35,11 +37,13 @@ export interface SessionState {
   flushAskFollowUp: () => void;
 }
 
-export function createSessionState(ws: WebSocket, workspaceDir: string, model: string): SessionState {
+export function createSessionState(ws: WebSocket, workspaceDir: string, model: string, effort: string, thinking: boolean): SessionState {
   const state: SessionState = {
     ws,
     workspaceDir,
     model,
+    effort,
+    thinking,
     sessionId: undefined,
     currentProc: undefined,
     currentProcKey: undefined,

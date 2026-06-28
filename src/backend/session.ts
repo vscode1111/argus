@@ -7,7 +7,7 @@ import { IS_WIN, resolveClaudeBin, killProc, plural, classifyError, API_ERROR_RE
 import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
 import { getSkills } from './skills';
 import { readFilePreview } from './filePreview';
-import { fetchAccountInfo, fetchUsage } from './accountUsage';
+import { fetchAccountInfo, fetchUsage, fetchModels } from './accountUsage';
 import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { createSessionState, type SessionState } from './sessionState';
@@ -34,7 +34,13 @@ export function handleConnection(
   model: string,
   hooks: ConnectionHooks = {},
 ): void {
-  const s = createSessionState(ws, workspaceDir, model);
+  const initCfg = readConfig();
+  const s = createSessionState(
+    ws, workspaceDir,
+    initCfg.model || model,
+    initCfg.effort || 'high',
+    initCfg.thinking ?? true,
+  );
 
   s.sendLog = (level, text) => {
     ws.send(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
@@ -171,7 +177,23 @@ export function handleConnection(
         const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
         version = pkg.version ?? '';
       } catch {}
-      ws.send(JSON.stringify({ type: 'workspaceInfo', path: workspaceDir, version }));
+      ws.send(JSON.stringify({ type: 'workspaceInfo', path: workspaceDir, version, model: s.model, effort: s.effort, thinking: s.thinking }));
+    } else if (msg.type === 'switchModel') {
+      const newModel = typeof (msg as { model?: string }).model === 'string' ? (msg as { model?: string }).model! : '';
+      s.model = newModel;
+      const config = readConfig();
+      writeConfig({ ...config, model: newModel });
+      ws.send(JSON.stringify({ type: 'modelChanged', model: s.model }));
+    } else if (msg.type === 'switchEffort') {
+      const newEffort = typeof (msg as { effort?: string }).effort === 'string' ? (msg as { effort?: string }).effort! : 'high';
+      s.effort = newEffort;
+      writeConfig({ ...readConfig(), effort: newEffort });
+      ws.send(JSON.stringify({ type: 'effortChanged', effort: s.effort }));
+    } else if (msg.type === 'switchThinking') {
+      const newThinking = (msg as { thinking?: boolean }).thinking !== false;
+      s.thinking = newThinking;
+      writeConfig({ ...readConfig(), thinking: newThinking });
+      ws.send(JSON.stringify({ type: 'thinkingChanged', thinking: s.thinking }));
     } else if (msg.type === 'retry') {
       if (s.lastMessage) {
         s.sendLog('info', 'Retrying last message');
@@ -213,6 +235,11 @@ export function handleConnection(
         // Only surface the fetch error when there is no fallback data to show.
         const usageError = rateLimits.length === 0 ? usage.error : undefined;
         ws.send(JSON.stringify({ type: 'accountUsage', account, rateLimits, usageError, usagePending: false }));
+      });
+    } else if (msg.type === 'getModels') {
+      fetchModels().then(({ models, error }) => {
+        const runtimeDefaultModel = readConfig().runtimeDefaultModel || '';
+        ws.send(JSON.stringify({ type: 'modelList', models, error, runtimeDefaultModel }));
       });
     } else if (msg.type === 'stop') {
       handleStop(s);
@@ -295,6 +322,11 @@ function handleSend(s: SessionState, msg: { text?: string; images?: Array<{ data
     '--allowedTools', tools.filter(t => t !== 'AskUserQuestion').join(','),
   ];
   if (s.model) baseArgs.push('--model', s.model);
+  if (!s.thinking) {
+    baseArgs.push('--effort', 'low');
+  } else if (s.effort) {
+    baseArgs.push('--effort', s.effort);
+  }
   if (isPlan) {
     baseArgs.push('--permission-mode', 'plan', '--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
   }

@@ -119,6 +119,52 @@ export async function fetchUsage(force = false): Promise<UsageResult> {
   }
 }
 
+export interface ModelInfo {
+  id: string;
+  displayName: string;
+}
+
+export interface ModelsResult {
+  models: ModelInfo[];
+  error?: string;
+}
+
+let modelsCache: { data: ModelInfo[]; ts: number } | null = null;
+const MODELS_TTL_MS = 5 * 60_000;
+
+export async function fetchModels(): Promise<ModelsResult> {
+  if (modelsCache && Date.now() - modelsCache.ts < MODELS_TTL_MS) return { models: modelsCache.data };
+  const token = readOAuthToken();
+  if (!token) return { models: [], error: 'not signed in (no OAuth token)' };
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/models', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': OAUTH_BETA,
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      const reason =
+        res.status === 401 ? 'token expired' :
+        res.status === 403 ? 'access denied' :
+        'request failed';
+      return { models: [], error: `${reason} (HTTP ${res.status})` };
+    }
+    const data = await res.json() as { data?: Array<{ id: string; display_name?: string }> };
+    const models: ModelInfo[] = (data.data ?? []).map(m => ({
+      id: m.id,
+      displayName: m.display_name ?? m.id,
+    }));
+    modelsCache = { data: models, ts: Date.now() };
+    return { models };
+  } catch (e) {
+    const error = e instanceof Error && e.name === 'TimeoutError' ? 'request timed out' : 'network error';
+    return { models: [], error };
+  }
+}
+
 // Read account/subscription details from `claude auth status --json`.
 // Resolves to { loggedIn: false } on any error so the UI can show a logged-out state.
 export function fetchAccountInfo(): Promise<AccountInfo> {

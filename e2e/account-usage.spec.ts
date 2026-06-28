@@ -37,7 +37,7 @@ async function openModal(page: Page) {
   const action = page.locator('[class*="slashMenuItem"]', { hasText: 'Account & usage' });
   await expect(action).toBeVisible();
   await action.click();
-  await expect(page.getByRole('dialog', { name: 'Account & Usage' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Account' })).toBeVisible();
   await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 15_000 });
 }
 
@@ -70,7 +70,7 @@ test.describe('account & usage', () => {
     await expect(page.locator('[class*="slashMenuItem"]', { hasText: 'Account & usage' })).toBeVisible();
     await page.keyboard.press('Enter');
 
-    await expect(page.getByRole('dialog', { name: 'Account & Usage' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Account' })).toBeVisible();
     // The "/usage" token is removed from the textarea.
     await expect(textarea).toHaveValue('');
   });
@@ -79,7 +79,7 @@ test.describe('account & usage', () => {
     await openModal(page);
     await send(page, { type: 'accountUsage', account: ACCOUNT, rateLimits: [] });
 
-    const dialog = page.getByRole('dialog', { name: 'Account & Usage' });
+    const dialog = page.getByRole('dialog', { name: 'Account' });
     await expect(dialog).toContainText('Account');
     await expect(dialog).toContainText('Auth method');
     await expect(dialog).toContainText('Claude AI');
@@ -155,7 +155,7 @@ test.describe('account & usage', () => {
     await openModal(page);
     await send(page, { type: 'accountUsage', account: ACCOUNT, rateLimits: [] });
 
-    const dialog = page.getByRole('dialog', { name: 'Account & Usage' });
+    const dialog = page.getByRole('dialog', { name: 'Account' });
     await expect(dialog).toContainText('Usage data is unavailable');
     await expect(page.locator('[class*="usageRow"]')).toHaveCount(0);
   });
@@ -169,7 +169,7 @@ test.describe('account & usage', () => {
       usageError: 'rate limited (HTTP 429)',
     });
 
-    const dialog = page.getByRole('dialog', { name: 'Account & Usage' });
+    const dialog = page.getByRole('dialog', { name: 'Account' });
     await expect(dialog).toContainText('Usage data is unavailable: rate limited (HTTP 429).');
     await expect(page.locator('[class*="usageRow"]')).toHaveCount(0);
   });
@@ -178,7 +178,7 @@ test.describe('account & usage', () => {
     await openModal(page);
     await send(page, { type: 'accountUsage', account: { loggedIn: false }, rateLimits: [] });
 
-    const dialog = page.getByRole('dialog', { name: 'Account & Usage' });
+    const dialog = page.getByRole('dialog', { name: 'Account' });
     await expect(dialog).toContainText('Not logged in');
     await expect(dialog).not.toContainText('Auth method');
   });
@@ -186,7 +186,7 @@ test.describe('account & usage', () => {
   test('Escape closes the modal', async ({ page }) => {
     await openModal(page);
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog', { name: 'Account & Usage' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Account' })).toHaveCount(0);
   });
 
   test('footer link is present', async ({ page }) => {

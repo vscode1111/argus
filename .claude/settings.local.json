@@ -8,7 +8,10 @@
       "Grep",
       "Bash(*)",
       "WebSearch",
-      "WebFetch"
+      "WebFetch",
+      "PowerShell(claude --help 2>&1)",
+      "PowerShell(cd \"d:\\\\_Projects\\\\scub111g\\\\argus\"; npx tsc -p webview/tsconfig.json --noEmit 2>&1 | Where-Object { $_ -notmatch \"FileViewerModal|filePath.tsx\" } | Select-Object -First 30)",
+      "PowerShell(cd \"d:\\\\_Projects\\\\scub111g\\\\argus\"; npx tsc -p webview/tsconfig.json --noEmit 2>&1 | Where-Object { $_ -notmatch \"FileViewerModal|filePath.tsx\" } | Select-Object -First 20)"
     ],
     "defaultMode": "bypassPermissions"
   }

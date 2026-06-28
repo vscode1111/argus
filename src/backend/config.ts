@@ -30,6 +30,15 @@ export interface ArgusConfig {
   // Idle timeout in ms: the daemon self-exits after this long with zero connected
   // clients. Env ARGUS_DAEMON_IDLE_MS overrides it. Needs a daemon restart to apply.
   daemonIdleMs: number;
+  // Active model override. Empty string defers to the Claude CLI default.
+  model: string;
+  // Detected CLI default model (written by scripts/detect-default-model.js).
+  // Empty string means not yet detected.
+  runtimeDefaultModel: string;
+  // Effort level passed to the CLI (low|medium|high|xhigh|max). Empty defers to CLI default.
+  effort: string;
+  // Whether extended thinking is enabled. When false, forces --effort low.
+  thinking: boolean;
 }
 
 export const DEFAULT_CONFIG: ArgusConfig = {
@@ -50,6 +59,10 @@ export const DEFAULT_CONFIG: ArgusConfig = {
   allowedOrigins: '',
   daemonPort: 3017,
   daemonIdleMs: 10 * 60 * 1000,
+  model: '',
+  runtimeDefaultModel: '',
+  effort: 'high',
+  thinking: true,
 };
 
 let cachedConfig: ArgusConfig | null = null;
