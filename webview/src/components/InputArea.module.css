@@ -54,6 +54,18 @@
 .slashMenuItem:hover {
   background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.05));
 }
+
+/* Non-selectable control rows (Effort dots, Thinking toggle).
+   Same layout as slashMenuItem but a distinct class so tests can exclude them. */
+.slashMenuControl {
+  display: flex;
+  align-items: center;
+  padding: 7px 12px;
+  gap: 10px;
+}
+.slashMenuControl:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.05));
+}
 .slashMenuItemActive {
   background: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground, rgba(255,255,255,0.1)));
   color: var(--vscode-list-activeSelectionForeground);
@@ -105,6 +117,98 @@
 .slashMenuScopeBuiltin {
   color: var(--vscode-terminal-ansiGreen, #4a9e4a);
   opacity: 1;
+}
+
+.slashMenuHint {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.75;
+}
+
+.slashMenuCheck {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: var(--font-size);
+  color: var(--vscode-terminal-ansiGreen, #4a9e4a);
+}
+
+.slashMenuModelInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.slashMenuModelDesc {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Effort segmented dots */
+.slashMenuDots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.slashMenuDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vscode-descriptionForeground, #888);
+  opacity: 0.3;
+  cursor: pointer;
+  transition: opacity 0.1s, background 0.1s;
+}
+.slashMenuDot:hover {
+  opacity: 0.6;
+}
+
+.slashMenuDotActive {
+  opacity: 1;
+  background: var(--fg);
+}
+
+/* Thinking toggle */
+.slashMenuToggleTrack {
+  width: 30px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.slashMenuToggleTrackOn {
+  background: var(--vscode-charts-green, #3fb950);
+  border-color: var(--vscode-charts-green, #3fb950);
+}
+
+.slashMenuToggleThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+
+.slashMenuToggleThumbOn {
+  transform: translateX(14px);
 }
 
 .inputResizeHandle {

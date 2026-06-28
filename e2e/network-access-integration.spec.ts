@@ -88,9 +88,12 @@ test.describe('network access (integration)', () => {
 
     await openNetworkTab(page);
 
-    // With network access on, private-LAN origins (and the host configured by the
-    // previous test) are allowed.
+    // With network access on, private-LAN origins (and a configured host) are allowed.
+    // Set allowedOrigins directly here so this test is independent of the previous test's state.
     await setNetworkAccess(page, true);
+    const originsInput = page.getByLabel('Allowed origins');
+    await originsInput.fill('scub-tunnel.test');
+    await originsInput.press('Enter');
     await expectOrigin('http://10.1.2.3', nonce, 'open');
     await expectOrigin('http://scub-tunnel.test', nonce, 'open');
 

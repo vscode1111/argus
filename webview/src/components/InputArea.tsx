@@ -7,6 +7,41 @@ import { ImageViewerModal } from './ImageViewerModal';
 import styles from './InputArea.module.css';
 import settings from './SettingsModal.module.css';
 
+interface ModelEntry {
+  id: string;
+  displayName: string;
+  description?: string;
+}
+
+// Static descriptions merged onto API-fetched model names.
+const MODEL_DESCRIPTIONS: Record<string, string> = {
+  'claude-opus-4-8':           'Best for everyday, complex tasks',
+  'claude-opus-4-7':           'Best for everyday, complex tasks',
+  'claude-sonnet-4-6':         'Efficient for routine tasks',
+  'claude-sonnet-4-5':         'Efficient for routine tasks',
+  'claude-haiku-4-5':          'Fastest for quick answers',
+  'claude-haiku-4-5-20251001': 'Fastest for quick answers',
+  'claude-fable-5':            'Creative and expressive',
+};
+
+// Shown while the API fetch is in flight or has failed.
+const FALLBACK_MODELS: ModelEntry[] = [
+  { id: 'claude-haiku-4-5',  displayName: 'Claude Haiku 4.5',  description: 'Fastest for quick answers'         },
+  { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', description: 'Efficient for routine tasks'       },
+  { id: 'claude-opus-4-8',   displayName: 'Claude Opus 4.8',   description: 'Best for everyday, complex tasks'  },
+];
+
+// Built at render time so runtimeDefaultModel can be injected into the description.
+function makeDefaultEntry(runtimeModel: string): ModelEntry {
+  return {
+    id: '',
+    displayName: 'Default (CLI)',
+    description: runtimeModel
+      ? `Currently ${runtimeModel} · run scripts/detect-default-model.js to refresh`
+      : 'Defers to the Claude CLI default · run scripts/detect-default-model.js to detect',
+  };
+}
+
 const DEFAULT_FALLBACK_HEIGHT = 100;
 const MIN_HEIGHT_WITH_IMAGES = 120;
 const MIN_HEIGHT_DEFAULT = 73;
@@ -52,11 +87,17 @@ interface Props {
   version: string;
   contextUsage: { percent: number; inputTokens: number; outputTokens: number } | null;
   wsConnected?: boolean;
+  currentModel?: string;
+  currentEffort?: string;
+  thinkingEnabled?: boolean;
   onSend?: () => void;
   onStop?: () => void;
 }
 
-export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, wsConnected = true, onSend, onStop }: Props) {
+const EFFORT_LEVELS = ['low', 'medium', 'high', 'max'] as const;
+type EffortLevel = typeof EFFORT_LEVELS[number];
+
+export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, wsConnected = true, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -72,6 +113,11 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [mode, setMode] = useState<'plan' | 'edit'>('edit');
   const [accountUsageOpen, setAccountUsageOpen] = useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [fetchedModels, setFetchedModels] = useState<ModelEntry[] | null>(null);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [runtimeDefaultModel, setRuntimeDefaultModel] = useState('');
   const [text, setText] = useState('');
   const highlightRef = useRef<HTMLDivElement>(null);
   const historyIndex = useRef(-1);
@@ -94,10 +140,24 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     el.style.height = Math.min(el.scrollHeight, maxH) + 'px';
   }
 
-  // Listen for skills message from extension
+  // Listen for skills and modelList messages
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
-      if (e.data?.type === 'skills') setSkills(e.data.skills ?? []);
+      if (e.data?.type === 'skills') {
+        setSkills(e.data.skills ?? []);
+      } else if (e.data?.type === 'modelList') {
+        const raw: ModelEntry[] = (e.data.models ?? []).map((m: { id: string; displayName: string }) => ({
+          id: m.id,
+          displayName: m.displayName,
+          description: MODEL_DESCRIPTIONS[m.id],
+        }));
+        setFetchedModels(raw.length > 0 ? raw : null);
+        setModelsError(raw.length === 0 && e.data.error ? String(e.data.error) : null);
+        setModelsLoading(false);
+        if (typeof e.data.runtimeDefaultModel === 'string' && e.data.runtimeDefaultModel) {
+          setRuntimeDefaultModel(e.data.runtimeDefaultModel);
+        }
+      }
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
@@ -261,14 +321,14 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     ? skills.filter(s => s.name.toLowerCase().includes(slashQuery.toLowerCase()))
     : [];
 
-  // "Account & usage..." action surfaces when the query is a prefix of "account"/"usage"
-  // (e.g. "/usage"), so it stays out of the way on a bare "/".
+  // Synthetic action items surface when the query is a prefix of their trigger words,
+  // so they stay out of the way on a bare "/".
   const accountQuery = (slashQuery ?? '').toLowerCase();
-  const showAccountAction = accountQuery.length > 0 && (
-    'account'.startsWith(accountQuery) || 'usage'.startsWith(accountQuery)
-  );
-  const accountActionIndex = filteredSkills.length; // last item when shown
-  const totalDropdownItems = filteredSkills.length + (showAccountAction ? 1 : 0);
+  const showModelAction = 'model'.startsWith(accountQuery) || 'switch'.startsWith(accountQuery);
+  const showAccountAction = 'account'.startsWith(accountQuery) || 'usage'.startsWith(accountQuery);
+  const modelActionIndex = filteredSkills.length;
+  const accountActionIndex = filteredSkills.length + (showModelAction ? 1 : 0);
+  const totalDropdownItems = filteredSkills.length + (showModelAction ? 1 : 0) + (showAccountAction ? 1 : 0);
 
   function selectSkill(name: string) {
     const el = textareaRef.current;
@@ -303,6 +363,36 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     setAccountUsageOpen(true);
   }
 
+  // Reset the model picker whenever the slash menu closes.
+  useEffect(() => { if (slashQuery === null) setModelPickerOpen(false); }, [slashQuery]);
+
+  function openModelPicker() {
+    setModelPickerOpen(v => {
+      if (!v && fetchedModels === null && !modelsLoading) {
+        setModelsLoading(true);
+        postMessage({ type: 'getModels' });
+      }
+      return !v;
+    });
+  }
+
+  function pickModel(id: string) {
+    const el = textareaRef.current;
+    if (el) {
+      const ctx = getSlashContext();
+      if (ctx) {
+        const cursor = el.selectionStart ?? 0;
+        el.value = el.value.slice(0, ctx.slashIndex) + el.value.slice(cursor);
+        el.setSelectionRange(ctx.slashIndex, ctx.slashIndex);
+      }
+      adjustHeight();
+      el.focus();
+    }
+    postMessage({ type: 'switchModel', model: id });
+    setModelPickerOpen(false);
+    setSlashQuery(null);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (slashQuery !== null && totalDropdownItems > 0) {
       if (e.key === 'ArrowUp') {
@@ -319,7 +409,9 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
         e.preventDefault();
         if (highlightIndex < filteredSkills.length) {
           selectSkill(filteredSkills[highlightIndex].name);
-        } else {
+        } else if (showModelAction && highlightIndex === modelActionIndex) {
+          openModelPicker();
+        } else if (showAccountAction && highlightIndex === accountActionIndex) {
           openAccountUsage();
         }
         return;
@@ -369,7 +461,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
       {slashQuery !== null && (
         <div className={styles.slashMenu} style={{ left: 0 }}>
           <div className={styles.slashMenuHeader}>Slash Commands</div>
-          {filteredSkills.length === 0 && !showAccountAction && (
+          {filteredSkills.length === 0 && !showModelAction && !showAccountAction && (
             <div className={styles.slashMenuEmpty}>
               {skillsLoaded.current ? 'No matching commands' : 'Loading...'}
             </div>
@@ -389,18 +481,87 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
               )}
             </div>
           ))}
-          {showAccountAction && (
+          {(showModelAction || showAccountAction) && (
+            <div className={styles.slashMenuHeader}>Model</div>
+          )}
+          {showModelAction && (
             <>
-              <div className={styles.slashMenuHeader}>Model</div>
               <div
-                ref={highlightIndex === accountActionIndex ? el => el?.scrollIntoView({ block: 'nearest' }) : undefined}
-                className={[styles.slashMenuItem, highlightIndex === accountActionIndex ? styles.slashMenuItemActive : ''].filter(Boolean).join(' ')}
+                ref={highlightIndex === modelActionIndex ? el => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                className={[styles.slashMenuItem, highlightIndex === modelActionIndex ? styles.slashMenuItemActive : ''].filter(Boolean).join(' ')}
                 onMouseDown={e => e.preventDefault()}
-                onClick={openAccountUsage}
+                onClick={openModelPicker}
               >
-                <span className={styles.slashMenuName}>Account &amp; usage...</span>
+                <span className={styles.slashMenuName}>Switch model...</span>
+                <span className={styles.slashMenuHint}>{(() => {
+                  const all = [makeDefaultEntry(runtimeDefaultModel), ...(fetchedModels ?? FALLBACK_MODELS)];
+                  const found = all.find(m => m.id === currentModel);
+                  return found ? found.displayName.replace(/^Claude /, '') : (currentModel || 'Default');
+                })()}</span>
+              </div>
+              {modelPickerOpen && (
+                modelsLoading ? (
+                  <div className={styles.slashMenuEmpty}>Loading models...</div>
+                ) : modelsError && !fetchedModels ? (
+                  <div className={styles.slashMenuEmpty}>Failed to load: {modelsError}</div>
+                ) : (
+                  [makeDefaultEntry(runtimeDefaultModel), ...(fetchedModels ?? FALLBACK_MODELS)].map(m => (
+                    <div
+                      key={m.id || '__default__'}
+                      className={styles.slashMenuItem}
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => pickModel(m.id)}
+                    >
+                      <span className={styles.slashMenuCheck}>{m.id === currentModel ? '✓' : ''}</span>
+                      <div className={styles.slashMenuModelInfo}>
+                        <span className={styles.slashMenuName}>{m.displayName}</span>
+                        {m.description && <span className={styles.slashMenuModelDesc}>{m.description}</span>}
+                      </div>
+                    </div>
+                  ))
+                )
+              )}
+            </>
+          )}
+          {showModelAction && !modelPickerOpen && (
+            <>
+              <div
+                className={styles.slashMenuControl}
+                onMouseDown={e => e.preventDefault()}
+              >
+                <span className={styles.slashMenuName}>Effort ({currentEffort.charAt(0).toUpperCase() + currentEffort.slice(1)})</span>
+                <div className={styles.slashMenuDots}>
+                  {EFFORT_LEVELS.map(level => (
+                    <span
+                      key={level}
+                      title={level.charAt(0).toUpperCase() + level.slice(1)}
+                      className={[styles.slashMenuDot, level === (EFFORT_LEVELS.includes(currentEffort as EffortLevel) ? currentEffort : 'high') ? styles.slashMenuDotActive : ''].filter(Boolean).join(' ')}
+                      onClick={() => { postMessage({ type: 'switchEffort', effort: level }); }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div
+                className={styles.slashMenuControl}
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => postMessage({ type: 'switchThinking', thinking: !thinkingEnabled })}
+              >
+                <span className={styles.slashMenuName}>Thinking</span>
+                <div className={[styles.slashMenuToggleTrack, thinkingEnabled ? styles.slashMenuToggleTrackOn : ''].filter(Boolean).join(' ')}>
+                  <div className={[styles.slashMenuToggleThumb, thinkingEnabled ? styles.slashMenuToggleThumbOn : ''].filter(Boolean).join(' ')} />
+                </div>
               </div>
             </>
+          )}
+          {showAccountAction && (
+            <div
+              ref={highlightIndex === accountActionIndex ? el => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+              className={[styles.slashMenuItem, highlightIndex === accountActionIndex ? styles.slashMenuItemActive : ''].filter(Boolean).join(' ')}
+              onMouseDown={e => e.preventDefault()}
+              onClick={openAccountUsage}
+            >
+              <span className={styles.slashMenuName}>Account &amp; usage...</span>
+            </div>
           )}
         </div>
       )}
@@ -502,7 +663,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
           onClose={() => setViewerIndex(null)}
         />
       )}
-      {accountUsageOpen && <AccountUsageModal onClose={() => setAccountUsageOpen(false)} />}
+      {accountUsageOpen && <AccountUsageModal onClose={() => setAccountUsageOpen(false)} currentModel={currentModel} currentEffort={currentEffort} thinkingEnabled={thinkingEnabled} />}
     </div>
   );
 

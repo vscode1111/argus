@@ -13,6 +13,9 @@ export type AppState = {
   login: LoginState;
   contextUsage: ContextUsage | null;
   wsConnected: boolean;
+  currentModel: string;
+  currentEffort: string;
+  thinkingEnabled: boolean;
 };
 
 export type AppAction =
@@ -27,7 +30,7 @@ export type AppAction =
   | { type: 'error'; text: string; errorKind?: string }
   | { type: 'clear' }
   | { type: 'prefill'; text: string }
-  | { type: 'workspaceInfo'; path: string; version?: string }
+  | { type: 'workspaceInfo'; path: string; version?: string; model?: string; effort?: string; thinking?: boolean }
   | { type: 'log'; level: LogLevel; text: string; timestamp: string }
   | { type: 'clearLogs' }
   | { type: 'loginStart' }
@@ -39,6 +42,9 @@ export type AppAction =
   | { type: 'retry_clean' }
   | { type: 'user_inject'; text: string }
   | { type: 'sessionLoaded'; id: string; messages: UIMessage[] }
+  | { type: 'modelChanged'; model: string }
+  | { type: 'effortChanged'; effort: string }
+  | { type: 'thinkingChanged'; thinking: boolean }
   | { type: 'ws_status'; connected: boolean };
 
 let nextMsgId = 0;
@@ -255,7 +261,23 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, prefill: action.text + '\x00' + Date.now() };
 
     case 'workspaceInfo':
-      return { ...state, workspacePath: action.path, version: action.version ?? '' };
+      return {
+        ...state,
+        workspacePath: action.path,
+        version: action.version ?? '',
+        ...(action.model !== undefined ? { currentModel: action.model } : {}),
+        ...(action.effort !== undefined ? { currentEffort: action.effort } : {}),
+        ...(action.thinking !== undefined ? { thinkingEnabled: action.thinking } : {}),
+      };
+
+    case 'modelChanged':
+      return { ...state, currentModel: action.model };
+
+    case 'effortChanged':
+      return { ...state, currentEffort: action.effort };
+
+    case 'thinkingChanged':
+      return { ...state, thinkingEnabled: action.thinking };
 
     case 'retry_status': {
       if (!state.streaming) return state;
@@ -370,4 +392,7 @@ export const initialState: AppState = {
   login: { phase: 'idle' },
   contextUsage: null,
   wsConnected: true,
+  currentModel: '',
+  currentEffort: 'high',
+  thinkingEnabled: true,
 };

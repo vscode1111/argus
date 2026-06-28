@@ -11,7 +11,9 @@ test.describe('slash commands (integration)', () => {
     await textarea.focus();
     await textarea.pressSequentially('/');
 
-    const header = page.locator('[class*="slashMenuHeader"]');
+    // Two headers exist ("Slash Commands" + "Model"); use .first() so toBeVisible
+    // doesn't throw on the multi-element locator.
+    const header = page.locator('[class*="slashMenuHeader"]').first();
     await expect(header).toBeVisible();
 
     // Wait for real skills to load (not "Loading...")

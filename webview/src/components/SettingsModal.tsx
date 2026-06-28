@@ -35,6 +35,20 @@ interface NumberInputProps {
   disabled?: boolean;
 }
 
+// Common service / dev ports to avoid when picking a random daemon port.
+const POPULAR_PORTS = new Set([
+  21, 22, 23, 25, 53, 80, 110, 143, 443, 587, 993, 995,
+  1433, 1521, 3000, 3001, 3017, 3018, 3306, 3389, 4200, 5000, 5173, 5432,
+  5672, 6379, 8000, 8080, 8081, 8443, 8888, 9000, 9090, 9200, 9229, 11211, 27017,
+]);
+
+// A random port in 1024-65535 that isn't a well-known/popular one.
+function randomPort(): number {
+  let p: number;
+  do { p = 1024 + Math.floor(Math.random() * (65535 - 1024 + 1)); } while (POPULAR_PORTS.has(p));
+  return p;
+}
+
 function NumberInput({ id, value, onChange, min = 1, step, disabled }: NumberInputProps) {
   const [text, setText] = useState(String(value));
   useEffect(() => { setText(String(value)); }, [value]);
@@ -138,6 +152,15 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, []);
+
+  // The Daemon port field configures the *next-restart* port, but on open it should
+  // reflect the port the daemon is actually running on (the configured value can be
+  // stale - e.g. set then never applied). When the live port arrives via serverInfo,
+  // sync the field to it so it shows the real port; randomize/Apply still move it.
+  useEffect(() => {
+    if (serverPort != null && serverPort !== daemonPort) setDaemonPort(serverPort);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverPort]);
 
   function openExternal(url: string): void {
     postMessage({ type: 'openUrl', url });
@@ -309,7 +332,24 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             </div>
             <label className={styles.settingRow} htmlFor="input-daemon-port">
               <span className={styles.settingLabel} title="Fixed port the always-on daemon listens on (default 3017). The extension and the browser UI read the actual port from the discovery file, so they adapt automatically. Applies to the daemon after a restart (yarn daemon:stop).">Daemon port</span>
-              <NumberInput id="input-daemon-port" value={daemonPort} onChange={setDaemonPort} min={1} />
+              <span className={styles.portControls}>
+                <button
+                  type="button"
+                  className={styles.randomBtn}
+                  aria-label="Randomize port"
+                  title="Pick a random port (avoids common ports)"
+                  onClick={(e) => { e.preventDefault(); setDaemonPort(randomPort()); }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" />
+                    <circle cx="16" cy="16" r="1.4" fill="currentColor" stroke="none" />
+                    <circle cx="8" cy="16" r="1.4" fill="currentColor" stroke="none" />
+                    <circle cx="16" cy="8" r="1.4" fill="currentColor" stroke="none" />
+                  </svg>
+                </button>
+                <NumberInput id="input-daemon-port" value={daemonPort} onChange={setDaemonPort} min={1} />
+              </span>
             </label>
             <label className={styles.settingRow} htmlFor="input-daemon-idle">
               <span className={styles.settingLabel} title="The always-on daemon self-exits after this many minutes with zero connected clients. Applies to the daemon after a restart (yarn daemon:stop).">Daemon idle timeout (min)</span>

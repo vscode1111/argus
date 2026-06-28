@@ -156,7 +156,7 @@ test.describe('dialog state persistence (integration)', () => {
       const action = page.locator('[class*="slashMenuItem"]', { hasText: 'Account & usage' });
       await expect(action).toBeVisible();
       await action.click();
-      const d = page.getByRole('dialog', { name: 'Account & Usage' });
+      const d = page.getByRole('dialog', { name: 'Account' });
       await expect(d).toBeVisible();
       return d;
     }
@@ -264,7 +264,7 @@ test.describe('dialog state persistence (integration)', () => {
       const action = page.locator('[class*="slashMenuItem"]', { hasText: 'Account & usage' });
       await expect(action).toBeVisible();
       await action.click();
-      const d = page.getByRole('dialog', { name: 'Account & Usage' });
+      const d = page.getByRole('dialog', { name: 'Account' });
       await expect(d).toBeVisible();
       return d;
     }
