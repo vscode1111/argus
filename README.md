@@ -20,6 +20,8 @@ AI coding assistant for VS Code, powered by Claude.
 ## Features
 
 - Streaming chat with Claude, including tool calls (read, write, edit, bash, grep, glob, web search, web fetch).
+- Live token spending display: input and output token counts update in real time during streaming, shown in the message timer.
+- Collapsible thinking blocks: extended thinking is shown collapsed with a token estimate; click to expand the full reasoning.
 - Plan mode for dry-run exploration without file edits.
 - Slash commands: built-in (`/compact`, `/model`, `/clear`, ...) and custom skills from `~/.claude/skills/` and `<workspace>/.claude/skills/`.
 - Paste images directly into the input with `Ctrl+V`.

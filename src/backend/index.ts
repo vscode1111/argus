@@ -12,7 +12,7 @@ export type { ArgusConfig } from './config';
 
 const DEFAULT_MODEL = process.env.ARGUS_MODEL ?? '';
 // Extra origin hosts (IPs or hostnames) allowed to connect, comma-separated.
-// e.g. ARGUS_ALLOWED_ORIGINS="45.45.45.45,dev.example.com" - used for the VLESS
+// e.g. ARGUS_ALLOWED_ORIGINS="203.0.113.1,dev.example.com" - used for the VLESS
 // reverse-mesh entry IP so a remote phone reaches this dev box over the tunnel.
 const DEFAULT_ALLOWED_ORIGINS = process.env.ARGUS_ALLOWED_ORIGINS ?? '';
 

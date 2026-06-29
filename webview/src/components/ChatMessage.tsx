@@ -191,7 +191,7 @@ export function ChatMessage({ message, login, logCount }: Props) {
           : message.outcome === 'retried' ? msg.responseTimeRetried
           : msg.responseTimeSuccess
         }>
-          {formatDuration(responseTime)}{message.finishedAt ? ` (${formatTime(message.finishedAt)})` : ''}{message.outcome === 'retried' && message.watchdogRetries ? ` reconnected ${message.watchdogRetries}x` : ''}
+          {formatDuration(responseTime)}{message.finishedAt ? ` (${formatTime(message.finishedAt)})` : ''}{message.outcome === 'retried' && message.watchdogRetries ? ` reconnected ${message.watchdogRetries}x` : ''}{message.finalTokens && (message.finalTokens.input > 0 || message.finalTokens.output > 0) ? ` · ${message.finalTokens.input.toLocaleString()} in / ${message.finalTokens.output.toLocaleString()} out` : ''}
         </div>
       )}
       {message.outcome === 'background_waiting' && (

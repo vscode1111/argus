@@ -49,6 +49,7 @@ export type UIMessage = {
   errorKind?: ErrorKind;
   bgTasksCompleted?: number;
   bgTasksTotal?: number;
+  finalTokens?: { input: number; output: number };
 };
 
 export type Outcome = 'success' | 'stopped' | 'error' | 'retried' | 'background_waiting' | 'background_done';
@@ -105,6 +106,7 @@ export type StreamingState = {
   watchdogRetries: number;
   backgroundWaiting?: boolean;
   askPausedAt?: number;
+  liveTokens?: { input: number; output: number };
 };
 
 export type ArgusSettings = {

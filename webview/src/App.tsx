@@ -113,7 +113,7 @@ function AppInner() {
       'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
       'tool_start', 'tool_end', 'done', 'error', 'clear', 'user_inject', 'sessionLoaded',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
-      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'retry_status', 'retry_clean', 'ws_status', 'modelChanged', 'effortChanged', 'thinkingChanged',
+      'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'token_update', 'retry_status', 'retry_clean', 'ws_status', 'modelChanged', 'effortChanged', 'thinkingChanged',
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;

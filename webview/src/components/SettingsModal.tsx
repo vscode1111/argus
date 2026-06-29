@@ -307,7 +307,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             </label>
             <div className={[styles.settingColumn, !allowNetworkAccess ? styles.settingDisabled : ''].filter(Boolean).join(' ')}>
               <label className={styles.settingLabel} htmlFor="input-origins" title="Extra hosts (IPs or hostnames) allowed to connect, comma-separated. Private-LAN ranges are already allowed when network access is on.">Allowed origins</label>
-              <TextInput id="input-origins" value={allowedOrigins} onChange={setAllowedOrigins} placeholder="45.45.45.45, dev.example.com" disabled={!allowNetworkAccess} />
+              <TextInput id="input-origins" value={allowedOrigins} onChange={setAllowedOrigins} placeholder="203.0.113.1, dev.example.com" disabled={!allowNetworkAccess} />
               <span className={styles.fieldHint}>
                 Comma-separated hosts.<br />
                 Used for tunnels or reverse proxies<br />

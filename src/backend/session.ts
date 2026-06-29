@@ -38,7 +38,7 @@ export function handleConnection(
   const s = createSessionState(
     ws, workspaceDir,
     initCfg.model || model,
-    initCfg.effort || 'high',
+    initCfg.effort ?? 'high',
     initCfg.thinking ?? true,
   );
 
@@ -319,7 +319,7 @@ function handleSend(s: SessionState, msg: { text?: string; images?: Array<{ data
     '--input-format', 'stream-json',
     '--include-partial-messages',
     '--tools', tools.join(','),
-    '--allowedTools', tools.filter(t => t !== 'AskUserQuestion').join(','),
+    '--allowedTools', tools.join(','),
   ];
   if (s.model) baseArgs.push('--model', s.model);
   if (!s.thinking) {
@@ -327,6 +327,8 @@ function handleSend(s: SessionState, msg: { text?: string; images?: Array<{ data
   } else if (s.effort) {
     baseArgs.push('--effort', s.effort);
   }
+  const cfg = readConfig();
+  if (cfg.appendSystemPrompt) baseArgs.push('--append-system-prompt', cfg.appendSystemPrompt);
   if (isPlan) {
     baseArgs.push('--permission-mode', 'plan', '--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
   }

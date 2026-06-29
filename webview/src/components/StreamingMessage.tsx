@@ -16,7 +16,7 @@ interface Props {
 
 export function StreamingMessage({ streaming, logCount }: Props) {
   const { showTimer } = useSettings();
-  const { thinking, blocks, startTime, lastEventTime, logsAtStart, reused } = streaming;
+  const { thinking, blocks, startTime, lastEventTime, logsAtStart, reused, liveTokens } = streaming;
   const isEmpty = !thinking && blocks.length === 0;
   // New session: trigger after the first CLI event past "stdin" (newLogs > 1)
   // Reused process: wait one more event so the indicator doesn't appear instantly (newLogs > 2)
@@ -51,7 +51,7 @@ export function StreamingMessage({ streaming, logCount }: Props) {
         </div>;
       })}
       {streaming.retryStatus && <WorkingIndicator logCount={logCount} retryStatus={streaming.retryStatus} />}
-      {showTimer && <StreamingTimer startTime={startTime} lastEventTime={lastEventTime} hideIdle={!!streaming.askPausedAt} />}
+      {showTimer && <StreamingTimer startTime={startTime} lastEventTime={lastEventTime} hideIdle={!!streaming.askPausedAt} liveTokens={liveTokens} />}
     </div>
   );
 }

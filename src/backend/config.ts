@@ -39,6 +39,9 @@ export interface ArgusConfig {
   effort: string;
   // Whether extended thinking is enabled. When false, forces --effort low.
   thinking: boolean;
+  // Text appended to the default Claude CLI system prompt (--append-system-prompt).
+  // Empty string disables.
+  appendSystemPrompt: string;
 }
 
 export const DEFAULT_CONFIG: ArgusConfig = {
@@ -63,6 +66,7 @@ export const DEFAULT_CONFIG: ArgusConfig = {
   runtimeDefaultModel: '',
   effort: 'high',
   thinking: true,
+  appendSystemPrompt: '',
 };
 
 let cachedConfig: ArgusConfig | null = null;
