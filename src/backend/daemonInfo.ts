@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 
 // Discovery file the daemon writes on startup and the extension reads to find it.
 // Lives in the user-owned ~/.claude/ (same trust boundary as .dev-nonce and
@@ -46,11 +47,22 @@ export function clearDaemonInfo(): void {
 // Whether a process with the given pid is currently running. `kill(pid, 0)` sends
 // no signal but throws ESRCH if the process does not exist (EPERM means it exists
 // but is owned by another user - still alive).
+// On Windows, PIDs recycle quickly. After confirming the pid exists, we verify it
+// belongs to node.exe or Code.exe (Electron-as-node) so a stale discovery file
+// whose pid was recycled by an unrelated process (e.g. conhost) doesn't block a
+// fresh daemon from starting.
 export function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
-    return true;
   } catch (err) {
     return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+  if (process.platform !== 'win32') return true;
+  try {
+    const out = execFileSync('tasklist', ['/fi', `PID eq ${pid}`, '/fo', 'csv', '/nh'],
+      { encoding: 'utf-8', timeout: 2000 }) as string;
+    return /^"(node|Code)\.exe"/im.test(out);
+  } catch {
+    return true; // can't verify, assume alive
   }
 }

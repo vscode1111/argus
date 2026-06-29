@@ -294,7 +294,7 @@
 /* "Apply (restart daemon)" button. */
 .restartBtn {
   margin-top: 8px;
-  align-self: flex-start;
+  align-self: stretch;
   background: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
   border: none;

@@ -356,7 +356,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
               <NumberInput id="input-daemon-idle" value={Math.round(daemonIdleMs / 60000)} onChange={(m) => setDaemonIdleMs(Math.max(1, m) * 60000)} min={1} />
             </label>
             <div className={styles.settingColumn}>
-              <span className={styles.fieldHint}>Daemon port and idle timeout.<br />Apply after a daemon restart.</span>
+              <span className={styles.fieldHint}>Daemon port and idle timeout. Apply after a daemon restart.</span>
               <button
                 className={styles.restartBtn}
                 onClick={handleRestart}
