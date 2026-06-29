@@ -242,4 +242,81 @@ test.describe('effort and thinking (integration)', () => {
       { timeout: 20_000 },
     ).toContain('--effort medium');
   });
+
+  // ── model selection ──────────────────────────────────────────────────────────
+
+  test('clicking a model row in the modal persists to config', async ({ page }) => {
+    const dialog = await openModelsTab(page);
+    // Wait for model rows (API fetch resolves; falls back only when the API returns no error)
+    await expect(dialog.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
+
+    // Skip the first row ("Default (CLI)") and click the first real model
+    const rows = dialog.locator('[class*="modelRow"]');
+    const count = await rows.count();
+    expect(count).toBeGreaterThan(1);
+    await rows.nth(1).click();
+
+    await expect.poll(() => readConfig().model, { timeout: 8_000 }).not.toBe('');
+  });
+
+  test('selecting Default (CLI) in the modal clears the stored model', async ({ page }) => {
+    writeConfig({ model: 'claude-haiku-4-5' });
+    await reloadAndWait(page);
+
+    const dialog = await openModelsTab(page);
+    await expect(dialog.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
+    await dialog.locator('[class*="modelRow"]').filter({ hasText: 'Default (CLI)' }).click();
+
+    await expect.poll(() => readConfig().model, { timeout: 8_000 }).toBe('');
+  });
+
+  test('selecting a model in the slash menu persists to config', async ({ page }) => {
+    await openSlashMenu(page);
+
+    // Expand the model picker
+    await page.locator('[class*="slashMenuItem"]').filter({ hasText: 'Switch model...' }).click();
+
+    // Wait for model list to load (falls back to FALLBACK_MODELS when API returns no error)
+    await expect(page.locator('[class*="slashMenuModelInfo"]').first()).toBeVisible({ timeout: 10_000 });
+
+    // Click the first real model (index 1 is the first after Default (CLI))
+    await page.locator('[class*="slashMenuModelInfo"]').nth(1).click();
+
+    await expect.poll(() => readConfig().model, { timeout: 8_000 }).not.toBe('');
+  });
+
+  test('model persists across reconnect - slash menu hint shows model name', async ({ page }) => {
+    writeConfig({ model: 'claude-haiku-4-5' });
+    await reloadAndWait(page);
+
+    await openSlashMenu(page);
+    // The hint next to "Switch model..." shows the display name without "Claude " prefix
+    await expect(page.locator('[class*="slashMenuHint"]')).toHaveText(/Haiku 4\.5/i, { timeout: 8_000 });
+    await closeSlashMenu(page);
+  });
+
+  test('model search in the modal filters the list', async ({ page }) => {
+    const dialog = await openModelsTab(page);
+    await expect(dialog.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
+
+    await dialog.getByPlaceholder('Search models...').fill('haiku');
+
+    await expect(dialog.locator('[class*="modelRow"]').filter({ hasText: /haiku/i })).toBeVisible();
+    await expect(dialog.locator('[class*="modelRow"]').filter({ hasText: /sonnet/i })).toHaveCount(0);
+  });
+
+  test('selected model is forwarded to the CLI spawn log', async ({ page }) => {
+    writeConfig({ model: 'claude-sonnet-4-6', effort: 'high', thinking: true });
+    await reloadAndWait(page);
+
+    const logList = page.locator(LOG_LIST);
+    await expect(logList).toBeVisible({ timeout: 5_000 });
+
+    await sendAndWait(page, 'Reply with just "ok".');
+
+    await expect.poll(
+      async () => { const t = await logList.innerText(); return t; },
+      { timeout: 20_000 },
+    ).toContain('--model claude-sonnet-4-6');
+  });
 });
