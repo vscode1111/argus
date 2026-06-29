@@ -35,6 +35,8 @@ export function handleCliEvent(s: SessionState, event: Record<string, unknown>):
   } else if (event.type === 'stream_event') {
     const inner = event.event as Record<string, unknown> | undefined;
     if (inner?.type === 'content_block_delta') handleDelta(s, inner);
+    else if (inner?.type === 'message_start') handleMessageStart(s, inner);
+    else if (inner?.type === 'message_delta') handleMessageDelta(s, inner);
   } else if (event.type === 'content_block_delta') {
     handleDelta(s, event);
   } else if (event.type === 'assistant') {
@@ -87,6 +89,19 @@ function handleDelta(s: SessionState, event: Record<string, unknown>): void {
   } else if (delta?.type === 'thinking_delta' && delta.thinking) {
     s.ws.send(JSON.stringify({ type: 'thinking_chunk', text: delta.thinking }));
   }
+}
+
+function handleMessageStart(s: SessionState, inner: Record<string, unknown>): void {
+  const usage = (inner.message as Record<string, unknown> | undefined)?.usage as Record<string, number> | undefined;
+  if (!usage) return;
+  const inputTokens = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+  if (inputTokens > 0) s.ws.send(JSON.stringify({ type: 'token_update', inputTokens }));
+}
+
+function handleMessageDelta(s: SessionState, inner: Record<string, unknown>): void {
+  const usage = inner.usage as Record<string, number> | undefined;
+  const outputTokens = usage?.output_tokens;
+  if (outputTokens != null) s.ws.send(JSON.stringify({ type: 'token_update', outputTokens }));
 }
 
 function handleAssistant(s: SessionState, event: Record<string, unknown>): void {

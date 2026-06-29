@@ -19,5 +19,6 @@
   "model": "",
   "runtimeDefaultModel": "",
   "effort": "high",
-  "thinking": true
+  "thinking": true,
+  "appendSystemPrompt": ""
 }

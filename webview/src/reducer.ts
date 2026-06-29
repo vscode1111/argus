@@ -45,7 +45,8 @@ export type AppAction =
   | { type: 'modelChanged'; model: string }
   | { type: 'effortChanged'; effort: string }
   | { type: 'thinkingChanged'; thinking: boolean }
-  | { type: 'ws_status'; connected: boolean };
+  | { type: 'ws_status'; connected: boolean }
+  | { type: 'token_update'; inputTokens?: number; outputTokens?: number };
 
 let nextMsgId = 0;
 function generateId(): string { return `msg-${++nextMsgId}-${Date.now()}`; }
@@ -181,6 +182,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         watchdogRetries: watchdogRetries > 0 ? watchdogRetries : undefined,
         bgTasksCompleted: hasPendingBg ? bgCompleted : undefined,
         bgTasksTotal: hasPendingBg ? bgTotal : undefined,
+        finalTokens: state.streaming.liveTokens,
       };
       const resolvedMessages = state.messages.map(m =>
         m.outcome === 'background_waiting' ? { ...m, outcome: 'background_done' as const } : m
@@ -318,6 +320,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
             thinking: '',
             blocks: [],
             watchdogRetries: state.streaming.watchdogRetries + 1,
+            liveTokens: undefined,
           } : {}),
         },
       };
@@ -350,6 +353,21 @@ export function reducer(state: AppState, action: AppAction): AppState {
 
     case 'contextUsage':
       return { ...state, contextUsage: { percent: action.percent, inputTokens: action.inputTokens, outputTokens: action.outputTokens } };
+
+    case 'token_update': {
+      if (!state.streaming) return state;
+      const prev = state.streaming.liveTokens ?? { input: 0, output: 0 };
+      return {
+        ...state,
+        streaming: {
+          ...state.streaming,
+          liveTokens: {
+            input: action.inputTokens ?? prev.input,
+            output: action.outputTokens ?? prev.output,
+          },
+        },
+      };
+    }
 
     case 'ws_status': {
       if (action.connected) return { ...state, wsConnected: true };

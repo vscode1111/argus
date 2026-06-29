@@ -5,8 +5,32 @@
   border-left: 2px solid var(--border);
   padding-left: 8px;
   margin-bottom: 8px;
-  max-height: 120px;
-  overflow: hidden;
   cursor: pointer;
 }
-.expanded { max-height: none; }
+
+.header {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  user-select: none;
+}
+
+.tokenCount {
+  opacity: 0.6;
+}
+
+.chevron {
+  font-style: normal;
+  opacity: 0.5;
+  transition: transform 0.15s;
+}
+
+.expanded .chevron {
+  transform: rotate(90deg);
+}
+
+.body {
+  margin-top: 6px;
+  word-break: break-word;
+  font-style: normal;
+}
