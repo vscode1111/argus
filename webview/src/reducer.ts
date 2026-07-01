@@ -20,7 +20,7 @@ export type AppState = {
 
 export type AppAction =
   | { type: 'message'; message: UIMessage }
-  | { type: 'thinking_start'; reused?: boolean }
+  | { type: 'thinking_start'; reused?: boolean; startedAt?: number }
   | { type: 'thinking_chunk'; text: string }
   | { type: 'text_chunk'; text: string }
   | { type: 'tool_start'; call: ToolCallData }
@@ -77,7 +77,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         isStreaming: true,
-        streaming: { thinking: '', blocks: [], startTime: prev ? prev.startTime : Date.now(), lastEventTime: Date.now(), logsAtStart: (inheritStart ? prev!.logsAtStart : state.logs.length), reused: action.reused ?? false, stopped: false, retryStatus: inheritStart ? prev!.retryStatus : null, watchdogRetries: (inheritStart ? prev!.watchdogRetries : 0) },
+        streaming: { thinking: '', blocks: [], startTime: prev ? prev.startTime : (action.startedAt ?? Date.now()), lastEventTime: Date.now(), logsAtStart: (inheritStart ? prev!.logsAtStart : state.logs.length), reused: action.reused ?? false, stopped: false, retryStatus: inheritStart ? prev!.retryStatus : null, watchdogRetries: (inheritStart ? prev!.watchdogRetries : 0) },
       };
     }
 

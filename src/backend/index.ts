@@ -5,7 +5,8 @@ import { resolve, isAbsolute, join } from 'path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage } from 'http';
 
-import { handleConnection } from './session';
+import { attachClientHandlers } from './session';
+import { getOrCreateChannel } from './channel';
 import { readConfig } from './config';
 
 export type { ArgusConfig } from './config';
@@ -217,7 +218,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       return;
     }
     const serverPort = req.socket.localPort ?? PORT;
-    handleConnection(ws, workspaceDir, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined });
+    const channel = getOrCreateChannel(workspaceDir);
+    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined });
     broadcastClientCount();
   });
 
