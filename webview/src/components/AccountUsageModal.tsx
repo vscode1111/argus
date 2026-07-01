@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { postMessage } from '../vscode';
+import { getDialogState, patchDialogState } from '../utils/dialogState';
 import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
 import { useWebviewMessage } from '../hooks/useWebviewMessage';
@@ -124,7 +125,8 @@ function formatReset(resetsAt: number): string {
 }
 
 export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 'high', thinkingEnabled = true }: Props) {
-  const [tab, setTab] = useState<Tab>('usage');
+  const [tab, setTabState] = useState<Tab>(() => (getDialogState('accountUsage')?.tab as Tab) || 'usage');
+  const setTab = (t: Tab) => { setTabState(t); patchDialogState('accountUsage', { tab: t }); };
   const [account, setAccount] = useState<AccountInfo | null>(null);
   const [rateLimits, setRateLimits] = useState<RateLimitInfo[]>([]);
   const [usageError, setUsageError] = useState<string | undefined>(undefined);
@@ -141,6 +143,16 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
   const [runtimeDefaultModel, setRuntimeDefaultModel] = useState('');
   const [modelSearch, setModelSearch] = useState('');
   const modelsLoadedRef = useRef(false);
+
+  // If the restored tab is "models", trigger the lazy fetch on mount.
+  useEffect(() => {
+    if (tab === 'models' && !modelsLoadedRef.current) {
+      modelsLoadedRef.current = true;
+      setModelsLoading(true);
+      postMessage({ type: 'getModels' });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useWebviewMessage(
     (e: MessageEvent) => {

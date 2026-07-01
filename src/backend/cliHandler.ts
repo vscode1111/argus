@@ -23,7 +23,7 @@ export function handleCliEvent(s: SessionState, event: Record<string, unknown>):
     s.pendingFollowUp = undefined;
     s.resetStaleTimer();
     s.watchdog.state.active = true;
-    s.ws.send(JSON.stringify({ type: 'thinking_start', reused: true }));
+    s.broadcast(JSON.stringify({ type: 'thinking_start', reused: true }));
     s.sendLog('info', 'Background task notification: starting autonomous turn');
   }
 
@@ -71,10 +71,10 @@ function handleSystemEvent(s: SessionState, event: Record<string, unknown>): voi
           if (output) result += '\n\nOutput:\n' + output;
         } catch {}
       }
-      s.ws.send(JSON.stringify({ type: 'tool_end', call: { id: toolUseId, name: 'Bash', input: {}, result } }));
+      s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolUseId, name: 'Bash', input: {}, result } }));
     }
   } else if (event.subtype === 'api_retry') {
-    s.ws.send(JSON.stringify({ type: 'retry_status', attempt: event.attempt, maxRetries: event.max_retries, delayMs: event.retry_delay_ms }));
+    s.broadcast(JSON.stringify({ type: 'retry_status', attempt: event.attempt, maxRetries: event.max_retries, delayMs: event.retry_delay_ms }));
   }
 }
 
@@ -85,9 +85,9 @@ function handleDelta(s: SessionState, event: Record<string, unknown>): void {
     s.receivedDeltas = true;
     s.textAccum += delta.text as string;
     s.startStaleTimer();
-    s.ws.send(JSON.stringify({ type: 'text_chunk', text: delta.text }));
+    s.broadcast(JSON.stringify({ type: 'text_chunk', text: delta.text }));
   } else if (delta?.type === 'thinking_delta' && delta.thinking) {
-    s.ws.send(JSON.stringify({ type: 'thinking_chunk', text: delta.thinking }));
+    s.broadcast(JSON.stringify({ type: 'thinking_chunk', text: delta.thinking }));
   }
 }
 
@@ -95,13 +95,13 @@ function handleMessageStart(s: SessionState, inner: Record<string, unknown>): vo
   const usage = (inner.message as Record<string, unknown> | undefined)?.usage as Record<string, number> | undefined;
   if (!usage) return;
   const inputTokens = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
-  if (inputTokens > 0) s.ws.send(JSON.stringify({ type: 'token_update', inputTokens }));
+  if (inputTokens > 0) s.broadcast(JSON.stringify({ type: 'token_update', inputTokens }));
 }
 
 function handleMessageDelta(s: SessionState, inner: Record<string, unknown>): void {
   const usage = inner.usage as Record<string, number> | undefined;
   const outputTokens = usage?.output_tokens;
-  if (outputTokens != null) s.ws.send(JSON.stringify({ type: 'token_update', outputTokens }));
+  if (outputTokens != null) s.broadcast(JSON.stringify({ type: 'token_update', outputTokens }));
 }
 
 function handleAssistant(s: SessionState, event: Record<string, unknown>): void {
@@ -110,22 +110,14 @@ function handleAssistant(s: SessionState, event: Record<string, unknown>): void 
   const content = (event.message as { content: Array<Record<string, unknown>> })?.content ?? [];
   for (const block of content) {
     if (block.type === 'thinking' && block.thinking) {
-      s.ws.send(JSON.stringify({ type: 'thinking_chunk', text: block.thinking }));
+      s.broadcast(JSON.stringify({ type: 'thinking_chunk', text: block.thinking }));
     } else if (block.type === 'text' && block.text && !s.receivedDeltas) {
-      s.ws.send(JSON.stringify({ type: 'text_chunk', text: block.text }));
+      s.broadcast(JSON.stringify({ type: 'text_chunk', text: block.text }));
     } else if (block.type === 'tool_use' && !s.toolMap.has(block.id as string) && !s.answeredTools.has(block.id as string)) {
       s.sendLog('info', `tool_start: ${block.name} (${block.id})`);
       s.toolMap.set(block.id as string, { name: block.name as string, input: block.input });
-      s.ws.send(JSON.stringify({ type: 'tool_start', call: { id: block.id, name: block.name, input: block.input } }));
+      s.broadcast(JSON.stringify({ type: 'tool_start', call: { id: block.id, name: block.name, input: block.input } }));
       if (block.name === 'AskUserQuestion') {
-        // The CLI no longer pauses on a tool that's outside --allowedTools: it
-        // hands the model a synthetic "Answer questions?" result and lets it
-        // barrel ahead on its own defaults (all suppressed -> invisible in the
-        // chat, and the user's real answers never get injected). Enforce the
-        // pause ourselves: make the question a hard turn boundary by stopping
-        // generation now and suppressing anything the model already streamed
-        // past it. Setting cliDone=true lets handleToolAnswer flush the real
-        // answers via a clean --resume once the user responds.
         s.pendingAskTools.add(block.id as string);
         s.suppressCliOutput = true;
         s.cliDone = true;
@@ -145,7 +137,7 @@ function handleAssistant(s: SessionState, event: Record<string, unknown>): void 
       s.turnOutputTokens = newOutput;
       const total = s.turnInputTokens + s.turnOutputTokens;
       const percent = Math.min(100, Math.round(total / MAX_CONTEXT * 100));
-      s.ws.send(JSON.stringify({ type: 'contextUsage', percent, inputTokens: s.turnInputTokens, outputTokens: s.turnOutputTokens }));
+      s.broadcast(JSON.stringify({ type: 'contextUsage', percent, inputTokens: s.turnInputTokens, outputTokens: s.turnOutputTokens }));
     }
   }
 }
@@ -170,7 +162,7 @@ function handleToolResult(s: SessionState, event: Record<string, unknown>): void
   const toolId = event.tool_use_id as string;
   if (suppressToolResult(s, toolId)) return;
   const tc = s.toolMap.get(toolId);
-  s.ws.send(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: event.content } }));
+  s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: event.content } }));
 }
 
 function handleUserEvent(s: SessionState, event: Record<string, unknown>): void {
@@ -186,9 +178,9 @@ function handleUserEvent(s: SessionState, event: Record<string, unknown>): void 
       const tc = s.toolMap.get(toolId);
       const content = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
       s.sendLog('debug', `tool_result ${toolId}: ${String(content).slice(0, 100)}`);
-      s.ws.send(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content } }));
+      s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content } }));
     } else if (block.type === 'text' && block.text) {
-      s.ws.send(JSON.stringify({ type: 'user_inject', text: block.text }));
+      s.broadcast(JSON.stringify({ type: 'user_inject', text: block.text }));
     }
   }
 }
@@ -202,12 +194,12 @@ function handleResult(s: SessionState, event: Record<string, unknown>): void {
       : (event.error as Record<string, unknown>)?.message as string
       ?? event.result as string ?? 'Unknown error';
     const { errorKind } = classifyError(errText, 1);
-    s.ws.send(JSON.stringify({ type: 'error', text: errText, errorKind }));
+    s.broadcast(JSON.stringify({ type: 'error', text: errText, errorKind }));
   }
   if (s.pendingFollowUp) {
     s.flushAskFollowUp();
   } else if (s.pendingAskTools.size === 0) {
-    s.ws.send(JSON.stringify({ type: 'done', ...(s.pendingBgTasks.size > 0 ? { pendingBackgroundTasks: s.pendingBgTasks.size, totalBackgroundTasks: s.totalBgTasks } : {}) }));
+    s.broadcast(JSON.stringify({ type: 'done', ...(s.pendingBgTasks.size > 0 ? { pendingBackgroundTasks: s.pendingBgTasks.size, totalBackgroundTasks: s.totalBgTasks } : {}) }));
   }
 }
 
@@ -227,8 +219,8 @@ export function attachProcHandlers(s: SessionState, proc: ReturnType<typeof spaw
         if (API_ERROR_RAW.test(trimmed) && !s.cliDone) {
           s.cliDone = true;
           const { errorKind } = classifyError(trimmed, 1);
-          s.ws.send(JSON.stringify({ type: 'error', text: trimmed, errorKind }));
-          s.ws.send(JSON.stringify({ type: 'done' }));
+          s.broadcast(JSON.stringify({ type: 'error', text: trimmed, errorKind }));
+          s.broadcast(JSON.stringify({ type: 'done' }));
         }
         continue;
       }
@@ -259,24 +251,24 @@ export function attachProcHandlers(s: SessionState, proc: ReturnType<typeof spaw
     s.watchdog.state.active = false;
     if (s.userStopped) {
       s.userStopped = false;
-      if (isActiveProc) s.ws.send(JSON.stringify({ type: 'done' }));
+      if (isActiveProc) s.broadcast(JSON.stringify({ type: 'done' }));
     } else if (code !== 0 && code !== null) {
       const { message, errorKind } = classifyError(s.stderrOutput, code);
       if (s.pendingAskTools.size > 0) {
         s.sendLog('warn', `CLI exited (${errorKind}) with ${plural(s.pendingAskTools.size, 'pending question')}: ${message}`);
       } else if (isActiveProc) {
-        s.ws.send(JSON.stringify({ type: 'error', text: message, errorKind }));
-        s.ws.send(JSON.stringify({ type: 'done' }));
+        s.broadcast(JSON.stringify({ type: 'error', text: message, errorKind }));
+        s.broadcast(JSON.stringify({ type: 'done' }));
       }
     } else if (isActiveProc && s.pendingAskTools.size === 0 && !s.cliDone) {
       if (code === null) {
         const accErr = s.textAccum.trim() || s.stderrOutput.trim();
         if (accErr && API_ERROR_RE.test(accErr)) {
           const { errorKind } = classifyError(accErr, 1);
-          s.ws.send(JSON.stringify({ type: 'error', text: accErr, errorKind }));
+          s.broadcast(JSON.stringify({ type: 'error', text: accErr, errorKind }));
         }
       }
-      s.ws.send(JSON.stringify({ type: 'done' }));
+      s.broadcast(JSON.stringify({ type: 'done' }));
     }
   });
 
@@ -287,7 +279,7 @@ export function attachProcHandlers(s: SessionState, proc: ReturnType<typeof spaw
     const errText = err.message.includes('ENOENT')
       ? 'Claude Code CLI not found. Install with: npm install -g @anthropic-ai/claude-code'
       : err.message;
-    s.ws.send(JSON.stringify({ type: 'error', text: errText }));
-    s.ws.send(JSON.stringify({ type: 'done' }));
+    s.broadcast(JSON.stringify({ type: 'error', text: errText }));
+    s.broadcast(JSON.stringify({ type: 'done' }));
   });
 }

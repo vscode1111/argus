@@ -1,10 +1,9 @@
 import type { spawn } from 'child_process';
-import type { WebSocket } from 'ws';
 import type { WatchdogState } from './watchdog';
 import type { RateLimitInfo } from './accountUsage';
 
 export interface SessionState {
-  ws: WebSocket;
+  broadcast: (msg: string) => void;
   workspaceDir: string;
   model: string;
   effort: string;
@@ -35,15 +34,18 @@ export interface SessionState {
   resetStaleTimer: () => void;
   startStaleTimer: () => void;
   flushAskFollowUp: () => void;
+  // Triggers a synthetic send event (for watchdog retry and AskUserQuestion follow-ups)
+  // without going through a WebSocket - calls handleSend directly on the shared state.
+  emitSyntheticSend: (msgStr: string) => void;
 }
 
-export function createSessionState(ws: WebSocket, workspaceDir: string, model: string, effort: string, thinking: boolean): SessionState {
+export function createSessionState(workspaceDir: string): SessionState {
   const state: SessionState = {
-    ws,
+    broadcast: undefined!,
     workspaceDir,
-    model,
-    effort,
-    thinking,
+    model: '',
+    effort: 'high',
+    thinking: true,
     sessionId: undefined,
     currentProc: undefined,
     currentProcKey: undefined,
@@ -70,6 +72,7 @@ export function createSessionState(ws: WebSocket, workspaceDir: string, model: s
     resetStaleTimer: undefined!,
     startStaleTimer: undefined!,
     flushAskFollowUp: undefined!,
+    emitSyntheticSend: undefined!,
   };
   return state;
 }

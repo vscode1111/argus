@@ -10,7 +10,8 @@ import { readFilePreview } from './filePreview';
 import { fetchAccountInfo, fetchUsage, fetchModels } from './accountUsage';
 import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
-import { createSessionState, type SessionState } from './sessionState';
+import { type SessionState } from './sessionState';
+import { type Channel } from './channel';
 import { attachProcHandlers } from './cliHandler';
 import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir } from './sessions';
 
@@ -18,35 +19,24 @@ const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSear
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
 
 export interface ConnectionHooks {
-  // Re-check live connections after a settings change (e.g. Network access toggle).
   onSettingsChange?: () => void;
-  // Current count of open client sockets, for the Settings "Network" tab.
   getClientCount?: () => number;
-  // Actual port this HTTP/WebSocket server is listening on, for the Settings "Network" tab.
   getServerPort?: () => number;
-  // Restart the daemon (browser-served "Apply" button). Undefined for the dev server.
   onRestartRequest?: () => void;
 }
 
-export function handleConnection(
-  ws: WebSocket,
-  workspaceDir: string,
-  model: string,
-  hooks: ConnectionHooks = {},
-): void {
-  const initCfg = readConfig();
-  const s = createSessionState(
-    ws, workspaceDir,
-    initCfg.model || model,
-    initCfg.effort ?? 'high',
-    initCfg.thinking ?? true,
-  );
+// Initialises per-session state: logging, stale-timer, watchdog, synthetic-send
+// mechanism (watchdog retry + AskUserQuestion follow-ups), and the follow-up flush.
+// Called once per SessionEntry (on first client join or on moveToNewSession).
+function initChannelSession(s: SessionState, model: string): void {
+  const cfg = readConfig();
+  s.model = cfg.model || model;
+  s.effort = cfg.effort ?? 'high';
+  s.thinking = cfg.thinking ?? true;
 
   s.sendLog = (level, text) => {
-    ws.send(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
+    s.broadcast(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
   };
-
-  const login = createLoginHandler(ws, s.sendLog);
 
   s.resetStaleTimer = () => {
     if (s.staleTimer) clearTimeout(s.staleTimer);
@@ -62,10 +52,17 @@ export function handleConnection(
         const errText = s.textAccum.trim();
         s.textAccum = '';
         const { errorKind } = classifyError(errText, 1);
-        ws.send(JSON.stringify({ type: 'error', text: errText, errorKind }));
-        ws.send(JSON.stringify({ type: 'done' }));
+        s.broadcast(JSON.stringify({ type: 'error', text: errText, errorKind }));
+        s.broadcast(JSON.stringify({ type: 'done' }));
       }
     }, 3000);
+  };
+
+  s.emitSyntheticSend = (msgStr: string) => {
+    try {
+      const msg = JSON.parse(msgStr);
+      if (msg.type === 'send') handleSend(s, msg);
+    } catch {}
   };
 
   s.flushAskFollowUp = () => {
@@ -89,35 +86,57 @@ export function handleConnection(
     const followUp = `The user has now answered your earlier questions. Disregard any assumptions or defaults you adopted while the questions were unanswered (do not act as if "no questionnaire" was the outcome), and proceed using exactly these choices:\n\n${answerLines}`;
     setTimeout(() => {
       s.suppressCliOutput = false;
-      ws.emit('message', Buffer.from(JSON.stringify({ type: 'send', text: followUp, mode, _silent: true, _askResume: true })));
+      s.emitSyntheticSend(JSON.stringify({ type: 'send', text: followUp, mode, _silent: true, _askResume: true }));
     }, 200);
   };
 
   const watchdog = createWatchdog({
-    ws,
+    broadcast: s.broadcast,
     getProc: () => s.currentProc,
     getCliDone: () => s.cliDone,
     setCliDone: (v) => { s.cliDone = v; s.resetStaleTimer(); },
     getPendingAskCount: () => s.pendingAskTools.size,
     getLastMessage: () => s.lastMessage,
     sendLog: s.sendLog,
-    emitSyntheticSend: (msg) => ws.emit('message', Buffer.from(msg)),
+    emitSyntheticSend: (msg) => s.emitSyntheticSend(msg),
     checkApiError: () => {
       const errContent = s.textAccum.trim() || s.stderrOutput.trim();
       return errContent && API_ERROR_RE.test(errContent) ? errContent : undefined;
     },
   });
   s.watchdog = watchdog;
+}
+
+// Attaches per-client WebSocket handlers to a channel. The client is added to the
+// most recently active session entry (or a new one if the channel is fresh). When
+// the client sends newSession it moves to a brand-new isolated entry; the previous
+// entry's CLI process keeps running for any remaining clients.
+export function attachClientHandlers(
+  ws: WebSocket,
+  channel: Channel,
+  model: string,
+  hooks: ConnectionHooks = {},
+): void {
+  channel.addClient(ws);
+  const s0 = channel.getClientState(ws);
+  if (!s0.sendLog) initChannelSession(s0, model);
+
+  // login is per-client: loginUrl/loginResult only go to the requesting client's ws.
+  const login = createLoginHandler(ws, s0.sendLog);
 
   ws.on('close', () => {
-    watchdog.state.active = false;
-    clearInterval(watchdog.interval);
-    s.resetStaleTimer();
-    if (s.currentProc) killProc(s.currentProc);
     login.kill();
+    // channel.removeClient handles per-entry cleanup (watchdog stop, grace timer).
+    // The entry's CLI proc is NOT killed here; it runs to natural completion so other
+    // clients watching the same entry are unaffected.
+    channel.removeClient(ws);
   });
 
   ws.on('message', (data: Buffer) => {
+    // Resolve the session state fresh on every message so that after moveToNewSession
+    // we automatically use the new entry's state without re-registering handlers.
+    const s = channel.getClientState(ws);
+
     let msg: {
       type: string;
       text?: string;
@@ -136,6 +155,7 @@ export function handleConnection(
     }
 
     if (msg.type === 'send' && msg.text?.trim() === '/clear') {
+      channel.setBrowsing(ws, false);
       s.sessionId = undefined;
       if (s.currentProc) {
         const proc = s.currentProc;
@@ -145,13 +165,13 @@ export function handleConnection(
       }
       s.pendingBgTasks.clear();
       s.totalBgTasks = 0;
-      ws.send(JSON.stringify({ type: 'clear' }));
+      s.broadcast(JSON.stringify({ type: 'clear' }));
     } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
+      channel.setBrowsing(ws, false);
       handleSend(s, msg);
     } else if (msg.type === 'getSettings') {
       ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
     } else if (msg.type === 'restartDaemon') {
-      // Browser-served UI: restart the daemon in place. No-op on the dev server.
       hooks.onRestartRequest?.();
     } else if (msg.type === 'getClientCount') {
       ws.send(JSON.stringify({ type: 'clientCount', count: hooks.getClientCount?.() ?? 0 }));
@@ -167,8 +187,6 @@ export function handleConnection(
         const config = { ...readConfig(), ...filtered };
         writeConfig(config);
         ws.send(JSON.stringify({ type: 'settings', settings: config }));
-        // Re-check live connections so a Network-access change applies at once
-        // (e.g. turning it off disconnects remote clients without a restart).
         hooks.onSettingsChange?.();
       }
     } else if (msg.type === 'getInfo') {
@@ -177,62 +195,50 @@ export function handleConnection(
         const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
         version = pkg.version ?? '';
       } catch {}
-      ws.send(JSON.stringify({ type: 'workspaceInfo', path: workspaceDir, version, model: s.model, effort: s.effort, thinking: s.thinking }));
+      ws.send(JSON.stringify({ type: 'workspaceInfo', path: s.workspaceDir, version, model: s.model, effort: s.effort, thinking: s.thinking }));
     } else if (msg.type === 'switchModel') {
       const newModel = typeof (msg as { model?: string }).model === 'string' ? (msg as { model?: string }).model! : '';
-      s.model = newModel;
-      const config = readConfig();
-      writeConfig({ ...config, model: newModel });
-      ws.send(JSON.stringify({ type: 'modelChanged', model: s.model }));
+      writeConfig({ ...readConfig(), model: newModel });
+      channel.forEachSession(ss => { ss.model = newModel; });
+      channel.broadcastToAll(JSON.stringify({ type: 'modelChanged', model: newModel }));
     } else if (msg.type === 'switchEffort') {
       const newEffort = typeof (msg as { effort?: string }).effort === 'string' ? (msg as { effort?: string }).effort! : 'high';
-      s.effort = newEffort;
       writeConfig({ ...readConfig(), effort: newEffort });
-      ws.send(JSON.stringify({ type: 'effortChanged', effort: s.effort }));
+      channel.forEachSession(ss => { ss.effort = newEffort; });
+      channel.broadcastToAll(JSON.stringify({ type: 'effortChanged', effort: newEffort }));
     } else if (msg.type === 'switchThinking') {
       const newThinking = (msg as { thinking?: boolean }).thinking !== false;
-      s.thinking = newThinking;
       writeConfig({ ...readConfig(), thinking: newThinking });
-      ws.send(JSON.stringify({ type: 'thinkingChanged', thinking: s.thinking }));
+      channel.forEachSession(ss => { ss.thinking = newThinking; });
+      channel.broadcastToAll(JSON.stringify({ type: 'thinkingChanged', thinking: newThinking }));
     } else if (msg.type === 'retry') {
       if (s.lastMessage) {
         s.sendLog('info', 'Retrying last message');
-        ws.send(JSON.stringify({ type: 'retry_clean' }));
-        ws.emit('message', Buffer.from(JSON.stringify({
-          type: 'send', text: s.lastMessage.text, images: s.lastMessage.images, mode: s.lastMessage.mode, _silent: true,
-        })));
+        s.broadcast(JSON.stringify({ type: 'retry_clean' }));
+        handleSend(s, { type: 'send', text: s.lastMessage.text, images: s.lastMessage.images, mode: s.lastMessage.mode, _silent: true });
       }
     } else if (msg.type === 'forceError') {
       if (s.currentProc) killProc(s.currentProc);
-      ws.send(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));
+      s.broadcast(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));
     } else if (msg.type === 'getSkills') {
-      ws.send(JSON.stringify({ type: 'skills', skills: getSkills(workspaceDir) }));
+      ws.send(JSON.stringify({ type: 'skills', skills: getSkills(s.workspaceDir) }));
     } else if (msg.type === 'login') {
-      login.start(workspaceDir);
+      login.start(s.workspaceDir);
     } else if (msg.type === 'loginCode' && msg.text) {
       login.submitCode(msg.text);
     } else if (msg.type === 'toolAnswer') {
       handleToolAnswer(s, msg as { type: string; id?: string; answers?: unknown; mode?: string });
     } else if (msg.type === 'readFilePreview' && msg.path) {
-      const result = readFilePreview(msg.path, workspaceDir);
+      const result = readFilePreview(msg.path, s.workspaceDir);
       ws.send(JSON.stringify({ type: 'filePreview', ...result }));
     } else if (msg.type === 'getAccountUsage') {
-      // Prefer the live usage API (all windows, immediately); fall back to
-      // windows accumulated from streamed rate_limit_events if it is unavailable.
       const accountP = fetchAccountInfo();
       const usageP = fetchUsage(msg.force);
-      // Phase 1: send account as soon as it resolves so the modal renders it
-      // immediately (matching the official panel) instead of waiting on usage,
-      // which can be slow or rate-limited. `usagePending` keeps the usage section
-      // in a loading state. Registered before usageP's handler so it always wins
-      // ordering when both resolve together.
       accountP.then((account) => {
         ws.send(JSON.stringify({ type: 'accountUsage', account, usagePending: true }));
       });
-      // Phase 2: account + usage once usage resolves.
       Promise.all([accountP, usageP]).then(([account, usage]) => {
         const rateLimits = usage.windows.length > 0 ? usage.windows : Array.from(s.rateLimits.values());
-        // Only surface the fetch error when there is no fallback data to show.
         const usageError = rateLimits.length === 0 ? usage.error : undefined;
         ws.send(JSON.stringify({ type: 'accountUsage', account, rateLimits, usageError, usagePending: false }));
       });
@@ -244,34 +250,29 @@ export function handleConnection(
     } else if (msg.type === 'stop') {
       handleStop(s);
     } else if (msg.type === 'newSession') {
-      // Fresh start: abandon the current turn, reset the session, and clear the
-      // webview (same teardown as /clear so every newSession caller behaves the
-      // same - the top-right New chat button, the error-block button, and the
-      // argus.newSession command).
-      s.sessionId = undefined;
-      if (s.currentProc) {
-        const proc = s.currentProc;
-        s.currentProc = undefined;
-        s.currentProcKey = undefined;
-        killProc(proc);
-      }
-      s.pendingBgTasks.clear();
-      s.totalBgTasks = 0;
-      s.lastMessage = null;
-      ws.send(JSON.stringify({ type: 'clear' }));
+      // Create a fresh isolated session entry for this client only.
+      // The previous entry's CLI process keeps running for any other clients still in it.
+      const newState = channel.moveToNewSession(ws);
+      if (!newState.sendLog) initChannelSession(newState, model);
+      newState.sessionId = undefined;
+      newState.lastMessage = null;
+      newState.pendingBgTasks.clear();
+      newState.totalBgTasks = 0;
+      // broadcast() on the new entry goes only to this client (the entry is fresh).
+      newState.broadcast(JSON.stringify({ type: 'clear' }));
     } else if (msg.type === 'listSessions') {
-      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(workspaceDir), currentId: s.sessionId }));
+      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(s.workspaceDir), currentId: s.sessionId }));
     } else if (msg.type === 'resumeSession' && msg.id) {
-      handleResumeSession(s, msg.id);
+      handleResumeSession(s, ws, channel, msg.id);
     } else if (msg.type === 'deleteSession' && msg.id) {
-      deleteSession(msg.id, workspaceDir);
+      deleteSession(msg.id, s.workspaceDir);
       if (s.sessionId === msg.id) s.sessionId = undefined;
-      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(workspaceDir), currentId: s.sessionId }));
+      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(s.workspaceDir), currentId: s.sessionId }));
     } else if (msg.type === 'renameSession' && msg.id && typeof msg.title === 'string') {
-      renameSession(msg.id, workspaceDir, msg.title);
-      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(workspaceDir), currentId: s.sessionId }));
+      renameSession(msg.id, s.workspaceDir, msg.title);
+      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(s.workspaceDir), currentId: s.sessionId }));
     } else if (msg.type === 'listWorkspaces') {
-      ws.send(JSON.stringify({ type: 'workspaceList', workspaces: listWorkspaces(), currentPath: workspaceDir }));
+      ws.send(JSON.stringify({ type: 'workspaceList', workspaces: listWorkspaces(), currentPath: s.workspaceDir }));
     } else if (msg.type === 'listAllSessions') {
       ws.send(JSON.stringify({ type: 'allSessionList', sessions: listAllSessions(), currentId: s.sessionId }));
     } else if (msg.type === 'listDir') {
@@ -280,11 +281,10 @@ export function handleConnection(
   });
 }
 
-function handleSend(s: SessionState, msg: { text?: string; images?: Array<{ data: string; mediaType: string; name?: string }>; mode?: string; _silent?: boolean; _askResume?: boolean }) {
+function handleSend(s: SessionState, msg: { type?: string; text?: string; images?: Array<{ data: string; mediaType: string; name?: string }>; mode?: string; _silent?: boolean; _askResume?: boolean }) {
   const text = msg.text ?? '';
   const images = msg.images;
 
-  // Mid-turn: write to stdin silently, CLI merges it into the active turn
   if (s.currentProc?.stdin?.writable && !s.cliDone && !msg._silent && !msg._askResume) {
     s.lastMessage = { text, images, mode: msg.mode };
     const contentBlocks: Array<Record<string, unknown>> = [];
@@ -303,12 +303,12 @@ function handleSend(s: SessionState, msg: { text?: string; images?: Array<{ data
     const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: contentBlocks } });
     s.sendLog('info', `Mid-turn inject: ${stdinMsg.length} bytes to stdin`);
     s.currentProc.stdin.write(stdinMsg + '\n');
-    s.ws.send(JSON.stringify({ type: 'user_inject', text }));
+    s.broadcast(JSON.stringify({ type: 'user_inject', text }));
     return;
   }
 
   if (!msg._silent) {
-    s.ws.send(JSON.stringify({ type: 'message', message: { id: String(Date.now()), role: 'user', content: text, images } }));
+    s.broadcast(JSON.stringify({ type: 'message', message: { id: String(Date.now()), role: 'user', content: text, images } }));
   }
 
   const isPlan = msg.mode === 'plan';
@@ -379,7 +379,7 @@ function handleSend(s: SessionState, msg: { text?: string; images?: Array<{ data
   s.pendingBgTasks.clear();
   s.totalBgTasks = 0;
   if (!msg._askResume) {
-    s.ws.send(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
+    s.broadcast(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
   }
   s.watchdog.state.lastEventTime = Date.now();
   s.watchdog.state.active = true;
@@ -412,7 +412,7 @@ function handleToolAnswer(s: SessionState, msg: { type: string; id?: string; ans
   s.pendingAskTools.delete(answerId);
   s.answeredTools.add(answerId);
 
-  s.ws.send(JSON.stringify({ type: 'tool_end', call: { id: answerId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: content } }));
+  s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: answerId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: content } }));
   s.sendLog('info', `Tool answer for ${answerId}: ${content.slice(0, 100)}`);
 
   if (s.pendingAskTools.size === 0 && s.sessionId && answers && Object.keys(answers).length > 0) {
@@ -422,31 +422,25 @@ function handleToolAnswer(s: SessionState, msg: { type: string; id?: string; ans
     if (s.pendingAskTools.size === 0) s.suppressCliOutput = false;
     if (s.currentProc?.stdin?.writable) s.currentProc.stdin.end();
     if (s.pendingAskTools.size === 0 && s.cliDone) {
-      setTimeout(() => s.ws.send(JSON.stringify({ type: 'done' })), 100);
+      setTimeout(() => s.broadcast(JSON.stringify({ type: 'done' })), 100);
     }
   }
 }
 
-// Switch the live session to a stored one: tear down any current proc (detaching
-// first so its close handler stays quiet, like /clear), point sessionId at the
-// chosen transcript so the next send spawns with `--resume`, and replay the
-// stored conversation into the UI.
-function handleResumeSession(s: SessionState, id: string) {
-  if (s.currentProc) {
-    const proc = s.currentProc;
-    s.currentProc = undefined;
-    s.currentProcKey = undefined;
-    killProc(proc);
-  }
-  s.cliDone = false;
-  s.userStopped = false;
-  s.pendingBgTasks.clear();
-  s.totalBgTasks = 0;
-  s.lastMessage = null;
-  s.sessionId = id;
+function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, id: string) {
+  // Don't kill currentProc - the active CLI turn belongs to the whole entry, not this client.
+  const procRunning = !!s.currentProc && !s.cliDone;
+  // isBrowsing: proc is active AND the user is viewing a session other than the one being streamed.
+  // If the proc is idle, any resumeSession is a direct switch (live mode) - no conflict possible.
+  const isBrowsing = procRunning && id !== s.sessionId;
+  // Only update the session pointer when the proc is idle or the user is returning to the live session.
+  // Updating it while browsing a different session would corrupt the --resume arg for the next spawn.
+  if (!isBrowsing) s.sessionId = id;
+  channel.setBrowsing(ws, isBrowsing);
   const messages = loadSession(id, s.workspaceDir);
   s.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);
-  s.ws.send(JSON.stringify({ type: 'sessionLoaded', id, messages }));
+  ws.send(JSON.stringify({ type: 'sessionLoaded', id, messages }));
+  if (!isBrowsing) channel.replaySnapshot(ws);
 }
 
 function handleStop(s: SessionState) {
@@ -458,13 +452,13 @@ function handleStop(s: SessionState) {
   s.watchdog.state.retrying = false;
   for (const toolId of s.pendingAskTools) {
     const tc = s.toolMap.get(toolId);
-    s.ws.send(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: JSON.stringify({ cancelled: true }) } }));
+    s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: JSON.stringify({ cancelled: true }) } }));
   }
   s.pendingAskTools.clear();
   if (s.currentProc) {
     s.userStopped = true;
     killProc(s.currentProc);
   } else {
-    s.ws.send(JSON.stringify({ type: 'done' }));
+    s.broadcast(JSON.stringify({ type: 'done' }));
   }
 }

@@ -1,4 +1,3 @@
-import type { WebSocket } from 'ws';
 import { readConfig } from './config';
 import { killProc } from './cli';
 import type { spawn } from 'child_process';
@@ -12,7 +11,7 @@ export interface WatchdogState {
 }
 
 export interface WatchdogDeps {
-  ws: WebSocket;
+  broadcast: (msg: string) => void;
   getProc: () => ReturnType<typeof spawn> | undefined;
   getCliDone: () => boolean;
   setCliDone: (v: boolean) => void;
@@ -49,8 +48,8 @@ export function createWatchdog(deps: WatchdogDeps): { state: WatchdogState; inte
       state.active = false;
       const proc = deps.getProc();
       if (proc) killProc(proc);
-      deps.ws.send(JSON.stringify({ type: 'error', text: errContent, errorKind: 'generic' }));
-      deps.ws.send(JSON.stringify({ type: 'done' }));
+      deps.broadcast(JSON.stringify({ type: 'error', text: errContent, errorKind: 'generic' }));
+      deps.broadcast(JSON.stringify({ type: 'done' }));
       return;
     }
 
@@ -59,7 +58,7 @@ export function createWatchdog(deps: WatchdogDeps): { state: WatchdogState; inte
       state.autoRetryCount++;
       const delay = getRetryDelay(state.autoRetryCount - 1, cfg.watchdogRetryDelay, cfg.watchdogDelayFactor);
       deps.sendLog('warn', `Watchdog: no CLI events for ${Math.round(elapsed)}s, auto-retry ${state.autoRetryCount}/${cfg.watchdogAutoRetries} in ${delay / 1000}s`);
-      deps.ws.send(JSON.stringify({
+      deps.broadcast(JSON.stringify({
         type: 'retry_status',
         attempt: 0,
         maxRetries: 0,
@@ -94,14 +93,14 @@ export function createWatchdog(deps: WatchdogDeps): { state: WatchdogState; inte
       state.retrying = false;
       const proc = deps.getProc();
       if (proc) killProc(proc);
-      deps.ws.send(JSON.stringify({
+      deps.broadcast(JSON.stringify({
         type: 'retry_status',
         attempt: 0, maxRetries: 0, delayMs: 0,
         autoRetry: state.autoRetryCount,
         autoRetryMax: cfg.watchdogAutoRetries,
         timedOut: true,
       }));
-      deps.ws.send(JSON.stringify({ type: 'done' }));
+      deps.broadcast(JSON.stringify({ type: 'done' }));
     }
   }, 5000);
 

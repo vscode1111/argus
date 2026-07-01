@@ -130,12 +130,14 @@ function AppInner() {
   useEffect(() => {
     if (wasStreaming.current && !state.isStreaming) {
       const lastAssistant = [...state.messages].reverse().find(m => m.role === 'assistant');
-      const wasStopped = lastAssistant?.outcome === 'stopped';
-      if (soundOnComplete && !wasStopped) playCompletionSound();
-      if (notifyOnComplete && !wasStopped) {
-        const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
-        const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
-        fireNotification(notifTitle(state.workspacePath), body);
+      // Don't fire on clear (messages emptied while streaming) or manual stop.
+      if (lastAssistant && lastAssistant.outcome !== 'stopped') {
+        if (soundOnComplete) playCompletionSound();
+        if (notifyOnComplete) {
+          const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
+          const body = lastUserMsg ? lastUserMsg.content.slice(0, 120) : 'Task complete';
+          fireNotification(notifTitle(state.workspacePath), body);
+        }
       }
     }
     wasStreaming.current = state.isStreaming;
