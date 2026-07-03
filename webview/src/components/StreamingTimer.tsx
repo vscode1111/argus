@@ -31,9 +31,9 @@ export function StreamingTimer({ startTime, lastEventTime, hideIdle, liveTokens 
       {hasTokens && (
         <>
           {' · '}
-          {liveTokens!.output > 0 && fmtTok(liveTokens!.output) + ' out'}
-          {liveTokens!.output > 0 && liveTokens!.input > 0 && ' / '}
           {liveTokens!.input > 0 && fmtTok(liveTokens!.input) + ' in'}
+          {liveTokens!.input > 0 && liveTokens!.output > 0 && ' / '}
+          {liveTokens!.output > 0 && fmtTok(liveTokens!.output) + ' out'}
         </>
       )}
     </div>

@@ -84,10 +84,15 @@ function handleDelta(s: SessionState, event: Record<string, unknown>): void {
   if (delta?.type === 'text_delta' && delta.text) {
     s.receivedDeltas = true;
     s.textAccum += delta.text as string;
+    s.liveOutputChars += (delta.text as string).length;
     s.startStaleTimer();
     s.broadcast(JSON.stringify({ type: 'text_chunk', text: delta.text }));
+    s.broadcast(JSON.stringify({ type: 'token_update', outputTokens: s.completedOutputTokens + Math.ceil(s.liveOutputChars / 4) }));
   } else if (delta?.type === 'thinking_delta' && delta.thinking) {
+    s.receivedThinkingDeltas = true;
+    s.liveOutputChars += (delta.thinking as string).length;
     s.broadcast(JSON.stringify({ type: 'thinking_chunk', text: delta.thinking }));
+    s.broadcast(JSON.stringify({ type: 'token_update', outputTokens: s.completedOutputTokens + Math.ceil(s.liveOutputChars / 4) }));
   }
 }
 
@@ -95,13 +100,22 @@ function handleMessageStart(s: SessionState, inner: Record<string, unknown>): vo
   const usage = (inner.message as Record<string, unknown> | undefined)?.usage as Record<string, number> | undefined;
   if (!usage) return;
   const inputTokens = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
-  if (inputTokens > 0) s.broadcast(JSON.stringify({ type: 'token_update', inputTokens }));
+  if (inputTokens > 0) {
+    s.liveInputTokens = inputTokens;
+    s.broadcast(JSON.stringify({ type: 'token_update', inputTokens }));
+  }
+  // Reset per-message char counter; completedOutputTokens carries the previous messages' totals.
+  s.liveOutputChars = 0;
 }
 
 function handleMessageDelta(s: SessionState, inner: Record<string, unknown>): void {
   const usage = inner.usage as Record<string, number> | undefined;
-  const outputTokens = usage?.output_tokens;
-  if (outputTokens != null) s.broadcast(JSON.stringify({ type: 'token_update', outputTokens }));
+  const real = usage?.output_tokens;
+  if (real != null) {
+    s.completedOutputTokens += real;
+    s.liveOutputChars = 0;
+    s.broadcast(JSON.stringify({ type: 'token_update', outputTokens: s.completedOutputTokens }));
+  }
 }
 
 function handleAssistant(s: SessionState, event: Record<string, unknown>): void {
@@ -109,7 +123,7 @@ function handleAssistant(s: SessionState, event: Record<string, unknown>): void 
   if (s.suppressCliOutput) { s.receivedDeltas = false; return; }
   const content = (event.message as { content: Array<Record<string, unknown>> })?.content ?? [];
   for (const block of content) {
-    if (block.type === 'thinking' && block.thinking) {
+    if (block.type === 'thinking' && block.thinking && !s.receivedThinkingDeltas) {
       s.broadcast(JSON.stringify({ type: 'thinking_chunk', text: block.thinking }));
     } else if (block.type === 'text' && block.text && !s.receivedDeltas) {
       s.broadcast(JSON.stringify({ type: 'text_chunk', text: block.text }));

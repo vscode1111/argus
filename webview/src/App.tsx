@@ -63,7 +63,7 @@ function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { showLogs, setShowLogs, soundOnComplete, notifyOnComplete } = useSettings();
   const messageListRef = useRef<MessageListHandle>(null);
-  const wasStreaming = React.useRef(false);
+  const prevTurnCompletions = React.useRef(0);
   const hadPendingAsk = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [historyOpen, setHistoryOpen] = React.useState(false);
@@ -78,6 +78,10 @@ function AppInner() {
   const loadTimer = React.useRef<number | null>(null);
   const [sessionTitle, setSessionTitle] = React.useState('');
   const [sessionId, setSessionId] = React.useState<string | null>(null);
+  // When the user browses a past session while another is streaming, s.sessionId on
+  // the server is not updated (to protect the live --resume arg). We cache the
+  // loaded id here so the header and modal still reflect the session being viewed.
+  const loadedSessionId = React.useRef<string | null>(null);
   // Line count of the current session, kept in sync from sessionList replies so the
   // header "Refresh current session" button can label its loading spinner.
   const [sessionLines, setSessionLines] = React.useState(0);
@@ -128,9 +132,10 @@ function AppInner() {
   }, []);
 
   useEffect(() => {
-    if (wasStreaming.current && !state.isStreaming) {
+    if (state.turnCompletions > prevTurnCompletions.current) {
+      prevTurnCompletions.current = state.turnCompletions;
       const lastAssistant = [...state.messages].reverse().find(m => m.role === 'assistant');
-      // Don't fire on clear (messages emptied while streaming) or manual stop.
+      // Don't fire on manual stop.
       if (lastAssistant && lastAssistant.outcome !== 'stopped') {
         if (soundOnComplete) playCompletionSound();
         if (notifyOnComplete) {
@@ -140,8 +145,7 @@ function AppInner() {
         }
       }
     }
-    wasStreaming.current = state.isStreaming;
-  }, [state.isStreaming, soundOnComplete, notifyOnComplete]);
+  }, [state.turnCompletions, soundOnComplete, notifyOnComplete]);
 
   const hasPendingAsk = !!state.streaming?.askPausedAt;
   useEffect(() => {
@@ -196,15 +200,23 @@ function AppInner() {
     function onSessionMsg(e: MessageEvent) {
       const t = e.data?.type;
       if (t === 'sessionList' && Array.isArray(e.data.sessions)) {
-        const cur = (e.data.sessions as SessionSummary[]).find(s => s.id === e.data.currentId);
+        // While browsing a past session during a live stream, loadedSessionId holds
+        // the viewed session id (the server's currentId still points to the live one).
+        const effectiveId = loadedSessionId.current ?? (e.data.currentId as string | undefined);
+        const cur = (e.data.sessions as SessionSummary[]).find(s => s.id === effectiveId);
         setSessionTitle(cur?.title ?? '');
-        setSessionId(e.data.currentId ?? null);
+        setSessionId(effectiveId ?? null);
         setSessionLines(cur?.lines ?? 0);
         endSessionLoad(); // a fresh list means a workspace reconnect finished
       } else if (t === 'sessionLoaded') {
+        if (typeof e.data.id === 'string') {
+          loadedSessionId.current = e.data.id;
+          setSessionId(e.data.id); // update immediately; title set when sessionList arrives
+        }
         postMessage({ type: 'listSessions' });
         endSessionLoad(); // the resumed transcript has been replayed
       } else if (t === 'clear') {
+        loadedSessionId.current = null;
         setSessionTitle('');
         setSessionId(null);
         setSessionLines(0);
@@ -216,9 +228,14 @@ function AppInner() {
   }, []);
 
   // Refresh the header title on mount and whenever a turn finishes (the CLI may
-  // have just generated or updated the session's ai-title).
+  // have just generated or updated the session's ai-title). When a new stream
+  // starts the user is back in live mode, so clear the browsing session override.
   useEffect(() => {
-    if (!state.isStreaming) postMessage({ type: 'listSessions' });
+    if (state.isStreaming) {
+      loadedSessionId.current = null;
+    } else {
+      postMessage({ type: 'listSessions' });
+    }
   }, [state.isStreaming]);
 
   useEffect(() => {
@@ -449,7 +466,7 @@ function AppInner() {
 
   return (
     <div className="app">
-      {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
+      {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
       {accountUsageOpen && <AccountUsageModal currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onClose={() => setAccountUsageOpen(false)} />}
       {initialFile && <AutoFileViewer path={initialFile} onClose={() => setInitialFile(null)} />}
       <div className="content">

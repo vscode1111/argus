@@ -28,6 +28,10 @@ export interface SessionState {
   staleTimer: ReturnType<typeof setTimeout> | null;
   lastMessage: { text: string; images?: Array<{ data: string; mediaType: string; name?: string }>; mode?: string } | null;
   receivedDeltas: boolean;
+  receivedThinkingDeltas: boolean;
+  liveOutputChars: number;
+  completedOutputTokens: number;
+  liveInputTokens: number;
   rateLimits: Map<string, RateLimitInfo>;
   watchdog: { state: WatchdogState; interval: ReturnType<typeof setInterval> };
   sendLog: (level: 'debug' | 'info' | 'warn' | 'error', text: string) => void;
@@ -66,6 +70,10 @@ export function createSessionState(workspaceDir: string): SessionState {
     staleTimer: null,
     lastMessage: null,
     receivedDeltas: false,
+    receivedThinkingDeltas: false,
+    liveOutputChars: 0,
+    completedOutputTokens: 0,
+    liveInputTokens: 0,
     rateLimits: new Map(),
     watchdog: undefined!,
     sendLog: undefined!,
