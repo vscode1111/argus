@@ -12,17 +12,17 @@ import styles from './SessionHistoryModal.module.css';
 
 interface Props {
   currentPath: string;
-  // Resume a session that may belong to another workspace ("All workspaces" tab):
-  // App switches the panel to that workspace first (if needed), then resumes.
-  // `lines` (the session's content size) is forwarded so the loading overlay can
-  // label the spinner, e.g. "Loading… 17k lines".
+  // Override the "current" session id from App state. When the user browses a past
+  // session while another is streaming, the server's currentId still points to the
+  // live session; this prop carries the id of the session actually being viewed.
+  currentId?: string;
   onResumeWorkspaceSession: (workspacePath: string, sessionId: string, lines?: number) => void;
   onClose: () => void;
 }
 
 type Tab = 'workspace' | 'all';
 
-export function SessionHistoryModal({ currentPath, onResumeWorkspaceSession, onClose }: Props) {
+export function SessionHistoryModal({ currentPath, currentId: currentIdOverride, onResumeWorkspaceSession, onClose }: Props) {
   // Remember the selected tab in-memory (reset on page refresh).
   const [tab, setTabState] = useState<Tab>(() => (getDialogState('sessionHistory')?.tab as Tab) || 'workspace');
   const setTab = (t: Tab) => { setTabState(t); patchDialogState('sessionHistory', { tab: t }); };
@@ -130,6 +130,10 @@ export function SessionHistoryModal({ currentPath, onResumeWorkspaceSession, onC
     setEditingId(null);
   }
 
+  // Use the override from App (which reflects the actually-viewed session during
+  // browsing) if present; fall back to the id reported by the server.
+  const effectiveCurrentId = currentIdOverride ?? currentId;
+
   const q = query.trim().toLowerCase();
   const filtered = q
     ? sessions.filter(s => s.title.toLowerCase().includes(q) || s.lastPrompt.toLowerCase().includes(q))
@@ -201,7 +205,7 @@ export function SessionHistoryModal({ currentPath, onResumeWorkspaceSession, onC
               filtered.map(s => (
                 <div
                   key={s.id}
-                  className={[styles.row, s.id === currentId ? shell.rowCurrent : '', editingId === s.id ? styles.rowEditing : ''].filter(Boolean).join(' ')}
+                  className={[styles.row, s.id === effectiveCurrentId ? shell.rowCurrent : '', editingId === s.id ? styles.rowEditing : ''].filter(Boolean).join(' ')}
                   onClick={() => editingId === s.id ? undefined : resume(s.id, s.lines)}
                   title={s.lastPrompt || s.title}
                 >

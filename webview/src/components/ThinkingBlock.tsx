@@ -6,7 +6,7 @@ interface Props {
 }
 
 export function ThinkingBlock({ text }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const tokens = Math.ceil(text.length / 4);
   return (
     <div

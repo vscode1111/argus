@@ -16,6 +16,7 @@ export type AppState = {
   currentModel: string;
   currentEffort: string;
   thinkingEnabled: boolean;
+  turnCompletions: number;
 };
 
 export type AppAction =
@@ -194,6 +195,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
           ? { thinking: '', blocks: [], startTime: state.streaming.startTime, lastEventTime: Date.now(), logsAtStart: state.logs.length, reused: true, stopped: false, retryStatus: null, watchdogRetries: 0, backgroundWaiting: true }
           : null,
         isStreaming: hasPendingBg,
+        turnCompletions: hasPendingBg ? state.turnCompletions : state.turnCompletions + 1,
       };
     }
 
@@ -232,6 +234,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         messages: [...existingMessages, ...msgs],
         streaming: null,
         isStreaming: false,
+        turnCompletions: state.turnCompletions + 1,
       };
     }
 
@@ -413,4 +416,5 @@ export const initialState: AppState = {
   currentModel: '',
   currentEffort: 'high',
   thinkingEnabled: true,
+  turnCompletions: 0,
 };

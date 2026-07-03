@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.71",
+  "version": "0.0.72",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "license": "UNLICENSED",
@@ -32,7 +32,7 @@
     "lint": "eslint src --ext ts",
     "dev:stop": "node scripts/dev-stop.js",
     "test:clean": "node scripts/test-clean.js && node scripts/dev-stop.js",
-    "test:e2e:install": "npx playwright install chromium",
+    "test:e2e:install": "node scripts/install-browsers-manual.js",
     "test:e2e": "node node_modules/@playwright/test/cli.js test",
     "test:e2e:mock": "node node_modules/@playwright/test/cli.js test --project=mock",
     "test:e2e:integration": "node node_modules/@playwright/test/cli.js test --project=integration --no-deps",

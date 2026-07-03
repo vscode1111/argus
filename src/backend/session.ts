@@ -349,6 +349,10 @@ function handleSend(s: SessionState, msg: { type?: string; text?: string; images
   s.resetStaleTimer();
   s.watchdog.state.active = false;
   s.receivedDeltas = false;
+  s.receivedThinkingDeltas = false;
+  s.liveOutputChars = 0;
+  s.completedOutputTokens = 0;
+  s.liveInputTokens = 0;
   s.suppressCliOutput = false;
   s.userStopped = false;
   s.cliDone = false;
@@ -440,7 +444,14 @@ function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, i
   const messages = loadSession(id, s.workspaceDir);
   s.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);
   ws.send(JSON.stringify({ type: 'sessionLoaded', id, messages }));
-  if (!isBrowsing) channel.replaySnapshot(ws);
+  if (!isBrowsing) {
+    channel.replaySnapshot(ws);
+    // Restore live token counts lost when sessionLoaded cleared the streaming state.
+    if (s.liveInputTokens > 0 || s.completedOutputTokens > 0 || s.liveOutputChars > 0) {
+      const outputTokens = s.completedOutputTokens + Math.ceil(s.liveOutputChars / 4);
+      ws.send(JSON.stringify({ type: 'token_update', inputTokens: s.liveInputTokens || undefined, outputTokens: outputTokens || undefined }));
+    }
+  }
 }
 
 function handleStop(s: SessionState) {
