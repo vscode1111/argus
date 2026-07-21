@@ -9,15 +9,17 @@ test.describe('send while streaming', () => {
   test('second message sent during streaming appears as inline inject', async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
 
-    // Send a task that requires tool calls so it takes long enough to inject
+    // Send a task long enough to leave room for a mid-turn inject.
     await textarea.fill('Read package.json, then read CLAUDE.md, then summarize both.');
     await page.getByRole('button', { name: 'Send' }).click();
 
-    // Wait for at least one tool call to appear (confirms streaming is active)
-    const toolCall = page.locator('[class*="toolCall"], [class*="tool_"]');
-    await expect(toolCall.first()).toBeVisible({ timeout: 30_000 });
+    // Gate on the Stop button, not on a tool call: whether the model actually calls a
+    // tool (and how fast) is its own choice, so a toolCall locator is a model-dependent
+    // proxy that intermittently never appears. Stop is rendered for every active turn,
+    // which is exactly the precondition here - the turn is still in flight.
+    await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible({ timeout: 30_000 });
 
-    // Inject second message while tool calls are running
+    // Inject second message while the turn is still running
     await textarea.fill('What is 123 + 456? Reply with just the number.');
     await page.getByRole('button', { name: 'Send' }).click();
 
@@ -42,17 +44,17 @@ test.describe('send while streaming', () => {
     await textarea.fill('Read package.json and tell me the version number.');
     await page.getByRole('button', { name: 'Send' }).click();
 
-    // Wait for streaming to start with tool calls
-    const toolCall = page.locator('[class*="toolCall"], [class*="tool_"]');
-    await expect(toolCall.first()).toBeVisible({ timeout: 30_000 });
+    // Gate on the Stop button rather than a tool call - see the note in the test above:
+    // a toolCall locator depends on the model choosing to call a tool, Stop does not.
+    await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible({ timeout: 30_000 });
 
     // Inject a short question mid-turn
     await textarea.fill('Say "scub-inject-ok" and nothing else.');
     await page.getByRole('button', { name: 'Send' }).click();
 
-    // Wait for response to complete
+    // Wait for response to complete - use the LAST timer (the inject response, not the first turn)
     const timer = page.locator('[class*="responseTime"]');
-    await expect(timer.first()).toBeVisible({ timeout: 60_000 });
+    await expect(timer.last()).toBeVisible({ timeout: 60_000 });
 
     // Inject should be visible
     const inject = page.locator('div[class*="userInject"]');
@@ -62,14 +64,13 @@ test.describe('send while streaming', () => {
     await textarea.fill('Say "scub-followup-ok" and nothing else.');
     await page.getByRole('button', { name: 'Send' }).click();
 
-    // Wait for second response
-    await expect(async () => {
-      const count = await timer.count();
-      expect(count).toBeGreaterThanOrEqual(2);
-    }).toPass({ timeout: 60_000 });
+    // Wait for the follow-up turn to start (Stop button appears), then complete (timer appears)
+    const stopBtn = page.getByRole('button', { name: 'Stop' });
+    await expect(stopBtn).toBeVisible({ timeout: 30_000 });
+    await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
 
-    // The follow-up response should contain the requested text (not exact - model may wrap it)
-    await expect(page.getByText('scub-followup-ok').first()).toBeVisible();
+    // Now we have at least 2 timers - assert the follow-up text is present
+    await expect(page.getByText('scub-followup-ok').first()).toBeVisible({ timeout: 10_000 });
 
     // No error blocks
     const errorBlock = page.locator('[class*="errorBlock"]');

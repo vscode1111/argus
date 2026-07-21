@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import { createSessionState, type SessionState } from './sessionState';
+import { killProc } from './cli';
 
 const MAX_HISTORY = 200;
 
@@ -59,8 +60,9 @@ interface ChannelData {
 
 // Public interface used by session.ts and index.ts.
 export interface Channel {
-  /** Add a client: joins the most recently active entry and receives a history replay. */
-  addClient(ws: WebSocket): void;
+  /** Add a client: joins the most recently active entry and receives a history replay.
+   *  Pass fresh=true to create an isolated new entry instead (used for browser clients). */
+  addClient(ws: WebSocket, fresh?: boolean): void;
   /** Remove a client on disconnect; handles per-entry cleanup without killing the proc. */
   removeClient(ws: WebSocket): void;
   /** Get the session state for this client's current entry. */
@@ -279,6 +281,14 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
   const t = setTimeout(() => {
     if (entry.clients.size === 0) {
       cd.entries.delete(entry.key);
+      // Once evicted the entry is unreachable - no client can rejoin it - so its CLI
+      // process would linger with nobody to receive its output. Reclaim it here, or
+      // every abandoned session leaks a `claude` process for the life of the server.
+      if (entry.state.currentProc) {
+        killProc(entry.state.currentProc);
+        entry.state.currentProc = undefined;
+        entry.state.currentProcKey = undefined;
+      }
       if (cd.entries.size === 0) registry.delete(cd.dir);
     }
   }, 30_000);
@@ -296,8 +306,8 @@ export function getOrCreateChannel(dir: string): Channel {
   const _cd = cd;
 
   return {
-    addClient(ws) {
-      joinEntry(_cd, ws, defaultEntry(_cd));
+    addClient(ws, fresh) {
+      joinEntry(_cd, ws, fresh ? createEntry(_cd) : defaultEntry(_cd));
     },
     removeClient(ws) {
       const entry = _cd.clientEntry.get(ws);

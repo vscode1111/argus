@@ -42,10 +42,12 @@ const POPULAR_PORTS = new Set([
   5672, 6379, 8000, 8080, 8081, 8443, 8888, 9000, 9090, 9200, 9229, 11211, 27017,
 ]);
 
-// A random port in 1024-65535 that isn't a well-known/popular one.
+// A random port in 10000-49151 that isn't a well-known/popular one.
+// Upper bound is below the Windows ephemeral range (49152+) so the port won't
+// be grabbed by VS Code's internal IPC or other OS-allocated sockets.
 function randomPort(): number {
   let p: number;
-  do { p = 1024 + Math.floor(Math.random() * (65535 - 1024 + 1)); } while (POPULAR_PORTS.has(p));
+  do { p = 10000 + Math.floor(Math.random() * (49151 - 10000 + 1)); } while (POPULAR_PORTS.has(p));
   return p;
 }
 
@@ -115,6 +117,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setAllowNetworkAccess, setAllowedOrigins, daemonPort, setDaemonPort, daemonIdleMs, setDaemonIdleMs } = useSettings();
   const [activeClients, setActiveClients] = useState<number | null>(null);
   const [serverPort, setServerPort] = useState<number | null>(null);
+  const [cliLaunchCount, setCliLaunchCount] = useState<number | null>(null);
   const [restarting, setRestarting] = useState(false);
   // Set when the daemon restarts onto a different port and this (browser) tab can't
   // follow it (it is same-origin to the old port) - surfaces a clickable new URL.
@@ -136,6 +139,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
         setServerPort(msg.port);
         setRestarting(false);
         setMovedUrl(null);
+        if (typeof msg.cliLaunchCount === 'number') setCliLaunchCount(msg.cliLaunchCount);
       } else if (msg && msg.type === 'daemonRestarting' && typeof msg.port === 'number') {
         setServerPort(msg.port);
         setRestarting(false);
@@ -153,13 +157,12 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  // The Daemon port field configures the *next-restart* port, but on open it should
-  // reflect the port the daemon is actually running on (the configured value can be
-  // stale - e.g. set then never applied). When the live port arrives via serverInfo,
-  // sync the field to it so it shows the real port; randomize/Apply still move it.
+  // Local display state for the daemon port input. Seeded from the live server port
+  // so the field shows what the daemon is actually running on - but updating this
+  // does NOT write to argus.json (only the NumberInput onChange does via setDaemonPort).
+  const [localDaemonPort, setLocalDaemonPort] = useState(daemonPort);
   useEffect(() => {
-    if (serverPort != null && serverPort !== daemonPort) setDaemonPort(serverPort);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (serverPort != null) setLocalDaemonPort(serverPort);
   }, [serverPort]);
 
   function openExternal(url: string): void {
@@ -178,7 +181,11 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const httpUrl = serverPort ? `http://localhost:${serverPort}` : '';
   const wsUrl = serverPort ? `ws://localhost:${serverPort}/agent` : '';
   const [tab, setTabState] = useState<Tab>(() => (localStorage.getItem('argus.settingsTab') as Tab) || 'general');
-  const setTab = (t: Tab) => { setTabState(t); localStorage.setItem('argus.settingsTab', t); };
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    localStorage.setItem('argus.settingsTab', t);
+    if (t === 'info') postMessage({ type: 'getServerInfo' });
+  };
   const [layoutCleared, setLayoutCleared] = useState(false);
   const hasDevHarness = !!document.getElementById('dev-harness');
   const hasNotificationAPI = typeof Notification !== 'undefined';
@@ -338,7 +345,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                   className={styles.randomBtn}
                   aria-label="Randomize port"
                   title="Pick a random port (avoids common ports)"
-                  onClick={(e) => { e.preventDefault(); setDaemonPort(randomPort()); }}
+                  onClick={(e) => { e.preventDefault(); const p = randomPort(); setLocalDaemonPort(p); setDaemonPort(p); }}
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -348,7 +355,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                     <circle cx="16" cy="8" r="1.4" fill="currentColor" stroke="none" />
                   </svg>
                 </button>
-                <NumberInput id="input-daemon-port" value={daemonPort} onChange={setDaemonPort} min={1} />
+                <NumberInput id="input-daemon-port" value={localDaemonPort} onChange={(v) => { setLocalDaemonPort(v); setDaemonPort(v); }} min={1} />
               </span>
             </label>
             <label className={styles.settingRow} htmlFor="input-daemon-idle">
@@ -385,6 +392,10 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             <div className={styles.infoRow}>
               <span className={styles.infoLabel}>Path</span>
               <span className={styles.infoValue}>{workspacePath || '(no workspace)'}</span>
+            </div>
+            <div className={styles.infoRow}>
+              <span className={styles.infoLabel} title="Number of Claude CLI processes spawned since the server started">CLI launches</span>
+              <span className={styles.infoValue} data-testid="cli-launches">{cliLaunchCount ?? '-'}</span>
             </div>
           </div>
         )}

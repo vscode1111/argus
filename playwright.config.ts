@@ -36,6 +36,11 @@ export default defineConfig({
       dependencies: ['mock'],
       timeout: 90_000,
       retries: 0,
+      // Each integration test drives a real Claude CLI plus a Chromium instance against
+      // the one shared :3001 backend. At the global 4 workers that exhausts memory/CPU:
+      // the backend stops responding mid-run and every later test sees a mounted page
+      // with no data, so one overload cascades into dozens of unrelated failures.
+      workers: 2,
     },
   ],
   use: {

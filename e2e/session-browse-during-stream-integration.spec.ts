@@ -24,11 +24,20 @@ async function startStreaming(page: Page, text: string) {
 }
 
 // Opens the Session History modal and waits for the session list to load.
+// The list arrives over the WS, and under parallel integration load that round-trip
+// occasionally outlasts a single wait. Reopening re-fires listSessions on mount, so
+// retry the whole open rather than sitting on a request that may never land.
 async function openHistoryModal(page: Page) {
-  await page.getByRole('button', { name: 'Session history' }).click();
   const dialog = page.getByRole('dialog', { name: 'Session History' });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
+  await expect(async () => {
+    if (await dialog.count() > 0) {
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+    }
+    await page.getByRole('button', { name: 'Session history' }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Loading...')).toHaveCount(0, { timeout: 10_000 });
+  }).toPass({ timeout: 30_000 });
   return dialog;
 }
 
@@ -140,14 +149,20 @@ test.describe('browse past session during active streaming (integration)', () =>
     await renameCurrentSession(page, titleB);
 
     // 3. Start a long stream in session B so there is time to browse and return.
-    await startStreaming(page, 'Write the numbers 1 to 100, one per line, no other text.');
+    //    It has to outlive the browse round-trip: once the turn ends, the replayed
+    //    transcript carries no timers at all, so step 7 would have nothing to assert
+    //    on. 1..600 keeps the CLI streaming long enough for most runs; the test now
+    //    handles both live and completed cases explicitly.
+    await startStreaming(page, 'Write the numbers 1 to 600, one per line, no other text.');
 
-    // 4. Wait for the ThinkingBlock to appear so that message_start (input tokens)
-    //    and at least one thinking_delta (output estimate) have been processed.
-    //    This guarantees s.liveInputTokens > 0 and s.liveOutputChars > 0 on the
-    //    server before we browse away.
-    const thinkingBlock = page.locator('[class*="thinkingBlock"]');
-    await expect(thinkingBlock).toBeVisible({ timeout: 20_000 });
+    // 4. Wait until the live timer shows both token counts. StreamingTimer renders
+    //    "<n> in / <m> out" only when input AND output are non-zero, so this waits on
+    //    exactly the precondition the test needs: s.liveInputTokens > 0 and
+    //    s.liveOutputChars > 0 on the server before we browse away. (Waiting for a
+    //    ThinkingBlock instead was model-dependent - whether the model emits thinking
+    //    text at all is its choice, so the block sometimes never appeared.)
+    const liveTimer = page.locator('[class*="responseTime"]').last();
+    await expect(liveTimer).toContainText(/\d\s+in\s*\/\s*[\d,\s]+out/, { timeout: 30_000 });
 
     // 5. Browse to session A while session B is still streaming.
     const hist1 = await openHistoryModal(page);
@@ -163,23 +178,41 @@ test.describe('browse past session during active streaming (integration)', () =>
     await expect(hist2).toHaveCount(0);
     await expect(page.locator('button.sessionNameBtn')).toHaveText(titleB, { timeout: 10_000 });
 
-    // 7. The response timer must show non-zero input AND output counts.
-    //    [class*="responseTime"] matches both the streaming timer and the
-    //    completed-message timer, so the assertion holds whether or not the
-    //    stream finished while we were browsing.
-    const timer = page.locator('[class*="responseTime"]').first();
-    await expect(timer).toContainText('in /', { timeout: 15_000 });
-    await expect(timer).toContainText('out');
+    // 7. The regression is that returning to a session MUST restore token counts.
+    //    Whether the stream is still live or has finished while browsing, the timer
+    //    should show non-zero input AND output tokens. Test both paths explicitly:
+    //    - If streaming live: Stop button visible, timer shows live counts.
+    //    - If stream finished: Stop button gone, timer shows final counts.
+    const stopBtn = page.getByRole('button', { name: 'Stop' });
+    const timer = page.locator('[class*="responseTime"]').last();
 
-    const timerText = await timer.textContent() ?? '';
-    const m = timerText.match(/(\d[\d\s,]*)\s+in\s*\/\s*(\d[\d\s,]*)\s+out/);
-    expect(m).not.toBeNull();
-    const inVal  = parseInt((m![1] ?? '0').replace(/[\s,]/g, ''), 10);
-    const outVal = parseInt((m![2] ?? '0').replace(/[\s,]/g, ''), 10);
-    expect(inVal).toBeGreaterThan(0);
-    expect(outVal).toBeGreaterThan(0);
+    const isLive = await stopBtn.isVisible({ timeout: 5_000 }).catch(() => false);
+    if (isLive) {
+      // Stream still running: assert live token counts.
+      await expect(timer).toContainText('in /', { timeout: 15_000 });
+      await expect(timer).toContainText('out');
+      const timerText = await timer.textContent() ?? '';
+      const m = timerText.match(/(\d[\d\s,]*)\s+in\s*\/\s*(\d[\d\s,]*)\s+out/);
+      expect(m).not.toBeNull();
+      const inVal  = parseInt((m![1] ?? '0').replace(/[\s,]/g, ''), 10);
+      const outVal = parseInt((m![2] ?? '0').replace(/[\s,]/g, ''), 10);
+      expect(inVal).toBeGreaterThan(0);
+      expect(outVal).toBeGreaterThan(0);
 
-    // Let the stream finish so the next test starts with a clean state.
-    await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0, { timeout: 90_000 });
+      // Stop the stream so the next test starts from a clean state.
+      await stopBtn.click();
+      await expect(stopBtn).toHaveCount(0, { timeout: 30_000 });
+    } else {
+      // Stream finished while browsing: assert the final timer still has counts.
+      await expect(timer).toContainText('in /', { timeout: 15_000 });
+      await expect(timer).toContainText('out');
+      const timerText = await timer.textContent() ?? '';
+      const m = timerText.match(/(\d[\d\s,]*)\s+in\s*\/\s*(\d[\d\s,]*)\s+out/);
+      expect(m).not.toBeNull();
+      const inVal  = parseInt((m![1] ?? '0').replace(/[\s,]/g, ''), 10);
+      const outVal = parseInt((m![2] ?? '0').replace(/[\s,]/g, ''), 10);
+      expect(inVal).toBeGreaterThan(0);
+      expect(outVal).toBeGreaterThan(0);
+    }
   });
 });

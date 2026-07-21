@@ -113,7 +113,7 @@ export class ChatPanel {
     } else if (msg.type === 'openUrl' && msg.url) {
       vscode.env.openExternal(vscode.Uri.parse(msg.url));
     } else if (msg.type === 'getInfo') {
-      const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+      const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
       const version = vscode.extensions.getExtension('local.argus')?.packageJSON?.version ?? '';
       this.post({ type: 'workspaceInfo', path: root, version });
     } else if (msg.type === 'readFilePreview' && msg.path) {
