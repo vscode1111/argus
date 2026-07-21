@@ -3,7 +3,10 @@
 // chromium, and stray test daemons. Deliberately conservative - it never kills:
 //   - this very session (the whole ancestor chain of this script, so the Claude
 //     process running the agent and its node parents are safe),
-//   - the real Argus daemon (the pid in ~/.claude/argus-daemon.json),
+//   - the real Argus daemon (the pid in ~/.claude/argus-daemon.json) and its
+//     whole process subtree - live user sessions are `claude --print` children
+//     of the daemon (via a cmd.exe shell on Windows), so killing them would
+//     drop conversations that are mid-turn,
 //   - your normal browser (only Playwright-spawned chromium is matched).
 //
 // Usage: node scripts/test-clean.js [--dry] [--no-claude]
@@ -55,15 +58,37 @@ while (cur && byPid.has(cur) && !protectedPids.has(cur)) {
   cur = byPid.get(cur).ppid;
 }
 
-// Protected: the real daemon.
+// Protected roots: the real daemon and everything under it. Live user sessions are
+// `claude --print` processes spawned by the daemon (through cmd.exe on Windows), so
+// the whole subtree must be spared, not just the daemon pid itself. Subtree
+// protection is NOT applied to the script's ancestor chain - that chain includes
+// VS Code / the terminal, whose descendants are exactly the stale test processes
+// this script exists to kill.
+const protectedRoots = new Set();
 try {
   const info = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'argus-daemon.json'), 'utf8'));
-  if (typeof info.pid === 'number') protectedPids.add(info.pid);
+  if (typeof info.pid === 'number') {
+    protectedPids.add(info.pid);
+    protectedRoots.add(info.pid);
+  }
 } catch { /* no real daemon */ }
+
+// True when the pid's parent chain reaches a protected root (cycle-safe: ppids can
+// be stale/recycled on Windows, so guard against loops).
+function underProtectedRoot(pid) {
+  let cur = pid;
+  const seen = new Set();
+  while (cur && byPid.has(cur) && !seen.has(cur)) {
+    if (protectedRoots.has(cur)) return true;
+    seen.add(cur);
+    cur = byPid.get(cur).ppid;
+  }
+  return false;
+}
 
 // --- classify kill targets ---
 function classify(p) {
-  if (protectedPids.has(p.pid)) return null;
+  if (protectedPids.has(p.pid) || underProtectedRoot(p.pid)) return null;
   const c = p.cmd;
   if (p.name === 'node.exe' || p.name === 'node') {
     if (/@playwright[\\/]test|playwright[\\/]cli|cli\.js["']?\s+test/i.test(c)) return 'playwright-runner';

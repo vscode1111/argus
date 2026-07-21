@@ -18,11 +18,16 @@ import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
 
+let cliLaunchCount = 0;
+export function getCliLaunchCount(): number { return cliLaunchCount; }
+
 export interface ConnectionHooks {
   onSettingsChange?: () => void;
   getClientCount?: () => number;
   getServerPort?: () => number;
   onRestartRequest?: () => void;
+  /** If true, create a fresh isolated session entry for this client (used for browser tabs). */
+  fresh?: boolean;
 }
 
 // Initialises per-session state: logging, stale-timer, watchdog, synthetic-send
@@ -117,7 +122,7 @@ export function attachClientHandlers(
   model: string,
   hooks: ConnectionHooks = {},
 ): void {
-  channel.addClient(ws);
+  channel.addClient(ws, hooks.fresh);
   const s0 = channel.getClientState(ws);
   if (!s0.sendLog) initChannelSession(s0, model);
 
@@ -176,7 +181,7 @@ export function attachClientHandlers(
     } else if (msg.type === 'getClientCount') {
       ws.send(JSON.stringify({ type: 'clientCount', count: hooks.getClientCount?.() ?? 0 }));
     } else if (msg.type === 'getServerInfo') {
-      ws.send(JSON.stringify({ type: 'serverInfo', port: hooks.getServerPort?.() ?? 0 }));
+      ws.send(JSON.stringify({ type: 'serverInfo', port: hooks.getServerPort?.() ?? 0, cliLaunchCount }));
     } else if (msg.type === 'updateSettings') {
       const patch = (msg as { settings?: Partial<ArgusConfig> }).settings;
       if (patch) {
@@ -374,7 +379,22 @@ function handleSend(s: SessionState, msg: { type?: string; text?: string; images
     const claudeBin = resolveClaudeBin();
     const spawnCmd = IS_WIN && /\s/.test(claudeBin) ? `"${claudeBin}"` : claudeBin;
     s.sendLog('info', `Spawning claude: ${args.join(' ')}`);
-    proc = spawn(spawnCmd, args, { cwd: s.workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN, windowsHide: true });
+    // spawn() throws synchronously when the OS refuses a new process (e.g. resource
+    // exhaustion -> "spawn UNKNOWN"). That must stay a per-turn error: uncaught it
+    // kills the server process and every other client's connection with it.
+    try {
+      proc = spawn(spawnCmd, args, { cwd: s.workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN, windowsHide: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      s.currentProc = undefined;
+      s.currentProcKey = undefined;
+      s.cliDone = true;
+      s.sendLog('error', `spawn failed: ${message}`);
+      s.broadcast(JSON.stringify({ type: 'error', text: `Failed to start Claude CLI: ${message}` }));
+      s.broadcast(JSON.stringify({ type: 'done' }));
+      return;
+    }
+    cliLaunchCount++;
     s.currentProc = proc;
     s.currentProcKey = procKey;
     attachProcHandlers(s, proc);
@@ -447,10 +467,11 @@ function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, i
   if (!isBrowsing) {
     channel.replaySnapshot(ws);
     // Restore live token counts lost when sessionLoaded cleared the streaming state.
-    if (s.liveInputTokens > 0 || s.completedOutputTokens > 0 || s.liveOutputChars > 0) {
-      const outputTokens = s.completedOutputTokens + Math.ceil(s.liveOutputChars / 4);
-      ws.send(JSON.stringify({ type: 'token_update', inputTokens: s.liveInputTokens || undefined, outputTokens: outputTokens || undefined }));
-    }
+    // Always send the update when returning to a live session - the frontend needs to
+    // know the current counts (even if zero) to correctly render the "in / out" timer.
+    // This fixes a regression where browsing away and back would lose the input count.
+    const outputTokens = s.completedOutputTokens + Math.ceil(s.liveOutputChars / 4);
+    ws.send(JSON.stringify({ type: 'token_update', inputTokens: s.liveInputTokens, outputTokens }));
   }
 }
 

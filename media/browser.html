@@ -85,6 +85,7 @@
         var p = new URLSearchParams();
         if (nonce) p.set('nonce', nonce);
         if (dir) p.set('dir', dir);
+        p.set('client', 'browser');
         return wsProto + host + '/agent?' + p.toString();
       }
 

@@ -70,6 +70,15 @@ function spawnDaemon(extensionPath: string, force: boolean): void {
       stdio: 'ignore',
       env,
     });
+    // If the daemon exits within 2s it failed to bind (port in use). Reset the
+    // debounce so ensureDaemon() can try again on the next needWsUrl cycle.
+    const spawnedAt = Date.now();
+    child.once('exit', (code) => {
+      if (Date.now() - spawnedAt < 2000) {
+        console.error('[Argus] daemon exited immediately (code', code, ') - port likely in use; resetting debounce');
+        lastDaemonSpawn = 0;
+      }
+    });
     child.unref();
     console.log(force ? '[Argus] restarted daemon' : '[Argus] auto-started daemon');
   } catch (err) {
@@ -87,20 +96,26 @@ export function ensureDaemon(extensionPath: string): void {
 
 // Explicit restart (Settings "Apply" button in the VS Code panel): hard-kill the
 // running daemon, clear its discovery file, then spawn a fresh one that reads the
-// updated config (new port/idle). The webview's reconnect loop picks up the new
-// port from the rewritten discovery file.
+// updated config (new port/idle). The FORCE_START flag already handles EADDRINUSE
+// with up to 25 retries (5s), so no port check here - a premature check would
+// falsely fail when Windows hasn't released the port yet and silently overwrite
+// the configured port with a default. The webview's reconnect loop picks up the
+// new port from the rewritten discovery file.
 export function restartDaemon(extensionPath: string): void {
   const info = readDaemonInfo();
-  if (info && isProcessAlive(info.pid)) {
-    try {
-      if (process.platform === 'win32') execFile('taskkill', ['/F', '/T', '/PID', String(info.pid)], () => { /* best-effort */ });
-      else process.kill(info.pid);
-    } catch { /* already gone */ }
-  }
   clearDaemonInfo();
   lastDaemonSpawn = Date.now();
-  // Let the OS release the port, then force-spawn (retries the port if needed).
-  setTimeout(() => spawnDaemon(extensionPath, true), 300);
+  const afterKill = () => { setTimeout(() => { spawnDaemon(extensionPath, true); }, 300); };
+  if (info && isProcessAlive(info.pid)) {
+    if (process.platform === 'win32') {
+      execFile('taskkill', ['/F', '/T', '/PID', String(info.pid)], afterKill);
+    } else {
+      try { process.kill(info.pid); } catch { /* already gone */ }
+      afterKill();
+    }
+  } else {
+    afterKill();
+  }
 }
 
 /** Extension id (publisher.name), used to build the `vscode://` toast click-to-focus URI. */

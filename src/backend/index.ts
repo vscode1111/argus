@@ -219,7 +219,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     }
     const serverPort = req.socket.localPort ?? PORT;
     const channel = getOrCreateChannel(workspaceDir);
-    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined });
+    const isBrowserClient = reqUrl.searchParams.get('client') === 'browser';
+    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, fresh: isBrowserClient });
     broadcastClientCount();
   });
 

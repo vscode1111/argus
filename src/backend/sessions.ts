@@ -480,10 +480,29 @@ export function renameSession(sessionId: string, workspaceDir: string, rawTitle:
   if (!title) return false;
   const record = JSON.stringify({ type: 'custom-title', customTitle: title, sessionId });
   try {
-    fs.appendFileSync(file, '\n' + record);
+    // The record must be a complete line. The CLI may still be appending to this
+    // transcript (renaming a session mid-turn is normal), and without the trailing
+    // newline its next record lands on the same line - both become unparseable, so
+    // the rename is silently lost and one CLI record is destroyed with it. The
+    // leading newline is only needed when the file does not already end with one.
+    fs.appendFileSync(file, (endsWithNewline(file) ? '' : '\n') + record + '\n');
     return true;
   } catch {
     return false;
+  }
+}
+
+// Whether the file's last byte is a newline (empty file counts as terminated).
+function endsWithNewline(file: string): boolean {
+  const size = fs.statSync(file).size;
+  if (size === 0) return true;
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(1);
+    fs.readSync(fd, buf, 0, 1, size - 1);
+    return buf[0] === 0x0a;
+  } finally {
+    fs.closeSync(fd);
   }
 }
 
