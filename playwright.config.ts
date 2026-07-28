@@ -3,6 +3,13 @@ import * as path from 'path';
 
 const e2eConfig = path.resolve(__dirname, 'e2e', 'argus.json');
 
+// Propagate ARGUS_CONFIG to test worker processes. Workers inherit this from the
+// main process, so integration tests that read/write the config file use the same
+// path the dev server uses. Without this, file-poll assertions fail when the server
+// was started by Playwright (which sets the env only for the webServer command, not
+// for test workers).
+process.env['ARGUS_CONFIG'] = e2eConfig;
+
 const chromiumOptions = {
   browserName: 'chromium' as const,
   launchOptions: {
@@ -40,7 +47,7 @@ export default defineConfig({
       // the one shared :3001 backend. At the global 4 workers that exhausts memory/CPU:
       // the backend stops responding mid-run and every later test sees a mounted page
       // with no data, so one overload cascades into dozens of unrelated failures.
-      workers: 2,
+      workers: 1,
     },
   ],
   use: {

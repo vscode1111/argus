@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { postMessage } from '../vscode';
+import { postMessage, isVsCode } from '../vscode';
 import { getDialogState, patchDialogState } from '../utils/dialogState';
 import { SessionSummary, GlobalSessionSummary } from '../types';
 import { Modal } from './shared/Modal';
@@ -22,6 +22,27 @@ interface Props {
 
 type Tab = 'workspace' | 'all';
 
+// Write text to the clipboard, falling back to a hidden textarea + execCommand
+// when the async Clipboard API is unavailable (plain-http LAN pages are not a
+// secure context, so navigator.clipboard is undefined there).
+function copyToClipboard(text: string): void {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+function fallbackCopy(text: string): void {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch {}
+  document.body.removeChild(ta);
+}
+
 export function SessionHistoryModal({ currentPath, currentId: currentIdOverride, onResumeWorkspaceSession, onClose }: Props) {
   // Remember the selected tab in-memory (reset on page refresh).
   const [tab, setTabState] = useState<Tab>(() => (getDialogState('sessionHistory')?.tab as Tab) || 'workspace');
@@ -35,6 +56,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // All-workspaces tab state (global, lazy-loaded on first open)
   const [allSessions, setAllSessions] = useState<GlobalSessionSummary[]>([]);
@@ -108,6 +130,16 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
     postMessage({ type: 'deleteSession', id });
     // Optimistic removal; the server also replies with a fresh sessionList.
     setSessions(prev => prev.filter(s => s.id !== id));
+  }
+
+  // Copy a deep link to this session (?session=<id>). The workspace is resolved
+  // server-side from the id, so the link works on machines with different paths.
+  // Browser-hosted pages only: a vscode-webview: origin would make a useless URL.
+  function copyLink(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    copyToClipboard(`${location.origin}${location.pathname}?session=${id}`);
+    setCopiedId(id);
+    window.setTimeout(() => setCopiedId(prev => (prev === id ? null : prev)), 1500);
   }
 
   function startEdit(e: React.MouseEvent, s: SessionSummary) {
@@ -233,6 +265,25 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                     <>
                       <span className={styles.rowCount}>{s.lines > 0 ? fmtLineCount(s.lines) : ''}</span>
                       <span className={styles.rowTime}>{relativeTime(s.updatedAt)}</span>
+                      {!isVsCode && (
+                        <button
+                          className={styles.linkBtn}
+                          onClick={e => copyLink(e, s.id)}
+                          aria-label="Copy session link"
+                          title="Copy session link"
+                        >
+                          {copiedId === s.id ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
                       <button
                         className={styles.editBtn}
                         onClick={e => startEdit(e, s)}

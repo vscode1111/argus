@@ -13,9 +13,14 @@ async function sendAndWait(page: Page, text: string) {
 }
 
 test.describe('session history (integration)', () => {
-  test('creates a session, lists it, resumes it, and continues context', async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
     await waitForApp(page);
+    // New chat isolates this test in its own channel entry so a concurrent
+    // worker can't overwrite s.sessionId in the shared default entry.
+    await page.getByRole('button', { name: 'New chat' }).click();
+  });
 
+  test('creates a session, lists it, resumes it, and continues context', async ({ page }) => {
     // 1. Establish a fact in a fresh session. The unique token lets us prove later
     //    that the resumed session still carries the earlier context.
     await sendAndWait(page, 'Remember this token for later: scub-7731. Reply with just "OK".');
@@ -53,8 +58,6 @@ test.describe('session history (integration)', () => {
   });
 
   test('renames a session and the new title survives a backend re-list', async ({ page }) => {
-    await waitForApp(page);
-
     // 1. Create a real session so a transcript exists to rename.
     await sendAndWait(page, 'Reply with just "OK".');
 
@@ -91,8 +94,6 @@ test.describe('session history (integration)', () => {
   });
 
   test('renames the current session inline from the header and it persists', async ({ page }) => {
-    await waitForApp(page);
-
     // 1. Create a real session. When the turn finishes the app re-fetches the
     //    session list, which populates the header title (and its current id), so
     //    the clickable rename button appears.

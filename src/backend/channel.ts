@@ -61,8 +61,10 @@ interface ChannelData {
 // Public interface used by session.ts and index.ts.
 export interface Channel {
   /** Add a client: joins the most recently active entry and receives a history replay.
-   *  Pass fresh=true to create an isolated new entry instead (used for browser clients). */
-  addClient(ws: WebSocket, fresh?: boolean): void;
+   *  Pass fresh=true to create an isolated new entry instead (used for browser clients).
+   *  When sessionId names a session live in an entry right now, the client attaches to
+   *  that entry (deep link) - overriding fresh; returns true only for such an attach. */
+  addClient(ws: WebSocket, fresh?: boolean, sessionId?: string): boolean;
   /** Remove a client on disconnect; handles per-entry cleanup without killing the proc. */
   removeClient(ws: WebSocket): void;
   /** Get the session state for this client's current entry. */
@@ -73,6 +75,8 @@ export interface Channel {
   setBrowsing(ws: WebSocket, browsing: boolean): void;
   /** Replay the in-progress streaming snapshot to this client (from its current entry). */
   replaySnapshot(ws: WebSocket): void;
+  /** Replay the client's entry history + streaming snapshot (deep-link initial sync). */
+  replayHistory(ws: WebSocket): void;
   /** Send a message to every client across ALL session entries in this channel. */
   broadcastToAll(msg: string): void;
   /** Call fn for each session entry's state (e.g. to update a shared setting). */
@@ -223,24 +227,26 @@ function createEntry(cd: ChannelData): SessionEntry {
 
 function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
   if (!entry.snapshot) return;
-  ws.send(JSON.stringify({ type: 'thinking_start', reused: true, startedAt: entry.snapshotStartedAt ?? undefined }));
-  if (entry.snapshot.thinking) ws.send(JSON.stringify({ type: 'thinking_chunk', text: entry.snapshot.thinking }));
+  try { ws.send(JSON.stringify({ type: 'thinking_start', reused: true, startedAt: entry.snapshotStartedAt ?? undefined })); } catch { return; }
+  if (entry.snapshot.thinking) { try { ws.send(JSON.stringify({ type: 'thinking_chunk', text: entry.snapshot.thinking })); } catch { return; } }
   for (const block of entry.snapshot.blocks) {
-    if (block.type === 'text') {
-      ws.send(JSON.stringify({ type: 'text_chunk', text: block.text ?? '' }));
-    } else if (block.type === 'tool') {
-      ws.send(JSON.stringify({ type: 'tool_start', call: block.call }));
-      if (block.call?.result !== undefined || block.call?.error) {
-        ws.send(JSON.stringify({ type: 'tool_end', call: block.call }));
+    try {
+      if (block.type === 'text') {
+        ws.send(JSON.stringify({ type: 'text_chunk', text: block.text ?? '' }));
+      } else if (block.type === 'tool') {
+        ws.send(JSON.stringify({ type: 'tool_start', call: block.call }));
+        if (block.call?.result !== undefined || block.call?.error) {
+          ws.send(JSON.stringify({ type: 'tool_end', call: block.call }));
+        }
+      } else if (block.type === 'user_inject') {
+        ws.send(JSON.stringify({ type: 'user_inject', text: block.text ?? '' }));
       }
-    } else if (block.type === 'user_inject') {
-      ws.send(JSON.stringify({ type: 'user_inject', text: block.text ?? '' }));
-    }
+    } catch { return; }
   }
 }
 
 function replayToClient(entry: SessionEntry, ws: WebSocket): void {
-  ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages: entry.history }));
+  try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages: entry.history })); } catch { return; }
   replaySnapshotToClient(entry, ws);
 }
 
@@ -255,15 +261,18 @@ function defaultEntry(cd: ChannelData): SessionEntry {
 }
 
 // Move a client from its previous entry (if any) to a new target entry.
-// Replays history to the client if the target entry already has state.
-function joinEntry(cd: ChannelData, ws: WebSocket, target: SessionEntry): void {
+// Replays history to the client if the target entry already has state, unless
+// skipReplay is true (used for deep-link live-attaches: webviewReady does the replay
+// after React has mounted, so anything sent here would be dispatched before the App
+// registers its message listener and would be lost).
+function joinEntry(cd: ChannelData, ws: WebSocket, target: SessionEntry, skipReplay = false): void {
   const prev = cd.clientEntry.get(ws);
   if (prev && prev !== target) {
     prev.clients.delete(ws);
     prev.browsingClients.delete(ws);
     if (prev.clients.size === 0) scheduleEntryCleanup(cd, prev);
   }
-  const needsReplay = target.clients.size > 0 || target.history.length > 0 || target.snapshot !== null;
+  const needsReplay = !skipReplay && (target.clients.size > 0 || target.history.length > 0 || target.snapshot !== null);
   target.clients.add(ws);
   cd.clientEntry.set(ws, target);
   if (needsReplay) replayToClient(target, ws);
@@ -306,8 +315,19 @@ export function getOrCreateChannel(dir: string): Channel {
   const _cd = cd;
 
   return {
-    addClient(ws, fresh) {
+    addClient(ws, fresh, sessionId) {
+      if (sessionId) {
+        for (const entry of _cd.entries.values()) {
+          if (entry.state.sessionId === sessionId) {
+            // Deep-link live-attach: skip the replay here. webviewReady sends it
+            // after React mounts so the App's message listener is already registered.
+            joinEntry(_cd, ws, entry, /* skipReplay */ true);
+            return true;
+          }
+        }
+      }
       joinEntry(_cd, ws, fresh ? createEntry(_cd) : defaultEntry(_cd));
+      return false;
     },
     removeClient(ws) {
       const entry = _cd.clientEntry.get(ws);
@@ -334,6 +354,10 @@ export function getOrCreateChannel(dir: string): Channel {
     replaySnapshot(ws) {
       const entry = _cd.clientEntry.get(ws);
       if (entry) replaySnapshotToClient(entry, ws);
+    },
+    replayHistory(ws) {
+      const entry = _cd.clientEntry.get(ws);
+      if (entry) replayToClient(entry, ws);
     },
     broadcastToAll(msg) {
       const sent = new Set<WebSocket>();
