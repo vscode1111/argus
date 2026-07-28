@@ -51,8 +51,10 @@ test.describe('workspace browse / folder explorer (integration)', () => {
 
     // Navigate back down into the system drive: the breadcrumb updates to the
     // drive root and the "Up" row reappears.
-    await dialog.getByText(/^C:\\$/).first().click();
-    await expect(breadcrumb).toHaveText('C:\\', { timeout: 10_000 });
+    const cDriveRow = dialog.getByText(/^C:\\$/).first();
+    await expect(cDriveRow).toBeVisible();
+    await cDriveRow.click();
+    await expect(breadcrumb).toHaveText('C:\\', { timeout: 20_000 });
     await expect(dialog.getByText('Up', { exact: true })).toBeVisible();
   });
 

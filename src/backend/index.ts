@@ -7,6 +7,7 @@ import type { IncomingMessage } from 'http';
 
 import { attachClientHandlers } from './session';
 import { getOrCreateChannel } from './channel';
+import { findWorkspaceForSession } from './sessions';
 import { readConfig } from './config';
 
 export type { ArgusConfig } from './config';
@@ -212,7 +213,27 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     ws.on('close', () => { broadcastClientCount(); scheduleIdleShutdown(); });
     const reqUrl = new URL(req.url ?? '/', 'http://localhost');
     const rawDir = reqUrl.searchParams.get('dir') || process.cwd();
-    const workspaceDir = resolve(rawDir);
+    let workspaceDir = resolve(rawDir);
+    // Deep link: ?session= resolves its own workspace from the transcript's recorded
+    // cwd, and that wins over ?dir= (the id is the more specific intent; a dir copied
+    // between machines can be stale). Must happen before getOrCreateChannel - a socket
+    // placed in the wrong channel could not be fixed by any later message. An id that
+    // resolves nowhere (malformed, unknown, or its workspace is gone) is dropped and
+    // the connection proceeds on ?dir= alone.
+    const rawSession = reqUrl.searchParams.get('session');
+    let sessionId: string | undefined;
+    if (rawSession) {
+      const sessionWs = findWorkspaceForSession(rawSession);
+      if (sessionWs) {
+        sessionId = rawSession;
+        if (resolve(sessionWs) !== workspaceDir) {
+          console.log(`[argus-server] deep link ${rawSession}: workspace ${sessionWs} overrides dir ${rawDir}`);
+        }
+        workspaceDir = resolve(sessionWs);
+      } else {
+        console.log(`[argus-server] deep link ${rawSession.slice(0, 64)}: no workspace found, ignoring`);
+      }
+    }
     if (!isAbsolute(workspaceDir) || !existsSync(workspaceDir)) {
       ws.close(4400, 'Invalid workspace directory');
       return;
@@ -220,7 +241,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     const serverPort = req.socket.localPort ?? PORT;
     const channel = getOrCreateChannel(workspaceDir);
     const isBrowserClient = reqUrl.searchParams.get('client') === 'browser';
-    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, fresh: isBrowserClient });
+    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, fresh: isBrowserClient, sessionId });
     broadcastClientCount();
   });
 

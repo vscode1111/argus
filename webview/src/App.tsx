@@ -101,7 +101,10 @@ function AppInner() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const dir = params.get('dir');
-    if (dir) {
+    // With a ?session= deep link the server resolves the workspace from the session
+    // id (it wins over a possibly stale ?dir=), so skip the optimistic paint - it
+    // could flash the wrong project name; the server pushes the verified path.
+    if (dir && !params.get('session')) {
       console.log('[Argus] Invoked from directory:', dir);
       dispatch({ type: 'workspaceInfo', path: dir });
     }

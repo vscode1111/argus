@@ -4,6 +4,13 @@ import { waitForApp } from './helpers';
 test.describe('send while streaming', () => {
   test.beforeEach(async ({ page }) => {
     await waitForApp(page);
+    // Start each test in a clean session. Integration tests share a channel entry
+    // (same workspace dir, fresh=false), so replayed history from a previous test
+    // contains completed timers that cause false-positive checks (e.g. timer.last()
+    // matches an old turn before the current one finishes). newSession resets the
+    // entry state and kills any orphaned CLI from a prior timeout, preventing cascade.
+    await page.getByRole('button', { name: 'New chat' }).click();
+    await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0, { timeout: 5_000 });
   });
 
   test('second message sent during streaming appears as inline inject', async ({ page }) => {
@@ -23,9 +30,10 @@ test.describe('send while streaming', () => {
     await textarea.fill('What is 123 + 456? Reply with just the number.');
     await page.getByRole('button', { name: 'Send' }).click();
 
-    // Wait for the response to complete
-    const timer = page.locator('[class*="responseTime"]');
-    await expect(timer.first()).toBeVisible({ timeout: 90_000 });
+    // Wait for the whole turn (including the inject) to complete. We gate on the Stop
+    // button disappearing rather than timer.first(): timer.first() could match a timer
+    // from a replayed prior turn and produce a false positive before the CLI finishes.
+    await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0, { timeout: 90_000 });
 
     // The injected user message should appear inline as a userInject block
     const inject = page.locator('div[class*="userInject"]');
@@ -46,15 +54,19 @@ test.describe('send while streaming', () => {
 
     // Gate on the Stop button rather than a tool call - see the note in the test above:
     // a toolCall locator depends on the model choosing to call a tool, Stop does not.
-    await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible({ timeout: 30_000 });
+    const stopBtn = page.getByRole('button', { name: 'Stop' });
+    await expect(stopBtn).toBeVisible({ timeout: 30_000 });
 
     // Inject a short question mid-turn
     await textarea.fill('Say "scub-inject-ok" and nothing else.');
     await page.getByRole('button', { name: 'Send' }).click();
 
-    // Wait for response to complete - use the LAST timer (the inject response, not the first turn)
-    const timer = page.locator('[class*="responseTime"]');
-    await expect(timer.last()).toBeVisible({ timeout: 60_000 });
+    // Wait for the whole turn (inject included) to complete. We gate on the Stop button
+    // disappearing rather than timer.last(): timer.last() can match a timer from a
+    // replayed older turn and return a false positive before the current CLI turn
+    // finishes. That false positive would cause the follow-up send to arrive mid-turn
+    // as a second inject, inflating the combined CLI work past the 90s test timeout.
+    await expect(stopBtn).toHaveCount(0, { timeout: 60_000 });
 
     // Inject should be visible
     const inject = page.locator('div[class*="userInject"]');
@@ -64,8 +76,7 @@ test.describe('send while streaming', () => {
     await textarea.fill('Say "scub-followup-ok" and nothing else.');
     await page.getByRole('button', { name: 'Send' }).click();
 
-    // Wait for the follow-up turn to start (Stop button appears), then complete (timer appears)
-    const stopBtn = page.getByRole('button', { name: 'Stop' });
+    // Wait for the follow-up turn to start (Stop button appears), then complete (Stop gone)
     await expect(stopBtn).toBeVisible({ timeout: 30_000 });
     await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
 

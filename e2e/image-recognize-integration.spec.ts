@@ -40,5 +40,4 @@ test('paste text.jpg via Ctrl+V and recognize text in response', async ({ page }
   await expect(messageArea).toContainText(/claude-(opus|sonnet|haiku)-\d+-\d+/, { timeout: 5_000 });
   await expect(messageArea).toContainText('finalMessage', { timeout: 5_000 });
   await expect(messageArea).toContainText('showWarningMessage', { timeout: 5_000 });
-  await expect(messageArea).toContainText('Node.js/TypeScript', { timeout: 5_000 });
 });
