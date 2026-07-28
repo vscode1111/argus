@@ -28,6 +28,8 @@ export interface ConnectionHooks {
   onRestartRequest?: () => void;
   /** If true, create a fresh isolated session entry for this client (used for browser tabs). */
   fresh?: boolean;
+  /** Deep link (?session=): attach to this session's live entry at connect, or replay it from disk. */
+  sessionId?: string;
 }
 
 // Initialises per-session state: logging, stale-timer, watchdog, synthetic-send
@@ -122,9 +124,13 @@ export function attachClientHandlers(
   model: string,
   hooks: ConnectionHooks = {},
 ): void {
-  channel.addClient(ws, hooks.fresh);
+  const liveAttach = channel.addClient(ws, hooks.fresh, hooks.sessionId);
   const s0 = channel.getClientState(ws);
   if (!s0.sendLog) initChannelSession(s0, model);
+  // Deep link to a session that is not live in memory: point this entry at it so
+  // the next send spawns with --resume (the transcript replays on webviewReady).
+  // Guarded on an idle entry so a mid-turn resume pointer is never clobbered.
+  if (hooks.sessionId && !liveAttach && !s0.currentProc) s0.sessionId = hooks.sessionId;
 
   // login is per-client: loginUrl/loginResult only go to the requesting client's ws.
   const login = createLoginHandler(ws, s0.sendLog);
@@ -159,7 +165,25 @@ export function attachClientHandlers(
       return;
     }
 
-    if (msg.type === 'send' && msg.text?.trim() === '/clear') {
+    if (msg.type === 'webviewReady') {
+      // Deep link (?session=): replay is deferred to here so it is sent after React
+      // mounts and registers its message listener. addClient uses skipReplay=true for
+      // live-attaches precisely so this handler owns the first replay.
+      if (hooks.sessionId) {
+        try { ws.send(JSON.stringify({ type: 'workspaceInfo', path: s.workspaceDir })); } catch { return; }
+        // For a live-attach (liveAttach=true), joinEntry skipped its replay; we must
+        // replay here. For a non-live attach, check whether the session is currently
+        // running in this entry (e.g. CLI started between upgrade and webviewReady).
+        const isLive = liveAttach || (!!s.currentProc && !s.cliDone && s.sessionId === hooks.sessionId);
+        if (isLive) {
+          channel.replayHistory(ws);
+        } else {
+          const messages = loadSession(hooks.sessionId, s.workspaceDir);
+          s.sendLog('info', `Deep link replay of ${hooks.sessionId} (${plural(messages.length, 'message')})`);
+          try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: hooks.sessionId, messages })); } catch {}
+        }
+      }
+    } else if (msg.type === 'send' && msg.text?.trim() === '/clear') {
       channel.setBrowsing(ws, false);
       s.sessionId = undefined;
       if (s.currentProc) {
@@ -241,17 +265,17 @@ export function attachClientHandlers(
       const usageP = fetchUsage(msg.force);
       accountP.then((account) => {
         ws.send(JSON.stringify({ type: 'accountUsage', account, usagePending: true }));
-      });
+      }).catch(() => {});
       Promise.all([accountP, usageP]).then(([account, usage]) => {
         const rateLimits = usage.windows.length > 0 ? usage.windows : Array.from(s.rateLimits.values());
         const usageError = rateLimits.length === 0 ? usage.error : undefined;
         ws.send(JSON.stringify({ type: 'accountUsage', account, rateLimits, usageError, usagePending: false }));
-      });
+      }).catch(() => {});
     } else if (msg.type === 'getModels') {
       fetchModels().then(({ models, error }) => {
         const runtimeDefaultModel = readConfig().runtimeDefaultModel || '';
         ws.send(JSON.stringify({ type: 'modelList', models, error, runtimeDefaultModel }));
-      });
+      }).catch(() => {});
     } else if (msg.type === 'stop') {
       handleStop(s);
     } else if (msg.type === 'newSession') {
@@ -277,9 +301,15 @@ export function attachClientHandlers(
       renameSession(msg.id, s.workspaceDir, msg.title);
       ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(s.workspaceDir), currentId: s.sessionId }));
     } else if (msg.type === 'listWorkspaces') {
-      ws.send(JSON.stringify({ type: 'workspaceList', workspaces: listWorkspaces(), currentPath: s.workspaceDir }));
+      const currentPath = s.workspaceDir;
+      listWorkspaces().then(workspaces => {
+        try { ws.send(JSON.stringify({ type: 'workspaceList', workspaces, currentPath })); } catch {}
+      }).catch(() => {});
     } else if (msg.type === 'listAllSessions') {
-      ws.send(JSON.stringify({ type: 'allSessionList', sessions: listAllSessions(), currentId: s.sessionId }));
+      const currentId = s.sessionId;
+      listAllSessions().then(sessions => {
+        try { ws.send(JSON.stringify({ type: 'allSessionList', sessions, currentId })); } catch {}
+      }).catch(() => {});
     } else if (msg.type === 'listDir') {
       ws.send(JSON.stringify({ type: 'dirList', ...listDir(typeof msg.path === 'string' ? msg.path : undefined) }));
     }

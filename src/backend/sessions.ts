@@ -177,12 +177,15 @@ export function listSessions(workspaceDir: string): SessionSummary[] {
 // from the `cwd` field stored inside the transcript records. Folders are ordered
 // by their most recent transcript mtime; workspaces whose path no longer exists
 // on disk are dropped.
-export function listWorkspaces(): WorkspaceSummary[] {
+export async function listWorkspaces(): Promise<WorkspaceSummary[]> {
   const root = projectsRoot();
   let names: string[];
   try { names = fs.readdirSync(root); } catch { return []; }
   const out: WorkspaceSummary[] = [];
   for (const name of names) {
+    // Yield between directories so WS ping/pong and other messages are not starved
+    // when the projects root contains many entries.
+    await new Promise<void>(resolve => setImmediate(resolve));
     const dir = path.join(root, name);
     let files: Array<{ full: string; mtime: number }> = [];
     try {
@@ -217,12 +220,14 @@ const MAX_GLOBAL_SESSIONS = 200;
 // exists are dropped. To keep this responsive, sessions are first sorted by mtime
 // from stat() alone, then only the MAX_GLOBAL_SESSIONS most recent are read for
 // their title/last-prompt metadata.
-export function listAllSessions(): GlobalSessionSummary[] {
+export async function listAllSessions(): Promise<GlobalSessionSummary[]> {
   const root = projectsRoot();
   let names: string[];
   try { names = fs.readdirSync(root); } catch { return []; }
   const candidates: Array<{ id: string; full: string; mtime: number; cwd: string; name: string }> = [];
   for (const name of names) {
+    // Yield between directories so WS ping/pong is not starved on large project trees.
+    await new Promise<void>(resolve => setImmediate(resolve));
     const dir = path.join(root, name);
     let stat: fs.Stats;
     try { stat = fs.statSync(dir); } catch { continue; }
@@ -343,6 +348,28 @@ export function listDir(target?: string): DirListing {
   }
   entries.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
   return { path: dir, parent: parentOf(dir), entries };
+}
+
+// Map a session id to the workspace (real cwd) its transcript belongs to, by
+// scanning every project folder for <id>.jsonl and recovering the cwd from the
+// transcript records (the folder name is a lossy encoding of the cwd). Used by
+// the ?session= deep link so the workspace can be resolved from the id alone.
+// Returns null when the id is malformed, no transcript exists, or the recovered
+// workspace path no longer exists on disk.
+export function findWorkspaceForSession(sessionId: string): string | null {
+  if (!UUID_RE.test(sessionId)) return null;
+  const root = projectsRoot();
+  let names: string[];
+  try { names = fs.readdirSync(root); } catch { return null; }
+  for (const name of names) {
+    const full = path.join(root, name, sessionId + '.jsonl');
+    let stat: fs.Stats;
+    try { stat = fs.statSync(full); } catch { continue; }
+    if (!stat.isFile() || stat.size === 0) continue;
+    const cwd = readCwd([{ full, mtime: stat.mtimeMs }]);
+    return cwd && fs.existsSync(cwd) ? cwd : null;
+  }
+  return null;
 }
 
 // Recover the real cwd by scanning transcripts newest-first for the first record

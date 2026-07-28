@@ -1,0 +1,11 @@
+# Investigation Notes Index
+
+| Folder | Module | Summary |
+|--------|--------|---------|
+| [account-and-usage/](account-and-usage/) | backend/accountUsage, webview/AccountUsageModal | Account & Usage modal: live `/oauth/usage` API (primary) + stream fallback; two-phase load; 429 error surfacing; refresh + 60s cache |
+| [streaming-and-input-ui/](streaming-and-input-ui/) | backend/cli, webview/input | Enable per-token streaming via `--include-partial-messages` + `stream_event` unwrap; drop model default; Send/Stop button icon restyle |
+| [session-bar-and-log-autoscroll/](session-bar-and-log-autoscroll/) | webview/App+global.css, LogPanel, backend/sessions | Collapsible full-width session header (name + history + new-chat); `custom-title` rename precedence; fix log autoscroll breaking mid-stream (direction-based scroll detection) |
+| [dialog-state-persistence/](dialog-state-persistence/) | webview/utils/dialogState, hooks/useDialogGeometry, SettingsModal | Persist each centered dialog's position/size/tab to `localStorage` (survives refresh) + Settings "Reset layout" button to wipe it; `clearDialogState()` and `useDialogGeometry.reset()` |
+| [single-daemon-server/](single-daemon-server/) | backend/index+daemon, frontend/extension+ChatPanel, SettingsModal, chat.html | IMPLEMENTED: single always-on daemon on a fixed port (configurable `daemonPort`/`daemonIdleMs`) with idle self-exit; auto-spawned + connect-only extension (discovery file `~/.claude/argus-daemon.json`); browser-served UI; in-app restart; Network tab daemon-port randomize button + field seeded from the real running port |
+| [token-spending-and-askuserquestion/](token-spending-and-askuserquestion/) | backend/cliHandler, webview/ThinkingBlock+StreamingTimer, e2e | Live token counts in StreamingTimer (message_start/delta -> token_update); collapsible ThinkingBlock with char-estimate; AskUserQuestion integration tests skipped (all models refuse in --print mode); --allowedTools fix; effort ?? fix |
+| [e2e-stabilization/](e2e-stabilization/) | playwright.config.ts, e2e/ | Fix 40-test cascade: workers: 2 caused resource exhaustion + concurrent argus.json writes; switched to workers: 1 (102 passed, ~7-13 min) |

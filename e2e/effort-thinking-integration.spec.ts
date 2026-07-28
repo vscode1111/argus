@@ -8,7 +8,9 @@ import { waitForApp } from './helpers';
 // They share the dev backend on :3001, so they run serially and restore config.
 test.describe.configure({ mode: 'serial' });
 
-const CONFIG_PATH = path.resolve(__dirname, 'argus.json');
+// ARGUS_CONFIG is set in playwright.config.ts so worker processes inherit it.
+// Using it here ensures we read/write the same file the dev server uses.
+const CONFIG_PATH = path.resolve(process.env['ARGUS_CONFIG'] ?? path.join(__dirname, 'argus.json'));
 const LOG_LIST = '[data-testid="log-list"]';
 
 function readConfig(): Record<string, unknown> {
@@ -47,10 +49,17 @@ async function closeSlashMenu(page: Page) {
   await page.keyboard.press('Escape');
 }
 
-// Reload the page and wait for the app to mount (backend reconnects and sends workspaceInfo).
+// Reload the page and wait for the app to mount, with retry for backend load spikes.
 async function reloadAndWait(page: Page) {
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await expect(page.getByPlaceholder('Ask Argus')).toBeVisible({ timeout: 15_000 });
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    try {
+      await expect(page.getByPlaceholder('Ask Argus')).toBeVisible({ timeout: 15_000 });
+      return;
+    } catch {
+      if (attempt === 3) throw new Error('App failed to mount after 3 reloads');
+    }
+  }
 }
 
 // Send a message and wait for streaming to finish.
@@ -113,14 +122,19 @@ test.describe('effort and thinking (integration)', () => {
   test('clicking effort dot in modal updates label and persists to config', async ({ page }) => {
     const dialog = await openModelsTab(page);
 
-    // Click the first dot (Low) - use span prefix to exclude the effortDots container div
+    // Click the first dot (Low)
     await dialog.locator('span[class*="effortDot"]').first().click();
 
-    // Label updates (use class locator to avoid multi-element match on parent divs)
+    // Label updates immediately (broadcast from backend)
     await expect(dialog.locator('[class*="optionLabel"]', { hasText: /Effort \(Low\)/i })).toBeVisible({ timeout: 8_000 });
 
-    // Config persisted
-    await expect.poll(() => readConfig().effort, { timeout: 8_000 }).toBe('low');
+    // Persistence: close, reload, reopen. A new WS connection makes the backend
+    // re-read its config from disk and send the stored value in workspaceInfo.
+    // This verifies the write without depending on which file path the backend uses.
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await reloadAndWait(page);
+    const dialog2 = await openModelsTab(page);
+    await expect(dialog2.locator('[class*="optionLabel"]', { hasText: /Effort \(Low\)/i })).toBeVisible({ timeout: 8_000 });
   });
 
   test('clicking effort dot in slash menu persists to config', async ({ page }) => {
@@ -129,8 +143,14 @@ test.describe('effort and thinking (integration)', () => {
     // Click the last dot (Max)
     await page.locator('[class*="slashMenuDot"]').last().click();
 
-    await expect.poll(() => readConfig().effort, { timeout: 8_000 }).toBe('max');
+    // Label updates (broadcast received)
+    await expect(page.locator('[class*="slashMenuName"]', { hasText: /Effort \(Max\)/i })).toBeVisible({ timeout: 8_000 });
 
+    // Persistence via reload
+    await closeSlashMenu(page);
+    await reloadAndWait(page);
+    await openSlashMenu(page);
+    await expect(page.locator('[class*="slashMenuName"]', { hasText: /Effort \(Max\)/i })).toBeVisible({ timeout: 8_000 });
     await closeSlashMenu(page);
   });
 
@@ -144,7 +164,7 @@ test.describe('effort and thinking (integration)', () => {
 
     await track.click();
 
-    // Visual state flipped
+    // Visual state flipped (broadcast received)
     await expect.poll(
       async () => {
         const cls = await track.evaluate((el: Element) => el.className);
@@ -153,8 +173,13 @@ test.describe('effort and thinking (integration)', () => {
       { timeout: 8_000 },
     ).toBe(!initialOn);
 
-    // Config persisted
-    await expect.poll(() => readConfig().thinking, { timeout: 8_000 }).toBe(!initialOn);
+    // Persistence via reload
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await reloadAndWait(page);
+    const dialog2 = await openModelsTab(page);
+    const track2 = dialog2.locator('[class*="toggleTrack"]');
+    const afterReloadOn = await track2.evaluate((el: Element) => el.className.includes('TrackOn'));
+    expect(afterReloadOn).toBe(!initialOn);
   });
 
   test('clicking thinking toggle in slash menu persists to config', async ({ page }) => {
@@ -165,8 +190,22 @@ test.describe('effort and thinking (integration)', () => {
 
     await track.click();
 
-    await expect.poll(() => readConfig().thinking, { timeout: 8_000 }).toBe(!initialOn);
+    // Wait for the visual state to flip (broadcast received)
+    await expect.poll(
+      async () => {
+        const cls = await track.evaluate((el: Element) => el.className);
+        return cls.includes('TrackOn');
+      },
+      { timeout: 8_000 },
+    ).toBe(!initialOn);
 
+    // Persistence via reload
+    await closeSlashMenu(page);
+    await reloadAndWait(page);
+    await openSlashMenu(page);
+    const track2 = page.locator('[class*="slashMenuToggleTrack"]');
+    const afterReloadOn = await track2.evaluate((el: Element) => el.className.includes('TrackOn'));
+    expect(afterReloadOn).toBe(!initialOn);
     await closeSlashMenu(page);
   });
 
@@ -247,16 +286,25 @@ test.describe('effort and thinking (integration)', () => {
 
   test('clicking a model row in the modal persists to config', async ({ page }) => {
     const dialog = await openModelsTab(page);
-    // Wait for model rows (API fetch resolves; falls back only when the API returns no error)
     await expect(dialog.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
 
-    // Skip the first row ("Default (CLI)") and click the first real model
     const rows = dialog.locator('[class*="modelRow"]');
-    const count = await rows.count();
-    expect(count).toBeGreaterThan(1);
+    expect(await rows.count()).toBeGreaterThan(1);
     await rows.nth(1).click();
 
-    await expect.poll(() => readConfig().model, { timeout: 8_000 }).not.toBe('');
+    // Checkmark moves to the selected row (broadcast received).
+    // The span renders '✓' when active and '' when not; target by text, not by
+    // class name, because the CSS module class is "modelCheck" (capital C) which
+    // would not match the lowercase [class*="check"] attribute selector.
+    await expect(rows.nth(1).locator('span', { hasText: '✓' })).toBeVisible({ timeout: 8_000 });
+
+    // Persistence via reload: after reconnect the Default row no longer has the checkmark
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await reloadAndWait(page);
+    const dialog2 = await openModelsTab(page);
+    await expect(dialog2.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
+    const defaultRow = dialog2.locator('[class*="modelRow"]').filter({ hasText: 'Default (CLI)' });
+    await expect(defaultRow.locator('span', { hasText: '✓' })).toHaveCount(0);
   });
 
   test('selecting Default (CLI) in the modal clears the stored model', async ({ page }) => {
@@ -265,24 +313,38 @@ test.describe('effort and thinking (integration)', () => {
 
     const dialog = await openModelsTab(page);
     await expect(dialog.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
-    await dialog.locator('[class*="modelRow"]').filter({ hasText: 'Default (CLI)' }).click();
+    const defaultRow = dialog.locator('[class*="modelRow"]').filter({ hasText: 'Default (CLI)' });
+    await defaultRow.click();
 
-    await expect.poll(() => readConfig().model, { timeout: 8_000 }).toBe('');
+    // Checkmark moves to the Default row (broadcast received)
+    await expect(defaultRow.locator('span', { hasText: '✓' })).toBeVisible({ timeout: 8_000 });
+
+    // Persistence via reload: Default row retains the checkmark after reconnect
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await reloadAndWait(page);
+    const dialog2 = await openModelsTab(page);
+    await expect(dialog2.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
+    const defaultRow2 = dialog2.locator('[class*="modelRow"]').filter({ hasText: 'Default (CLI)' });
+    await expect(defaultRow2.locator('span', { hasText: '✓' })).toBeVisible({ timeout: 8_000 });
   });
 
   test('selecting a model in the slash menu persists to config', async ({ page }) => {
     await openSlashMenu(page);
 
-    // Expand the model picker
     await page.locator('[class*="slashMenuItem"]').filter({ hasText: 'Switch model...' }).click();
-
-    // Wait for model list to load (falls back to FALLBACK_MODELS when API returns no error)
     await expect(page.locator('[class*="slashMenuModelInfo"]').first()).toBeVisible({ timeout: 10_000 });
-
-    // Click the first real model (index 1 is the first after Default (CLI))
     await page.locator('[class*="slashMenuModelInfo"]').nth(1).click();
 
-    await expect.poll(() => readConfig().model, { timeout: 8_000 }).not.toBe('');
+    // pickModel() closes the slash menu; re-open to confirm hint updated
+    await openSlashMenu(page);
+    await expect(page.locator('[class*="slashMenuHint"]')).not.toHaveText('', { timeout: 8_000 });
+
+    // Persistence via reload: hint still non-empty after reconnect
+    await closeSlashMenu(page);
+    await reloadAndWait(page);
+    await openSlashMenu(page);
+    await expect(page.locator('[class*="slashMenuHint"]')).not.toHaveText('', { timeout: 8_000 });
+    await closeSlashMenu(page);
   });
 
   test('model persists across reconnect - slash menu hint shows model name', async ({ page }) => {

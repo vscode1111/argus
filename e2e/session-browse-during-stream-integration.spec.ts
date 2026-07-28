@@ -9,7 +9,10 @@ test.describe.configure({ mode: 'serial' });
 async function sendAndWait(page: Page, text: string) {
   const textarea = page.getByPlaceholder('Ask Argus');
   await textarea.fill(text);
-  await page.getByRole('button', { name: 'Send' }).click();
+  // Use exact:true so a session whose AI-generated title contains the word "Send"
+  // (e.g. "Send OK confirmation") does not make the header button ambiguous with
+  // the actual Send button (aria-label="Send").
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   const stopBtn = page.getByRole('button', { name: 'Stop' });
   await expect(stopBtn).toBeVisible({ timeout: 15_000 });
   await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
@@ -19,7 +22,7 @@ async function sendAndWait(page: Page, text: string) {
 // without waiting for the turn to finish.
 async function startStreaming(page: Page, text: string) {
   await page.getByPlaceholder('Ask Argus').fill(text);
-  await page.getByRole('button', { name: 'Send' }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible({ timeout: 15_000 });
 }
 
