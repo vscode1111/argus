@@ -26,6 +26,8 @@ Run these 3 bash commands in background: sleep 10 && echo task1-done, sleep 20 &
 yarn test:e2e:integration
 Analyze that project in details
 What is 100 + 200? Reply with just the number.
+Add integration tests for that
+
 
 http://192.168.100.4:5173/
 

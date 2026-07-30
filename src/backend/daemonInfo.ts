@@ -40,7 +40,13 @@ export function writeDaemonInfo(info: DaemonInfo): void {
   fs.writeFileSync(DAEMON_FILE, JSON.stringify(info, null, 2) + '\n', { mode: 0o600 });
 }
 
-export function clearDaemonInfo(): void {
+// Remove the discovery file. Pass `onlyIfPid` to make the removal ownership-aware:
+// the file is left alone unless it registers that pid. A daemon that exits early
+// (port taken, startup failure) must not wipe the registration of the live daemon
+// that actually owns the port - doing so strands the extension, which then can
+// neither connect (no file) nor respawn (port held), with the nonce lost to memory.
+export function clearDaemonInfo(onlyIfPid?: number): void {
+  if (onlyIfPid !== undefined && readDaemonInfo()?.pid !== onlyIfPid) return;
   try { fs.unlinkSync(DAEMON_FILE); } catch { /* already gone */ }
 }
 

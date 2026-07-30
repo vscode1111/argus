@@ -366,3 +366,28 @@
   word-break: break-all;
   text-align: right;
 }
+
+/* A serving daemon older than this build: the panel works but quietly lacks
+   whatever the newer UI expects, so the mismatch has to be visible. */
+.infoValueWarn {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+/* Click-to-copy value: anchors the "Copied!" overlay. */
+.copyable {
+  position: relative;
+}
+
+/* The value keeps its box (and so the modal keeps its width) while the feedback
+   shows; visibility, not display, is what preserves the reserved space. */
+.copyHidden {
+  visibility: hidden;
+}
+
+.copiedBadge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
