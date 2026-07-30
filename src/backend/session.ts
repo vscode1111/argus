@@ -13,7 +13,8 @@ import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
 import { type Channel } from './channel';
 import { attachProcHandlers } from './cliHandler';
-import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir } from './sessions';
+import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath } from './sessions';
+import { readServerVersion } from './version';
 
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
@@ -30,6 +31,8 @@ export interface ConnectionHooks {
   fresh?: boolean;
   /** Deep link (?session=): attach to this session's live entry at connect, or replay it from disk. */
   sessionId?: string;
+  /** Stable per-panel id (?panel=): binds this client to its own session entry across reconnects. */
+  panelId?: string;
 }
 
 // Initialises per-session state: logging, stale-timer, watchdog, synthetic-send
@@ -124,7 +127,11 @@ export function attachClientHandlers(
   model: string,
   hooks: ConnectionHooks = {},
 ): void {
-  const liveAttach = channel.addClient(ws, hooks.fresh, hooks.sessionId);
+  const attached = channel.addClient(ws, hooks.fresh, hooks.sessionId, hooks.panelId);
+  // A panel rejoin reports the same "attached, replay deferred" signal as a deep link,
+  // but only the deep-link branch keys off hooks.sessionId - separate them here.
+  const liveAttach = attached && !!hooks.sessionId;
+  const panelRejoin = attached && !hooks.sessionId;
   const s0 = channel.getClientState(ws);
   if (!s0.sendLog) initChannelSession(s0, model);
   // Deep link to a session that is not live in memory: point this entry at it so
@@ -174,13 +181,24 @@ export function attachClientHandlers(
         // For a live-attach (liveAttach=true), joinEntry skipped its replay; we must
         // replay here. For a non-live attach, check whether the session is currently
         // running in this entry (e.g. CLI started between upgrade and webviewReady).
+        // A live entry can still have nothing in memory - reloading the page of a
+        // finished session re-attaches to the entry the first load created, whose
+        // history was never streamed (it came from disk). replayHistory reports that,
+        // and we read the transcript instead of leaving the page blank.
         const isLive = liveAttach || (!!s.currentProc && !s.cliDone && s.sessionId === hooks.sessionId);
-        if (isLive) {
-          channel.replayHistory(ws);
-        } else {
+        if (!isLive || !channel.replayHistory(ws)) {
           const messages = loadSession(hooks.sessionId, s.workspaceDir);
           s.sendLog('info', `Deep link replay of ${hooks.sessionId} (${plural(messages.length, 'message')})`);
           try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: hooks.sessionId, messages })); } catch {}
+        }
+      } else if (panelRejoin) {
+        // Reconnecting panel (?panel= matched an existing entry): addClient skipped the
+        // replay for the same mount-timing reason, so restore its conversation here.
+        // Same disk fallback as the deep link: the entry may be bound to a session it
+        // never streamed itself (it was resumed from history before the reconnect).
+        if (!channel.replayHistory(ws) && s.sessionId) {
+          const messages = loadSession(s.sessionId, s.workspaceDir);
+          try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: s.sessionId, messages })); } catch {}
         }
       }
     } else if (msg.type === 'send' && msg.text?.trim() === '/clear') {
@@ -205,7 +223,20 @@ export function attachClientHandlers(
     } else if (msg.type === 'getClientCount') {
       ws.send(JSON.stringify({ type: 'clientCount', count: hooks.getClientCount?.() ?? 0 }));
     } else if (msg.type === 'getServerInfo') {
-      ws.send(JSON.stringify({ type: 'serverInfo', port: hooks.getServerPort?.() ?? 0, cliLaunchCount }));
+      // sessionId is undefined until the CLI reports one (a brand-new chat before its
+      // first turn); sessionPath is null until the transcript folder exists on disk.
+      ws.send(JSON.stringify({
+        type: 'serverInfo',
+        port: hooks.getServerPort?.() ?? 0,
+        cliLaunchCount,
+        sessionId: s.sessionId,
+        sessionPath: s.sessionId ? sessionFilePath(s.sessionId, s.workspaceDir) : null,
+        // Version of the build serving this connection. The extension and the daemon
+        // are separate installs that find each other through one machine-global
+        // discovery file, so a panel can be talking to an older daemon left running by
+        // another install - which silently lacks whatever the panel expects.
+        serverVersion: readServerVersion(),
+      }));
     } else if (msg.type === 'updateSettings') {
       const patch = (msg as { settings?: Partial<ArgusConfig> }).settings;
       if (patch) {

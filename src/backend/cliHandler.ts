@@ -52,7 +52,13 @@ export function handleCliEvent(s: SessionState, event: Record<string, unknown>):
 
 function handleSystemEvent(s: SessionState, event: Record<string, unknown>): void {
   if (event.subtype === 'init') {
-    s.sessionId = event.session_id as string;
+    const id = event.session_id as string;
+    const changed = id && id !== s.sessionId;
+    s.sessionId = id;
+    // Announce the id the CLI just assigned so the browser shims can put it in the
+    // address bar. Until this, a brand-new chat had no id anywhere in the URL and the
+    // page could not be shared or reloaded back into the same conversation.
+    if (changed) s.broadcast(JSON.stringify({ type: 'sessionId', id }));
   } else if (event.subtype === 'task_started') {
     s.pendingBgTasks.add(event.task_id as string);
     s.totalBgTasks++;
