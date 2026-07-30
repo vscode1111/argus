@@ -145,6 +145,15 @@ function readSessionMeta(file: string): { title: string; lastPrompt: string; lin
   return { title: customTitle || aiTitle, lastPrompt, lines };
 }
 
+// Absolute path of the transcript file backing a session, for display in the
+// Settings "Info" tab. Null for a malformed id, or when the CLI has not created the
+// project folder yet (a session that has not been written to disk).
+export function sessionFilePath(sessionId: string, workspaceDir: string): string | null {
+  if (!UUID_RE.test(sessionId)) return null;
+  const dir = resolveProjectDir(workspaceDir);
+  return dir ? path.join(dir, `${sessionId}.jsonl`) : null;
+}
+
 export function listSessions(workspaceDir: string): SessionSummary[] {
   const dir = resolveProjectDir(workspaceDir);
   if (!dir) return [];

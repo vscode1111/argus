@@ -102,6 +102,13 @@
       }
 
       var bridge = window.createArgusBridge({ nextUrl: nextUrl });
+      // The CLI assigns the id for a brand-new chat, so it arrives from the server
+      // rather than from anything the user clicked - reflect it in the address bar
+      // too, otherwise a new conversation cannot be shared or reloaded back into.
+      window.addEventListener('message', function (e) {
+        var m = e.data;
+        if (m && m.type === 'sessionId' && m.id && m.id !== session) { session = m.id; updateUrl(); }
+      });
       window.acquireVsCodeApi = function () {
         return {
           postMessage: function (msg) {

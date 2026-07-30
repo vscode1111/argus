@@ -105,6 +105,35 @@ function TextInput({ id, value, onChange, placeholder, disabled }: TextInputProp
   );
 }
 
+interface CopyableValueProps {
+  value: string;
+  copied: boolean;
+  onCopy: () => void;
+  className: string;
+  testId: string;
+}
+
+// A click-to-copy value that keeps its width while showing the "Copied!" feedback.
+// Swapping the text outright collapsed the modal (it is content-sized, so a long
+// transcript path defines its width) and it snapped back a second later. The value
+// stays in the layout and is only made invisible, with the label drawn over it.
+function CopyableValue({ value, copied, onCopy, className, testId }: CopyableValueProps) {
+  return (
+    <span
+      className={[className, styles.copyable].join(' ')}
+      data-testid={testId}
+      role="button"
+      tabIndex={0}
+      title="Click to copy"
+      onClick={onCopy}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCopy(); } }}
+    >
+      <span className={copied ? styles.copyHidden : undefined}>{value}</span>
+      {copied && <span className={styles.copiedBadge}>Copied!</span>}
+    </span>
+  );
+}
+
 interface Props {
   onClose: () => void;
   workspacePath: string;
@@ -118,11 +147,16 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const [activeClients, setActiveClients] = useState<number | null>(null);
   const [serverPort, setServerPort] = useState<number | null>(null);
   const [cliLaunchCount, setCliLaunchCount] = useState<number | null>(null);
+  const [serverVersion, setServerVersion] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionPath, setSessionPath] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
   // Set when the daemon restarts onto a different port and this (browser) tab can't
   // follow it (it is same-origin to the old port) - surfaces a clickable new URL.
   const [movedUrl, setMovedUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // Which value was just copied, so the "Copied!" feedback shows on that row only
+  // (several rows are copyable now, and a shared boolean lit all of them at once).
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   useEffect(() => {
     postMessage({ type: 'getSettings' });
     postMessage({ type: 'getClientCount' });
@@ -140,6 +174,9 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
         setRestarting(false);
         setMovedUrl(null);
         if (typeof msg.cliLaunchCount === 'number') setCliLaunchCount(msg.cliLaunchCount);
+        setServerVersion(typeof msg.serverVersion === 'string' ? msg.serverVersion : null);
+        setSessionId(typeof msg.sessionId === 'string' ? msg.sessionId : null);
+        setSessionPath(typeof msg.sessionPath === 'string' ? msg.sessionPath : null);
       } else if (msg && msg.type === 'daemonRestarting' && typeof msg.port === 'number') {
         setServerPort(msg.port);
         setRestarting(false);
@@ -169,9 +206,15 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     postMessage({ type: 'openUrl', url });
     if (!isVsCode && typeof window !== 'undefined') window.open(url, '_blank');
   }
-  function copyText(text: string): void {
-    try { navigator.clipboard?.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* */ }
+  function copyText(text: string, key: string): void {
+    try { navigator.clipboard?.writeText(text); setCopiedKey(key); setTimeout(() => setCopiedKey(null), 1200); } catch { /* */ }
   }
+  // Only a genuine disagreement counts: either side can be unknown (the browser dev
+  // host passes no version, and an old daemon sends no serverVersion at all).
+  const versionSkew = !!version && !!serverVersion && version !== serverVersion;
+  // A daemon older than the serverInfo.serverVersion field sends nothing at all, so
+  // silence here is itself proof of skew - the one case this row exists to catch.
+  const serverUnknown = !!version && !!serverPort && !serverVersion;
   function handleRestart(): void {
     setRestarting(true);
     postMessage({ type: 'restartDaemon' });
@@ -330,7 +373,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             <div className={styles.clientCount} title="WebSocket endpoint clients connect to (shares the HTTP port) - click to copy">
               <span className={styles.settingLabel}>WebSocket address</span>
               {wsUrl
-                ? <span className={[styles.clientCountValue, styles.addrLink].join(' ')} data-testid="ws-address" role="button" tabIndex={0} title="Click to copy" onClick={() => copyText(wsUrl)}>{copied ? 'Copied!' : wsUrl}</span>
+                ? <CopyableValue value={wsUrl} copied={copiedKey === 'ws'} onCopy={() => copyText(wsUrl, 'ws')} className={[styles.clientCountValue, styles.addrLink].join(' ')} testId="ws-address" />
                 : <span className={styles.clientCountValue} data-testid="ws-address">-</span>}
             </div>
             <div className={styles.clientCount} title="WebSocket clients currently connected to this server (this window counts as one)">
@@ -385,17 +428,45 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
           <div className={styles.tabContent}>
             {version && (
               <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>Version</span>
-                <span className={styles.infoValue}>{version}</span>
+                <span className={styles.infoLabel} title="Version of this extension/UI build">Client</span>
+                <span className={styles.infoValue} data-testid="client-version">{version}</span>
               </div>
             )}
             <div className={styles.infoRow}>
+              <span className={styles.infoLabel} title="Version of the daemon serving this panel. The daemon is a separate install found through a machine-global discovery file, so an older one left running elsewhere can serve a newer UI - which then silently misses features.">Server</span>
+              <span
+                className={[styles.infoValue, versionSkew || serverUnknown ? styles.infoValueWarn : ''].filter(Boolean).join(' ')}
+                data-testid="server-version"
+                title={
+                  versionSkew ? `Serving daemon is ${serverVersion}, this build is ${version} - restart the daemon`
+                    : serverUnknown ? `The serving daemon is too old to report its version (this build is ${version}) - restart the daemon`
+                      : undefined
+                }
+              >
+                {serverVersion ? (versionSkew ? `${serverVersion} (stale)` : serverVersion) : serverUnknown ? 'unknown (stale)' : '-'}
+              </span>
+            </div>
+            <div className={styles.infoRow}>
               <span className={styles.infoLabel}>Path</span>
-              <span className={styles.infoValue}>{workspacePath || '(no workspace)'}</span>
+              {workspacePath
+                ? <CopyableValue value={workspacePath} copied={copiedKey === 'workspace'} onCopy={() => copyText(workspacePath, 'workspace')} className={[styles.infoValue, styles.addrLink].join(' ')} testId="workspace-path" />
+                : <span className={styles.infoValue} data-testid="workspace-path">(no workspace)</span>}
             </div>
             <div className={styles.infoRow}>
               <span className={styles.infoLabel} title="Number of Claude CLI processes spawned since the server started">CLI launches</span>
               <span className={styles.infoValue} data-testid="cli-launches">{cliLaunchCount ?? '-'}</span>
+            </div>
+            <div className={styles.infoRow}>
+              <span className={styles.infoLabel} title="Id of the conversation this panel is in. Empty until the CLI reports one (a new chat has none until its first turn).">Session</span>
+              {sessionId
+                ? <CopyableValue value={sessionId} copied={copiedKey === 'session'} onCopy={() => copyText(sessionId, 'session')} className={[styles.infoValue, styles.addrLink].join(' ')} testId="session-id" />
+                : <span className={styles.infoValue} data-testid="session-id">(no session yet)</span>}
+            </div>
+            <div className={styles.infoRow}>
+              <span className={styles.infoLabel} title="Transcript file the CLI stores this conversation in">Transcript</span>
+              {sessionPath
+                ? <CopyableValue value={sessionPath} copied={copiedKey === 'path'} onCopy={() => copyText(sessionPath, 'path')} className={[styles.infoValue, styles.addrLink].join(' ')} testId="session-path" />
+                : <span className={styles.infoValue} data-testid="session-path">-</span>}
             </div>
           </div>
         )}

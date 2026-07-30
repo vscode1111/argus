@@ -43,9 +43,10 @@ Integration specs run against a real model, so an assertion is only stable if it
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible({ timeout: 30_000 });
   await expect(stopBtn).toHaveCount(0, { timeout: 90_000 }); // turn finished
   ```
-- **Do not assume a stream is still live** when the assertion runs. A test that browses/interacts mid-stream should branch on whether the turn is still running rather than racing it:
+- **Do not assume a stream is still live** when the assertion runs. A test that browses/interacts mid-stream should branch on whether the turn is still running rather than racing it. Use `waitFor`, not `isVisible({ timeout })` - `isVisible()` is an immediate check and the `timeout` option does not make it wait, so right after a UI transition it reports `false` for a stream that *is* live and sends the test down the wrong branch:
   ```ts
-  const isLive = await stopBtn.isVisible({ timeout: 5_000 }).catch(() => false);
+  const isLive = await stopBtn.waitFor({ state: 'visible', timeout: 5_000 })
+    .then(() => true).catch(() => false);
   ```
 - **Prefer app-owned state** (buttons, timers, committed message DOM) over model-owned output (specific wording, tool choice, response length) as a synchronisation point.
 
@@ -61,6 +62,12 @@ The Claude CLI auto-loads `~/.claude/projects/<encoded-cwd>/memory/` (and `CLAUD
 - **Forbid tools in the recall prompt** (`"Answer from conversation context only - do not read any files"`), otherwise the agent can go looking for the value on disk.
 
 `e2e/new-chat-integration.spec.ts` is the worked example.
+
+### Gotcha: a replayed transcript has no timers or token counts
+
+`loadSession` (`src/backend/sessions.ts`) rebuilds messages from the `.jsonl` with only `outcome: 'success'` - it sets no `responseTime`, no `finishedAt`, and no token fields. So after a **disk replay** (opening or returning to a session that is not live in memory) there is no `[class*="responseTime"]` element in the DOM at all.
+
+Consequence for tests that browse away mid-stream and come back: the "stream already finished" branch cannot assert token counts, because the data does not exist on that path. `session-browse-during-stream-integration.spec.ts` used to have such a branch and failed with `element(s) not found` whenever the model outran the browse round-trip (more likely since `--effort low`). The fix is to keep the live precondition (longer prompt) and `test.skip(!isLive, reason)` otherwise - never assert a state the architecture cannot produce. Branching to a second assertion "just in case" hides that the branch is impossible.
 
 ## Integration config: `e2e/argus.json`
 

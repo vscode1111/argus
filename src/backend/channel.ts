@@ -35,13 +35,19 @@ export interface ChannelMessage {
 const SESSION_STREAM_EVENTS = new Set([
   'thinking_start', 'thinking_chunk', 'text_chunk', 'tool_start', 'tool_end',
   'done', 'error', 'message', 'user_inject', 'token_update',
-  'retry_status', 'retry_clean', 'contextUsage',
+  // 'sessionId' belongs to the live turn: a browsing client is viewing a different
+  // transcript, so it must not have its address bar rewritten to this one.
+  'retry_status', 'retry_clean', 'contextUsage', 'sessionId',
 ]);
 
 // One SessionEntry per running (or recently-ran) session within a workspace.
 // Clients connect to the most recently active entry; newSession creates a fresh one.
 interface SessionEntry {
   readonly key: string;
+  // Panel that owns this entry (extension clients pass a stable per-panel id). A
+  // reconnecting panel rejoins its own entry instead of the channel default, so two
+  // panels in one workspace stay isolated while a reload keeps its conversation.
+  owner?: string;
   state: SessionState;
   clients: Set<WebSocket>;
   browsingClients: Set<WebSocket>; // within this entry: clients viewing a different transcript
@@ -63,8 +69,11 @@ export interface Channel {
   /** Add a client: joins the most recently active entry and receives a history replay.
    *  Pass fresh=true to create an isolated new entry instead (used for browser clients).
    *  When sessionId names a session live in an entry right now, the client attaches to
-   *  that entry (deep link) - overriding fresh; returns true only for such an attach. */
-  addClient(ws: WebSocket, fresh?: boolean, sessionId?: string): boolean;
+   *  that entry (deep link) - overriding fresh; returns true only for such an attach.
+   *  panelId binds the client to its own entry (see SessionEntry.owner): an unknown id
+   *  creates one, a known id rejoins it. Returns true for such a rejoin as well, since
+   *  like a deep-link attach it defers the replay to webviewReady. */
+  addClient(ws: WebSocket, fresh?: boolean, sessionId?: string, panelId?: string): boolean;
   /** Remove a client on disconnect; handles per-entry cleanup without killing the proc. */
   removeClient(ws: WebSocket): void;
   /** Get the session state for this client's current entry. */
@@ -76,7 +85,9 @@ export interface Channel {
   /** Replay the in-progress streaming snapshot to this client (from its current entry). */
   replaySnapshot(ws: WebSocket): void;
   /** Replay the client's entry history + streaming snapshot (deep-link initial sync). */
-  replayHistory(ws: WebSocket): void;
+  /** Replay this client's entry (history + streaming snapshot). Returns false when the
+   *  entry has nothing to replay, so the caller can fall back to loading from disk. */
+  replayHistory(ws: WebSocket): boolean;
   /** Send a message to every client across ALL session entries in this channel. */
   broadcastToAll(msg: string): void;
   /** Call fn for each session entry's state (e.g. to update a shared setting). */
@@ -209,9 +220,10 @@ function createBroadcastForEntry(entry: SessionEntry): (msg: string) => void {
   };
 }
 
-function createEntry(cd: ChannelData): SessionEntry {
+function createEntry(cd: ChannelData, owner?: string): SessionEntry {
   const entry: SessionEntry = {
     key: nextEntryKey(),
+    owner,
     state: createSessionState(cd.dir),
     clients: new Set(),
     browsingClients: new Set(),
@@ -315,7 +327,7 @@ export function getOrCreateChannel(dir: string): Channel {
   const _cd = cd;
 
   return {
-    addClient(ws, fresh, sessionId) {
+    addClient(ws, fresh, sessionId, panelId) {
       if (sessionId) {
         for (const entry of _cd.entries.values()) {
           if (entry.state.sessionId === sessionId) {
@@ -325,6 +337,21 @@ export function getOrCreateChannel(dir: string): Channel {
             return true;
           }
         }
+      }
+      if (panelId) {
+        for (const entry of _cd.entries.values()) {
+          if (entry.owner === panelId) {
+            // Reconnect of a known panel (reload, daemon restart): rejoin its own entry.
+            // Replay is deferred to webviewReady - the socket opens while the React
+            // bundle is still evaluating, so an immediate replay would be dispatched
+            // before App registers its message listener and would be lost.
+            joinEntry(_cd, ws, entry, /* skipReplay */ true);
+            return true;
+          }
+        }
+        // First connect of this panel: its own entry, never the channel default.
+        joinEntry(_cd, ws, createEntry(_cd, panelId));
+        return false;
       }
       joinEntry(_cd, ws, fresh ? createEntry(_cd) : defaultEntry(_cd));
       return false;
@@ -341,7 +368,13 @@ export function getOrCreateChannel(dir: string): Channel {
       return (_cd.clientEntry.get(ws) ?? defaultEntry(_cd)).state;
     },
     moveToNewSession(ws) {
-      const newEntry = createEntry(_cd);
+      // Hand the panel's ownership to the new entry, so a later reconnect rejoins the
+      // new session rather than the abandoned one. The old entry keeps running for any
+      // other clients, but is no longer any panel's reconnect target.
+      const prev = _cd.clientEntry.get(ws);
+      const owner = prev?.owner;
+      if (prev) prev.owner = undefined;
+      const newEntry = createEntry(_cd, owner);
       joinEntry(_cd, ws, newEntry);
       return newEntry.state;
     },
@@ -357,7 +390,14 @@ export function getOrCreateChannel(dir: string): Channel {
     },
     replayHistory(ws) {
       const entry = _cd.clientEntry.get(ws);
-      if (entry) replayToClient(entry, ws);
+      if (!entry) return false;
+      // An entry can be bound to a session without ever having streamed it: opening a
+      // finished session by deep link loads it from disk, leaving the entry's in-memory
+      // history empty. Replaying that empty history would clear the client's view, so
+      // report "nothing to replay" and let the caller read the transcript instead.
+      if (entry.history.length === 0 && !entry.snapshot) return false;
+      replayToClient(entry, ws);
+      return true;
     },
     broadcastToAll(msg) {
       const sent = new Set<WebSocket>();

@@ -1,5 +1,7 @@
 # _notes
 
+Parent: company-level knowledge base at [../../!notes/INDEX.md](../../!notes/INDEX.md).
+
 | Folder | Purpose |
 |--------|---------|
 | [common/](common/) | Shared instructions and guides applicable to all tasks |
@@ -15,7 +17,7 @@
 |------|-------|---------|
 | [common/oauth-usage-api.md](common/oauth-usage-api.md) | Anthropic usage API | Live `/api/oauth/usage` endpoint: token source, response shape (0-100 percent), window allowlist, 429 rate-limiting |
 | [common/security.md](common/security.md) | Security hardening | WebSocket origin validation, path traversal protection, settings allowlist |
-| [common/e2e-testing.md](common/e2e-testing.md) | Playwright e2e | Tiered timeouts; integration `workers: 2` + cascade signature; captured backend stdout; model-independent assertions; CLI-memory pollution; `e2e/argus.json` gotchas |
+| [common/e2e-testing.md](common/e2e-testing.md) | Playwright e2e | Tiered timeouts (mock 30s / integration 90s, retries 0, no per-test setTimeout); integration `workers: 1` + cascade signature; running with captured backend stdout; writing model-independent assertions (gate on Stop via waitFor, not tool calls); a disk-replayed transcript has no timers/token counts; CLI-memory pollution in "must have forgotten" tests; `e2e/argus.json` is the full settings config hydrated over `getSettings`; `showLogs:true` gotcha; message-injection idiom |
 
 ### Issues
 | Issue | Status | Summary |

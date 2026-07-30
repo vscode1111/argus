@@ -1,8 +1,7 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import { spawn } from 'child_process';
 import { startServer } from './index';
 import { readConfig } from './config';
+import { readServerVersion } from './version';
 import {
   DEFAULT_DAEMON_PORT,
   readDaemonInfo,
@@ -30,14 +29,6 @@ const MODEL = process.env.ARGUS_MODEL ?? '';
 // skip the single-instance guard - the old daemon is still alive while it hands off.
 const FORCE_START = process.env.ARGUS_DAEMON_FORCE_START === '1';
 
-function readVersion(): string {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
-    return pkg.version ?? '';
-  } catch {
-    return '';
-  }
-}
 
 // Idempotent launch: if a discovery file points at a live daemon process, do not
 // start a second one. A crashed daemon leaves a stale file whose pid is dead, so we
@@ -57,7 +48,9 @@ let shuttingDown = false;
 function cleanup(): void {
   if (shuttingDown) return;
   shuttingDown = true;
-  if (!handingOff) clearDaemonInfo();
+  // Only clear our own registration: a daemon that failed to bind (port owned by a
+  // live daemon) must not delete the owner's file on its way out.
+  if (!handingOff) clearDaemonInfo(process.pid);
 }
 
 // Spawn a replacement daemon that takes over (used to apply a new port/idle from the
@@ -94,7 +87,7 @@ async function listen(attempt = 0): Promise<void> {
       port: server.port,
       nonce: server.nonce,
       pid: process.pid,
-      version: readVersion(),
+      version: readServerVersion(),
       startedAt: Date.now(),
     });
     console.log(`[argus-daemon] listening on ws://localhost:${server.port}/agent (pid ${process.pid}); idle-exit in ${IDLE_TIMEOUT_MS / 60000}m with no clients`);
@@ -106,7 +99,11 @@ async function listen(attempt = 0): Promise<void> {
       return listen(attempt + 1);
     }
     if (e.code === 'EADDRINUSE') {
-      console.error(`[argus-daemon] port ${PORT} already in use; another process owns it. Exiting.`);
+      const owner = readDaemonInfo();
+      const hint = owner
+        ? `pid ${owner.pid} owns it (discovery file intact).`
+        : 'no discovery file registers it - the holder is unreachable (its nonce is memory-only), kill that process or change daemonPort.';
+      console.error(`[argus-daemon] port ${PORT} already in use; ${hint} Exiting.`);
     } else {
       console.error('[argus-daemon] failed to start:', e);
     }

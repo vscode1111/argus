@@ -141,6 +141,44 @@ test('deep link with no ?dir= resolves the workspace server-side and replays a f
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toHaveText(path.basename(dir), { timeout: 15_000 });
 });
 
+test('a new chat puts its assigned session id into the page URL', async ({ page }) => {
+  // The CLI mints the id server-side, so nothing the user clicked carries it. Without
+  // the sessionId push the address bar stayed bare and a fresh chat could not be
+  // shared or reloaded back into.
+  const dir = makeTempDir('newurl');
+  await openApp(page, `?dir=${encodeURIComponent(dir)}`);
+  expect(new URL(page.url()).searchParams.get('session')).toBeNull();
+
+  await page.getByPlaceholder('Ask Argus').fill('Reply with just "OK".');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect.poll(
+    () => new URL(page.url()).searchParams.get('session'),
+    { timeout: 30_000 },
+  ).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+
+  // The id in the URL is the real one: the page reloads straight back into the chat.
+  await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0, { timeout: 60_000 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('Reply with just "OK".')).toBeVisible({ timeout: 15_000 });
+});
+
+test('reloading a deep-linked finished session replays it again', async ({ page }) => {
+  // Regression: the first load leaves an entry bound to the session but with an empty
+  // in-memory history (the transcript was read from disk, never streamed). The reload
+  // re-attached to that entry and replayed the empty history, blanking the page.
+  const dir = makeTempDir('reload');
+  const id = writeSyntheticTranscript(dir, 'scub-reload-prompt', 'scub-reload-reply');
+
+  await openApp(page, `?session=${id}`);
+  await expect(page.getByText('scub-reload-prompt')).toBeVisible({ timeout: 15_000 });
+
+  // Well inside the 30s grace window, so the first load's entry is still alive.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('scub-reload-prompt')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('scub-reload-reply')).toBeVisible();
+});
+
 test('deep link with a stale ?dir= ends up in the session\'s real workspace', async ({ page }) => {
   const realDir = makeTempDir('real');
   const staleDir = makeTempDir('stale');

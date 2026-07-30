@@ -53,6 +53,9 @@ If the second tab sends a message, it will spawn a **second CLI** with `--resume
 
 Extension panels are **not** affected: they do not set `client=browser`, so `fresh` is undefined and they join `defaultEntry` and already share sessions correctly. Only browser clients are isolated. Also note `fresh` is currently **uncommitted working-tree code**, so changing it is cheap.
 
+> **Superseded (2026-07-30)** - see the [Superseded](#superseded) block at the end of this
+> file. Panels joining `defaultEntry` turned out to be a defect, not correct behaviour.
+
 ## Design
 
 Two options were considered.
@@ -146,3 +149,21 @@ Follow the stable-assertion rules in [../common/e2e-testing.md](../common/e2e-te
 | `webview/src/components/SessionHistoryModal.tsx` | "running now" affordance on live rows, distinct from the `.rowCurrent` highlight |
 | `e2e/shared-channel-integration.spec.ts` | Two-client live-attach + remote-stop tests |
 | `CLAUDE.md` | Multi-session shared-channels bullet: attach semantics |
+
+## Superseded
+
+**Was:** "Extension panels are not affected: they join `defaultEntry` and already share
+sessions correctly. Only browser clients are isolated." (Note on scope, 2026-07-21)
+
+**Actually:** joining `defaultEntry` is exactly what made two panels in one workspace share
+a single conversation and echo each other's turns. Extension clients now pass a stable
+`?panel=<uuid>`; `SessionEntry.owner` binds each panel to its own entry, and a reconnect
+(reload, daemon restart) rejoins that entry instead of whatever was last active.
+
+**Why it was wrong:** the claim was derived from the code path alone - panels *do* share
+state, and for the multi-device goal that reads as the desired end state. What it missed is
+that two panels are two windows the user opened deliberately, so shared state presents as
+crosstalk rather than as collaboration. Sharing is only wanted between clients that opted
+into the *same session*, which is what the deep link expresses.
+
+**Corrected by:** [tasks/panel-isolation-and-session-info](../tasks/panel-isolation-and-session-info/notes.md) (2026-07-30)

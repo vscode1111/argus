@@ -20,6 +20,11 @@ export class ChatPanel {
   private readonly panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;
   private readonly outputChannel: vscode.OutputChannel;
+  // Identifies this panel to the daemon so it gets its own session entry instead of
+  // joining whichever entry was last active in this workspace (which made two panels
+  // share one conversation and echo each other's replies). Stable for the panel's
+  // lifetime, so a webview reload or daemon restart rejoins the same entry.
+  private readonly panelId = crypto.randomUUID();
   private disposables: vscode.Disposable[] = [];
   private webviewReady = false;
   private pendingMessages: object[] = [];
@@ -235,6 +240,7 @@ export class ChatPanel {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
     const wsParams = new URLSearchParams();
     wsParams.set('nonce', info.nonce);
+    wsParams.set('panel', this.panelId);
     if (root) wsParams.set('dir', root);
     return `ws://localhost:${info.port}/agent?${wsParams.toString()}`;
   }

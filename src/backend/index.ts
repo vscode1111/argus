@@ -241,7 +241,11 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     const serverPort = req.socket.localPort ?? PORT;
     const channel = getOrCreateChannel(workspaceDir);
     const isBrowserClient = reqUrl.searchParams.get('client') === 'browser';
-    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, fresh: isBrowserClient, sessionId });
+    // Extension panels pass a stable per-panel id so each panel gets its own session
+    // entry (without it they all share the channel default and see each other's turns),
+    // while a reconnect of the same panel rejoins the entry it already owns.
+    const panelId = reqUrl.searchParams.get('panel')?.slice(0, 64) || undefined;
+    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, fresh: isBrowserClient, sessionId, panelId });
     broadcastClientCount();
   });
 
