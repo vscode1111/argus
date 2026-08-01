@@ -112,12 +112,18 @@ export function ToolCall({ call, sessionDone }: Props) {
   }
 
   if (name === 'AskUserQuestion') {
-    const questions = (input.questions as Array<{
+    type AskQuestion = {
       question: string;
       header: string;
       multiSelect?: boolean;
       options: Array<{ label: string; description?: string }>;
-    }>) || [];
+    };
+    // Some transcripts record `questions` as a JSON string instead of an array,
+    // so parse it before use - a throw here unmounts the whole React tree.
+    const rawQuestions = typeof input.questions === 'string'
+      ? (() => { try { return JSON.parse(input.questions as string); } catch { return []; } })()
+      : input.questions;
+    const questions: AskQuestion[] = Array.isArray(rawQuestions) ? rawQuestions : [];
 
     const isPending = !result;
 

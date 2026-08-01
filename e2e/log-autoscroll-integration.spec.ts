@@ -40,8 +40,12 @@ test('debug log auto-scrolls to the bottom throughout a stream', async ({ page }
   // Sample the scroll position repeatedly while streaming. Autoscroll should keep
   // the list near the bottom; the generous threshold absorbs the brief window
   // between a burst render and the autoscroll effect firing.
+  // Bounded so a stream that never ends fails on this assertion instead of running
+  // out the test timeout with no explanation.
   let worstMidStream = 0;
+  const deadline = Date.now() + 15_000;
   while ((await stopBtn.count()) > 0) {
+    expect(Date.now(), 'stream did not finish in time').toBeLessThan(deadline);
     worstMidStream = Math.max(worstMidStream, await bottomDistance(page));
     await page.waitForTimeout(250);
   }
