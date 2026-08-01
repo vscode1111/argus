@@ -8,7 +8,7 @@ import type { IncomingMessage } from 'http';
 import { attachClientHandlers } from './session';
 import { getOrCreateChannel } from './channel';
 import { findWorkspaceForSession } from './sessions';
-import { readConfig } from './config';
+import { readConfig, CONFIG_PATH } from './config';
 
 export type { ArgusConfig } from './config';
 
@@ -76,6 +76,18 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       return;
     }
     const urlPath = (req.url ?? '').split('?')[0];
+    // Which settings file this process is actually reading. The e2e global setup
+    // uses it to detect a reused dev server that was started without ARGUS_CONFIG -
+    // such a server writes the user's real ~/.claude/argus.json and reads settings
+    // the tests never set, which fails tests for reasons invisible in their output.
+    // Loopback only, so the path is never disclosed to a LAN client.
+    if (urlPath === '/health') {
+      const addr = req.socket.remoteAddress ?? '';
+      const local = addr === '::1' || addr === '127.0.0.1' || addr === '::ffff:127.0.0.1';
+      res.writeHead(local ? 200 : 403, { 'Content-Type': 'application/json' });
+      res.end(local ? JSON.stringify({ configPath: CONFIG_PATH, pid: process.pid }) : '');
+      return;
+    }
     const asset = STATIC[urlPath];
     if (asset) {
       try {

@@ -2,13 +2,17 @@
 
 Two-project Playwright setup in `playwright.config.ts`: `mock` (no `-integration` suffix, fast, injects messages client-side, no Claude CLI) and `integration` (`*-integration.spec.ts`, real backend + CLI, runs after `mock` via `dependencies: ['mock']`).
 
-## Tiered timeouts (one place)
+## One flat timeout for every test (one place)
 
-- Global `timeout: 30_000` - the mock tier; mock tests never touch the CLI, so they fail fast.
-- `integration` project overrides it: `timeout: 90_000`, `retries: 0`.
-  - 90s comfortably covers a real multi-turn CLI run while capping a hang at 90s.
-  - `retries: 0` so a hang isn't paid twice (the old `retries: 1` made a 120s hang cost ~4min).
-- **Do not** add per-test `test.setTimeout(...)` in integration specs. The single project timeout governs all of them; scattered 120/180/240s overrides were just defensive padding (no passing integration test runs beyond ~60s) and they defeat the bounded-hang goal. Removing them was safe.
+- Global `timeout: 30_000` applies to **both** projects, mock and integration alike. `retries: 0` on the `integration` project so a hang isn't paid twice.
+- This replaced an earlier `integration`-only override of `timeout: 90_000`. That 90s cap was too generous: a real CLI turn in these tests normally finishes in a few seconds, so anything actually hanging still burned close to a minute and a half before being reported. At a flat 30s the full 112-test integration run (108 passed, 4 known skips) completes in ~5 min when the backend is healthy - faster than the old 90s-tiered run, not slower, because nothing was legitimately using the extra headroom.
+- **A per-test `test.setTimeout(...)` override is allowed, but only as a rare, explicit, commented exception** for a test that provably needs more than 30s (e.g. `session-browse-during-stream-integration.spec.ts`'s three-real-CLI-turn test uses `test.setTimeout(60_000)`). This reverses the earlier blanket "never add per-test overrides" rule from when the project timeout was 90s - at 90s nothing needed one, so the rule was easy to keep; at a flat 30s a handful of genuinely multi-turn tests do. The bar stays high: justify it in a comment, don't reach for it to paper over a slow/flaky assertion.
+
+## Guard against a reused dev server with the wrong config
+
+`webServer.reuseExistingServer: true` (`playwright.config.ts`) means a `yarn dev` the user already had running gets adopted as the backend instead of Playwright starting its own. If that process was launched from a plain shell (no `ARGUS_CONFIG`), it reads and **writes** the real `~/.claude/argus.json` instead of `e2e/argus.json` - tests that change settings through the UI corrupt the user's actual config, and tests that depend on `e2e/argus.json` values (`showLogs`, `effort`, `allowedOrigins`, ...) fail against values they never set. This looks like several unrelated product bugs, not one environment problem.
+
+`e2e/global-setup.ts` catches it before any test runs: it hits a loopback-only `GET /health` on the dev server (`src/backend/index.ts`, added for this - returns `{ configPath, pid }` only to `127.0.0.1`/`::1`, 403 otherwise) and compares `configPath` against the resolved `e2e/argus.json` path (case-insensitive on `win32`, where the drive letter's case is launch-dependent). A mismatch throws immediately with a message naming the offending pid and telling the user to `yarn dev:stop` first. If the server isn't reachable yet (Playwright's `webServer` start order relative to `globalSetup` is version-dependent), that's treated as fine - only a live mismatch is fatal, since a server Playwright starts itself always gets the right env via `webServer.env`.
 
 ## Integration concurrency: `workers: 1`
 
@@ -40,9 +44,10 @@ Integration specs run against a real model, so an assertion is only stable if it
 
 - **Do not gate on tool calls.** `locator('[class*="toolCall"]')` assumes the model decided to call a tool, and how fast. It intermittently never appears. Gate on the **Stop button** instead - it is rendered for every active turn, which is usually the actual precondition ("the turn is in flight"):
   ```ts
-  await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible({ timeout: 30_000 });
-  await expect(stopBtn).toHaveCount(0, { timeout: 90_000 }); // turn finished
+  await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible({ timeout: 10_000 });
+  await expect(stopBtn).toHaveCount(0, { timeout: 20_000 }); // turn finished
   ```
+  Both numbers must fit under the flat 30s test timeout with room for everything else in the test - there is no longer a 90s tier to lean on.
 - **Do not assume a stream is still live** when the assertion runs. A test that browses/interacts mid-stream should branch on whether the turn is still running rather than racing it. Use `waitFor`, not `isVisible({ timeout })` - `isVisible()` is an immediate check and the `timeout` option does not make it wait, so right after a UI transition it reports `false` for a stream that *is* live and sends the test down the wrong branch:
   ```ts
   const isLive = await stopBtn.waitFor({ state: 'visible', timeout: 5_000 })

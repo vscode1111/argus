@@ -3,12 +3,31 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { withLinkedPaths } from './filePath';
+import { usePreviewNav } from '../contexts/PreviewNavContext';
 
 // Escape backslashes in Windows file paths so the markdown parser preserves them.
 // Without this, `D:\_Projects` becomes `D:_Projects` (backslash consumed as escape).
-const WIN_PATH_RE = /(?<![a-zA-Z`])([A-Za-z]:[\\])[\w.\-\\\/]+\.\w+(?::\d+(?:-\d+)?)?/g;
+// Covers drive-letter paths and relative backslash paths; "!" is allowed in
+// directory segments (the !notes convention) - without it the escape stopped at
+// the bang and markdown ate the preceding backslash (`CCS\!notes` -> `CCS!notes`).
+const WIN_PATH_RE = /(?<![a-zA-Z`])(?:[A-Za-z]:\\|(?:[\w.\-@!]+\\)+)[\w.\-!\\\/]*[\w.\-]+\.\w+(?::\d+(?:-\d+)?)?/g;
+// Code spans and fences keep backslashes literal, so escaping inside them would
+// double them (`CCS\!notes` -> `CCS\\!notes`). Split them out and leave them alone.
+const CODE_SPAN_RE = /(`+)[\s\S]*?\1/g;
 function protectPathBackslashes(text: unknown): string {
   if (typeof text !== 'string') return String(text ?? '');
+  let out = '';
+  let lastIndex = 0;
+  CODE_SPAN_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = CODE_SPAN_RE.exec(text)) !== null) {
+    out += escapeWinPaths(text.slice(lastIndex, m.index)) + m[0];
+    lastIndex = m.index + m[0].length;
+  }
+  return out + escapeWinPaths(text.slice(lastIndex));
+}
+
+function escapeWinPaths(text: string): string {
   return text.replace(WIN_PATH_RE, match => match.replace(/\\/g, '\\\\'));
 }
 
@@ -56,6 +75,35 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+const EXTERNAL_HREF_RE = /^https?:\/\/|^#|^mailto:/i;
+
+// Inside the file previewer, a relative link points at a sibling document, so it
+// navigates the previewer. Outside it there is nothing to navigate, and the href
+// is dropped as before (only external schemes are kept).
+function MarkdownLink({ href, children }: { href?: string; children: React.ReactNode }) {
+  const navigate = usePreviewNav();
+  const isExternal = !!href && EXTERNAL_HREF_RE.test(href);
+  const canNavigate = !!href && !isExternal && !!navigate;
+
+  if (canNavigate) {
+    return (
+      <a
+        href="#"
+        className="file-path-link"
+        title={`Open ${href}`}
+        onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(href!); }}
+      >
+        {children}
+      </a>
+    );
+  }
+  return (
+    <a href={isExternal ? href : undefined} style={{ color: 'var(--vscode-textLink-foreground)' }}>
+      {children}
+    </a>
+  );
+}
+
 export function Markdown({ children, breaks }: { children: string; breaks?: boolean }) {
   return (
     <ReactMarkdown
@@ -95,8 +143,7 @@ export function Markdown({ children, breaks }: { children: string; breaks?: bool
           return <td>{withLinkedPaths(children)}</td>;
         },
         a({ href, children }) {
-          const safe = href && /^https?:\/\/|^#|^mailto:/i.test(href) ? href : undefined;
-          return <a href={safe} style={{ color: 'var(--vscode-textLink-foreground)' }}>{children}</a>;
+          return <MarkdownLink href={href}>{children}</MarkdownLink>;
         },
       }}
     >
