@@ -58,7 +58,16 @@ async function setNetworkAccess(page: Page, on: boolean) {
 
 test.describe('network access (integration)', () => {
   let original: string;
-  test.beforeAll(() => { original = fs.readFileSync(CONFIG_PATH, 'utf8'); });
+  test.beforeAll(() => {
+    original = fs.readFileSync(CONFIG_PATH, 'utf8');
+    // Start from a known gate state. The first test's baseline asserts an external
+    // origin is rejected, which a leftover allowedOrigins entry (from an aborted
+    // earlier run) would silently break.
+    fs.writeFileSync(
+      CONFIG_PATH,
+      JSON.stringify({ ...JSON.parse(original), allowNetworkAccess: true, allowedOrigins: '' }, null, 2) + '\n',
+    );
+  });
   test.afterAll(() => { fs.writeFileSync(CONFIG_PATH, original); });
 
   test('adding an allowed origin in the Network tab lets that origin connect', async ({ page }) => {

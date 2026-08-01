@@ -14,8 +14,8 @@ async function sendAndWait(page: Page, text: string) {
   // the actual Send button (aria-label="Send").
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   const stopBtn = page.getByRole('button', { name: 'Stop' });
-  await expect(stopBtn).toBeVisible({ timeout: 15_000 });
-  await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
+  await expect(stopBtn).toBeVisible({ timeout: 10_000 });
+  await expect(stopBtn).toHaveCount(0, { timeout: 20_000 });
 }
 
 // Sends a prompt and returns as soon as the Stop button appears (CLI is live),
@@ -39,8 +39,11 @@ async function openHistoryModal(page: Page) {
     }
     await page.getByRole('button', { name: 'Session history' }).click();
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText('Loading...')).toHaveCount(0, { timeout: 10_000 });
-  }).toPass({ timeout: 30_000 });
+    // Short per-attempt wait: reopening re-fires listSessions, which recovers a lost
+    // round-trip faster than sitting on one. Both budgets stay well inside the 30s
+    // per-test timeout so a failure here is reported instead of timing the test out.
+    await expect(dialog.getByText('Loading...')).toHaveCount(0, { timeout: 4_000 });
+  }).toPass({ timeout: 12_000 });
   return dialog;
 }
 
@@ -138,6 +141,11 @@ test.describe('browse past session during active streaming (integration)', () =>
     // Fix: handleResumeSession sends token_update with stored liveInputTokens and
     // the current completedOutputTokens + liveOutputChars/4 estimate immediately
     // after replaySnapshot so the StreamingTimer always shows non-zero values.
+    //
+    // The one test that does not fit the global 30s budget: it needs three real CLI
+    // turns plus two rename round-trips before the assertion can even begin. Bounded
+    // exception here rather than raising the timeout for every test.
+    test.setTimeout(60_000);
     await waitForApp(page);
 
     // 1. Create and rename session A (a completed session to browse to).

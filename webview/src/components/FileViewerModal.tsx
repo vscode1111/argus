@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useEncoding } from '../hooks/useEncoding';
@@ -54,10 +54,11 @@ SyntaxHighlighter.registerLanguage('ruby', ruby);
 SyntaxHighlighter.registerLanguage('php', php);
 SyntaxHighlighter.registerLanguage('swift', swift);
 SyntaxHighlighter.registerLanguage('kotlin', kotlin);
-import { postMessage } from '../vscode';
+import { postMessage, isVsCode } from '../vscode';
 import { Markdown } from '../utils/markdown';
+import { PreviewNavContext } from '../contexts/PreviewNavContext';
 import { EncodingSelect } from './shared/EncodingSelect';
-import { CopyIcon, CheckIcon } from './shared/icons';
+import { CopyIcon, CheckIcon, BackIcon } from './shared/icons';
 import { useCopyFeedback } from '../hooks/useCopyFeedback';
 import modal from './shared/modal.module.css';
 import styles from './FileViewerModal.module.css';
@@ -95,44 +96,112 @@ interface Props {
 
 const isDataUrl = (s: string) => s.startsWith('data:image/');
 
+const dirOf = (p: string) => p.replace(/[\\/][^\\/]*$/, '');
+
+/**
+ * Resolves a relative markdown link against the directory of the file it appears
+ * in, so the previewer can follow it. Keeps the separator style of the base path
+ * (backslashes on Windows) and understands "./" and "../" segments.
+ */
+export function resolveRelative(basePath: string, href: string): string {
+  const sep = basePath.includes('\\') ? '\\' : '/';
+  const clean = href.split(/[?#]/)[0].replace(/\\/g, '/');
+  const segments = dirOf(basePath).split(/[\\/]/);
+  for (const part of clean.split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') segments.pop();
+    else segments.push(part);
+  }
+  return segments.join(sep);
+}
+
+interface Frame {
+  path: string;
+  content: string;
+  line?: number;
+}
+
 export function FileViewerModal({ path, content, line, copyText, onClose }: Props) {
   // Default to dark unless VS Code explicitly marks the theme as light.
   const isDark = !document.body.classList.contains('vscode-light');
   const { copied, copy } = useCopyFeedback();
 
+  // Documents opened by following links inside the preview. The prop is the root
+  // frame, so an empty stack means we are showing what the caller asked for.
+  const [stack, setStack] = useState<Frame[]>([]);
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+
+  const current: Frame = stack.length ? stack[stack.length - 1] : { path, content, line };
+
   useEscapeKey(onClose);
 
-  const isImage = isDataUrl(content);
-  const language = isImage ? 'text' : detectLanguage(path);
-  const rawCode = isImage ? '' : stripLineNumbers(content);
+  // A new root document (the caller clicked another path) drops the trail.
+  useEffect(() => {
+    setStack([]);
+    setPendingPath(null);
+  }, [path]);
+
+  const navigate = useCallback((href: string) => {
+    const target = resolveRelative(current.path, href);
+    setPendingPath(target);
+    postMessage({ type: 'readFilePreview', path: target });
+  }, [current.path]);
+
+  useEffect(() => {
+    if (!pendingPath) return;
+    function onMessage(e: MessageEvent) {
+      if (e.data?.type !== 'filePreview') return;
+      const got: string = e.data.path ?? '';
+      if (got !== pendingPath && !got.endsWith(pendingPath!)) return;
+      setStack(prev => [...prev, { path: got || pendingPath!, content: e.data.content }]);
+      setPendingPath(null);
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [pendingPath]);
+
+  const isImage = isDataUrl(current.content);
+  const language = isImage ? 'text' : detectLanguage(current.path);
+  const rawCode = isImage ? '' : stripLineNumbers(current.content);
   const { encoding, setEncoding, decoded: code } = useEncoding(rawCode);
-  const filename = path.split(/[\\/]/).pop() ?? path;
+  const filename = current.path.split(/[\\/]/).pop() ?? current.path;
 
   const bodyRef = useRef<HTMLDivElement>(null);
+  const currentLine = current.line;
 
   const scrollToLine = useCallback(() => {
-    if (!line || !bodyRef.current) return;
-    const row = bodyRef.current.querySelector(`[data-line="${line}"]`) as HTMLElement | null;
+    if (!currentLine || !bodyRef.current) return;
+    const row = bodyRef.current.querySelector(`[data-line="${currentLine}"]`) as HTMLElement | null;
     if (row) {
       row.scrollIntoView({ block: 'center' });
     }
-  }, [line]);
+  }, [currentLine]);
 
   useEffect(() => {
-    if (!line) return;
+    if (!currentLine) return;
     // Delay to let SyntaxHighlighter render line elements
     const timer = setTimeout(scrollToLine, 50);
     return () => clearTimeout(timer);
-  }, [line, code, scrollToLine]);
+  }, [currentLine, code, scrollToLine]);
+
+  // A followed document starts at the top, not where the previous one was.
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+  }, [current.path]);
 
   function openInEditor(e: React.MouseEvent) {
     e.stopPropagation();
-    postMessage({ type: 'openFile', path, line });
+    postMessage({ type: 'openFile', path: current.path, line: current.line });
+  }
+
+  function goBack(e: React.MouseEvent) {
+    e.stopPropagation();
+    setStack(prev => prev.slice(0, -1));
   }
 
   function handleCopyPath(e: React.MouseEvent) {
     e.stopPropagation();
-    copy(path, 'path');
+    copy(current.path, 'path');
   }
 
   function handleCopyCmd(e: React.MouseEvent) {
@@ -151,7 +220,12 @@ export function FileViewerModal({ path, content, line, copyText, onClose }: Prop
       >
         <div className={modal.header}>
           <div className={modal.titleRow}>
-            <span className={modal.title} title={path}>{path}</span>
+            {stack.length > 0 && (
+              <button className={modal.btnIcon} onClick={goBack} title="Back" aria-label="Back">
+                <BackIcon />
+              </button>
+            )}
+            <span className={modal.title} title={current.path}>{current.path}</span>
             <button className={modal.btnIcon} onClick={handleCopyPath} title="Copy path to clipboard" aria-label="Copy path">
               {copied === 'path' ? <CheckIcon /> : <CopyIcon />}
             </button>
@@ -163,9 +237,12 @@ export function FileViewerModal({ path, content, line, copyText, onClose }: Prop
           </div>
           <div className={modal.actions}>
             {!isImage && <EncodingSelect value={encoding} onChange={setEncoding} />}
-            <button className={modal.btnOpen} onClick={openInEditor} title="Open in VS Code editor">
-              Open in editor
-            </button>
+            {/* No editor to open in outside VS Code - the button was a silent no-op there. */}
+            {isVsCode && (
+              <button className={modal.btnOpen} onClick={openInEditor} title="Open in VS Code editor">
+                Open in editor
+              </button>
+            )}
             <button className={modal.close} aria-label="Close" onClick={onClose}>×</button>
           </div>
         </div>
@@ -176,7 +253,9 @@ export function FileViewerModal({ path, content, line, copyText, onClose }: Prop
             </div>
           ) : language === 'markdown' ? (
             <div className={styles.mdBody}>
-              <Markdown breaks>{code}</Markdown>
+              <PreviewNavContext.Provider value={navigate}>
+                <Markdown breaks>{code}</Markdown>
+              </PreviewNavContext.Provider>
             </div>
           ) : (
             <SyntaxHighlighter

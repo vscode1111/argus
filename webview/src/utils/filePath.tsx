@@ -6,7 +6,9 @@ import { FileViewerModal } from '../components/FileViewerModal';
 // Windows absolute: D:\path\to\file.ext:123
 // Unix absolute: /path/to/file.ext:123
 // Relative: src/file.ext, webview/src/App.tsx (at least one dir separator + extension)
-const FILE_PATH_RE = /((?:(?<![a-zA-Z])[A-Za-z]:[\\\/])[\w.\-\\\/]+\.\w+|\/(?:[\w.\-]+\/)+[\w.\-]+\.\w+|(?:[\w.\-@]+[\\\/])+[\w.\-]+\.\w+)(?::(\d+)(?:-(\d+))?)?/g;
+// Directory segments may start with "!" (the !notes convention); the final
+// filename class stays without it so prose like "done!file.md" is not swallowed.
+const FILE_PATH_RE = /((?:(?<![a-zA-Z])[A-Za-z]:[\\\/])[\w.\-!\\\/]+\.\w+|\/(?:[\w.\-!]+\/)+[\w.\-]+\.\w+|(?:[\w.\-@!]+[\\\/])+[\w.\-]+\.\w+)(?::(\d+)(?:-(\d+))?)?/g;
 
 function FilePathLink({ path: origPath, line, endLine, display }: { path: string; line?: number; endLine?: number; display: string }) {
   const [open, setOpen] = useState(false);
