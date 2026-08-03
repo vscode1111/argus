@@ -36,6 +36,45 @@ export function killProc(proc: ReturnType<typeof spawn>) {
   }
 }
 
+export interface KillAllResult {
+  count: number;
+  error?: string;
+}
+
+// Force-terminates every Claude Code CLI process on the machine, not just the one(s)
+// this server spawned - the same scope as cmd/kill-claude.bat. Since any running
+// claude.exe shares the same image name, this can kill unrelated sessions (e.g. a
+// terminal-driven CLI session elsewhere on the box); that is the intended "panic
+// button" behavior, not a bug.
+export function killAllClaude(): KillAllResult {
+  if (IS_WIN) {
+    // Count first via CSV output (locale-independent - it echoes the literal image
+    // name, unlike taskkill's own human-readable success/error sentences) so the
+    // reported count doesn't depend on taskkill's localized text.
+    let count = 0;
+    try {
+      const csv = execFileSync('tasklist', ['/FI', 'IMAGENAME eq claude.exe', '/FO', 'CSV', '/NH'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+      count = csv.split(/\r?\n/).filter(line => line.trim().startsWith('"claude.exe"')).length;
+    } catch {}
+    if (count === 0) return { count: 0 };
+    try {
+      execFileSync('taskkill', ['/F', '/IM', 'claude.exe'], { stdio: 'ignore', windowsHide: true });
+      return { count };
+    } catch (err) {
+      return { count: 0, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  try {
+    const listed = execFileSync('pgrep', ['-x', 'claude'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const pids = listed.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (pids.length === 0) return { count: 0 };
+    execFileSync('pkill', ['-x', 'claude'], { stdio: 'ignore' });
+    return { count: pids.length };
+  } catch {
+    return { count: 0 };
+  }
+}
+
 export function plural(count: number, singular: string, pluralForm?: string): string {
   return `${count} ${count === 1 ? singular : (pluralForm ?? singular + 's')}`;
 }

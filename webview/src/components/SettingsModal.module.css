@@ -348,6 +348,45 @@
 }
 .resetCorner:hover { opacity: 1; }
 
+/* "Stop all Claude CLI processes" - a machine-wide kill switch (cmd/kill-claude.bat
+   equivalent), armed by a first click and fired by a second (see dangerBtnArmed). */
+.dangerBtn {
+  margin-top: 8px;
+  align-self: stretch;
+  background: transparent;
+  color: var(--error-fg);
+  border: 1px solid var(--error-fg);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+.dangerBtn:hover {
+  background: var(--diff-removed-bg);
+}
+.dangerBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.dangerBtnArmed {
+  background: var(--error-fg);
+  color: var(--assistant-bg);
+}
+/* Same specificity as .dangerBtn:hover, so this must redeclare background (not just
+   opacity) to actually win the cascade - otherwise the base hover (a translucent
+   wash) overrides this solid fill while the cursor sits on the button, which is the
+   common case right after the arming click. */
+.dangerBtnArmed:hover {
+  background: var(--error-fg);
+  opacity: 0.85;
+}
+
+.fieldHintError {
+  font-size: 0.82em;
+  color: var(--error-fg);
+  line-height: 1.35;
+}
+
 .infoRow {
   display: flex;
   justify-content: space-between;
