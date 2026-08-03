@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { WebSocket } from 'ws';
 
-import { IS_WIN, resolveClaudeBin, killProc, plural, classifyError, API_ERROR_RE } from './cli';
+import { IS_WIN, resolveClaudeBin, killProc, killAllClaude, plural, classifyError, API_ERROR_RE } from './cli';
 import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
 import { getSkills } from './skills';
 import { readFilePreview } from './filePreview';
@@ -220,6 +220,13 @@ export function attachClientHandlers(
       ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
     } else if (msg.type === 'restartDaemon') {
       hooks.onRestartRequest?.();
+    } else if (msg.type === 'killAllClaude') {
+      const result = killAllClaude();
+      // The counter only ever increments on spawn, so a kill alone never moves it -
+      // reset it here (only when something was actually killed) so the Info tab's
+      // "CLI launches" visibly reflects the action instead of looking like a no-op.
+      if (result.count > 0) cliLaunchCount = 0;
+      ws.send(JSON.stringify({ type: 'killAllClaudeResult', ...result }));
     } else if (msg.type === 'getClientCount') {
       ws.send(JSON.stringify({ type: 'clientCount', count: hooks.getClientCount?.() ?? 0 }));
     } else if (msg.type === 'getServerInfo') {
