@@ -4,6 +4,7 @@ import { useDialogGeometry } from '../hooks/useDialogGeometry';
 import { clearDialogState } from '../utils/dialogState';
 import { useSettings } from '../contexts/SettingsContext';
 import { postMessage, isVsCode } from '../vscode';
+import { plural } from '../utils/text';
 import styles from './SettingsModal.module.css';
 
 interface ToggleProps {
@@ -157,6 +158,14 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   // Which value was just copied, so the "Copied!" feedback shows on that row only
   // (several rows are copyable now, and a shared boolean lit all of them at once).
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  // "Stop all Claude CLI processes": armed by a first click, fired by a second
+  // within killArmTimer's window - this kills processes machine-wide (see
+  // killAllClaude in cli.ts), so it needs more friction than a single click.
+  const [killArmed, setKillArmed] = useState(false);
+  const [killing, setKilling] = useState(false);
+  const [killResult, setKillResult] = useState<{ count: number; error?: string } | null>(null);
+  const killArmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (killArmTimer.current) clearTimeout(killArmTimer.current); }, []);
   useEffect(() => {
     postMessage({ type: 'getSettings' });
     postMessage({ type: 'getClientCount' });
@@ -188,6 +197,13 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
         // the live port and client count so the address rows reflect the new daemon.
         postMessage({ type: 'getServerInfo' });
         postMessage({ type: 'getClientCount' });
+      } else if (msg && msg.type === 'killAllClaudeResult' && typeof msg.count === 'number') {
+        setKilling(false);
+        setKillResult({ count: msg.count, error: typeof msg.error === 'string' ? msg.error : undefined });
+        // A kill can respawn this panel's own CLI process count (or end its session),
+        // so refresh the Info tab snapshot instead of leaving it at whatever it showed
+        // before the click.
+        postMessage({ type: 'getServerInfo' });
       }
     };
     window.addEventListener('message', onMessage);
@@ -221,6 +237,20 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     // Safety net: drop the spinner if nothing comes back (e.g. dev server no-op).
     setTimeout(() => setRestarting(false), 8000);
   }
+  function handleKillAll(): void {
+    if (killing) return;
+    if (!killArmed) {
+      setKillArmed(true);
+      setKillResult(null);
+      if (killArmTimer.current) clearTimeout(killArmTimer.current);
+      killArmTimer.current = setTimeout(() => setKillArmed(false), 4000);
+      return;
+    }
+    if (killArmTimer.current) { clearTimeout(killArmTimer.current); killArmTimer.current = null; }
+    setKillArmed(false);
+    setKilling(true);
+    postMessage({ type: 'killAllClaude' });
+  }
   const httpUrl = serverPort ? `http://localhost:${serverPort}` : '';
   const wsUrl = serverPort ? `ws://localhost:${serverPort}/agent` : '';
   const [tab, setTabState] = useState<Tab>(() => (localStorage.getItem('argus.settingsTab') as Tab) || 'general');
@@ -247,7 +277,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   useEscapeKey(onClose);
 
   const modalRef = useRef<HTMLDivElement>(null);
-  const drag = useDialogGeometry(modalRef, { persistKey: 'settings' });
+  const drag = useDialogGeometry(modalRef, { persistKey: 'settings', defaultWidth: 340 });
 
   // Forget every dialog's remembered position/size/tab (and the Settings tab),
   // then snap this modal back to its default geometry so the reset is visible.
@@ -453,7 +483,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 : <span className={styles.infoValue} data-testid="workspace-path">(no workspace)</span>}
             </div>
             <div className={styles.infoRow}>
-              <span className={styles.infoLabel} title="Number of Claude CLI processes spawned since the server started">CLI launches</span>
+              <span className={styles.infoLabel} title="Number of Claude CLI processes spawned since the server started (or since the last 'Stop all Claude CLI processes')">CLI launches</span>
               <span className={styles.infoValue} data-testid="cli-launches">{cliLaunchCount ?? '-'}</span>
             </div>
             <div className={styles.infoRow}>
@@ -467,6 +497,29 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
               {sessionPath
                 ? <CopyableValue value={sessionPath} copied={copiedKey === 'path'} onCopy={() => copyText(sessionPath, 'path')} className={[styles.infoValue, styles.addrLink].join(' ')} testId="session-path" />
                 : <span className={styles.infoValue} data-testid="session-path">-</span>}
+            </div>
+            <div className={styles.settingColumn}>
+              <span className={styles.fieldHint}>
+                Force-stops every Claude Code CLI process on this machine (all workspaces and terminals) - not just this panel's session.
+              </span>
+              <button
+                className={[styles.dangerBtn, killArmed ? styles.dangerBtnArmed : ''].filter(Boolean).join(' ')}
+                onClick={handleKillAll}
+                disabled={killing}
+                data-testid="kill-all-claude"
+                title="Force-terminates every Claude Code CLI process on this machine"
+              >
+                {killing ? 'Stopping...' : killArmed ? 'Click again to confirm' : 'Stop all Claude CLI processes'}
+              </button>
+              {killResult && (
+                <span className={killResult.error ? styles.fieldHintError : styles.fieldHint} data-testid="kill-all-claude-result">
+                  {killResult.error
+                    ? `Failed to stop processes: ${killResult.error}`
+                    : killResult.count === 0
+                      ? 'No Claude CLI processes were running.'
+                      : `Stopped ${plural(killResult.count, 'process', 'processes')}.`}
+                </span>
+              )}
             </div>
           </div>
         )}

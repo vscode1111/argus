@@ -96,3 +96,12 @@ await page.evaluate(() => {
 });
 ```
 This simulates a server->webview message; it does not get re-sent to the backend.
+
+## Never automate a real destructive OS-level action in a test
+
+Some features (e.g. `killAllClaude`, see [../tasks/stop-all-claude-button/notes.md](../tasks/stop-all-claude-button/notes.md)) send a WS message whose handler runs a real OS command with effects outside this app - a process kill by image name, for instance. Mock's client-side message injection does **not** protect against this: the "mock" project still runs against a real live backend (`webServer`), and only two message types are ever suppressed from actually reaching it (`webview/index.html`'s dev-mode `MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1 }`, there to stop async replies from clobbering injected mock data - it is not a safety allowlist). A test - or a manual click while iterating in a browser - that performs the real second step of such an action will actually execute it on whatever machine is running the suite, which can include a live `claude.exe` behind the very Claude Code session doing the work.
+
+- Test the arming/UI-state-machine side of a two-step destructive action with real clicks (safe: it sends nothing).
+- Test the result-rendering side by simulating the reply (`window.dispatchEvent`, above) rather than by letting the real action fire.
+- Verify the underlying OS command's mechanics (parsing, counting, success/failure paths) against a **decoy target** (e.g. a throwaway `notepad++.exe`), not the real one, before trusting it in the shipped code.
+- If a feature like this ever needs a true integration test, it must not run against this dev machine's ambient processes - spawn and target a disposable child process created by the test itself.
