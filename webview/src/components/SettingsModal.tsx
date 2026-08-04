@@ -52,6 +52,20 @@ function randomPort(): number {
   return p;
 }
 
+// Numeric dot-segment compare (a < b => negative, a > b => positive). A plain
+// string compare gets "0.0.9" > "0.0.10" wrong, which flips which side actually
+// looks stale.
+function compareVersions(a: string, b: string): number {
+  const as = a.split('.');
+  const bs = b.split('.');
+  for (let i = 0; i < Math.max(as.length, bs.length); i++) {
+    const an = Number(as[i] ?? 0);
+    const bn = Number(bs[i] ?? 0);
+    if (an !== bn) return an - bn;
+  }
+  return 0;
+}
+
 function NumberInput({ id, value, onChange, min = 1, step, disabled }: NumberInputProps) {
   const [text, setText] = useState(String(value));
   useEffect(() => { setText(String(value)); }, [value]);
@@ -226,8 +240,14 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     try { navigator.clipboard?.writeText(text); setCopiedKey(key); setTimeout(() => setCopiedKey(null), 1200); } catch { /* */ }
   }
   // Only a genuine disagreement counts: either side can be unknown (the browser dev
-  // host passes no version, and an old daemon sends no serverVersion at all).
-  const versionSkew = !!version && !!serverVersion && version !== serverVersion;
+  // host passes no version, and an old daemon sends no serverVersion at all). Which
+  // side is actually behind matters - "(stale)" belongs on the older build, and a
+  // plain inequality check can't tell "0.0.79 vs 0.0.80" from "0.0.80 vs 0.0.79".
+  const versionCompare = version && serverVersion && version !== serverVersion
+    ? compareVersions(serverVersion, version)
+    : 0;
+  const serverIsStale = versionCompare < 0;
+  const clientIsStale = versionCompare > 0;
   // A daemon older than the serverInfo.serverVersion field sends nothing at all, so
   // silence here is itself proof of skew - the one case this row exists to catch.
   const serverUnknown = !!version && !!serverPort && !serverVersion;
@@ -459,21 +479,27 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             {version && (
               <div className={styles.infoRow}>
                 <span className={styles.infoLabel} title="Version of this extension/UI build">Client</span>
-                <span className={styles.infoValue} data-testid="client-version">{version}</span>
+                <span
+                  className={[styles.infoValue, clientIsStale ? styles.infoValueWarn : ''].filter(Boolean).join(' ')}
+                  data-testid="client-version"
+                  title={clientIsStale ? `This build is ${version}, the serving daemon is newer (${serverVersion}) - update/reload this install` : undefined}
+                >
+                  {clientIsStale ? `${version} (stale)` : version}
+                </span>
               </div>
             )}
             <div className={styles.infoRow}>
               <span className={styles.infoLabel} title="Version of the daemon serving this panel. The daemon is a separate install found through a machine-global discovery file, so an older one left running elsewhere can serve a newer UI - which then silently misses features.">Server</span>
               <span
-                className={[styles.infoValue, versionSkew || serverUnknown ? styles.infoValueWarn : ''].filter(Boolean).join(' ')}
+                className={[styles.infoValue, serverIsStale || serverUnknown ? styles.infoValueWarn : ''].filter(Boolean).join(' ')}
                 data-testid="server-version"
                 title={
-                  versionSkew ? `Serving daemon is ${serverVersion}, this build is ${version} - restart the daemon`
+                  serverIsStale ? `Serving daemon is ${serverVersion}, this build is ${version} - restart the daemon`
                     : serverUnknown ? `The serving daemon is too old to report its version (this build is ${version}) - restart the daemon`
                       : undefined
                 }
               >
-                {serverVersion ? (versionSkew ? `${serverVersion} (stale)` : serverVersion) : serverUnknown ? 'unknown (stale)' : '-'}
+                {serverVersion ? (serverIsStale ? `${serverVersion} (stale)` : serverVersion) : serverUnknown ? 'unknown (stale)' : '-'}
               </span>
             </div>
             <div className={styles.infoRow}>
