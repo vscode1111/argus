@@ -1,6 +1,6 @@
 # Fix: version skew warning always blamed the Server row
 
-**Status:** implemented (2026-08-03, working tree)
+**Status:** committed and pushed (2026-08-04, `83f1b4f`)
 **Related:** [panel-isolation-and-session-info](../panel-isolation-and-session-info/notes.md) (introduced the Client/Server rows)
 
 ## Problem
@@ -51,4 +51,4 @@ npx playwright test e2e/session-info-integration.spec.ts --project=integration -
 
 ## Remaining work
 
-None. Working tree not yet committed.
+None. Committed and pushed as `83f1b4f`.
