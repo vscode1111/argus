@@ -21,7 +21,37 @@ interface RateLimitInfo {
   utilization: number; // 0..1
   resetsAt?: number;   // unix epoch seconds
   status?: string;
+  label?: string;      // server-provided display label (model-scoped windows, e.g. "Weekly Fable")
 }
+
+interface InsightRow {
+  name: string;
+  pct: number; // 0-100
+}
+
+interface BehaviorStat {
+  key: string;
+  pct: number; // 0-100
+  count: number;
+}
+
+interface InsightsReport {
+  totalCost: number;
+  requestCount: number;
+  sessionCount: number;
+  behaviors: BehaviorStat[];
+  skills: InsightRow[];
+  agents: InsightRow[];
+  plugins: InsightRow[];
+  mcpServers: InsightRow[];
+}
+
+interface UsageInsights {
+  day: InsightsReport;
+  week: InsightsReport;
+}
+
+type InsightsRange = 'day' | 'week';
 
 type Tab = 'usage' | 'models';
 
@@ -52,9 +82,41 @@ const AUTH_LABELS: Record<string, string> = {
 const RATE_LIMIT_META: Record<string, { label: string; order: number }> = {
   five_hour: { label: 'Session (5hr)', order: 0 },
   seven_day: { label: 'Weekly (7 day)', order: 1 },
-  seven_day_opus: { label: 'Weekly Opus', order: 2 },
-  seven_day_sonnet: { label: 'Weekly Sonnet', order: 3 },
+  seven_day_fable: { label: 'Weekly Fable', order: 2 },
+  seven_day_opus: { label: 'Weekly Opus', order: 3 },
+  seven_day_sonnet: { label: 'Weekly Sonnet', order: 4 },
 };
+
+// "What's contributing to your limits usage?" behavior insights: official copy,
+// keyed by the behavior keys the server reports (sorted by cost there). Unknown
+// future keys are skipped rather than rendered without wording.
+const BEHAVIOR_META: Record<string, { headline: (pct: number) => string; body: string }> = {
+  cache_miss: {
+    headline: (pct) => `${pct}% of your usage hit a >100k-token cache miss`,
+    body: 'Uncached input is expensive, and often happens when sending a message to a session that has gone idle. /compact before stepping away keeps the cold-start small.',
+  },
+  long_context: {
+    headline: (pct) => `${pct}% of your usage was at >150k context`,
+    body: 'Longer sessions are more expensive even when cached. /compact mid-task, /clear when switching to new tasks.',
+  },
+  subagent_heavy: {
+    headline: (pct) => `${pct}% of your usage came from subagent-heavy sessions`,
+    body: 'Each subagent runs its own requests. Be deliberate about spawning them — and consider configuring a cheaper model for simpler subagents.',
+  },
+  high_parallel: {
+    headline: (pct) => `${pct}% of your usage was while 4+ sessions ran in parallel`,
+    body: "All sessions share one limit. If you don't need them all at once, queueing uses it more evenly.",
+  },
+  cron: {
+    headline: (pct) => `${pct}% of your usage came from sessions active for 8+ hours`,
+    body: 'These are often background/loop sessions. Continuous usage can add up quickly so make sure it is intentional.',
+  },
+};
+
+// Matches the official panel: behaviors under 10% are noise and hidden, tables
+// show the top 8 rows.
+const MIN_BEHAVIOR_PCT = 10;
+const TABLE_ROW_CAP = 8;
 
 function rateLimitLabel(type: string): string {
   if (RATE_LIMIT_META[type]) return RATE_LIMIT_META[type].label;
@@ -107,6 +169,13 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
   const [accountLoading, setAccountLoading] = useState(true);
   const [usageLoading, setUsageLoading] = useState(true);
 
+  // Local usage insights ("What's contributing to your limits usage?"): both
+  // ranges arrive in one reply, the Day/Week toggle switches client-side.
+  const [insights, setInsights] = useState<UsageInsights | null>(null);
+  const [insightsError, setInsightsError] = useState<string | undefined>(undefined);
+  const [insightsLoading, setInsightsLoading] = useState(true);
+  const [insightsRange, setInsightsRange] = useState<InsightsRange>('day');
+
   // Models tab state
   const [fetchedModels, setFetchedModels] = useState<ModelEntry[] | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -135,6 +204,12 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
         setRateLimits(Array.isArray(d.rateLimits) ? d.rateLimits : []);
         setUsageError(typeof d.usageError === 'string' ? d.usageError : undefined);
         setUsageLoading(false);
+      } else if (e.data?.type === 'usageInsights') {
+        const d = e.data;
+        const hasReports = d.day && d.week;
+        setInsights(hasReports ? { day: d.day, week: d.week } : null);
+        setInsightsError(typeof d.error === 'string' ? d.error : undefined);
+        setInsightsLoading(false);
       } else if (e.data?.type === 'modelList') {
         const raw: ModelEntry[] = (e.data.models ?? []).map(toModelEntry);
         setFetchedModels(raw.length > 0 ? raw : null);
@@ -145,7 +220,10 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
         }
       }
     },
-    () => postMessage({ type: 'getAccountUsage' }),
+    () => {
+      postMessage({ type: 'getAccountUsage' });
+      postMessage({ type: 'getUsageInsights' });
+    },
   );
 
   // Manual refresh: force a fresh fetch, bypassing the server's 60s usage cache.
@@ -154,6 +232,9 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
     setUsageLoading(true);
     setUsageError(undefined);
     postMessage({ type: 'getAccountUsage', force: true });
+    setInsightsLoading(true);
+    setInsightsError(undefined);
+    postMessage({ type: 'getUsageInsights', force: true });
   }
 
   function openModelsTab() {
@@ -172,6 +253,10 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
   const sortedLimits = [...rateLimits].sort(
     (a, b) => rateLimitOrder(a.rateLimitType) - rateLimitOrder(b.rateLimitType)
   );
+
+  const report = insights ? insights[insightsRange] : null;
+  const hasAttribution = !!report &&
+    (report.skills.length > 0 || report.agents.length > 0 || report.plugins.length > 0 || report.mcpServers.length > 0);
 
   const allModels = [
     makeDefaultEntry(runtimeDefaultModel),
@@ -239,7 +324,7 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
                   return (
                     <div key={rl.rateLimitType} className={styles.usageRow}>
                       <div className={styles.usageHeader}>
-                        <span className={styles.usageName}>{rateLimitLabel(rl.rateLimitType)}</span>
+                        <span className={styles.usageName}>{rl.label ?? rateLimitLabel(rl.rateLimitType)}</span>
                         <span className={styles.usagePercent}>{percent}%</span>
                       </div>
                       <div className={styles.progressTrack}>
@@ -249,6 +334,58 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
                     </div>
                   );
                 })}
+
+                <div className={styles.insightsHeader}>What's contributing to your limits usage?</div>
+                {insightsLoading && !report && <div className={styles.usageHint}>Analyzing local sessions...</div>}
+                {!insightsLoading && !report && (
+                  <div className={styles.usageHint}>
+                    {insightsError ? `Usage insights are unavailable: ${insightsError}.` : 'Usage insights are unavailable right now.'}
+                  </div>
+                )}
+                {/* Toggle and disclaimers only accompany actual data - while loading
+                    or after a failure they are scaffolding around nothing. */}
+                {report && (
+                  <>
+                    <div className={styles.rangeTabs} role="tablist" aria-label="Insights range">
+                      {(['day', 'week'] as const).map(range => (
+                        <button
+                          key={range}
+                          role="tab"
+                          aria-selected={insightsRange === range}
+                          className={[styles.rangeTab, insightsRange === range ? styles.rangeTabActive : ''].filter(Boolean).join(' ')}
+                          onClick={() => setInsightsRange(range)}
+                        >{range === 'day' ? 'Day' : 'Week'}</button>
+                      ))}
+                    </div>
+                    <div className={styles.insightsNote}>
+                      Approximate, based on local sessions on this machine — does not include other devices or claude.ai
+                    </div>
+                    <div className={styles.insightsNote}>
+                      {insightsRange === 'day' ? 'Last 24h' : 'Last 7d'} · these are independent characteristics of your usage, not a breakdown
+                    </div>
+                    {report.behaviors
+                      .filter(b => b.pct >= MIN_BEHAVIOR_PCT && BEHAVIOR_META[b.key])
+                      .map(b => (
+                        <div key={b.key} className={styles.behavior}>
+                          <div className={styles.behaviorHeadline}>{BEHAVIOR_META[b.key].headline(b.pct)}</div>
+                          <div className={styles.behaviorBody}>{BEHAVIOR_META[b.key].body}</div>
+                        </div>
+                      ))}
+                    {hasAttribution ? (
+                      <>
+                        <InsightTable title="Skills" rows={report.skills} format={n => `/${n}`} />
+                        <InsightTable title="Subagents" rows={report.agents} />
+                        <InsightTable title="Plugins" rows={report.plugins} />
+                        <InsightTable title="MCP servers" rows={report.mcpServers} />
+                      </>
+                    ) : (
+                      <div className={styles.behavior}>
+                        <div className={styles.behaviorHeadline}>Skills, subagents, plugins, and MCP servers</div>
+                        <div className={styles.behaviorBody}>No attribution data yet · accumulates as you use Claude</div>
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>
@@ -336,6 +473,30 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className={styles.row}>
       <span className={styles.label}>{label}</span>
       <span className={styles.value}>{value}</span>
+    </div>
+  );
+}
+
+function InsightTable({ title, rows, format }: { title: string; rows: InsightRow[]; format?: (name: string) => string }) {
+  if (rows.length === 0) return null;
+  const shown = rows.slice(0, TABLE_ROW_CAP);
+  const hidden = rows.length - TABLE_ROW_CAP;
+  return (
+    <div className={styles.insightTable}>
+      <div className={styles.insightTableHeader}>
+        <span>{title}</span>
+        <span className={styles.insightTablePct}>% of usage</span>
+      </div>
+      {shown.map(row => {
+        const name = format ? format(row.name) : row.name;
+        return (
+          <div key={row.name} className={styles.insightTableRow}>
+            <span className={styles.insightTableName} title={name}>{name}</span>
+            <span className={styles.insightTablePct}>{row.pct}%</span>
+          </div>
+        );
+      })}
+      {hidden > 0 && <div className={styles.insightTableMore}>… {hidden} more</div>}
     </div>
   );
 }

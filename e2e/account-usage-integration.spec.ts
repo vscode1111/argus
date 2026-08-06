@@ -4,8 +4,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { waitForApp } from './helpers';
 
-// Known windows + labels, mirroring src/backend/accountUsage.ts and the modal.
-// Kept in display order so live[i] lines up with the i-th rendered row.
+// Known legacy windows + labels, mirroring src/backend/accountUsage.ts and the
+// modal. Kept in display order so live[i] lines up with the i-th rendered row.
 const USAGE_WINDOWS: { key: string; label: string }[] = [
   { key: 'five_hour', label: 'Session (5hr)' },
   { key: 'seven_day', label: 'Weekly (7 day)' },
@@ -15,6 +15,8 @@ const USAGE_WINDOWS: { key: string; label: string }[] = [
 
 // Fetch live usage the same way the backend does, so the test can compare the
 // rendered modal against ground truth instead of hardcoded (drifting) numbers.
+// Mirrors the backend's parsing: the `limits` array wins when present (it is the
+// only source of model-scoped windows like Weekly Fable), legacy keys otherwise.
 // Returns null when unavailable (no token, rate limited, offline) so the caller
 // can skip rather than flake.
 async function fetchLiveUsage(): Promise<{ label: string; percent: number }[] | null> {
@@ -33,10 +35,26 @@ async function fetchLiveUsage(): Promise<{ label: string; percent: number }[] | 
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as Record<string, { utilization?: number } | null>;
+    const data = (await res.json()) as Record<string, unknown>;
+
     const out: { label: string; percent: number }[] = [];
+    if (Array.isArray(data.limits)) {
+      for (const entry of data.limits as Array<Record<string, unknown>>) {
+        const pct = Number(entry?.percent);
+        if (isNaN(pct)) continue;
+        if (entry.kind === 'session') out.push({ label: 'Session (5hr)', percent: Math.round(pct) });
+        else if (entry.kind === 'weekly_all') out.push({ label: 'Weekly (7 day)', percent: Math.round(pct) });
+        else if (entry.kind === 'weekly_scoped') {
+          const scope = entry.scope as { model?: { display_name?: unknown } } | null | undefined;
+          const name = typeof scope?.model?.display_name === 'string' ? scope.model.display_name : '';
+          if (name) out.push({ label: `Weekly ${name}`, percent: Math.round(pct) });
+        }
+      }
+      if (out.length > 0) return out;
+    }
+
     for (const { key, label } of USAGE_WINDOWS) {
-      const w = data[key];
+      const w = data[key] as { utilization?: number } | null | undefined;
       if (!w || typeof w !== 'object') continue; // null/absent windows are not rendered
       const pct = Number(w.utilization);
       if (isNaN(pct)) continue;
