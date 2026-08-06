@@ -13,3 +13,5 @@ media/webview.css
 media/ws-bridge.js
 bash.exe.stackdump
 .dev-nonce
+\!notes/common/scripts/*.log
+\!notes/tasks/usage-insights/scripts/*.js.txt

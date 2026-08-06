@@ -118,6 +118,30 @@ test.describe('account & usage', () => {
       .toHaveText(/· (Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2}:\d{2} (AM|PM)/);
   });
 
+  test('model-scoped weekly windows render their label in sort order (Weekly Fable)', async ({ page }) => {
+    await openModal(page);
+    await send(page, {
+      type: 'accountUsage',
+      account: ACCOUNT,
+      rateLimits: [
+        // A known scoped window plus an unknown one whose server-provided label must win.
+        { rateLimitType: 'seven_day_zenith', utilization: 0.11, resetsAt: NOW + 3 * 86_400, label: 'Weekly Zenith' },
+        { rateLimitType: 'seven_day_fable', utilization: 0.27, resetsAt: NOW + 3 * 86_400, label: 'Weekly Fable' },
+        { rateLimitType: 'five_hour', utilization: 0.6, resetsAt: NOW + 2 * 3600 },
+        { rateLimitType: 'seven_day', utilization: 0.23, resetsAt: NOW + 3 * 86_400 },
+      ],
+    });
+
+    const rows = page.locator('[class*="usageRow"]');
+    await expect(rows).toHaveCount(4);
+    await expect(rows.nth(0).locator('[class*="usageName"]')).toHaveText('Session (5hr)');
+    await expect(rows.nth(1).locator('[class*="usageName"]')).toHaveText('Weekly (7 day)');
+    await expect(rows.nth(2).locator('[class*="usageName"]')).toHaveText('Weekly Fable');
+    await expect(rows.nth(2).locator('[class*="usagePercent"]')).toHaveText('27%');
+    // Unknown scoped type has no META order, so it sorts last - but keeps its label.
+    await expect(rows.nth(3).locator('[class*="usageName"]')).toHaveText('Weekly Zenith');
+  });
+
   test('high utilization uses the high (red) color tier', async ({ page }) => {
     await openModal(page);
     await send(page, {

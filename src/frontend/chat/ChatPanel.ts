@@ -9,6 +9,7 @@ import { showWindowsToast } from '../utils/win32Toast';
 
 import { readDaemon, ensureDaemon, restartDaemon, FOCUS_PROTOCOL } from '../extension';
 import { readFilePreview } from '../../backend/filePreview';
+import { buildWorkspaceInfo } from '../../backend/workspaceInfo';
 
 export class ChatPanel {
   private static readonly panels = new Set<ChatPanel>();
@@ -120,7 +121,7 @@ export class ChatPanel {
     } else if (msg.type === 'getInfo') {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
       const version = vscode.extensions.getExtension('local.argus')?.packageJSON?.version ?? '';
-      this.post({ type: 'workspaceInfo', path: root, version });
+      this.post(buildWorkspaceInfo(root, version));
     } else if (msg.type === 'readFilePreview' && msg.path) {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
       const result = readFilePreview(msg.path, root);
