@@ -58,6 +58,7 @@ approval routing cleanly separable without growing into a monolith.
 - Collapsible thinking blocks with token estimate; click to expand.
 - Plan mode: dry-run exploration without file edits.
 - Slash commands: built-in and custom skills from `~/.claude/skills/`.
+- Model picker with live model list and per-family descriptions; model data (list, descriptions, detected CLI default) auto-refreshes daily via the daemon (`yarn update-models` to force).
 - Image paste via `Ctrl+V`.
 - Inline diff and file viewers next to tool calls.
 - OS toast notifications on task completion.

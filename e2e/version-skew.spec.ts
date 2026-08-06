@@ -29,6 +29,22 @@ function setServerVersion(page: import('@playwright/test').Page, serverVersion: 
 
 test.describe('Client/Server version skew direction', () => {
   test.beforeEach(async ({ page }) => {
+    // Opening the Info tab posts a real getServerInfo at the live mock-project
+    // backend; its reply carries the dev server's actual version and lands after
+    // setServerVersion's mock, clobbering it (invisible while the real version
+    // happened to equal the mocked one, guaranteed red once they diverge - e.g.
+    // after a version bump). getServerInfo cannot go into MOCK_SUPPRESSED
+    // (kill-all-claude.spec.ts asserts on the outgoing send), so drop the frame
+    // at the socket for this spec only, before the app scripts load.
+    await page.addInitScript(() => {
+      const origSend = WebSocket.prototype.send;
+      WebSocket.prototype.send = function (data: string | ArrayBufferLike | Blob | ArrayBufferView) {
+        try {
+          if (typeof data === 'string' && JSON.parse(data).type === 'getServerInfo') return;
+        } catch { /* not JSON - pass through */ }
+        return origSend.call(this, data);
+      };
+    });
     await waitForApp(page);
   });
 

@@ -11,7 +11,8 @@ import { fetchAccountInfo, fetchUsage, fetchModels } from './accountUsage';
 import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
-import { type Channel } from './channel';
+import { type Channel, broadcastToAllChannels } from './channel';
+import { describeModel } from './modelData';
 import { attachProcHandlers } from './cliHandler';
 import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath } from './sessions';
 import { readServerVersion } from './version';
@@ -39,10 +40,7 @@ export interface ConnectionHooks {
 // mechanism (watchdog retry + AskUserQuestion follow-ups), and the follow-up flush.
 // Called once per SessionEntry (on first client join or on moveToNewSession).
 function initChannelSession(s: SessionState, model: string): void {
-  const cfg = readConfig();
-  s.model = cfg.model || model;
-  s.effort = cfg.effort ?? 'high';
-  s.thinking = cfg.thinking ?? true;
+  s.serverDefaultModel = model;
 
   s.sendLog = (level, text) => {
     s.broadcast(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
@@ -262,22 +260,25 @@ export function attachClientHandlers(
         const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
         version = pkg.version ?? '';
       } catch {}
-      ws.send(JSON.stringify({ type: 'workspaceInfo', path: s.workspaceDir, version, model: s.model, effort: s.effort, thinking: s.thinking }));
+      // model/effort/thinking come fresh from the config (the single source of truth):
+      // a cached per-entry copy went stale whenever the switch happened in another
+      // workspace channel or another server process sharing argus.json.
+      const cfg = readConfig();
+      ws.send(JSON.stringify({ type: 'workspaceInfo', path: s.workspaceDir, version, model: cfg.model || s.serverDefaultModel, effort: cfg.effort, thinking: cfg.thinking }));
     } else if (msg.type === 'switchModel') {
       const newModel = typeof (msg as { model?: string }).model === 'string' ? (msg as { model?: string }).model! : '';
       writeConfig({ ...readConfig(), model: newModel });
-      channel.forEachSession(ss => { ss.model = newModel; });
-      channel.broadcastToAll(JSON.stringify({ type: 'modelChanged', model: newModel }));
+      // Global settings notify every client on every workspace channel; a per-channel
+      // broadcast left other workspaces' panels highlighting the old model.
+      broadcastToAllChannels(JSON.stringify({ type: 'modelChanged', model: newModel }));
     } else if (msg.type === 'switchEffort') {
       const newEffort = typeof (msg as { effort?: string }).effort === 'string' ? (msg as { effort?: string }).effort! : 'high';
       writeConfig({ ...readConfig(), effort: newEffort });
-      channel.forEachSession(ss => { ss.effort = newEffort; });
-      channel.broadcastToAll(JSON.stringify({ type: 'effortChanged', effort: newEffort }));
+      broadcastToAllChannels(JSON.stringify({ type: 'effortChanged', effort: newEffort }));
     } else if (msg.type === 'switchThinking') {
       const newThinking = (msg as { thinking?: boolean }).thinking !== false;
       writeConfig({ ...readConfig(), thinking: newThinking });
-      channel.forEachSession(ss => { ss.thinking = newThinking; });
-      channel.broadcastToAll(JSON.stringify({ type: 'thinkingChanged', thinking: newThinking }));
+      broadcastToAllChannels(JSON.stringify({ type: 'thinkingChanged', thinking: newThinking }));
     } else if (msg.type === 'retry') {
       if (s.lastMessage) {
         s.sendLog('info', 'Retrying last message');
@@ -311,8 +312,19 @@ export function attachClientHandlers(
       }).catch(() => {});
     } else if (msg.type === 'getModels') {
       fetchModels().then(({ models, error }) => {
-        const runtimeDefaultModel = readConfig().runtimeDefaultModel || '';
-        ws.send(JSON.stringify({ type: 'modelList', models, error, runtimeDefaultModel }));
+        const cfg = readConfig();
+        let list = models;
+        if (list.length > 0) {
+          // Persist the last good list so the picker still shows real entries when
+          // a later fetch fails (offline, expired token) or on the next fresh start.
+          if (JSON.stringify(list) !== JSON.stringify(cfg.modelListCache)) {
+            writeConfig({ ...cfg, modelListCache: list });
+          }
+        } else if (cfg.modelListCache.length > 0) {
+          list = cfg.modelListCache;
+        }
+        const withDescriptions = list.map(m => ({ ...m, description: describeModel(m.id, cfg.modelFamilyDescriptions) }));
+        ws.send(JSON.stringify({ type: 'modelList', models: withDescriptions, error, runtimeDefaultModel: cfg.runtimeDefaultModel || '' }));
       }).catch(() => {});
     } else if (msg.type === 'stop') {
       handleStop(s);
@@ -394,13 +406,16 @@ function handleSend(s: SessionState, msg: { type?: string; text?: string; images
     '--tools', tools.join(','),
     '--allowedTools', tools.join(','),
   ];
-  if (s.model) baseArgs.push('--model', s.model);
-  if (!s.thinking) {
-    baseArgs.push('--effort', 'low');
-  } else if (s.effort) {
-    baseArgs.push('--effort', s.effort);
-  }
+  // Derived from the config at spawn time (see getInfo): the latest switchModel /
+  // switchEffort / switchThinking always wins, whichever channel or process it came from.
   const cfg = readConfig();
+  const model = cfg.model || s.serverDefaultModel;
+  if (model) baseArgs.push('--model', model);
+  if (!cfg.thinking) {
+    baseArgs.push('--effort', 'low');
+  } else if (cfg.effort) {
+    baseArgs.push('--effort', cfg.effort);
+  }
   if (cfg.appendSystemPrompt) baseArgs.push('--append-system-prompt', cfg.appendSystemPrompt);
   if (isPlan) {
     baseArgs.push('--permission-mode', 'plan', '--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));

@@ -4,6 +4,7 @@ import { getDialogState, patchDialogState } from '../utils/dialogState';
 import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
 import { useWebviewMessage } from '../hooks/useWebviewMessage';
+import { type ModelEntry, FALLBACK_MODELS, makeDefaultEntry, sameModel, toModelEntry } from '../utils/model';
 import styles from './AccountUsageModal.module.css';
 import shell from './shared/centeredModal.module.css';
 
@@ -20,36 +21,6 @@ interface RateLimitInfo {
   utilization: number; // 0..1
   resetsAt?: number;   // unix epoch seconds
   status?: string;
-}
-
-interface ModelEntry {
-  id: string;
-  displayName: string;
-  description?: string;
-}
-
-const MODEL_DESCRIPTIONS: Record<string, string> = {
-  'claude-opus-4-8':           'Best for everyday, complex tasks',
-  'claude-opus-4-7':           'Best for everyday, complex tasks',
-  'claude-sonnet-4-6':         'Efficient for routine tasks',
-  'claude-sonnet-4-5':         'Efficient for routine tasks',
-  'claude-haiku-4-5':          'Fastest for quick answers',
-  'claude-haiku-4-5-20251001': 'Fastest for quick answers',
-  'claude-fable-5':            'Creative and expressive',
-};
-
-const FALLBACK_MODELS: ModelEntry[] = [
-  { id: 'claude-haiku-4-5',  displayName: 'Claude Haiku 4.5',  description: 'Fastest for quick answers'        },
-  { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', description: 'Efficient for routine tasks'      },
-  { id: 'claude-opus-4-8',   displayName: 'Claude Opus 4.8',   description: 'Best for everyday, complex tasks' },
-];
-
-function makeDefaultEntry(runtimeModel: string): ModelEntry {
-  return {
-    id: '',
-    displayName: 'Default (CLI)',
-    description: runtimeModel ? `Currently ${runtimeModel}` : 'Defers to the Claude CLI default',
-  };
 }
 
 type Tab = 'usage' | 'models';
@@ -165,11 +136,7 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
         setUsageError(typeof d.usageError === 'string' ? d.usageError : undefined);
         setUsageLoading(false);
       } else if (e.data?.type === 'modelList') {
-        const raw: ModelEntry[] = (e.data.models ?? []).map((m: { id: string; displayName: string }) => ({
-          id: m.id,
-          displayName: m.displayName,
-          description: MODEL_DESCRIPTIONS[m.id],
-        }));
+        const raw: ModelEntry[] = (e.data.models ?? []).map(toModelEntry);
         setFetchedModels(raw.length > 0 ? raw : null);
         setModelsError(raw.length === 0 && e.data.error ? String(e.data.error) : null);
         setModelsLoading(false);
@@ -317,7 +284,7 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
             {modelsLoading && <div className={styles.placeholder}>Loading models...</div>}
             {!modelsLoading && modelsError && <div className={styles.placeholder}>{modelsError}</div>}
             {!modelsLoading && displayModels.map(m => {
-              const isActive = m.id === currentModel;
+              const isActive = sameModel(m.id, currentModel);
               return (
                 <div
                   key={m.id || '__default__'}

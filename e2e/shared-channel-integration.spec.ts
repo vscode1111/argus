@@ -217,6 +217,33 @@ test.describe('shared channel broadcast (integration)', () => {
     await waitForType(clientA, 'modelChanged', 3000);
   });
 
+  // Regression: the model is a config-global setting, but the broadcast (and the
+  // per-entry state update) used to be scoped to the switching client's channel -
+  // a panel in another workspace kept highlighting (and spawning with) the old model.
+  test('switchModel reaches a client in a DIFFERENT workspace dir and its getInfo reflects it', async () => {
+    dir = makeTempDir('model-global-a');
+    const dirB = makeTempDir('model-global-b');
+    [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dirB)]);
+
+    // Drain initial replay on B
+    await collectMessages(clientB, 300);
+
+    const bGotModel = waitForType(clientB, 'modelChanged', 3000);
+    clientA.send(JSON.stringify({ type: 'switchModel', model: 'claude-haiku-4-5' }));
+    const msg = await bGotModel as Record<string, unknown>;
+    expect(msg.model).toBe('claude-haiku-4-5');
+
+    // B's getInfo derives the model from the config (single source of truth), not
+    // from per-entry state seeded before the switch.
+    const bInfo = waitForType(clientB, 'workspaceInfo', 3000);
+    clientB.send(JSON.stringify({ type: 'getInfo' }));
+    expect((await bInfo as Record<string, unknown>).model).toBe('claude-haiku-4-5');
+
+    // Restore model to empty (CLI default)
+    clientA.send(JSON.stringify({ type: 'switchModel', model: '' }));
+    await waitForType(clientA, 'modelChanged', 3000);
+  });
+
   // --- Tests covering the two session-switching bugs ---
   //
   // Bug 1: resumeSession was calling killProc, so switching session mid-turn killed the
