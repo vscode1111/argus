@@ -69,10 +69,17 @@ export function isPortUp(port: number): Promise<boolean> {
 export async function startDaemon(opts: StartOpts): Promise<DaemonHandle> {
   const file = opts.file ?? uniqueDaemonFile('test');
   try { fs.unlinkSync(file); } catch { /* not there */ }
-  const env: NodeJS.ProcessEnv = { ...process.env, ARGUS_DAEMON_FILE: file };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ARGUS_DAEMON_FILE: file,
+    // The daemon records daemonLastStartAt (and would run the daily model-data
+    // refresh, spawning a real CLI turn) against its config on startup - keep test
+    // daemons off the user's real ~/.claude/argus.json and skip the refresh.
+    ARGUS_CONFIG: opts.configPath ?? uniqueConfigFile('default'),
+    ARGUS_MODEL_REFRESH: '0',
+  };
   if (opts.port != null) env.ARGUS_DAEMON_PORT = String(opts.port);
   else delete env.ARGUS_DAEMON_PORT; // let config drive the port
-  if (opts.configPath) env.ARGUS_CONFIG = opts.configPath;
   if (opts.idleMs != null) env.ARGUS_DAEMON_IDLE_MS = String(opts.idleMs);
   else delete env.ARGUS_DAEMON_IDLE_MS;
   const proc = spawn(process.execPath, [DAEMON_JS], { cwd: ROOT, env, stdio: 'ignore' });

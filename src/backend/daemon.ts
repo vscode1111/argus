@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { startServer } from './index';
 import { readConfig } from './config';
+import { scheduleModelDataRefresh } from './modelData';
 import { readServerVersion } from './version';
 import {
   DEFAULT_DAEMON_PORT,
@@ -91,6 +92,9 @@ async function listen(attempt = 0): Promise<void> {
       startedAt: Date.now(),
     });
     console.log(`[argus-daemon] listening on ws://localhost:${server.port}/agent (pid ${process.pid}); idle-exit in ${IDLE_TIMEOUT_MS / 60000}m with no clients`);
+    // Record this launch in the global config and refresh the model data (default
+    // model, family descriptions, model list cache) when it is older than a day.
+    scheduleModelDataRefresh((msg) => console.log(`[argus-daemon] ${msg}`));
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
     if (e.code === 'EADDRINUSE' && FORCE_START && attempt < 25) {

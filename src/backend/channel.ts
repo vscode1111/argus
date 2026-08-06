@@ -88,13 +88,26 @@ export interface Channel {
   /** Replay this client's entry (history + streaming snapshot). Returns false when the
    *  entry has nothing to replay, so the caller can fall back to loading from disk. */
   replayHistory(ws: WebSocket): boolean;
-  /** Send a message to every client across ALL session entries in this channel. */
-  broadcastToAll(msg: string): void;
-  /** Call fn for each session entry's state (e.g. to update a shared setting). */
-  forEachSession(fn: (state: SessionState) => void): void;
 }
 
 const registry = new Map<string, ChannelData>();
+
+// Send a message to every connected client across ALL workspace channels. Used for
+// global settings changes (model/effort/thinking), which live in the shared config:
+// a per-channel broadcast left other workspaces' panels showing the old value.
+export function broadcastToAllChannels(msg: string): void {
+  const sent = new Set<WebSocket>();
+  for (const cd of registry.values()) {
+    for (const entry of cd.entries.values()) {
+      for (const ws of entry.clients) {
+        if (ws.readyState === 1 && !sent.has(ws)) {
+          try { ws.send(msg); } catch { /* closing */ }
+          sent.add(ws);
+        }
+      }
+    }
+  }
+}
 let _entrySeq = 0;
 let _msgSeq = 0;
 function nextEntryKey(): string { return `e${++_entrySeq}`; }
@@ -398,20 +411,6 @@ export function getOrCreateChannel(dir: string): Channel {
       if (entry.history.length === 0 && !entry.snapshot) return false;
       replayToClient(entry, ws);
       return true;
-    },
-    broadcastToAll(msg) {
-      const sent = new Set<WebSocket>();
-      for (const entry of _cd.entries.values()) {
-        for (const ws of entry.clients) {
-          if (ws.readyState === 1 && !sent.has(ws)) {
-            try { ws.send(msg); } catch { /* closing */ }
-            sent.add(ws);
-          }
-        }
-      }
-    },
-    forEachSession(fn) {
-      for (const entry of _cd.entries.values()) fn(entry.state);
     },
   };
 }

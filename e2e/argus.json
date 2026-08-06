@@ -18,6 +18,10 @@
   "daemonIdleMs": 600000,
   "model": "",
   "runtimeDefaultModel": "",
+  "daemonLastStartAt": 0,
+  "modelDataUpdatedAt": 0,
+  "modelFamilyDescriptions": {},
+  "modelListCache": [],
   "effort": "low",
   "thinking": true,
   "appendSystemPrompt": ""

@@ -5,9 +5,11 @@ import type { RateLimitInfo } from './accountUsage';
 export interface SessionState {
   broadcast: (msg: string) => void;
   workspaceDir: string;
-  model: string;
-  effort: string;
-  thinking: boolean;
+  // Server-level fallback model (ARGUS_MODEL / startServer option). The active
+  // model/effort/thinking are always derived fresh from readConfig() at use time
+  // (getInfo, CLI spawn) so a config change in any workspace or process is never
+  // shadowed by per-entry cached state.
+  serverDefaultModel: string;
   sessionId: string | undefined;
   currentProc: ReturnType<typeof spawn> | undefined;
   currentProcKey: string | undefined;
@@ -47,9 +49,7 @@ export function createSessionState(workspaceDir: string): SessionState {
   const state: SessionState = {
     broadcast: undefined!,
     workspaceDir,
-    model: '',
-    effort: 'high',
-    thinking: true,
+    serverDefaultModel: '',
     sessionId: undefined,
     currentProc: undefined,
     currentProcKey: undefined,
