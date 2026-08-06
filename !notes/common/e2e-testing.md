@@ -97,9 +97,23 @@ await page.evaluate(() => {
 ```
 This simulates a server->webview message; it does not get re-sent to the backend.
 
+## Mock data clobbered by real backend replies
+
+The "mock" project still runs against a live backend, so a component that fires a data query (`getModels`, `getServerInfo`, ...) gets a **real** reply alongside the test's injected one - and whichever lands last wins. The failure is load-dependent (the real reply's timing shifts under 4 parallel workers), so the spec passes in isolation and flakes in the full run.
+
+Three independent fixes, pick per constraint:
+
+1. **Suppress the outgoing query globally** by adding its type to `MOCK_SUPPRESSED` in `webview/index.html` - then no real reply ever exists. This is how `getSkills`, `listSessions`, and `getModels` are handled. Not always possible: `getServerInfo` cannot go there because `kill-all-claude.spec.ts` asserts on the outgoing send itself (a `WebSocket.prototype.send` interception).
+2. **Drop the outgoing query per-spec** when the global list is off-limits: `page.addInitScript` patches `WebSocket.prototype.send` to swallow just that message type before the app scripts load (see `version-skew.spec.ts`'s `beforeEach`). This is how version-skew was deflaked - its failures were invisible while the real `serverVersion` happened to equal the mocked one and went guaranteed-red after the 0.0.81 bump made them diverge.
+3. **Re-dispatch until observed**: when the consuming component registers its `message` listener in a `useEffect` (after paint), a single dispatch can also be lost outright. Wrap dispatch + a cheap visibility assert in `expect(...).toPass()` (see `deliverModelList` in `model-picker.spec.ts`, same pattern as `clickAndWaitForModal` in file-path-links).
+
+## `e2e/argus.json` drifts during integration runs
+
+Features that persist runtime data into the config (e.g. `getModels` caching the fetched list into `modelListCache`) write into whatever config the server runs under - for integration runs that is the checked-in fixture `e2e/argus.json`. After a suite run, `git status` shows it modified with runtime fields. This is benign; `git checkout -- e2e/argus.json` before reviewing or committing so the diff carries only intentional changes.
+
 ## Never automate a real destructive OS-level action in a test
 
-Some features (e.g. `killAllClaude`, see [../tasks/stop-all-claude-button/notes.md](../tasks/stop-all-claude-button/notes.md)) send a WS message whose handler runs a real OS command with effects outside this app - a process kill by image name, for instance. Mock's client-side message injection does **not** protect against this: the "mock" project still runs against a real live backend (`webServer`), and only two message types are ever suppressed from actually reaching it (`webview/index.html`'s dev-mode `MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1 }`, there to stop async replies from clobbering injected mock data - it is not a safety allowlist). A test - or a manual click while iterating in a browser - that performs the real second step of such an action will actually execute it on whatever machine is running the suite, which can include a live `claude.exe` behind the very Claude Code session doing the work.
+Some features (e.g. `killAllClaude`, see [../tasks/stop-all-claude-button/notes.md](../tasks/stop-all-claude-button/notes.md)) send a WS message whose handler runs a real OS command with effects outside this app - a process kill by image name, for instance. Mock's client-side message injection does **not** protect against this: the "mock" project still runs against a real live backend (`webServer`), and only a few message types are ever suppressed from actually reaching it (`webview/index.html`'s dev-mode `MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1, getModels: 1 }`, there to stop async replies from clobbering injected mock data - it is not a safety allowlist). A test - or a manual click while iterating in a browser - that performs the real second step of such an action will actually execute it on whatever machine is running the suite, which can include a live `claude.exe` behind the very Claude Code session doing the work.
 
 - Test the arming/UI-state-machine side of a two-step destructive action with real clicks (safe: it sends nothing).
 - Test the result-rendering side by simulating the reply (`window.dispatchEvent`, above) rather than by letting the real action fire.

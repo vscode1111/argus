@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.80",
+  "version": "0.0.82",
   "displayName": "Argus",
   "description": "AI coding assistant powered by Claude",
   "license": "UNLICENSED",
@@ -46,7 +46,7 @@
     "ext:install": "node scripts/ext-install.js",
     "ext:uninstall": "code.cmd --uninstall-extension local.argus",
     "e2e:install": "node scripts/install-browsers.js",
-    "detect-model": "node scripts/detect-default-model.js"
+    "update-models": "node scripts/update-model-data.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.0",

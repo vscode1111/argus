@@ -4,43 +4,9 @@ import { postMessage, isVsCode } from '../vscode';
 import { SettingsModal } from './SettingsModal';
 import { AccountUsageModal } from './AccountUsageModal';
 import { ImageViewerModal } from './ImageViewerModal';
+import { type ModelEntry, FALLBACK_MODELS, makeDefaultEntry, sameModel, toModelEntry } from '../utils/model';
 import styles from './InputArea.module.css';
 import settings from './SettingsModal.module.css';
-
-interface ModelEntry {
-  id: string;
-  displayName: string;
-  description?: string;
-}
-
-// Static descriptions merged onto API-fetched model names.
-const MODEL_DESCRIPTIONS: Record<string, string> = {
-  'claude-opus-4-8':           'Best for everyday, complex tasks',
-  'claude-opus-4-7':           'Best for everyday, complex tasks',
-  'claude-sonnet-4-6':         'Efficient for routine tasks',
-  'claude-sonnet-4-5':         'Efficient for routine tasks',
-  'claude-haiku-4-5':          'Fastest for quick answers',
-  'claude-haiku-4-5-20251001': 'Fastest for quick answers',
-  'claude-fable-5':            'Creative and expressive',
-};
-
-// Shown while the API fetch is in flight or has failed.
-const FALLBACK_MODELS: ModelEntry[] = [
-  { id: 'claude-haiku-4-5',  displayName: 'Claude Haiku 4.5',  description: 'Fastest for quick answers'         },
-  { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', description: 'Efficient for routine tasks'       },
-  { id: 'claude-opus-4-8',   displayName: 'Claude Opus 4.8',   description: 'Best for everyday, complex tasks'  },
-];
-
-// Built at render time so runtimeDefaultModel can be injected into the description.
-function makeDefaultEntry(runtimeModel: string): ModelEntry {
-  return {
-    id: '',
-    displayName: 'Default (CLI)',
-    description: runtimeModel
-      ? `Currently ${runtimeModel} · run scripts/detect-default-model.js to refresh`
-      : 'Defers to the Claude CLI default · run scripts/detect-default-model.js to detect',
-  };
-}
 
 const DEFAULT_FALLBACK_HEIGHT = 100;
 const MIN_HEIGHT_WITH_IMAGES = 120;
@@ -146,11 +112,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
       if (e.data?.type === 'skills') {
         setSkills(e.data.skills ?? []);
       } else if (e.data?.type === 'modelList') {
-        const raw: ModelEntry[] = (e.data.models ?? []).map((m: { id: string; displayName: string }) => ({
-          id: m.id,
-          displayName: m.displayName,
-          description: MODEL_DESCRIPTIONS[m.id],
-        }));
+        const raw: ModelEntry[] = (e.data.models ?? []).map(toModelEntry);
         setFetchedModels(raw.length > 0 ? raw : null);
         setModelsError(raw.length === 0 && e.data.error ? String(e.data.error) : null);
         setModelsLoading(false);
@@ -495,7 +457,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
                 <span className={styles.slashMenuName}>Switch model...</span>
                 <span className={styles.slashMenuHint}>{(() => {
                   const all = [makeDefaultEntry(runtimeDefaultModel), ...(fetchedModels ?? FALLBACK_MODELS)];
-                  const found = all.find(m => m.id === currentModel);
+                  const found = all.find(m => sameModel(m.id, currentModel));
                   return found ? found.displayName.replace(/^Claude /, '') : (currentModel || 'Default');
                 })()}</span>
               </div>
@@ -512,7 +474,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
                       onMouseDown={e => e.preventDefault()}
                       onClick={() => pickModel(m.id)}
                     >
-                      <span className={styles.slashMenuCheck}>{m.id === currentModel ? '✓' : ''}</span>
+                      <span className={styles.slashMenuCheck}>{sameModel(m.id, currentModel) ? '✓' : ''}</span>
                       <div className={styles.slashMenuModelInfo}>
                         <span className={styles.slashMenuName}>{m.displayName}</span>
                         {m.description && <span className={styles.slashMenuModelDesc}>{m.description}</span>}

@@ -32,9 +32,20 @@ export interface ArgusConfig {
   daemonIdleMs: number;
   // Active model override. Empty string defers to the Claude CLI default.
   model: string;
-  // Detected CLI default model (written by scripts/detect-default-model.js).
-  // Empty string means not yet detected.
+  // Detected CLI default model (written by the daemon's daily model-data refresh,
+  // manually via `yarn update-models`). Empty string means not yet detected.
   runtimeDefaultModel: string;
+  // Unix ms of the last daemon start (written by the daemon on every launch).
+  daemonLastStartAt: number;
+  // Unix ms of the last model-data refresh (default model detection, description
+  // extraction, model list cache). The daemon refreshes when older than a day.
+  modelDataUpdatedAt: number;
+  // Per-family model descriptions (fable/opus/sonnet/haiku) extracted from the
+  // installed Claude CLI bundle. Empty falls back to baked-in strings (modelData.ts).
+  modelFamilyDescriptions: Record<string, string>;
+  // Last successful /v1/models list, used as the model picker fallback when the
+  // live fetch fails. Updated on successful fetches and by the daily refresh.
+  modelListCache: Array<{ id: string; displayName: string }>;
   // Effort level passed to the CLI (low|medium|high|xhigh|max). Empty defers to CLI default.
   effort: string;
   // Whether extended thinking is enabled. When false, forces --effort low.
@@ -64,6 +75,10 @@ export const DEFAULT_CONFIG: ArgusConfig = {
   daemonIdleMs: 10 * 60 * 1000,
   model: '',
   runtimeDefaultModel: '',
+  daemonLastStartAt: 0,
+  modelDataUpdatedAt: 0,
+  modelFamilyDescriptions: {},
+  modelListCache: [],
   effort: 'high',
   thinking: true,
   appendSystemPrompt: '',

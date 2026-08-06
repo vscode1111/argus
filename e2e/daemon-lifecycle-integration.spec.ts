@@ -5,6 +5,7 @@ import * as path from 'path';
 import { WebSocket } from 'ws';
 import {
   ensureCompiled, startDaemon, readInfo, isAlive, stopDaemon, waitFor,
+  uniqueConfigFile, writeDaemonConfig,
   type DaemonHandle,
 } from './daemonHelpers';
 
@@ -69,6 +70,30 @@ test.describe('daemon lifecycle (integration)', () => {
     expect(code).toBe(0);
     expect(isAlive(first.pid)).toBe(true);
     expect(readInfo(d.file).pid).toBe(first.pid); // file still points at the original
+  });
+
+  test('records daemonLastStartAt in its config on launch', async () => {
+    const PORT = 3914;
+    const configPath = uniqueConfigFile('last-start');
+    writeDaemonConfig(configPath, { daemonPort: PORT });
+    const before = Date.now();
+    d = await startDaemon({ configPath });
+
+    // The daemon stamps its launch time into the config right after binding (the
+    // daily model-data refresh gates on it staying fresh; the refresh itself is
+    // disabled for test daemons via ARGUS_MODEL_REFRESH=0 in daemonHelpers).
+    const stamped = await waitFor(() => {
+      try {
+        const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        return typeof cfg.daemonLastStartAt === 'number' && cfg.daemonLastStartAt >= before;
+      } catch { return false; }
+    }, 5000);
+    expect(stamped).toBe(true);
+
+    // The kill-switch kept the refresh from running (no real CLI turn): the
+    // refresh timestamp is still at its default.
+    const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    expect(cfg.modelDataUpdatedAt ?? 0).toBe(0);
   });
 
   test('self-exits and cleans the discovery file after the last client disconnects', async () => {

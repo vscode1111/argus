@@ -78,6 +78,13 @@ Control events (`clear`, `modelChanged`, `log`, etc.) always reach all clients.
 
 Global setting changes (`switchModel`/`switchEffort`/`switchThinking`) use `channel.forEachSession()` + `channel.broadcastToAll()` to update all entries' states and notify all clients.
 
+## Superseded
+
+- **Was:** switch handlers updated per-entry cached state via `channel.forEachSession()` and notified via the per-channel `channel.broadcastToAll()` (the paragraph above and the facade sketch).
+- **Actually:** model/effort/thinking are config-global; the handlers write argus.json and notify every client of every workspace via the module-level `broadcastToAllChannels()`; `getInfo` and CLI spawns re-derive the values from `readConfig()` at use time. `broadcastToAll`/`forEachSession` were removed from the Channel facade.
+- **Why it was wrong:** the per-channel scope left other workspaces' panels highlighting and spawning with a stale model (the "picked Fable 5 but it is not highlighted" bug).
+- **Corrected by:** [../tasks/model-picker-refresh/notes.md](../tasks/model-picker-refresh/notes.md)
+
 ### Late-joiner replay
 
 `addClient` calls `joinEntry` which sends `sessionLoaded {id, messages: entry.history}` then replays the in-progress streaming snapshot (thinking + blocks) so late joiners see the current conversation state immediately.

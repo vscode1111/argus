@@ -54,7 +54,7 @@
       // ?mock=1 isolates e2e mock tests: do not forward these data-query messages to
       // the live dev backend (their async replies would clobber injected mock data).
       var mock = params.get('mock') === '1';
-      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1 };
+      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1, getModels: 1 };
       // Derive host from the page so a LAN device reaches the dev machine, not its own localhost.
       var host = window.location.hostname || 'localhost';
 
