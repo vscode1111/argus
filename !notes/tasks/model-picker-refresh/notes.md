@@ -79,7 +79,7 @@ The literal request was "if 24h passed since the daemon last started". The daemo
 - Company task registry (`scub111g/!notes/tasks/`) not updated: its scope line restricts it to cross-project/infra tasks, and argus per-task notes have never been mirrored there.
 
 ## Remaining work
-- Not committed yet (user has not asked). Working tree carries the full change set on `main`; package.json already at 0.0.81.
+- ~~Not committed yet~~ Committed and pushed on 2026-08-06 as `79b8461` on `main` (version 0.0.82).
 - The live daemon still runs the old build: activate with `yarn daemon:stop` + open a panel (or the Settings restart button). Not done from the agent session because it kills live CLI sessions hanging off the daemon. Confirmed still true on 2026-08-06 (daemon spawned from the installed `local.argus-0.0.80` folder, so the extension install also needs a rebuild+reinstall for the webview side).
 - Reconnect re-sync gap (found 2026-08-06, see the follow-up section): webview never re-posts `getInfo` after `ws_status connected`, so model/effort/thinking display can stay stale across a daemon restart even with this fix deployed. Proposed, not implemented.
 - ~~version-skew flake~~ FIXED in this task: the 0.0.81 bump turned the latent clobber race (real `getServerInfo` reply vs mocked `serverInfo`) into 4/4 hard failures; `version-skew.spec.ts` now drops the outgoing `getServerInfo` at the socket via `page.addInitScript` (per-spec, so `kill-all-claude.spec.ts`'s outgoing-send assertions are untouched). Full mock suite: 184/184, zero flaky.
