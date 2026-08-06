@@ -19,6 +19,7 @@ export interface RateLimitInfo {
   utilization: number;     // 0..1 fraction of the window consumed
   resetsAt?: number;       // unix epoch seconds
   status?: string;         // e.g. 'allowed', 'allowed_warning', 'rejected'
+  label?: string;          // display label from the API (model-scoped windows, e.g. "Weekly Fable")
 }
 
 // Subscription windows the UI surfaces, mirroring the official Account & Usage panel.
@@ -44,9 +45,52 @@ export function parseRateLimitEvent(event: Record<string, unknown>): RateLimitIn
   };
 }
 
-// Parse the live `/api/oauth/usage` response. Each known window is
+function parseResetsAt(value: unknown): number | undefined {
+  if (typeof value !== 'string') return undefined;
+  const ms = Date.parse(value);
+  return isNaN(ms) ? undefined : Math.floor(ms / 1000);
+}
+
+// Parse the newer `limits` array of the usage response. Each entry is
+// `{ kind, percent, resets_at, scope? }`; model-scoped weekly windows carry the
+// model display name (e.g. "Fable") in scope - this is the only place the API
+// exposes them, the legacy top-level keys never gain new families. Unknown kinds
+// (overage, promotions) are skipped like the official panel does.
+function parseLimitsArray(limits: unknown): RateLimitInfo[] {
+  if (!Array.isArray(limits)) return [];
+  const out: RateLimitInfo[] = [];
+  for (const entry of limits) {
+    if (!entry || typeof entry !== 'object') continue;
+    const l = entry as Record<string, unknown>;
+    const pct = Number(l.percent);
+    if (isNaN(pct)) continue;
+    const resetsAt = parseResetsAt(l.resets_at);
+    if (l.kind === 'session') {
+      out.push({ rateLimitType: 'five_hour', utilization: pct / 100, resetsAt });
+    } else if (l.kind === 'weekly_all') {
+      out.push({ rateLimitType: 'seven_day', utilization: pct / 100, resetsAt });
+    } else if (l.kind === 'weekly_scoped') {
+      const scope = l.scope as { model?: { display_name?: unknown } } | null | undefined;
+      const name = typeof scope?.model?.display_name === 'string' ? scope.model.display_name : '';
+      if (!name) continue;
+      out.push({
+        rateLimitType: `seven_day_${name.toLowerCase().replace(/\W+/g, '_')}`,
+        utilization: pct / 100,
+        resetsAt,
+        label: `Weekly ${name}`,
+      });
+    }
+  }
+  return out;
+}
+
+// Parse the live `/api/oauth/usage` response: the `limits` array when present
+// (it carries model-scoped weekly windows the legacy keys do not), else the
+// legacy top-level known-window keys, each
 // `{ utilization: <percent 0-100>, resets_at: <ISO string|null> }` or null.
 export function parseUsageResponse(data: Record<string, unknown>): RateLimitInfo[] {
+  const fromLimits = parseLimitsArray(data.limits);
+  if (fromLimits.length > 0) return fromLimits;
   const out: RateLimitInfo[] = [];
   for (const key of KNOWN_USAGE_WINDOWS) {
     const val = data[key];
@@ -54,12 +98,7 @@ export function parseUsageResponse(data: Record<string, unknown>): RateLimitInfo
     const w = val as Record<string, unknown>;
     const pct = Number(w.utilization);
     if (isNaN(pct)) continue;
-    let resetsAt: number | undefined;
-    if (typeof w.resets_at === 'string') {
-      const ms = Date.parse(w.resets_at);
-      if (!isNaN(ms)) resetsAt = Math.floor(ms / 1000);
-    }
-    out.push({ rateLimitType: key, utilization: pct / 100, resetsAt });
+    out.push({ rateLimitType: key, utilization: pct / 100, resetsAt: parseResetsAt(w.resets_at) });
   }
   return out;
 }

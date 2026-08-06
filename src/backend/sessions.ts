@@ -55,7 +55,7 @@ export interface ReplayMessage {
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-function projectsRoot(): string {
+export function projectsRoot(): string {
   return path.join(os.homedir(), '.claude', 'projects');
 }
 

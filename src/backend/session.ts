@@ -8,6 +8,7 @@ import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './con
 import { getSkills } from './skills';
 import { readFilePreview } from './filePreview';
 import { fetchAccountInfo, fetchUsage, fetchModels } from './accountUsage';
+import { collectUsageInsights } from './usageInsights';
 import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
@@ -16,6 +17,7 @@ import { describeModel } from './modelData';
 import { attachProcHandlers } from './cliHandler';
 import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath } from './sessions';
 import { readServerVersion } from './version';
+import { buildWorkspaceInfo } from './workspaceInfo';
 
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
@@ -260,11 +262,7 @@ export function attachClientHandlers(
         const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
         version = pkg.version ?? '';
       } catch {}
-      // model/effort/thinking come fresh from the config (the single source of truth):
-      // a cached per-entry copy went stale whenever the switch happened in another
-      // workspace channel or another server process sharing argus.json.
-      const cfg = readConfig();
-      ws.send(JSON.stringify({ type: 'workspaceInfo', path: s.workspaceDir, version, model: cfg.model || s.serverDefaultModel, effort: cfg.effort, thinking: cfg.thinking }));
+      ws.send(JSON.stringify(buildWorkspaceInfo(s.workspaceDir, version, s.serverDefaultModel)));
     } else if (msg.type === 'switchModel') {
       const newModel = typeof (msg as { model?: string }).model === 'string' ? (msg as { model?: string }).model! : '';
       writeConfig({ ...readConfig(), model: newModel });
@@ -310,6 +308,12 @@ export function attachClientHandlers(
         const usageError = rateLimits.length === 0 ? usage.error : undefined;
         ws.send(JSON.stringify({ type: 'accountUsage', account, rateLimits, usageError, usagePending: false }));
       }).catch(() => {});
+    } else if (msg.type === 'getUsageInsights') {
+      collectUsageInsights(msg.force).then((insights) => {
+        ws.send(JSON.stringify({ type: 'usageInsights', day: insights.day, week: insights.week }));
+      }).catch((err) => {
+        ws.send(JSON.stringify({ type: 'usageInsights', error: (err as Error).message ?? String(err) }));
+      });
     } else if (msg.type === 'getModels') {
       fetchModels().then(({ models, error }) => {
         const cfg = readConfig();

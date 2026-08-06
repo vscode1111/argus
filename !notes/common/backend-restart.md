@@ -41,6 +41,39 @@ Restarting drops every WS connection and any in-flight turn. There is also an in
 Settings -> Network -> **Apply (restart daemon)** - which does the same thing with the same
 caveat.
 
+### Restarting from inside an Argus conversation
+
+If the restart is requested *through Argus itself* (the user asks the assistant to fix a
+stale daemon), the CLI process answering is a **child of that daemon** - killing it
+immediately breaks the CLI's stdout pipe and aborts the very turn doing the killing.
+Check ancestry first (`claude.exe -> cmd.exe -> Code.exe <pid>` where `<pid>` matches the
+discovery file), then schedule [scripts/restart-daemon-detached.js](scripts/restart-daemon-detached.js)
+detached with a delay instead of running `daemon-stop.js` directly:
+
+```sh
+node -e "const{spawn}=require('child_process');spawn(process.execPath,['<repo>/!notes/common/scripts/restart-daemon-detached.js','--delay','15000'],{detached:true,stdio:'ignore',windowsHide:true}).unref()"
+```
+
+It waits out the delay (letting the requesting turn finish), then swaps **target-first**:
+it spawns the target build (newest `local.argus-*` unless `--daemon-js` says otherwise) with
+`ARGUS_DAEMON_FORCE_START=1`, which skips the single-instance guard and retries `EADDRINUSE`
+every 200ms for ~5s, camping on the port; ~1.2s later it kills the discovery-file pid, so the
+camping target inherits the port within one retry tick; ~6s later it verifies the discovery
+file shows the target version and retries the whole sequence once if not. A daemon already
+registered at the target version is never killed. It logs actions to
+`scripts/restart-daemon-detached.log`.
+
+Target-first exists because plain kill-then-start **loses the respawn race**: any still-open
+VS Code window whose extension host predates the newest install respawns its own old build
+via `ensureDaemon` within the same second the daemon dies. Observed 2026-08-06: a window
+still hosting 0.0.80 respawned a 0.0.80 daemon at the very second a 4s-defer version of this
+script killed the old one, while 0.0.82 was installed and expected. Reloading that window
+would also cure it, but a reload cannot be done safely from outside.
+
+Note the server-side session binding does not survive a daemon swap: the panel keeps its
+rendered history, but the next send starts a fresh CLI session unless the user resumes the
+old one from Session History.
+
 ### Verify, do not assume
 
 ```sh

@@ -32,8 +32,24 @@ One object per window, plus internal codename windows:
 - `resets_at` is an ISO string or `null`.
 - A window can be `null` (not applicable to the plan) - skip it.
 
-### Windows worth surfacing
-Only these four are real subscription windows; everything else is an internal codename. **Filter with an allowlist, not a denylist** - new codenames appear over time.
+### `limits` array (preferred, 2026-08)
+
+The response now also carries a curated `limits` array - **the only place model-scoped weekly windows (e.g. "Weekly Fable") appear**; the legacy top-level keys never gain new families (`seven_day_opus`/`seven_day_sonnet` stay `null` while the scoped window lives here):
+
+```json
+"limits": [
+  { "kind": "session",       "group": "session", "percent": 66, "severity": "normal", "resets_at": "...", "scope": null, "is_active": true },
+  { "kind": "weekly_all",    "group": "weekly",  "percent": 23, "resets_at": "...", "scope": null },
+  { "kind": "weekly_scoped", "group": "weekly",  "percent": 29, "resets_at": "...",
+    "scope": { "model": { "id": null, "display_name": "Fable" }, "surface": null } }
+]
+```
+
+- `percent` is a plain 0-100 integer; `kind` mapping: `session` -> Session (5hr), `weekly_all` -> Weekly (7 day), `weekly_scoped` -> `Weekly <scope.model.display_name>`.
+- Parse `limits` first and fall back to the legacy keys only when it is empty/absent (old API responses); skip unknown kinds (overage/promotions may appear).
+
+### Legacy top-level windows
+Only these four are real subscription windows among the top-level keys; everything else is an internal codename. **Filter with an allowlist, not a denylist** - new codenames appear over time.
 
 | Key | Label |
 |-----|-------|
