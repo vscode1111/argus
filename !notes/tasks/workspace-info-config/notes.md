@@ -26,5 +26,5 @@ Two responders build the `workspaceInfo` reply to `getInfo`, and they drifted:
 
 ## Remaining work
 
-- Not committed yet.
+- ~~Not committed yet~~ Committed and pushed on 2026-08-06 as `75e0fd5` on `main` (version 0.0.84, bundled with the usage-insights feature).
 - Known adjacent gap (documented in [model-picker-refresh notes](../model-picker-refresh/notes.md)): the webview does not re-post `getInfo` on `ws_status connected`, so a daemon restart can still leave a stale display until reload. Out of scope here.
