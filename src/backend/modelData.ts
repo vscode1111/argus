@@ -36,6 +36,32 @@ export function describeModel(id: string, extracted?: Record<string, string>): s
   return extracted?.[family] || FAMILY_DESCRIPTIONS[family];
 }
 
+// --- Context window ----------------------------------------------------------
+
+// Used when the model is unknown to the cached /v1/models list. Matches the Claude
+// CLI's own default for an unrecognized id.
+export const DEFAULT_CONTEXT_WINDOW = 200_000;
+
+const SNAPSHOT_SUFFIX_RE = /-20\d{6}$/;
+
+/** Model id without its snapshot date, so a dated id matches its dateless alias. */
+function undated(id: string): string {
+  return id.toLowerCase().replace(SNAPSHOT_SUFFIX_RE, '');
+}
+
+// Context window for a model id, from the cached /v1/models list (max_input_tokens).
+// The window is NOT derivable from the family - opus-4-5 is 200k while opus-4-6 and
+// later are 1M - so an unknown id falls back to the default rather than guessing.
+// The CLI's own result event reports contextWindow too, but it defaults to 200k for
+// any model missing from the installed bundle's registry, so it is not used here.
+export function contextWindowFor(id: string, cache?: Array<{ id: string; contextWindow?: number }>): number {
+  if (!id) return DEFAULT_CONTEXT_WINDOW;
+  const models = cache ?? readConfig().modelListCache;
+  const target = undated(id);
+  const hit = models.find((m) => undated(m.id) === target);
+  return hit?.contextWindow && hit.contextWindow > 0 ? hit.contextWindow : DEFAULT_CONTEXT_WINDOW;
+}
+
 // Refresh no more than once a day; a long-running daemon re-checks hourly.
 export const MODEL_DATA_REFRESH_MS = 24 * 60 * 60 * 1000;
 const REFRESH_RECHECK_MS = 60 * 60 * 1000;

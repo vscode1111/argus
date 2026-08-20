@@ -55,6 +55,7 @@ approval routing cleanly separable without growing into a monolith.
 
 - Streaming chat with real-time tool calls (read, write, edit, bash, grep, glob, web fetch).
 - Live token counter: input and output counts update during streaming.
+- Context usage pill showing how full the window is, as a share of the active model's own window (200k or 1M depending on the model, not a fixed number).
 - Collapsible thinking blocks with token estimate; click to expand.
 - Plan mode: dry-run exploration without file edits.
 - Slash commands: built-in and custom skills from `~/.claude/skills/`.

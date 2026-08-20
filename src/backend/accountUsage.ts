@@ -161,6 +161,10 @@ export async function fetchUsage(force = false): Promise<UsageResult> {
 export interface ModelInfo {
   id: string;
   displayName: string;
+  // Context window in tokens (`max_input_tokens`). The authoritative source: the
+  // installed CLI's own registry reports the 200k default for any model newer than
+  // the CLI build, so it cannot be trusted for the context-usage percentage.
+  contextWindow?: number;
 }
 
 export interface ModelsResult {
@@ -191,10 +195,11 @@ export async function fetchModels(): Promise<ModelsResult> {
         'request failed';
       return { models: [], error: `${reason} (HTTP ${res.status})` };
     }
-    const data = await res.json() as { data?: Array<{ id: string; display_name?: string }> };
+    const data = await res.json() as { data?: Array<{ id: string; display_name?: string; max_input_tokens?: number }> };
     const models: ModelInfo[] = (data.data ?? []).map(m => ({
       id: m.id,
       displayName: m.display_name ?? m.id,
+      ...(typeof m.max_input_tokens === 'number' && m.max_input_tokens > 0 ? { contextWindow: m.max_input_tokens } : {}),
     }));
     modelsCache = { data: models, ts: Date.now() };
     return { models };

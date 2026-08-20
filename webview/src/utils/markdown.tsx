@@ -57,7 +57,9 @@ function CopyButton({ text }: { text: string }) {
         position: 'absolute',
         top: 4,
         right: 4,
-        background: 'transparent',
+        // Opaque, matching the block: the button now sits over code that scrolls
+        // beneath it, so a transparent background would overlap the text.
+        background: 'var(--tool-bg)',
         border: 'none',
         color: 'var(--fg)',
         cursor: 'pointer',
@@ -111,11 +113,19 @@ export function Markdown({ children, breaks }: { children: string; breaks?: bool
       components={{
         pre({ children }) {
           const text = extractText(children).replace(/\n$/, '');
+          // The copy button is anchored to this wrapper, not to the <pre>: an
+          // absolutely positioned child of a scroll container is laid out against
+          // the padding box at scroll origin and then scrolls away with the
+          // content, so `right: 4` only held while scrollLeft was 0 and the
+          // button drifted left across the block (and out of view) as soon as a
+          // long line was scrolled. The wrapper does not scroll.
           return (
-            <pre className="code-block-wrapper" style={{ position: 'relative', background: 'var(--tool-bg)', borderRadius: 4, padding: '8px 10px', overflowX: 'auto', margin: '6px 0', width: 'fit-content', maxWidth: '100%' }}>
-              {children}
+            <div className="code-block-wrapper" style={{ position: 'relative', margin: '6px 0', width: 'fit-content', maxWidth: '100%' }}>
+              <pre style={{ background: 'var(--tool-bg)', borderRadius: 4, padding: '8px 10px', overflowX: 'auto', margin: 0 }}>
+                {children}
+              </pre>
               <CopyButton text={text} />
-            </pre>
+            </div>
           );
         },
         code({ children, className }) {

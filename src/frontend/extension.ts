@@ -7,7 +7,7 @@ import { ArgusCodeLensProvider } from './providers/CodeLensProvider';
 import { InlineSuggestProvider } from './providers/InlineSuggestProvider';
 import { getSelection } from './utils/workspace';
 import { isInlineCompletionsEnabled, isCodeLensEnabled } from './utils/config';
-import { readDaemonInfo, clearDaemonInfo, isProcessAlive, type DaemonInfo } from '../backend/daemonInfo';
+import { readDaemonInfo, clearDaemonInfo, isProcessAlive, isPortListening, type DaemonInfo } from '../backend/daemonInfo';
 
 let extensionId = 'local.argus';
 
@@ -44,16 +44,33 @@ export function readDaemon(): DaemonInfo | undefined {
   return info;
 }
 
+// Daemon lifecycle log. Separate from ChatPanel's per-panel 'Argus' output channel
+// because ensureDaemon is decoupled from any single panel (module-level, called from
+// buildWsUrl on any panel's reconnect); logging here via console.log/error alone only
+// reaches the Extension Host's dev console, which is not somewhere a user (or a future
+// debugging agent) would think to look when the daemon silently fails to come back.
+let daemonLog: vscode.OutputChannel | undefined;
+function logDaemon(msg: string): void {
+  const line = `[${new Date().toISOString()}] ${msg}`;
+  console.log(line);
+  if (!daemonLog) daemonLog = vscode.window.createOutputChannel('Argus Daemon');
+  daemonLog.appendLine(line);
+}
+
 // Auto-spawn: if no daemon is running, launch the compiled daemon windowless and
 // detached so it outlives this extension host and self-exits when idle. Called when
 // a panel needs a connection. The daemon's single-instance guard makes concurrent
 // launches safe (a second one exits early); we also debounce here to avoid spawning
 // a burst of short-lived processes while the first is still coming up.
 let lastDaemonSpawn = 0;
+let consecutiveFailures = 0;
+let warnedUser = false;
+
 function spawnDaemon(extensionPath: string, force: boolean): void {
   const daemonJs = path.join(extensionPath, 'out', 'backend', 'daemon.js');
   if (!fs.existsSync(daemonJs)) {
-    console.error('[Argus] cannot start daemon: not found at', daemonJs, '(run `yarn compile`)');
+    logDaemon(`cannot start daemon: not found at ${daemonJs} (run \`yarn compile\`)`);
+    onSpawnOutcome(extensionPath, false);
     return;
   }
   try {
@@ -75,15 +92,58 @@ function spawnDaemon(extensionPath: string, force: boolean): void {
     const spawnedAt = Date.now();
     child.once('exit', (code) => {
       if (Date.now() - spawnedAt < 2000) {
-        console.error('[Argus] daemon exited immediately (code', code, ') - port likely in use; resetting debounce');
+        logDaemon(`daemon exited immediately (code ${code}) - port likely in use; resetting debounce`);
         lastDaemonSpawn = 0;
       }
     });
     child.unref();
-    console.log(force ? '[Argus] restarted daemon' : '[Argus] auto-started daemon');
+    logDaemon(force ? 'restarted daemon' : 'auto-started daemon');
+    // Give it a few seconds to bind, then verify with a real TCP connect rather
+    // than just trusting the discovery file it (should have) written - closes the
+    // gap where isProcessAlive's pid heuristics misjudge staleness for any reason
+    // and the extension retries forever with zero visible signal.
+    setTimeout(() => { void verifyDaemonUp(extensionPath); }, 4000);
   } catch (err) {
-    console.error('[Argus] failed to start daemon:', err);
+    logDaemon(`failed to launch daemon process: ${err}`);
+    onSpawnOutcome(extensionPath, false);
   }
+}
+
+async function verifyDaemonUp(extensionPath: string): Promise<void> {
+  const info = readDaemonInfo();
+  const up = !!info && isProcessAlive(info.pid) && await isPortListening(info.port);
+  if (!up && info) {
+    // A discovery file that fails verification is worse than none: it blocks every
+    // future respawn attempt (both ours and the daemon's own single-instance guard
+    // trust it at face value). Clear it so the next attempt starts clean.
+    logDaemon(`daemon did not come up; discarding discovery file (pid ${info.pid}, port ${info.port})`);
+    clearDaemonInfo(info.pid);
+  }
+  onSpawnOutcome(extensionPath, up);
+}
+
+function onSpawnOutcome(extensionPath: string, success: boolean): void {
+  if (success) {
+    consecutiveFailures = 0;
+    warnedUser = false;
+    return;
+  }
+  consecutiveFailures++;
+  if (consecutiveFailures < 3 || warnedUser) return;
+  warnedUser = true;
+  const log = daemonLog;
+  vscode.window.showErrorMessage(
+    'Argus daemon failed to start automatically. See the "Argus Daemon" output channel for details.',
+    'Show Log', 'Retry'
+  ).then((choice) => {
+    if (choice === 'Show Log') log?.show();
+    if (choice === 'Retry') {
+      consecutiveFailures = 0;
+      warnedUser = false;
+      lastDaemonSpawn = 0;
+      ensureDaemon(extensionPath);
+    }
+  });
 }
 
 export function ensureDaemon(extensionPath: string): void {
