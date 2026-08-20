@@ -30,14 +30,14 @@ test('long response streams as many text_chunk frames, not one block', async ({ 
 
   const textarea = page.getByPlaceholder('Ask Argus');
   await textarea.fill(
-    'Write the numbers from 1 to 80, one per line, nothing else. No code block, no commentary.'
+    'Write the numbers from 1 to 200, one per line, nothing else. No code block, no commentary.'
   );
   await page.getByRole('button', { name: 'Send' }).click();
 
   // Wait for streaming to start, then for it to complete (Stop button disappears).
   const stopBtn = page.getByRole('button', { name: 'Stop' });
   await expect(stopBtn).toBeVisible({ timeout: 10_000 });
-  await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
+  await expect(stopBtn).toHaveCount(0, { timeout: 20_000 });
 
   // Brief settle so any trailing frames are captured.
   await page.waitForTimeout(300);
@@ -46,14 +46,19 @@ test('long response streams as many text_chunk frames, not one block', async ({ 
   const maxChunkSize = textChunks.reduce((m, c) => Math.max(m, c.length), 0);
 
   // The response must come as multiple partial chunks, not a single block.
-  // The CLI batches deltas, so we won't see one chunk per token, but for a
-  // ~230 char response we should observe at least 3 separate frames.
-  expect(textChunks.length).toBeGreaterThanOrEqual(3);
+  // 2 is the real boundary, not an arbitrary "looks streamy" number: without the
+  // flag `handleAssistant` sends exactly one text_chunk carrying the whole text
+  // (the `!s.receivedDeltas` branch in cliHandler.ts), so any second frame proves
+  // the deltas path ran. How many frames beyond that is the CLI's business - it
+  // flushes deltas on a timer (~0.8s observed), so the count tracks generation
+  // speed, which is model-owned and must not be asserted on.
+  expect(textChunks.length).toBeGreaterThanOrEqual(2);
 
-  // Sanity: the response actually has substantive content (80 numbers, ~200+ chars).
+  // Sanity: the response actually has substantive content (200 numbers, ~690 chars).
   expect(totalLength).toBeGreaterThan(100);
 
-  // No single chunk should dominate - true streaming means each chunk is a fraction
-  // of the whole. Without streaming, one chunk would be ~100% of total.
-  expect(maxChunkSize).toBeLessThan(totalLength * 0.7);
+  // Guards the degenerate case that would slip past the count check: one frame with
+  // the entire response plus a tiny trailing one. Deliberately loose - how evenly
+  // the CLI splits the text is not something the app controls.
+  expect(maxChunkSize).toBeLessThan(totalLength * 0.9);
 });

@@ -51,7 +51,7 @@ interface Props {
   prefill: string;
   workspacePath: string;
   version: string;
-  contextUsage: { percent: number; inputTokens: number; outputTokens: number } | null;
+  contextUsage: { percent: number; inputTokens: number; outputTokens: number; contextWindow?: number } | null;
   wsConnected?: boolean;
   currentModel?: string;
   currentEffort?: string;
@@ -586,7 +586,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
           {contextUsage && (
             <span
               className={[styles.contextPill, contextUsage.percent >= 80 ? styles.contextHigh : contextUsage.percent >= 50 ? styles.contextMedium : ''].filter(Boolean).join(' ')}
-              title={`${contextUsage.percent}% used\nInput: ${contextUsage.inputTokens.toLocaleString()} tokens\nOutput: ${contextUsage.outputTokens.toLocaleString()} tokens`}
+              title={`${contextUsage.percent}% used\nInput: ${contextUsage.inputTokens.toLocaleString()} tokens\nOutput: ${contextUsage.outputTokens.toLocaleString()} tokens${contextUsage.contextWindow ? `\nWindow: ${contextUsage.contextWindow.toLocaleString()} tokens` : ''}`}
             >
               {contextUsage.percent}%
             </span>

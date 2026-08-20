@@ -16,8 +16,12 @@
       "PowerShell(Get-NetTCPConnection -LocalPort 51852 -ErrorAction SilentlyContinue)",
       "Skill(update-config)",
       "Skill(update-config:*)",
-      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId = 5724\")"
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId = 5724\")",
+      "Bash(rm -f \"C:\\\\Users\\\\Admin\\\\.claude\\\\argus-daemon.json\" && echo \"removed stale discovery file\")"
     ],
-    "defaultMode": "bypassPermissions"
+    "defaultMode": "bypassPermissions",
+    "additionalDirectories": [
+      "C:\\Users\\Admin\\.claude"
+    ]
   }
 }

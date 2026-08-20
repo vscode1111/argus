@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as net from 'net';
 import { execFileSync } from 'child_process';
 
 // Discovery file the daemon writes on startup and the extension reads to find it.
@@ -71,4 +72,22 @@ export function isProcessAlive(pid: number): boolean {
   } catch {
     return true; // can't verify, assume alive
   }
+}
+
+// Ground-truth check: is anything actually accepting connections on the daemon's
+// recorded port. A pid can look alive (isProcessAlive) for reasons that have
+// nothing to do with the daemon - Windows recycles pids quickly, and the tasklist
+// disambiguation above is itself a heuristic that could misfire on a differently
+// localized system. A real TCP connect can't be fooled by any of that, so it backs
+// isProcessAlive up as the final word before ensureDaemon decides to trust (or
+// discard) a discovery file.
+export function isPortListening(port: number, timeoutMs = 1500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ port, host: '127.0.0.1' });
+    const done = (ok: boolean): void => { socket.destroy(); resolve(ok); };
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+  });
 }
