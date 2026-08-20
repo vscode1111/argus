@@ -1,6 +1,6 @@
 import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState, RetryStatus } from './types';
 
-export type ContextUsage = { percent: number; inputTokens: number; outputTokens: number };
+export type ContextUsage = { percent: number; inputTokens: number; outputTokens: number; contextWindow?: number };
 
 export type AppState = {
   messages: UIMessage[];
@@ -38,7 +38,7 @@ export type AppAction =
   | { type: 'loginUrl'; url: string }
   | { type: 'loginSubmitting' }
   | { type: 'loginResult'; success: boolean; message?: string }
-  | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number }
+  | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number; contextWindow?: number }
   | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; timedOut?: boolean }
   | { type: 'retry_clean' }
   | { type: 'user_inject'; text: string }
@@ -355,7 +355,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, login: action.success ? { phase: 'success' } : { phase: 'error', message: action.message ?? 'Login failed' } };
 
     case 'contextUsage':
-      return { ...state, contextUsage: { percent: action.percent, inputTokens: action.inputTokens, outputTokens: action.outputTokens } };
+      return { ...state, contextUsage: { percent: action.percent, inputTokens: action.inputTokens, outputTokens: action.outputTokens, contextWindow: action.contextWindow } };
 
     case 'token_update': {
       if (!state.streaming) return state;

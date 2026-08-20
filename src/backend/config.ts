@@ -44,8 +44,9 @@ export interface ArgusConfig {
   // installed Claude CLI bundle. Empty falls back to baked-in strings (modelData.ts).
   modelFamilyDescriptions: Record<string, string>;
   // Last successful /v1/models list, used as the model picker fallback when the
-  // live fetch fails. Updated on successful fetches and by the daily refresh.
-  modelListCache: Array<{ id: string; displayName: string }>;
+  // live fetch fails, and as the source of per-model context windows (modelData.ts
+  // contextWindowFor). Updated on successful fetches and by the daily refresh.
+  modelListCache: Array<{ id: string; displayName: string; contextWindow?: number }>;
   // Effort level passed to the CLI (low|medium|high|xhigh|max). Empty defers to CLI default.
   effort: string;
   // Whether extended thinking is enabled. When false, forces --effort low.

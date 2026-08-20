@@ -22,9 +22,11 @@ When asked for a long response (200+ chars), the UI showed a "Working..." indica
 - [src/backend/cliHandler.ts:31-33](../../../src/backend/cliHandler.ts#L31-L33) - added a branch that unwraps `stream_event` and dispatches the inner `content_block_delta` event.
 
 ### Regression coverage
-New integration test [e2e/streaming-partial-integration.spec.ts](../../../e2e/streaming-partial-integration.spec.ts) intercepts the WebSocket frames via Playwright's `page.on('websocket')` (not DOM mutations - React 18 batches re-renders so DOM-level sampling collapses chunks). Sends a prompt asking for numbers 1..80, asserts the response arrives as >= 3 `text_chunk` frames with no single chunk > 70% of the total length. Without the fix, the test sees exactly 1 frame of full size.
+New integration test [e2e/streaming-partial-integration.spec.ts](../../../e2e/streaming-partial-integration.spec.ts) intercepts the WebSocket frames via Playwright's `page.on('websocket')` (not DOM mutations - React 18 batches re-renders so DOM-level sampling collapses chunks). Sends a prompt asking for numbers 1..200, asserts the response arrives as >= 2 `text_chunk` frames with no single chunk > 90% of the total length. Without the fix, the test sees exactly 1 frame of full size.
 
 The new test ran 1 -> 3 chunks of ~230 chars total once the fix was in place, with the largest chunk being ~42% of the response.
+
+**2026-08-21, thresholds retuned.** The original bounds (1..80 prompt, `>= 3` frames, 70% dominance) failed on a run where the app streamed correctly: the debug log showed the CLI emitting exactly two `text_delta`s for the text block, 779ms apart, because 80 numbers generate in under a second and the CLI flushes deltas on a timer. Frame count is therefore a proxy for generation speed - model-owned, exactly what [../../common/e2e-testing.md](../../common/e2e-testing.md) says not to assert on. The floor moved to the real boundary of 2 (flag off = one frame with 100% of the text, via the `!s.receivedDeltas` branch in `handleAssistant`), the dominance bound loosened to 90% (it now only guards "one giant frame plus a tiny trailing one", which would otherwise slip past a count of 2), and the prompt grew to 1..200 so the split stays observable at all: measured 5-6 frames, 691 chars, largest chunk 28%.
 
 ## Decisions
 
@@ -79,6 +81,6 @@ In [src/backend/cli.ts:54](../../../src/backend/cli.ts#L54), `classifyError` bli
 | `package.json` | `argus.model` lost `default` and `enum`; free-text now |
 | `webview/src/components/InputArea.tsx` | Send/Stop -> SVG icons + aria-labels; new `.sendRow` container; Send-then-Stop order |
 | `webview/src/components/InputArea.module.css` | `.btnSend`/`.btnStop` -> `flex: 1`, 34px height; `.sendRow` `align-self: stretch`; Send has `min-width: 70px` |
-| `e2e/streaming-partial-integration.spec.ts` | New file - asserts >= 3 text_chunk WS frames with no dominant chunk |
+| `e2e/streaming-partial-integration.spec.ts` | New file - asserts >= 2 text_chunk WS frames with no chunk carrying the whole response |
 | `e2e/image-recognize-integration.spec.ts` | Hardcoded model string -> regex |
 | `README.md`, `CLAUDE.md` | Updated model default docs and added Token streaming / Send-Stop convention entries |

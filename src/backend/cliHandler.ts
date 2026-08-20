@@ -2,9 +2,8 @@ import * as fs from 'fs';
 import type { spawn } from 'child_process';
 import { plural, classifyError, API_ERROR_RE, killProc } from './cli';
 import { parseRateLimitEvent } from './accountUsage';
+import { contextWindowFor } from './modelData';
 import type { SessionState } from './sessionState';
-
-const MAX_CONTEXT = 200_000;
 
 export function handleCliEvent(s: SessionState, event: Record<string, unknown>): void {
   s.sendLog('debug', `event: ${event.type} ${JSON.stringify(event).slice(0, 120)}`);
@@ -155,9 +154,13 @@ function handleAssistant(s: SessionState, event: Record<string, unknown>): void 
     if (newInput > 0 || newOutput > 0) {
       s.turnInputTokens = newInput;
       s.turnOutputTokens = newOutput;
-      const total = s.turnInputTokens + s.turnOutputTokens;
-      const percent = Math.min(100, Math.round(total / MAX_CONTEXT * 100));
-      s.broadcast(JSON.stringify({ type: 'contextUsage', percent, inputTokens: s.turnInputTokens, outputTokens: s.turnOutputTokens }));
+      // Window is per-model (200k on the 4.x line, 1M from opus-4-6 / sonnet-5 on),
+      // resolved from the model this very message was produced by. Output tokens are
+      // deliberately left out of the numerator: they are already counted in the next
+      // request's input, and the CLI's own percentage uses input alone.
+      const contextWindow = contextWindowFor((event.message as { model?: string })?.model ?? '');
+      const percent = Math.min(100, Math.round(s.turnInputTokens / contextWindow * 100));
+      s.broadcast(JSON.stringify({ type: 'contextUsage', percent, inputTokens: s.turnInputTokens, outputTokens: s.turnOutputTokens, contextWindow }));
     }
   }
 }
