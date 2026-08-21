@@ -41,6 +41,27 @@ Restarting drops every WS connection and any in-flight turn. There is also an in
 Settings -> Network -> **Apply (restart daemon)** - which does the same thing with the same
 caveat.
 
+### An open panel respawns the daemon by itself, with no user action
+
+`ensureDaemon` is not only reached by opening a panel. Any **already-open** extension panel
+respawns the daemon within seconds of it dying, unattended: the WS bridge's reconnect loop
+posts `needWsUrl` on every failed attempt (backoff 1s -> 10s), `ChatPanel.buildWsUrl()` finds
+no live discovery pid and calls `ensureDaemon(extensionPath)`. The panel asking "where do I
+connect?" is the same act that starts a daemon.
+
+Consequences worth knowing before trying to stop one:
+
+- **Stopping the daemon while a panel is open does not stick.** `yarn daemon:stop` and the
+  Settings -> Info -> **Stop daemon** button both really kill the process, and a panel brings
+  a new one back on its next reconnect tick. The panel that requested the stop suppresses
+  this (`media/chat.html` sets `userStopped` on the `daemonStopping` broadcast and stops
+  asking for a URL until its overlay's Retry is clicked), but **other** open panels do not.
+  Close them, or expect the daemon back.
+- It is a second way to lose the version race above: the respawn comes from whichever panel
+  reconnects first, i.e. potentially an old install, with no click involved.
+- The browser-served UI (`http://localhost:<port>/`) has no such path - it is served *by* the
+  daemon and cannot start one. A stop there is final until something else launches it.
+
 ### Restarting from inside an Argus conversation
 
 If the restart is requested *through Argus itself* (the user asks the assistant to fix a

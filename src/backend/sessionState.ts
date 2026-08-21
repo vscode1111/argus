@@ -17,7 +17,6 @@ export interface SessionState {
   answeredTools: Set<string>;
   pendingAskTools: Set<string>;
   cliDone: boolean;
-  userStopped: boolean;
   suppressCliOutput: boolean;
   pendingFollowUp: { answers: Record<string, string>; toolId: string; mode?: string } | undefined;
   pendingBgTasks: Set<string>;
@@ -57,7 +56,6 @@ export function createSessionState(workspaceDir: string): SessionState {
     answeredTools: new Set(),
     pendingAskTools: new Set(),
     cliDone: false,
-    userStopped: false,
     suppressCliOutput: false,
     pendingFollowUp: undefined,
     pendingBgTasks: new Set(),

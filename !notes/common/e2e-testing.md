@@ -28,7 +28,7 @@ node node_modules/@playwright/test/cli.js test \
 Limits, in order of how badly they bite:
 
 - **Never point it at `*-integration.spec.ts`.** Those patch `e2e/argus.json` through the UI, which is precisely what the guard protects; the project filter drops them, so an explicit path just matches nothing.
-- **"Mock" still talks to a real backend** (same point as the destructive-action section below). It is safe only because no mock spec writes server settings - re-check rather than assume, with `grep -L integration e2e/*.spec.ts | xargs grep -l "updateSettings\|switchModel\|switchEffort\|switchThinking\|restartDaemon\|killAllClaude"`. As of 2026-08-21 only `kill-all-claude.spec.ts` matches, and it never clicks its confirm step.
+- **"Mock" still talks to a real backend** (same point as the destructive-action section below). It is safe only because no mock spec writes server settings - re-check rather than assume, with `grep -L integration e2e/*.spec.ts | xargs grep -l "updateSettings\|switchModel\|switchEffort\|switchThinking\|restartDaemon\|stopDaemon\|killAllClaude"`. As of 2026-08-21 only `kill-all-claude.spec.ts` and `stop-daemon.spec.ts` match, and neither clicks its confirm step (both buttons are two-click armed, and the arming click sends nothing).
 - **Results are still config-dependent** - the `model-picker.spec.ts` failure above is exactly what running this way looks like. A failure here has to be diffed against the two configs before it is believed.
 - Inherited relative paths (`testDir`, `outputDir`, `webServer.cwd`) resolve against the **config file's own directory**, so they are re-anchored at the repo root inside it; moving that file means fixing the `../` depth.
 
@@ -62,6 +62,9 @@ Extends the company-level [playwright-run-hygiene.md](../../../!notes/common/pla
 
 - **Cascade**: the page loads and shows `"Disconnected, reconnecting..."` - only the backend on `:3001` died, Vite is fine. `node scripts/test-clean.js --dry` usually finds leaked CLI processes.
 - **Server handover**: `page.goto` itself is refused (`net::ERR_CONNECTION_REFUSED at http://localhost:5173/`), so Vite is gone too, and `test-clean --dry` reports nothing to clean. The remedy is patience, not cleanup: `netstat -ano | grep -E ":5173 .*LISTENING|:3001 .*LISTENING"` must print nothing before the next run (`TIME_WAIT` rows are harmless).
+- **Half-dead adoption**: Vite is listening on `:5173` but the backend on `:3001` is not - typically after a run was killed rather than finishing (an interrupted `yarn test:e2e` orphans `scripts/dev.js`'s children unevenly). `webServer.url` only checks `:5173`, so Playwright adopts it and starts testing against a backend that does not exist. Here `yarn test:clean` **is** the fix (unlike the handover case). Check both ports, not just the one Playwright checks.
+
+**A spec that talks to `:3001` directly must poll it first.** Playwright's readiness gate is Vite; the backend comes up alongside and can lag it, which a browser spec never notices (the page's WS just reconnects) but a raw `fetch`/`ws` client fails on immediately. Poll `GET /nonce` until it answers before connecting - see the helper at the top of `stop-then-send-integration.spec.ts`.
 
 Seen 2026-08-21 running one spec three times in a row: 3/3 green, 3/3 red, then 3/3 green again with nothing changed but the wait between runs.
 
@@ -83,6 +86,12 @@ Integration specs run against a real model, so an assertion is only stable if it
     .then(() => true).catch(() => false);
   ```
 - **Prefer app-owned state** (buttons, timers, committed message DOM) over model-owned output (specific wording, tool choice, response length) as a synchronisation point.
+- **An event both the healthy and the broken path emit needs an ordering gate, not just a wait.** `done` is the trap: `stop` broadcasts one immediately, and a turn that never started also produces one, so "wait for `done` after sending" is satisfied in every case and measures nothing. Anchor it to the start of the turn you mean - record `thinking_start` first and only then accept a `done`:
+  ```ts
+  if (e.type === 'thinking_start') started = true;
+  else if (e.type === 'done' && started) done = true;
+  ```
+  Without that gate, `stop-then-send-integration.spec.ts` reported a fixed build as still broken (the stop's own `done`, arriving *before* the new turn's `thinking_start`, was read as the new turn ending in 200ms). The timestamps were what exposed it - an out-of-order pair in the frame log, not a wrong value.
 - **Put a threshold at the real boundary, not at a comfortable-looking number.** If a behaviour is binary in the code, find the value that separates the two branches and assert *that*; anything above it is a second, unstated assertion about model speed. `streaming-partial-integration.spec.ts` required `>= 3` `text_chunk` frames when the code's actual boundary is 1 (with `--include-partial-messages` off, `handleAssistant` sends a single frame with the whole text via `!s.receivedDeltas`). Frames beyond the second only count how long generation lasted, since the CLI flushes deltas on a ~0.8s timer - so a correct 2-frame run failed. Where a small count is unavoidable, also **size the prompt so the effect is observable**: 80 numbers generate in under a second and yield 2 frames, 200 numbers yield 5-6.
 
 ### Run the red before trusting a regression test
@@ -104,6 +113,18 @@ fails and with what value. Two things this catches, both hit while writing
   before clicking, so it never sees the button parked off-screen. That does not make it
   useless - it guards the restructure - but its comment must say what it guards, or the
   next reader will trust it as regression cover it does not provide.
+- **Reverting a webview fix means rebuilding, not just stashing.** The browser loads
+  `media/webview.js`, a build artifact - stashing `webview/src/**` and re-running leaves the
+  *fixed* bundle in place, so the "red" run is silently still green. The sequence is
+  `git stash push -- <files>` -> `yarn build` -> run -> `git stash pop` -> `yarn build`.
+  Note `git stash push -- <pathspec>` **stages every other modified file** as a side effect;
+  `git reset` afterwards to restore the index.
+- **Keep the controls that pass in both states, they localize the bug.** In
+  `modal-persistence.spec.ts` four cases went red on the old code and two stayed green
+  (mid-stream events, next turn starting). That split is the finding: the modal was not being
+  closed by "some event during streaming" but specifically by the turn-commit boundary. A
+  spec that only asserts the broken cases proves less than one that also pins down where the
+  breakage stops.
 
 ### Gotcha: reading the clipboard right after clicking a copy button
 
