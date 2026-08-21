@@ -100,10 +100,17 @@
       // Ask the extension for a fresh daemon URL (it reads the discovery file).
       function requestWsUrl() { realApi.postMessage({ type: 'needWsUrl' }); }
 
+      // Set when the user stops the daemon from Settings. Asking the extension for a
+      // URL is what auto-starts a daemon (buildWsUrl -> ensureDaemon), so without this
+      // the reconnect loop would bring it straight back and the button would look like
+      // a no-op. Cleared by Retry, the explicit "bring it back".
+      var userStopped = false;
+
       var bridge = window.createArgusBridge({
         nextUrl: function () { return WS_URL || null; },
         onStatus: function (connected) {
           if (connected) { showDaemonDown(false); return; }
+          if (userStopped) { showDaemonDown(true); return; }
           // Disconnected: ask the extension for a fresh URL (covers daemon restart /
           // first boot with no URL). Show the overlay only when we have nothing.
           if (!WS_URL) showDaemonDown(true);
@@ -112,7 +119,7 @@
       });
 
       var retryBtn = document.getElementById('daemon-retry');
-      if (retryBtn) retryBtn.addEventListener('click', requestWsUrl);
+      if (retryBtn) retryBtn.addEventListener('click', function () { userStopped = false; requestWsUrl(); });
 
       // Extension -> webview messages handled here (not by the React app).
       window.addEventListener('message', function (event) {
@@ -124,6 +131,11 @@
           else showDaemonDown(true);
         } else if (data.type === 'newSession') {
           bridge.post({ type: 'newSession' });
+        } else if (data.type === 'daemonStopping' && data.stopped !== false) {
+          // Came over the WS (the bridge dispatches server messages here too): the
+          // daemon is going down on purpose, so keep it down. A restart is a different
+          // message (daemonRestarting) and must still auto-reconnect.
+          userStopped = true;
         }
       });
 

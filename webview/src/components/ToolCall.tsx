@@ -3,8 +3,7 @@ import { ToolCallData } from '../types';
 import { postMessage } from '../vscode';
 import { useSettings } from '../contexts/SettingsContext';
 import { plural } from '../utils/text';
-import { FileViewerModal } from './FileViewerModal';
-import { DiffViewerModal } from './DiffViewerModal';
+import { usePreview, type PreviewRequest } from '../contexts/PreviewContext';
 import styles from './ToolCall.module.css';
 
 function toolSummary(name: string, input: Record<string, unknown>): string {
@@ -58,8 +57,7 @@ export function ToolCall({ call, sessionDone }: Props) {
   const summary = toolSummary(name, input);
   const limit = name === 'Bash' ? 600 : 200;
   const preview = result ? result.slice(0, limit) + (result.length > limit ? '...' : '') : undefined;
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [diffOpen, setDiffOpen] = useState(false);
+  const previewer = usePreview();
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string | string[]>>({});
   const [otherText, setOtherText] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState(0);
@@ -77,35 +75,58 @@ export function ToolCall({ call, sessionDone }: Props) {
   const IMAGE_EXTS = /\.(jpe?g|png|gif|bmp|webp|ico|tiff?)$/i;
   const filePath = (input.file_path as string) || summary;
   const isImageFile = IMAGE_EXTS.test(filePath);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!viewerOpen || !isImageFile) return;
-    setImagePreview(null);
-    function onMessage(e: MessageEvent) {
-      if (e.data?.type === 'filePreview' && e.data.content?.startsWith('data:image/')) {
-        const p = e.data.path as string | undefined;
-        if (p === filePath || p?.endsWith(filePath) || p?.endsWith(filePath.replace(/\//g, '\\'))) {
-          setImagePreview(e.data.content);
-        }
-      }
-    }
-    window.addEventListener('message', onMessage);
-    postMessage({ type: 'readFilePreview', path: filePath });
-    return () => window.removeEventListener('message', onMessage);
-  }, [viewerOpen, isImageFile, filePath]);
 
   const fileViewerContent =
-    isImageFile ? imagePreview ?? undefined :
     name === 'Read' ? result :
     name === 'Write' ? (input.content as string) || undefined :
     name === 'Edit' ? (input.new_string as string) || undefined :
     undefined;
 
+  // What this tool's file/output preview shows. An image has no content here -
+  // the preview host reads it off disk and opens when the data arrives.
+  function fileRequest(): PreviewRequest | null {
+    if (isImageFile) return { kind: 'path', key: `${call.id}:file`, path: filePath };
+    const content = fileViewerContent ?? result;
+    if (content === undefined) return null;
+    return {
+      kind: 'file',
+      key: `${call.id}:file`,
+      path: name === 'Bash'
+        ? (summary !== bashCommand && summary ? `${summary}: ${bashCommand}` : bashCommand || summary)
+        : ((input.file_path as string) || summary),
+      content,
+      line: name === 'Read' && input.offset != null ? (input.offset as number) : undefined,
+      copyText: name === 'Bash' ? bashCommand || undefined : undefined,
+    };
+  }
+
+  function openFilePreview(): void {
+    const req = fileRequest();
+    if (req) previewer.open(req);
+  }
+
+  function openDiff(): void {
+    previewer.open({
+      kind: 'diff',
+      key: `${call.id}:diff`,
+      path: (input.file_path as string) || summary,
+      oldString: String(input.old_string || ''),
+      newString: String(input.new_string || ''),
+    });
+  }
+
+  // A background Bash task reports its output long after the modal was opened, so
+  // push the new result into the open preview instead of leaving a stale snapshot.
+  useEffect(() => {
+    const req = fileRequest();
+    if (req && req.kind === 'file') previewer.refresh(req);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
   function handleFileClick(e: React.MouseEvent) {
     e.preventDefault();
     if (isImageFile || fileViewerContent) {
-      setViewerOpen(true);
+      openFilePreview();
     } else {
       postMessage({ type: 'openFile', path: summary });
     }
@@ -366,7 +387,7 @@ export function ToolCall({ call, sessionDone }: Props) {
               <a
                 className={[styles.toolOutLink, !sessionDone && result.startsWith('Command running in background') && styles.toolOutLinkRunning].filter(Boolean).join(' ')}
                 href="#"
-                onClick={e => { e.preventDefault(); setViewerOpen(true); }}
+                onClick={e => { e.preventDefault(); openFilePreview(); }}
               >
                 Out
               </a>
@@ -380,7 +401,7 @@ export function ToolCall({ call, sessionDone }: Props) {
                 <a
                   className={styles.toolResultCount}
                   href="#"
-                  onClick={e => { e.preventDefault(); setViewerOpen(true); }}
+                  onClick={e => { e.preventDefault(); openFilePreview(); }}
                 >
                   {plural(resultLineCount, name === 'Glob' ? 'file' : 'line of output', name === 'Glob' ? 'files' : 'lines of output')}
                 </a>
@@ -393,7 +414,7 @@ export function ToolCall({ call, sessionDone }: Props) {
                 <a
                   className={styles.toolOutLink}
                   href="#"
-                  onClick={e => { e.preventDefault(); setDiffOpen(true); }}
+                  onClick={e => { e.preventDefault(); openDiff(); }}
                 >
                   Diff
                 </a>
@@ -405,25 +426,6 @@ export function ToolCall({ call, sessionDone }: Props) {
           <div className={styles.toolResult}>{preview}</div>
         )}
       </div>
-      {viewerOpen && (result || fileViewerContent) && (
-        <FileViewerModal
-          path={name === 'Bash'
-            ? (summary !== bashCommand && summary ? `${summary}: ${bashCommand}` : bashCommand || summary)
-            : ((input.file_path as string) || summary)}
-          content={(fileViewerContent ?? result)!}
-          line={name === 'Read' && input.offset != null ? (input.offset as number) : undefined}
-          copyText={name === 'Bash' ? bashCommand || undefined : undefined}
-          onClose={() => setViewerOpen(false)}
-        />
-      )}
-      {diffOpen && hasDiff && (
-        <DiffViewerModal
-          path={(input.file_path as string) || summary}
-          oldString={String(input.old_string || '')}
-          newString={String(input.new_string || '')}
-          onClose={() => setDiffOpen(false)}
-        />
-      )}
     </>
   );
 }

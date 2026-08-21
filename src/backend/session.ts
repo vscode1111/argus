@@ -30,6 +30,8 @@ export interface ConnectionHooks {
   getClientCount?: () => number;
   getServerPort?: () => number;
   onRestartRequest?: () => void;
+  /** Shut the server down for good (daemon only); absent on a server that can't exit itself. */
+  onStopRequest?: () => void;
   /** If true, create a fresh isolated session entry for this client (used for browser tabs). */
   fresh?: boolean;
   /** Deep link (?session=): attach to this session's live entry at connect, or replay it from disk. */
@@ -220,6 +222,12 @@ export function attachClientHandlers(
       ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
     } else if (msg.type === 'restartDaemon') {
       hooks.onRestartRequest?.();
+    } else if (msg.type === 'stopDaemon') {
+      // The daemon broadcasts daemonStopping to everyone on its way out. A server
+      // that cannot stop itself (the dev server) answers only the requester, so the
+      // UI reports "not a daemon" instead of waiting for a reply that never comes.
+      if (hooks.onStopRequest) hooks.onStopRequest();
+      else ws.send(JSON.stringify({ type: 'daemonStopping', stopped: false }));
     } else if (msg.type === 'killAllClaude') {
       const result = killAllClaude();
       // The counter only ever increments on spawn, so a kill alone never moves it -
@@ -446,7 +454,6 @@ function handleSend(s: SessionState, msg: { type?: string; text?: string; images
   s.completedOutputTokens = 0;
   s.liveInputTokens = 0;
   s.suppressCliOutput = false;
-  s.userStopped = false;
   s.cliDone = false;
   s.toolMap.clear();
   s.answeredTools.clear();
@@ -574,10 +581,18 @@ function handleStop(s: SessionState) {
     s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: JSON.stringify({ cancelled: true }) } }));
   }
   s.pendingAskTools.clear();
+  // Detach before killing, exactly like the /clear handler. `close` arrives a beat
+  // after killProc, and until it does the dying proc still has a writable stdin - so
+  // a send issued right after a stop was taken for a mid-turn inject (or reused the
+  // proc outright), wrote into a pipe nobody reads, and the pending close then ended
+  // the fresh turn with a bare `done`. Detached, it can be neither reused nor
+  // injected into, and its close is a no-op (isActiveProc === false).
   if (s.currentProc) {
-    s.userStopped = true;
-    killProc(s.currentProc);
-  } else {
-    s.broadcast(JSON.stringify({ type: 'done' }));
+    const proc = s.currentProc;
+    s.currentProc = undefined;
+    s.currentProcKey = undefined;
+    killProc(proc);
   }
+  s.cliDone = true;
+  s.broadcast(JSON.stringify({ type: 'done' }));
 }

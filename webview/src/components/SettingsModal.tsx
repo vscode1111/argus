@@ -179,7 +179,18 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const [killing, setKilling] = useState(false);
   const [killResult, setKillResult] = useState<{ count: number; error?: string } | null>(null);
   const killArmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (killArmTimer.current) clearTimeout(killArmTimer.current); }, []);
+  // "Stop daemon": same arm/confirm friction as the kill button - it takes the server
+  // this panel is talking to offline (every other panel included), so a stray click
+  // must not be enough. `stopResult` is true when the daemon really stopped, false
+  // when the server answered that it isn't a daemon (dev server).
+  const [stopArmed, setStopArmed] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopResult, setStopResult] = useState<boolean | null>(null);
+  const stopArmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (killArmTimer.current) clearTimeout(killArmTimer.current);
+    if (stopArmTimer.current) clearTimeout(stopArmTimer.current);
+  }, []);
   useEffect(() => {
     postMessage({ type: 'getSettings' });
     postMessage({ type: 'getClientCount' });
@@ -206,6 +217,11 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
         if (!isVsCode && typeof location !== 'undefined' && String(msg.port) !== location.port) {
           setMovedUrl(msg.url); // this tab can't follow a port change - show the new URL
         }
+      } else if (msg && msg.type === 'daemonStopping') {
+        // Broadcast by the daemon just before it exits; sent with stopped:false by a
+        // server that has no process to stop (dev server).
+        setStopping(false);
+        setStopResult(msg.stopped !== false);
       } else if (msg && msg.type === 'ws_status' && msg.connected) {
         // After any (re)connect - including the new daemon after a restart - refresh
         // the live port and client count so the address rows reflect the new daemon.
@@ -270,6 +286,22 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     setKillArmed(false);
     setKilling(true);
     postMessage({ type: 'killAllClaude' });
+  }
+  function handleStopDaemon(): void {
+    if (stopping) return;
+    if (!stopArmed) {
+      setStopArmed(true);
+      setStopResult(null);
+      if (stopArmTimer.current) clearTimeout(stopArmTimer.current);
+      stopArmTimer.current = setTimeout(() => setStopArmed(false), 4000);
+      return;
+    }
+    if (stopArmTimer.current) { clearTimeout(stopArmTimer.current); stopArmTimer.current = null; }
+    setStopArmed(false);
+    setStopping(true);
+    postMessage({ type: 'stopDaemon' });
+    // Safety net: a daemon too old to know this message never answers.
+    setTimeout(() => setStopping(false), 8000);
   }
   const httpUrl = serverPort ? `http://localhost:${serverPort}` : '';
   const wsUrl = serverPort ? `ws://localhost:${serverPort}/agent` : '';
@@ -544,6 +576,25 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                     : killResult.count === 0
                       ? 'No Claude CLI processes were running.'
                       : `Stopped ${plural(killResult.count, 'process', 'processes')}.`}
+                </span>
+              )}
+              <span className={styles.fieldHint}>
+                Shuts down the Argus daemon serving this panel, the same as running yarn daemon:stop. Every panel on it disconnects and any running turn ends.
+              </span>
+              <button
+                className={[styles.dangerBtn, stopArmed ? styles.dangerBtnArmed : ''].filter(Boolean).join(' ')}
+                onClick={handleStopDaemon}
+                disabled={stopping}
+                data-testid="stop-daemon"
+                title="Stops the daemon process serving this panel"
+              >
+                {stopping ? 'Stopping...' : stopArmed ? 'Click again to confirm' : 'Stop daemon'}
+              </button>
+              {stopResult !== null && (
+                <span className={styles.fieldHint} data-testid="stop-daemon-result">
+                  {stopResult
+                    ? 'Daemon stopped. Reconnect to start it again.'
+                    : 'This server is not a daemon - nothing to stop.'}
                 </span>
               )}
             </div>

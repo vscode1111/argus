@@ -148,13 +148,18 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     return n;
   }
 
-  // Push the live client count to every open client. Sent on connect/disconnect so
-  // the Settings "Network" tab reflects connections opening and closing in real time.
-  function broadcastClientCount(): void {
-    const msg = JSON.stringify({ type: 'clientCount', count: clientCount() });
+  // Send one message to every open client socket.
+  function broadcastAll(payload: object): void {
+    const msg = JSON.stringify(payload);
     for (const client of wss.clients) {
       if (client.readyState === 1) { try { client.send(msg); } catch { /* closing */ } }
     }
+  }
+
+  // Push the live client count to every open client. Sent on connect/disconnect so
+  // the Settings "Network" tab reflects connections opening and closing in real time.
+  function broadcastClientCount(): void {
+    broadcastAll({ type: 'clientCount', count: clientCount() });
   }
 
   // Idle self-shutdown: when idleTimeoutMs is set, start a timer once the last
@@ -173,12 +178,20 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       idleTimer = undefined;
       if (clientCount() > 0) return; // a client reconnected in the meantime
       console.log('[argus-server] idle timeout reached, shutting down');
-      clearInterval(pingTimer);
-      wss.close();
-      httpServer.close();
-      options.onIdleShutdown?.();
+      shutdown();
     }, options.idleTimeoutMs);
     if (typeof idleTimer.unref === 'function') idleTimer.unref();
+  }
+
+  // Stop serving and hand back to the caller, which decides whether the process
+  // itself exits (the daemon passes onIdleShutdown = process.exit; the dev server
+  // and the extension pass nothing and stay alive).
+  function shutdown(): void {
+    clearIdleTimer();
+    clearInterval(pingTimer);
+    wss.close();
+    httpServer.close();
+    options.onIdleShutdown?.();
   }
 
   // Restart the daemon (browser-served path): tell every client the URL the new
@@ -189,18 +202,21 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     const cfg = readConfig();
     const newPort = cfg.daemonPort || PORT;
     const url = `http://localhost:${newPort}/`;
-    const msg = JSON.stringify({ type: 'daemonRestarting', port: newPort, url });
-    for (const client of wss.clients) {
-      if (client.readyState === 1) { try { client.send(msg); } catch { /* closing */ } }
-    }
+    broadcastAll({ type: 'daemonRestarting', port: newPort, url });
     options.onRespawn();
-    setTimeout(() => {
-      clearIdleTimer();
-      clearInterval(pingTimer);
-      wss.close();
-      httpServer.close();
-      options.onIdleShutdown?.();
-    }, 500);
+    setTimeout(shutdown, 500);
+  }
+
+  // Stop the daemon for good (Settings "Stop daemon", the in-app equivalent of
+  // `yarn daemon:stop`): tell every client before the socket dies, then shut down
+  // with no replacement. Gated on onIdleShutdown - that option is what makes a
+  // process willing to exit itself, so the dev server (which has none) never stops
+  // here and answers the request as unsupported instead.
+  function doStop(): void {
+    if (!options.onIdleShutdown) return;
+    broadcastAll({ type: 'daemonStopping', stopped: true });
+    // Give the broadcast a moment to flush; closing immediately drops it.
+    setTimeout(shutdown, 300);
   }
 
   const wsAlive = new WeakMap<WebSocket, boolean>();
@@ -257,7 +273,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     // entry (without it they all share the channel default and see each other's turns),
     // while a reconnect of the same panel rejoins the entry it already owns.
     const panelId = reqUrl.searchParams.get('panel')?.slice(0, 64) || undefined;
-    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, fresh: isBrowserClient, sessionId, panelId });
+    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, onStopRequest: options.onIdleShutdown ? doStop : undefined, fresh: isBrowserClient, sessionId, panelId });
     broadcastClientCount();
   });
 

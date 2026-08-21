@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { postMessage } from '../vscode';
-import { FileViewerModal } from '../components/FileViewerModal';
+import React from 'react';
+import { usePreview } from '../contexts/PreviewContext';
 
 // Matches file paths with optional :line or :line-endLine suffix
 // Windows absolute: D:\path\to\file.ext:123
@@ -10,45 +9,25 @@ import { FileViewerModal } from '../components/FileViewerModal';
 // filename class stays without it so prose like "done!file.md" is not swallowed.
 const FILE_PATH_RE = /((?:(?<![a-zA-Z])[A-Za-z]:[\\\/])[\w.\-!\\\/]+\.\w+|\/(?:[\w.\-!]+\/)+[\w.\-]+\.\w+|(?:[\w.\-@!]+[\\\/])+[\w.\-]+\.\w+)(?::(\d+)(?:-(\d+))?)?/g;
 
-function FilePathLink({ path: origPath, line, endLine, display }: { path: string; line?: number; endLine?: number; display: string }) {
-  const [open, setOpen] = useState(false);
-  const [content, setContent] = useState<string | null>(null);
-  const [resolvedPath, setResolvedPath] = useState(origPath);
-
-  useEffect(() => {
-    if (!open) return;
-    setContent(null);
-    function onMessage(e: MessageEvent) {
-      if (e.data?.type === 'filePreview' && (e.data.path === origPath || e.data.path?.endsWith(origPath.replace(/\//g, '\\')) || e.data.path?.endsWith(origPath))) {
-        setResolvedPath(e.data.path);
-        setContent(e.data.content);
-      }
-    }
-    window.addEventListener('message', onMessage);
-    postMessage({ type: 'readFilePreview', path: origPath });
-    return () => window.removeEventListener('message', onMessage);
-  }, [open, origPath]);
+// The preview itself is owned by PreviewProvider, not by this link: markdown is
+// re-rendered constantly while a turn streams and the message it belongs to is
+// remounted when the turn commits, either of which would close a modal held here.
+function FilePathLink({ path: origPath, line, display }: { path: string; line?: number; display: string }) {
+  const previewer = usePreview();
 
   return (
-    <>
-      <a
-        className="file-path-link"
-        href="#"
-        title={`Open ${origPath}`}
-        onClick={e => { e.preventDefault(); e.stopPropagation(); setOpen(true); }}
-      >
-        {display}
-      </a>
-      {open && content !== null && (
-        <FileViewerModal
-          path={resolvedPath}
-          content={content}
-          line={line}
-          endLine={endLine}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </>
+    <a
+      className="file-path-link"
+      href="#"
+      title={`Open ${origPath}`}
+      onClick={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        previewer.open({ kind: 'path', path: origPath, line });
+      }}
+    >
+      {display}
+    </a>
   );
 }
 
@@ -74,10 +53,10 @@ export function linkifyPaths(text: string): React.ReactNode {
     const fullMatch = match[0];
     const filePath = match[1];
     const line = match[2] ? parseInt(match[2], 10) : undefined;
-    const endLine = match[3] ? parseInt(match[3], 10) : undefined;
-
+    // match[3] (the end of a `:12-80` range) is part of the link text only - the
+    // viewer scrolls to a single line and has never accepted an end line.
     parts.push(
-      <FilePathLink key={match.index} path={filePath} line={line} endLine={endLine} display={fullMatch} />
+      <FilePathLink key={match.index} path={filePath} line={line} display={fullMatch} />
     );
 
     lastIndex = match.index + fullMatch.length;
