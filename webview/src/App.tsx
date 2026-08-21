@@ -7,6 +7,7 @@ import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
 import { AutoFileViewer } from './components/AutoFileViewer';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
+import { PreviewProvider } from './contexts/PreviewContext';
 import { postMessage, isVsCode } from './vscode';
 import { reducer, initialState, type AppAction } from './reducer';
 import { SessionSummary } from './types';
@@ -508,7 +509,11 @@ function AppInner() {
 export default function App() {
   return (
     <SettingsProvider>
-      <AppInner />
+      {/* Above AppInner so an open file/diff/image preview survives the message
+          list rebuilding itself when a turn commits (see PreviewProvider). */}
+      <PreviewProvider>
+        <AppInner />
+      </PreviewProvider>
     </SettingsProvider>
   );
 }

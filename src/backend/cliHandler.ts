@@ -227,7 +227,15 @@ function handleResult(s: SessionState, event: Record<string, unknown>): void {
 }
 
 export function attachProcHandlers(s: SessionState, proc: ReturnType<typeof spawn>): void {
+  // A detached proc (stop, /clear, respawn on changed args) is dead to this session:
+  // what it still has buffered belongs to a turn the user already ended and must not
+  // land in the state of the turn that replaced it. The spawn path assigns
+  // s.currentProc before attaching these handlers, so this never drops legitimate
+  // output, and a reused proc is unaffected (s.currentProc === proc).
+  const detached = () => s.currentProc !== proc;
+
   proc.stdout!.on('data', (chunk: Buffer) => {
+    if (detached()) return;
     s.buffer += chunk.toString();
     const lines = s.buffer.split('\n');
     s.buffer = lines.pop() ?? '';
@@ -253,9 +261,12 @@ export function attachProcHandlers(s: SessionState, proc: ReturnType<typeof spaw
 
   proc.stderr!.on('data', (chunk: Buffer) => {
     const text = chunk.toString();
-    s.stderrOutput += text;
     console.error('[argus-server]', text.trim());
     s.sendLog('warn', `stderr: ${text.trim()}`);
+    // Logged either way (it is diagnostics), but a dead proc's stderr must not end up
+    // in s.stderrOutput, which classifyError reads to explain the *current* turn.
+    if (detached()) return;
+    s.stderrOutput += text;
   });
 
   proc.stdin!.on('error', (err) => {
@@ -263,27 +274,25 @@ export function attachProcHandlers(s: SessionState, proc: ReturnType<typeof spaw
   });
 
   proc.on('close', (code) => {
-    s.resetStaleTimer();
-    const isActiveProc = s.currentProc === proc;
-    if (isActiveProc) {
-      s.currentProc = undefined;
-      s.currentProcKey = undefined;
-    }
     s.sendLog('info', `claude exited with code ${code}${s.watchdog.state.retrying ? ' (watchdog retry pending)' : ''}`);
+    // Detached: the turn it belonged to is over and something else may already be
+    // running. Touching shared state here is how a stopped proc used to disarm the
+    // next turn's watchdog and end it with a stray `done`.
+    if (detached()) return;
+    s.resetStaleTimer();
+    s.currentProc = undefined;
+    s.currentProcKey = undefined;
     if (s.watchdog.state.retrying) return;
     s.watchdog.state.active = false;
-    if (s.userStopped) {
-      s.userStopped = false;
-      if (isActiveProc) s.broadcast(JSON.stringify({ type: 'done' }));
-    } else if (code !== 0 && code !== null) {
+    if (code !== 0 && code !== null) {
       const { message, errorKind } = classifyError(s.stderrOutput, code);
       if (s.pendingAskTools.size > 0) {
         s.sendLog('warn', `CLI exited (${errorKind}) with ${plural(s.pendingAskTools.size, 'pending question')}: ${message}`);
-      } else if (isActiveProc) {
+      } else {
         s.broadcast(JSON.stringify({ type: 'error', text: message, errorKind }));
         s.broadcast(JSON.stringify({ type: 'done' }));
       }
-    } else if (isActiveProc && s.pendingAskTools.size === 0 && !s.cliDone) {
+    } else if (s.pendingAskTools.size === 0 && !s.cliDone) {
       if (code === null) {
         const accErr = s.textAccum.trim() || s.stderrOutput.trim();
         if (accErr && API_ERROR_RE.test(accErr)) {

@@ -1,16 +1,18 @@
 import { test, expect } from '@playwright/test';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import * as http from 'http';
 import * as path from 'path';
 import { WebSocket } from 'ws';
 import {
-  ensureCompiled, startDaemon, readInfo, isAlive, stopDaemon, waitFor,
+  ensureCompiled, startDaemon, readInfo, isAlive, isPortUp, stopDaemon, waitFor,
   uniqueConfigFile, writeDaemonConfig,
   type DaemonHandle,
 } from './daemonHelpers';
 
 // Exercises the real daemon process (out/backend/daemon.js): its discovery file,
-// nonce gate, single-instance guard, and connection-count idle self-shutdown. Each
+// nonce gate, single-instance guard, requested shutdown (Settings "Stop daemon"),
+// and connection-count idle self-shutdown. Each
 // test gets its own port + throwaway discovery file (via env) so they never touch
 // the user's real ~/.claude/argus-daemon.json. Serial to keep the spawned processes
 // and port use predictable.
@@ -94,6 +96,76 @@ test.describe('daemon lifecycle (integration)', () => {
     // refresh timestamp is still at its default.
     const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     expect(cfg.modelDataUpdatedAt ?? 0).toBe(0);
+  });
+
+  test('stopDaemon shuts the daemon down and cleans its discovery file', async () => {
+    const PORT = 3915;
+    d = await startDaemon({ port: PORT, idleMs: 600_000 }); // long idle: only the request may stop it
+    const info = readInfo(d.file);
+
+    const ws = new WebSocket(`ws://localhost:${PORT}/agent?nonce=${info.nonce}`);
+    const stopping = new Promise<{ stopped: boolean }>((resolve, reject) => {
+      ws.on('message', (m) => { const e = JSON.parse(m.toString()); if (e.type === 'daemonStopping') resolve(e); });
+      ws.on('error', reject);
+    });
+    await new Promise<void>((resolve, reject) => { ws.on('open', () => resolve()); ws.on('error', reject); });
+    ws.send(JSON.stringify({ type: 'stopDaemon' }));
+
+    // Every client is told before the socket dies, so the UI can report it.
+    const msg = await Promise.race([
+      stopping,
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('no daemonStopping broadcast')), 8000)),
+    ]);
+    expect(msg.stopped).toBe(true);
+
+    // Then the process really exits and leaves no discovery file behind - the same
+    // end state as `yarn daemon:stop`, so nothing blocks the next launch.
+    expect(await waitFor(() => !isAlive(info.pid), 8000)).toBe(true);
+    expect(fs.existsSync(d.file)).toBe(false);
+    expect(await isPortUp(PORT)).toBe(false);
+    ws.close();
+  });
+
+  test('a server that cannot exit itself refuses to stop', async () => {
+    // The dev server's exact configuration: startServer with no onIdleShutdown, i.e.
+    // no permission to end the process. Run in-process here rather than against the
+    // shared :3001 dev server, so a regression in this gate cannot kill the suite.
+    const PORT = 3916;
+    const server = spawn(process.execPath, [
+      '-e',
+      `require(${JSON.stringify(path.resolve(__dirname, '..', 'out', 'backend', 'index.js'))})`
+      + `.startServer({ port: ${PORT} }).then(() => console.log('up'));`,
+    ], { cwd: path.resolve(__dirname, '..'), env: { ...process.env, ARGUS_CONFIG: uniqueConfigFile('nodaemon') }, stdio: 'ignore' });
+    try {
+      expect(await waitFor(() => isPortUp(PORT), 10_000)).toBe(true);
+      const nonce = await new Promise<string>((resolve, reject) => {
+        http.get(`http://localhost:${PORT}/nonce`, (res) => {
+          let body = ''; res.on('data', (c) => { body += c; }); res.on('end', () => resolve(body));
+        }).on('error', reject);
+      });
+
+      const ws = new WebSocket(`ws://localhost:${PORT}/agent?nonce=${nonce}`);
+      const reply = new Promise<{ stopped: boolean }>((resolve, reject) => {
+        ws.on('message', (m) => { const e = JSON.parse(m.toString()); if (e.type === 'daemonStopping') resolve(e); });
+        ws.on('error', reject);
+      });
+      await new Promise<void>((resolve, reject) => { ws.on('open', () => resolve()); ws.on('error', reject); });
+      ws.send(JSON.stringify({ type: 'stopDaemon' }));
+
+      const msg = await Promise.race([
+        reply,
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('no daemonStopping reply')), 8000)),
+      ]);
+      expect(msg.stopped).toBe(false);
+
+      // And it is still serving - the request was answered, not obeyed.
+      await new Promise((r) => setTimeout(r, 800));
+      expect(await isPortUp(PORT)).toBe(true);
+      expect(isAlive(server.pid!)).toBe(true);
+      ws.close();
+    } finally {
+      try { server.kill(); } catch { /* already gone */ }
+    }
   });
 
   test('self-exits and cleans the discovery file after the last client disconnects', async () => {
