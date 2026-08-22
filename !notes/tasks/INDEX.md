@@ -2,6 +2,9 @@
 
 | Folder | Module | Summary |
 |--------|--------|---------|
+| [session-active-marker/](session-active-marker/) | backend/channel, webview/SessionHistoryModal | Pulsing dot on sessions with a turn running now, server-derived (`listActiveSessions` = sessionId + live proc + `!cliDone`) and pushed to every client; implemented, integration spec not yet re-run green |
+| [pending-tool-pulse/](pending-tool-pulse/) | webview/ToolCall | FIXED: a resultless tool kept pulsing green after its turn ended (`finalizeBlocks` only reaches `state.streaming`, never a committed or disk-replayed message); `pending` now also requires `!sessionDone` |
+| [browse-send-routing/](browse-send-routing/) | backend/channel, backend/session | FIXED (2 bugs): a send while browsing another session was injected into the stdin of the turn the client left; and resuming a session streaming in another entry showed no progress indicator and never updated. Both from handlers acting on the client's current entry instead of the one owning the session - `clientViewing` + `detachToBrowsedSession` + `attachToLiveSession` |
 | [account-and-usage/](account-and-usage/) | backend/accountUsage, webview/AccountUsageModal | Account & Usage modal: live `/oauth/usage` API (primary) + stream fallback; two-phase load; 429 error surfacing; refresh + 60s cache |
 | [streaming-and-input-ui/](streaming-and-input-ui/) | backend/cli, webview/input | Enable per-token streaming via `--include-partial-messages` + `stream_event` unwrap; drop model default; Send/Stop button icon restyle |
 | [session-bar-and-log-autoscroll/](session-bar-and-log-autoscroll/) | webview/App+global.css, LogPanel, backend/sessions | Collapsible full-width session header (name + history + new-chat); `custom-title` rename precedence; fix log autoscroll breaking mid-stream (direction-based scroll detection) |

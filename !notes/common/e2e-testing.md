@@ -160,6 +160,24 @@ The Claude CLI auto-loads `~/.claude/projects/<encoded-cwd>/memory/` (and `CLAUD
 
 Consequence for tests that browse away mid-stream and come back: the "stream already finished" branch cannot assert token counts, because the data does not exist on that path. `session-browse-during-stream-integration.spec.ts` used to have such a branch and failed with `element(s) not found` whenever the model outran the browse round-trip (more likely since `--effort low`). The fix is to keep the live precondition (longer prompt) and `test.skip(!isLive, reason)` otherwise - never assert a state the architecture cannot produce. Branching to a second assertion "just in case" hides that the branch is impossible.
 
+### Gotcha: an open centered modal blocks every click on the app behind it
+
+The centered-modal shell (Session History, Workspace History, Account & Usage, Settings) renders a full-viewport `.overlay` (`position: fixed; inset: 0`) as its click-outside-to-close catcher. It sits above the whole app, so **no** app control can be clicked while a dialog is open, however visible that control looks.
+
+The failure does not read like a layout problem. Playwright resolves the target, reports it visible, enabled and stable, scrolls it into view, and only then fails the hit test, retrying until the test times out:
+
+```
+locator resolved to <button title="Stop" aria-label="Stop" ...>
+  - element is visible, enabled and stable
+  - <div aria-hidden="true" class="_overlay_k6a4k_6"></div> intercepts pointer events
+```
+
+Close the dialog first (`page.keyboard.press('Escape')`, then assert `toHaveCount(0)`), or drive the action from a second page in the same context when the point of the test is to watch the open list react. Neither is a weakened assertion: a user cannot click through the overlay either.
+
+The same overlay is `aria-hidden`, which is why role-based locators cannot see inside these modals and have to go through `[role="dialog"]` (see `preview-navigation.spec.ts`).
+
+Found in `session-active-marker-integration.spec.ts`; full write-up in [../tasks/session-active-marker/notes.md](../tasks/session-active-marker/notes.md).
+
 ## Integration config: `e2e/argus.json`
 
 - The integration dev server is started with `ARGUS_CONFIG=e2e/argus.json` (see the `webServer.env` in `playwright.config.ts`).

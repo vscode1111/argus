@@ -10,9 +10,11 @@ import * as path from 'path';
 // (settings, skills, filePreview, etc.) must NOT leak to other clients.
 //
 // Uses the real dev server on :3001. Each test creates a unique temp dir so
-// channel state never bleeds between tests.
+// channel state never bleeds between tests. ARGUS_E2E_PORT overrides the port so the
+// suite can be pointed at a throwaway backend instead of a dev server in use.
 
-const BACKEND = 'http://localhost:3001';
+const PORT = process.env.ARGUS_E2E_PORT ?? '3001';
+const BACKEND = `http://localhost:${PORT}`;
 
 async function getNonce(): Promise<string> {
   const res = await fetch(`${BACKEND}/nonce`);
@@ -28,7 +30,7 @@ function makeTempDir(tag: string): string {
 // Opens a WS client for a specific workspace dir and resolves once connected.
 function openClient(nonce: string, dir: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const url = `ws://localhost:3001/agent?nonce=${encodeURIComponent(nonce)}&dir=${encodeURIComponent(dir)}`;
+    const url = `ws://localhost:${PORT}/agent?nonce=${encodeURIComponent(nonce)}&dir=${encodeURIComponent(dir)}`;
     const ws = new WebSocket(url, { origin: 'http://localhost:5173' });
     ws.on('open', () => resolve(ws));
     ws.on('unexpected-response', (_req, res) => reject(new Error(`upgrade failed: ${res.statusCode}`)));
@@ -141,7 +143,7 @@ test.describe('shared channel broadcast (integration)', () => {
     // B joins after the message. The server replays history immediately on connection,
     // which can arrive before the WS 'open' event resolves on the client side.
     // Attach the 'message' listener BEFORE awaiting open to avoid the race.
-    const url = `ws://localhost:3001/agent?nonce=${encodeURIComponent(nonce)}&dir=${encodeURIComponent(dir)}`;
+    const url = `ws://localhost:${PORT}/agent?nonce=${encodeURIComponent(nonce)}&dir=${encodeURIComponent(dir)}`;
     clientB = new WebSocket(url, { origin: 'http://localhost:5173' });
     const replayPromise = waitForType(clientB, 'sessionLoaded', 5000);
     await new Promise<void>((resolve, reject) => {

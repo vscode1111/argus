@@ -144,6 +144,102 @@ test.describe('session history', () => {
     await expect(dialog.getByText('scub-newest-session')).toHaveCount(0);
   });
 
+  test('reopening paints the cached list without a refetch', async ({ page }) => {
+    await openModal(page);
+    await send(page, { type: 'sessionList', sessions: SESSIONS, currentId: SESSIONS[1].id });
+
+    const dialog = page.getByRole('dialog', { name: 'Session History' });
+    await expect(dialog.getByText('scub-newest-session')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+
+    // Reopen with nothing injected. listSessions is suppressed under ?mock=1, so
+    // rows can only come from the module-level cache - a modal that refetched
+    // would sit on "Loading..." forever.
+    await openModal(page);
+    await expect(dialog.getByText('scub-newest-session')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Delete session' })).toHaveCount(3);
+    await expect(dialog.getByText('Loading...')).toHaveCount(0);
+    // The current-session highlight is cached with the rows.
+    await expect(dialog.locator('[class*="rowCurrent"]')).toHaveCount(1);
+  });
+
+  test('an optimistic delete survives a close and reopen', async ({ page }) => {
+    await openModal(page);
+    const fake = { id: '00000000-0000-0000-0000-000000000098', title: 'scub-cache-delete-me', lastPrompt: 'remove me', updatedAt: NOW - 5_000 };
+    await send(page, { type: 'sessionList', sessions: [...SESSIONS, fake], currentId: SESSIONS[1].id });
+
+    const dialog = page.getByRole('dialog', { name: 'Session History' });
+    await dialog.getByRole('textbox', { name: 'Search sessions' }).fill('cache-delete');
+    await dialog.getByRole('button', { name: 'Delete session' }).click();
+    await expect(dialog.getByText('scub-cache-delete-me')).toHaveCount(0);
+
+    await page.keyboard.press('Escape');
+    await openModal(page);
+
+    // The write-through keeps the deleted row out of the cache; the other rows stay.
+    await expect(dialog.getByText('scub-newest-session')).toBeVisible();
+    await expect(dialog.getByText('scub-cache-delete-me')).toHaveCount(0);
+  });
+
+  test('the All workspaces tab is cached across a reopen', async ({ page }) => {
+    await openModal(page);
+    const dialog = page.getByRole('dialog', { name: 'Session History' });
+    await dialog.getByRole('tab', { name: 'All workspaces' }).click();
+    await send(page, {
+      type: 'allSessionList',
+      sessions: [{ ...SESSIONS[0], lines: 12, workspacePath: 'd:\\_Projects\\scub-elsewhere', workspaceName: 'scub-elsewhere' }],
+      currentId: undefined,
+    });
+    await expect(dialog.getByText('scub-elsewhere')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+
+    // The tab selection is restored from the dialog store, and its rows from the
+    // cache - listAllSessions is suppressed under ?mock=1, so nothing refills it.
+    await openModal(page);
+    await expect(dialog.getByRole('tab', { name: 'All workspaces' })).toHaveAttribute('aria-selected', 'true');
+    await expect(dialog.getByText('scub-elsewhere')).toBeVisible();
+    await expect(dialog.getByText('Loading...')).toHaveCount(0);
+  });
+
+  test('a session with a running turn is marked, in both tabs, until it finishes', async ({ page }) => {
+    await openModal(page);
+    await send(page, { type: 'sessionList', sessions: SESSIONS, currentId: SESSIONS[1].id });
+
+    const dialog = page.getByRole('dialog', { name: 'Session History' });
+    const marks = dialog.getByRole('img', { name: 'Working now' });
+    await expect(dialog.getByText('scub-oldest-session')).toBeVisible();
+    // Nothing is running until the server says so.
+    await expect(marks).toHaveCount(0);
+
+    // A turn starts in the oldest session (in another workspace, i.e. another panel).
+    await send(page, {
+      type: 'activeSessions',
+      sessions: [{ id: SESSIONS[2].id, workspacePath: 'd:\\_Projects\\scub-elsewhere', startedAt: NOW }],
+    });
+    await expect(marks).toHaveCount(1);
+    await expect(dialog.locator('[class*="rowTitle"]', { hasText: 'scub-oldest-session' })
+      .getByRole('img', { name: 'Working now' })).toHaveCount(1);
+
+    // The same set marks the global tab, which lists sessions from every workspace.
+    await dialog.getByRole('tab', { name: 'All workspaces' }).click();
+    await send(page, {
+      type: 'allSessionList',
+      sessions: SESSIONS.map(s => ({ ...s, lines: 3, workspacePath: 'd:\\_Projects\\scub-elsewhere', workspaceName: 'scub-elsewhere' })),
+      currentId: undefined,
+    });
+    await expect(dialog.locator('[class*="rowTitle"]', { hasText: 'scub-oldest-session' })
+      .getByRole('img', { name: 'Working now' })).toHaveCount(1);
+    await expect(marks).toHaveCount(1);
+
+    // The turn finishes: the server pushes a set without it and the mark clears.
+    await send(page, { type: 'activeSessions', sessions: [] });
+    await expect(marks).toHaveCount(0);
+  });
+
   test('Escape closes the modal', async ({ page }) => {
     await openModal(page);
     await page.keyboard.press('Escape');
