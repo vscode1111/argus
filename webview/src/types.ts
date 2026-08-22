@@ -69,6 +69,14 @@ export type WorkspaceSummary = {
   updatedAt: number; // epoch ms
 };
 
+// A session with a CLI turn running right now, as reported by the server. Lives
+// only in memory (server-side too): it says what is happening, not what happened.
+export type ActiveSession = {
+  id: string;
+  workspacePath: string;
+  startedAt: number; // epoch ms the current turn started
+};
+
 export type GlobalSessionSummary = SessionSummary & {
   workspacePath: string; // real absolute cwd the session belongs to
   workspaceName: string; // basename for display

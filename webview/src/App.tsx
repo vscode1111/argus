@@ -10,7 +10,7 @@ import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { PreviewProvider } from './contexts/PreviewContext';
 import { postMessage, isVsCode } from './vscode';
 import { reducer, initialState, type AppAction } from './reducer';
-import { SessionSummary } from './types';
+import { SessionSummary, ActiveSession } from './types';
 import { basename } from './utils/path';
 import { fmtLineCount } from './utils/text';
 
@@ -86,6 +86,9 @@ function AppInner() {
   // Line count of the current session, kept in sync from sessionList replies so the
   // header "Refresh current session" button can label its loading spinner.
   const [sessionLines, setSessionLines] = React.useState(0);
+  // Sessions with a turn running right now, anywhere on this server (any workspace,
+  // any panel). Server-pushed, never cached, so the history list marks them live.
+  const [activeIds, setActiveIds] = React.useState<Set<string>>(() => new Set());
   const [editingName, setEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState('');
   const [showSessionBar, setShowSessionBar] = React.useState(() => {
@@ -225,9 +228,16 @@ function AppInner() {
         setSessionId(null);
         setSessionLines(0);
         setEditingName(false);
+      } else if (t === 'activeSessions' && Array.isArray(e.data.sessions)) {
+        setActiveIds(new Set((e.data.sessions as ActiveSession[]).map(a => a.id)));
+      } else if (t === 'ws_status' && e.data.connected) {
+        // A reconnect (daemon restart, workspace switch) means missed pushes; the
+        // server only sends the set on change, so ask for the current one.
+        postMessage({ type: 'getActiveSessions' });
       }
     }
     window.addEventListener('message', onSessionMsg);
+    postMessage({ type: 'getActiveSessions' });
     return () => window.removeEventListener('message', onSessionMsg);
   }, []);
 
@@ -470,7 +480,7 @@ function AppInner() {
 
   return (
     <div className="app">
-      {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
+      {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} activeIds={activeIds} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
       {accountUsageOpen && <AccountUsageModal currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onClose={() => setAccountUsageOpen(false)} />}
       {initialFile && <AutoFileViewer path={initialFile} onClose={() => setInitialFile(null)} />}
       <div className="content">

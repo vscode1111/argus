@@ -62,6 +62,12 @@ interface ChannelData {
   readonly dir: string;
   entries: Map<string, SessionEntry>;
   clientEntry: Map<WebSocket, SessionEntry>;
+  // Session a browsing client actually has on screen. Its entry keeps pointing at the
+  // session being streamed (so the live turn's --resume arg stays correct), which makes
+  // this the only record of what the user is looking at - and the only way a send from
+  // that client can be routed to the session it belongs to instead of injected into
+  // the turn it walked away from.
+  clientViewing: Map<WebSocket, string>;
 }
 
 // Public interface used by session.ts and index.ts.
@@ -80,8 +86,20 @@ export interface Channel {
   getClientState(ws: WebSocket): SessionState;
   /** Create a fresh isolated session entry for this client; the old entry keeps running. */
   moveToNewSession(ws: WebSocket): SessionState;
-  /** Mark a client as browsing (will not receive SESSION_STREAM_EVENTS) or live. */
-  setBrowsing(ws: WebSocket, browsing: boolean): void;
+  /** Mark a client as browsing (will not receive SESSION_STREAM_EVENTS) or live.
+   *  When browsing, pass the session the client navigated to: the entry still points at
+   *  the streaming one, so this is what makes the client's own view recoverable. */
+  setBrowsing(ws: WebSocket, browsing: boolean, sessionId?: string): void;
+  /** Move a browsing client into its own entry, bound to the session it is viewing, and
+   *  return that entry's state. Undefined when the client is not browsing. Lets a send
+   *  start a turn on the session that is on screen instead of being injected into the
+   *  stdin of the turn still running in the entry the client left. */
+  detachToBrowsedSession(ws: WebSocket): SessionState | undefined;
+  /** Join the entry that is streaming this session right now, replaying its history and
+   *  in-progress snapshot so the live turn (and its progress indicator) is restored.
+   *  Undefined when no OTHER entry is mid-turn on that session - including when the
+   *  client is already in it, which the caller handles as an ordinary resume. */
+  attachToLiveSession(ws: WebSocket, sessionId: string): SessionState | undefined;
   /** Replay the in-progress streaming snapshot to this client (from its current entry). */
   replaySnapshot(ws: WebSocket): void;
   /** Replay the client's entry history + streaming snapshot (deep-link initial sync). */
@@ -108,6 +126,57 @@ export function broadcastToAllChannels(msg: string): void {
     }
   }
 }
+// A session is "in progress" while its entry holds a live CLI process that has not
+// reported the end of the turn. `currentProc` alone is not enough: a finished turn
+// keeps its process alive so the next send can reuse it, and `!cliDone` alone is not
+// enough either (a fresh entry starts with cliDone false and no process at all).
+export interface ActiveSession {
+  id: string;
+  workspacePath: string;
+  startedAt: number;
+}
+
+// Every session running anywhere in this server process, across all workspaces: a
+// turn started in one panel shows as busy in every other panel's history list.
+// Sessions the CLI has not yet named (sessionId arrives with its first event) are
+// skipped - there is no history row to mark until then.
+export function listActiveSessions(): ActiveSession[] {
+  const out: ActiveSession[] = [];
+  for (const cd of registry.values()) {
+    for (const entry of cd.entries.values()) {
+      const st = entry.state;
+      if (st.sessionId && st.currentProc && !st.cliDone) {
+        out.push({ id: st.sessionId, workspacePath: cd.dir, startedAt: entry.snapshotStartedAt ?? entry.lastActivityAt });
+      }
+    }
+  }
+  return out;
+}
+
+// Broadcast types that can flip a session between running and idle.
+const ACTIVITY_EVENTS = new Set(['thinking_start', 'done', 'error', 'sessionId', 'clear']);
+
+let activeNotifyTimer: ReturnType<typeof setTimeout> | null = null;
+let lastActivePayload = '';
+
+// Push the running set to every client. Deferred onto a timer so it reads the state
+// flags after the handler that triggered it has finished mutating them, coalescing
+// the burst of events at a turn boundary into one message; a set that did not
+// actually change sends nothing.
+export function notifyActiveSessions(): void {
+  if (activeNotifyTimer) return;
+  activeNotifyTimer = setTimeout(() => {
+    activeNotifyTimer = null;
+    const payload = JSON.stringify({ type: 'activeSessions', sessions: listActiveSessions() });
+    if (payload === lastActivePayload) return;
+    lastActivePayload = payload;
+    broadcastToAllChannels(payload);
+  }, 0);
+  if (typeof (activeNotifyTimer as unknown as { unref?(): void }).unref === 'function') {
+    (activeNotifyTimer as unknown as { unref(): void }).unref();
+  }
+}
+
 let _entrySeq = 0;
 let _msgSeq = 0;
 function nextEntryKey(): string { return `e${++_entrySeq}`; }
@@ -224,6 +293,7 @@ function createBroadcastForEntry(entry: SessionEntry): (msg: string) => void {
     let parsed: Record<string, unknown> | undefined;
     try { parsed = JSON.parse(msg) as Record<string, unknown>; } catch {}
     if (parsed) applyMsg(entry, parsed);
+    if (parsed && ACTIVITY_EVENTS.has(parsed.type as string)) notifyActiveSessions();
     const gated = parsed ? SESSION_STREAM_EVENTS.has(parsed.type as string) : false;
     for (const ws of entry.clients) {
       if (ws.readyState === 1 && (!gated || !entry.browsingClients.has(ws))) {
@@ -322,6 +392,8 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
         killProc(entry.state.currentProc);
         entry.state.currentProc = undefined;
         entry.state.currentProcKey = undefined;
+        // An evicted entry can be mid-turn, so its row must stop showing as running.
+        notifyActiveSessions();
       }
       if (cd.entries.size === 0) registry.delete(cd.dir);
     }
@@ -334,7 +406,7 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
 export function getOrCreateChannel(dir: string): Channel {
   let cd = registry.get(dir);
   if (!cd) {
-    cd = { dir, entries: new Map(), clientEntry: new Map() };
+    cd = { dir, entries: new Map(), clientEntry: new Map(), clientViewing: new Map() };
     registry.set(dir, cd);
   }
   const _cd = cd;
@@ -372,6 +444,7 @@ export function getOrCreateChannel(dir: string): Channel {
     removeClient(ws) {
       const entry = _cd.clientEntry.get(ws);
       _cd.clientEntry.delete(ws);
+      _cd.clientViewing.delete(ws);
       if (!entry) return;
       entry.clients.delete(ws);
       entry.browsingClients.delete(ws);
@@ -389,13 +462,53 @@ export function getOrCreateChannel(dir: string): Channel {
       if (prev) prev.owner = undefined;
       const newEntry = createEntry(_cd, owner);
       joinEntry(_cd, ws, newEntry);
+      _cd.clientViewing.delete(ws);
       return newEntry.state;
     },
-    setBrowsing(ws, browsing) {
+    setBrowsing(ws, browsing, sessionId) {
       const entry = _cd.clientEntry.get(ws);
       if (!entry) return;
-      if (browsing) entry.browsingClients.add(ws);
-      else entry.browsingClients.delete(ws);
+      if (browsing) {
+        entry.browsingClients.add(ws);
+        if (sessionId) _cd.clientViewing.set(ws, sessionId);
+      } else {
+        entry.browsingClients.delete(ws);
+        _cd.clientViewing.delete(ws);
+      }
+    },
+    detachToBrowsedSession(ws) {
+      const viewing = _cd.clientViewing.get(ws);
+      if (!viewing) return undefined;
+      // Ownership follows the client, exactly as in moveToNewSession: a later reconnect
+      // must rejoin the session the user is actually in, not the one it walked away from.
+      const prev = _cd.clientEntry.get(ws);
+      const owner = prev?.owner;
+      if (prev) prev.owner = undefined;
+      const entry = createEntry(_cd, owner);
+      // joinEntry drops the client from the old entry's browsingClients, and the new
+      // entry is empty, so it replays nothing - the client already has this transcript
+      // on screen from the sessionLoaded that put it into browsing mode.
+      joinEntry(_cd, ws, entry);
+      entry.state.sessionId = viewing;
+      _cd.clientViewing.delete(ws);
+      return entry.state;
+    },
+    attachToLiveSession(ws, sessionId) {
+      const current = _cd.clientEntry.get(ws);
+      for (const entry of _cd.entries.values()) {
+        // Already in it: an ordinary return-to-live resume, which the caller replays
+        // itself. Only a session running in a DIFFERENT entry needs a move.
+        if (entry === current) continue;
+        const st = entry.state;
+        if (st.sessionId === sessionId && st.currentProc && !st.cliDone) {
+          // joinEntry replays this entry's history and streaming snapshot, which is what
+          // brings the progress indicator back and resumes the flow of output.
+          joinEntry(_cd, ws, entry);
+          _cd.clientViewing.delete(ws);
+          return st;
+        }
+      }
+      return undefined;
     },
     replaySnapshot(ws) {
       const entry = _cd.clientEntry.get(ws);
