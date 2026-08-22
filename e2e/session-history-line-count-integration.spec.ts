@@ -32,6 +32,10 @@ async function readCurrentCount(page: Page): Promise<number> {
   const dialog = page.getByRole('dialog', { name: 'Session History' });
   await expect(dialog).toBeVisible();
   await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
+  // A reopen paints the cached rows (no "Loading...") and revalidates in the
+  // background; the refresh button is disabled while that request is in flight,
+  // so wait it out or the cell still holds the count from the previous open.
+  await expect(dialog.getByRole('button', { name: 'Refresh sessions' })).toBeEnabled({ timeout: 20_000 });
 
   const current = dialog.locator('[class*="rowCurrent"]');
   await expect(current).toBeVisible({ timeout: 10_000 });

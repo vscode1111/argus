@@ -10,9 +10,11 @@ import * as path from 'path';
 // panel now passes a stable id and owns its own session entry, while a reconnect of
 // that same id (webview reload, daemon restart) rejoins the entry it already owns.
 //
-// Uses the real dev server on :3001, one unique temp dir per test.
+// Uses the real dev server on :3001, one unique temp dir per test. ARGUS_E2E_PORT
+// overrides the port so the suite can be pointed at a throwaway backend instead.
 
-const BACKEND = 'http://localhost:3001';
+const PORT = process.env.ARGUS_E2E_PORT ?? '3001';
+const BACKEND = `http://localhost:${PORT}`;
 
 async function getNonce(): Promise<string> {
   const res = await fetch(`${BACKEND}/nonce`);
@@ -26,7 +28,7 @@ function makeTempDir(tag: string): string {
 }
 
 function wsUrl(nonce: string, dir: string, panel: string): string {
-  return `ws://localhost:3001/agent?nonce=${encodeURIComponent(nonce)}`
+  return `ws://localhost:${PORT}/agent?nonce=${encodeURIComponent(nonce)}`
     + `&dir=${encodeURIComponent(dir)}&panel=${encodeURIComponent(panel)}`;
 }
 

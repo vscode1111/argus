@@ -67,7 +67,11 @@ export function ToolCall({ call, sessionDone }: Props) {
     () => result ? result.trim().split('\n').filter(Boolean).length : 0,
     [result]
   );
-  const pending = !result && !error;
+  // A resultless tool is only genuinely "working" while its turn is live. Once the turn
+  // is over the tool never will come back, so it must not keep pulsing: `done` rewrites
+  // such blocks via finalizeBlocks(), but only inside `state.streaming` - a transcript
+  // replayed from disk never passed through it and would otherwise pulse forever.
+  const pending = !result && !error && !sessionDone;
   const hasDiff = name === 'Edit' && !!(input.old_string || input.new_string);
   const oldLines = hasDiff ? String(input.old_string || '').split('\n') : [];
   const newLines = hasDiff ? String(input.new_string || '').split('\n') : [];

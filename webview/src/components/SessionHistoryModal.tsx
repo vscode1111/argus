@@ -16,11 +16,30 @@ interface Props {
   // session while another is streaming, the server's currentId still points to the
   // live session; this prop carries the id of the session actually being viewed.
   currentId?: string;
+  // Sessions with a turn running right now (any workspace, any panel). Held by App
+  // from server pushes rather than cached with the rows, which would go stale the
+  // moment a turn starts or finishes behind a closed modal.
+  activeIds: Set<string>;
   onResumeWorkspaceSession: (workspacePath: string, sessionId: string, lines?: number) => void;
   onClose: () => void;
 }
 
+// Pulsing dot marking a session that is working right now.
+function RunningDot() {
+  return <span className={styles.runningDot} role="img" aria-label="Working now" title="Working now" />;
+}
+
 type Tab = 'workspace' | 'all';
+
+// Both lists are cached at module scope so reopening the modal paints the rows
+// it showed last time instead of flashing "Loading...", which on the global tab
+// means waiting for the server to re-read up to 200 transcripts. The cache is
+// never authoritative: closing invalidates it, so every open re-requests the
+// workspace list (and the global one on its first visit) and the reply
+// overwrites the cache; the cached rows are only what fills the screen while
+// that reply is in flight. Page-scoped, never written to storage.
+let wsCache: { path: string; sessions: SessionSummary[]; currentId?: string } | null = null;
+let allCache: { sessions: GlobalSessionSummary[]; currentId?: string } | null = null;
 
 // Write text to the clipboard, falling back to a hidden textarea + execCommand
 // when the async Clipboard API is unavailable (plain-http LAN pages are not a
@@ -43,25 +62,30 @@ function fallbackCopy(text: string): void {
   document.body.removeChild(ta);
 }
 
-export function SessionHistoryModal({ currentPath, currentId: currentIdOverride, onResumeWorkspaceSession, onClose }: Props) {
+export function SessionHistoryModal({ currentPath, currentId: currentIdOverride, activeIds, onResumeWorkspaceSession, onClose }: Props) {
   // Remember the selected tab in-memory (reset on page refresh).
   const [tab, setTabState] = useState<Tab>(() => (getDialogState('sessionHistory')?.tab as Tab) || 'workspace');
   const setTab = (t: Tab) => { setTabState(t); patchDialogState('sessionHistory', { tab: t }); };
 
-  // This-workspace tab state
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [currentId, setCurrentId] = useState<string | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
+  // Cached rows only stand in for the workspace they were listed for.
+  const cached = wsCache?.path === currentPath ? wsCache : null;
+
+  // This-workspace tab state (seeded from the cache; the mount fetch refreshes it)
+  const [sessions, setSessions] = useState<SessionSummary[]>(() => cached?.sessions ?? []);
+  const [currentId, setCurrentId] = useState<string | undefined>(() => cached?.currentId);
+  const [loading, setLoading] = useState(() => !cached);
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
+  // With rows already on screen the mount fetch is a background revalidate, so it
+  // spins the refresh icon instead of blanking the list.
+  const [refreshing, setRefreshing] = useState(() => !!cached);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // All-workspaces tab state (global, lazy-loaded on first open)
-  const [allSessions, setAllSessions] = useState<GlobalSessionSummary[]>([]);
-  const [allCurrentId, setAllCurrentId] = useState<string | undefined>(undefined);
-  const [allLoading, setAllLoading] = useState(true);
+  // All-workspaces tab state (global, lazy-loaded on first visit)
+  const [allSessions, setAllSessions] = useState<GlobalSessionSummary[]>(() => allCache?.sessions ?? []);
+  const [allCurrentId, setAllCurrentId] = useState<string | undefined>(() => allCache?.currentId);
+  const [allLoading, setAllLoading] = useState(() => !allCache);
   const [allQuery, setAllQuery] = useState('');
   const [allRefreshing, setAllRefreshing] = useState(false);
   const allLoaded = useRef(false);
@@ -69,15 +93,21 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
   useWebviewMessage(
     (e: MessageEvent) => {
       if (e.data?.type === 'sessionList') {
-        setSessions(Array.isArray(e.data.sessions) ? e.data.sessions : []);
-        setCurrentId(typeof e.data.currentId === 'string' ? e.data.currentId : undefined);
+        const list: SessionSummary[] = Array.isArray(e.data.sessions) ? e.data.sessions : [];
+        const cid = typeof e.data.currentId === 'string' ? e.data.currentId : undefined;
+        setSessions(list);
+        setCurrentId(cid);
         setLoading(false);
         setRefreshing(false);
+        wsCache = { path: currentPath, sessions: list, currentId: cid };
       } else if (e.data?.type === 'allSessionList') {
-        setAllSessions(Array.isArray(e.data.sessions) ? e.data.sessions : []);
-        setAllCurrentId(typeof e.data.currentId === 'string' ? e.data.currentId : undefined);
+        const list: GlobalSessionSummary[] = Array.isArray(e.data.sessions) ? e.data.sessions : [];
+        const cid = typeof e.data.currentId === 'string' ? e.data.currentId : undefined;
+        setAllSessions(list);
+        setAllCurrentId(cid);
         setAllLoading(false);
         setAllRefreshing(false);
+        allCache = { sessions: list, currentId: cid };
       }
     },
     () => postMessage({ type: 'listSessions' }),
@@ -85,12 +115,25 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
 
   // If the restored tab is "All workspaces", lazy-load its list on mount.
   useEffect(() => {
-    if (tab === 'all' && !allLoaded.current) {
-      allLoaded.current = true;
-      postMessage({ type: 'listAllSessions' });
-    }
+    if (tab === 'all') loadAllOnce();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fetch the global list once per open. Cached rows stay on screen while the
+  // reply is in flight, so the wait shows on the refresh icon, not as a blank list.
+  function loadAllOnce() {
+    if (allLoaded.current) return;
+    allLoaded.current = true;
+    if (allCache) setAllRefreshing(true);
+    postMessage({ type: 'listAllSessions' });
+  }
+
+  // Keep the cached rows in step with a local edit, so a reopen doesn't briefly
+  // show the old title or a row that was just deleted.
+  function applySessions(next: SessionSummary[]) {
+    setSessions(next);
+    wsCache = { path: currentPath, sessions: next, currentId };
+  }
 
   // Re-fetch the list from disk; the spinner stops when the sessionList reply lands.
   function refresh() {
@@ -101,10 +144,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
   // Open the global "All workspaces" tab; load lazily on first visit.
   function openAll() {
     setTab('all');
-    if (!allLoaded.current) {
-      allLoaded.current = true;
-      postMessage({ type: 'listAllSessions' });
-    }
+    loadAllOnce();
   }
 
   function refreshAll() {
@@ -115,21 +155,31 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
   function resume(id: string, lines: number) {
     // Route through the same App handler as the "All workspaces" tab so the
     // loading spinner is shown; for a same-workspace id it just posts resumeSession.
+    markCurrent(id);
     onResumeWorkspaceSession(currentPath, id, lines);
     onClose();
   }
 
   // Resume a global session: switch to its workspace first when it differs.
   function resumeGlobal(s: GlobalSessionSummary) {
+    markCurrent(s.id);
     onResumeWorkspaceSession(s.workspacePath, s.id, s.lines);
     onClose();
+  }
+
+  // The resumed session becomes the current one, so move the cached highlight
+  // with it; otherwise a reopen greens the previously-current row until the
+  // fresh list lands.
+  function markCurrent(id: string) {
+    if (wsCache) wsCache = { ...wsCache, currentId: id };
+    if (allCache) allCache = { ...allCache, currentId: id };
   }
 
   function remove(e: React.MouseEvent, id: string) {
     e.stopPropagation();
     postMessage({ type: 'deleteSession', id });
     // Optimistic removal; the server also replies with a fresh sessionList.
-    setSessions(prev => prev.filter(s => s.id !== id));
+    applySessions(sessions.filter(s => s.id !== id));
   }
 
   // Copy a deep link to this session (?session=<id>). The workspace is resolved
@@ -153,7 +203,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
     if (title) {
       postMessage({ type: 'renameSession', id, title });
       // Optimistic update; the server also replies with a fresh sessionList.
-      setSessions(prev => prev.map(s => (s.id === id ? { ...s, title } : s)));
+      applySessions(sessions.map(s => (s.id === id ? { ...s, title } : s)));
     }
     setEditingId(null);
   }
@@ -237,6 +287,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
               filtered.map(s => (
                 <div
                   key={s.id}
+                  data-session-id={s.id}
                   className={[styles.row, s.id === effectiveCurrentId ? shell.rowCurrent : '', editingId === s.id ? styles.rowEditing : ''].filter(Boolean).join(' ')}
                   onClick={() => editingId === s.id ? undefined : resume(s.id, s.lines)}
                   title={s.lastPrompt || s.title}
@@ -258,7 +309,10 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                         aria-label="Rename session"
                       />
                     ) : (
-                      <span className={styles.rowTitle}>{s.title}</span>
+                      <span className={styles.rowTitle}>
+                        {activeIds.has(s.id) && <RunningDot />}
+                        {s.title}
+                      </span>
                     )}
                   </div>
                   {editingId !== s.id && (
@@ -337,12 +391,16 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
               filteredAll.map(s => (
                 <div
                   key={s.id}
+                  data-session-id={s.id}
                   className={[styles.row, s.id === allCurrentId ? shell.rowCurrent : ''].filter(Boolean).join(' ')}
                   onClick={() => resumeGlobal(s)}
                   title={`${s.title}\n${s.workspacePath}`}
                 >
                   <div className={styles.allRowMain}>
-                    <span className={styles.rowTitle}>{s.title}</span>
+                    <span className={styles.rowTitle}>
+                      {activeIds.has(s.id) && <RunningDot />}
+                      {s.title}
+                    </span>
                     <span className={styles.rowSub}>{s.workspaceName}</span>
                   </div>
                   <span className={styles.rowCount}>{s.lines > 0 ? fmtLineCount(s.lines) : ''}</span>

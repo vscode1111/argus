@@ -12,7 +12,7 @@ import { collectUsageInsights } from './usageInsights';
 import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
-import { type Channel, broadcastToAllChannels } from './channel';
+import { type Channel, broadcastToAllChannels, listActiveSessions } from './channel';
 import { describeModel } from './modelData';
 import { attachProcHandlers } from './cliHandler';
 import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath } from './sessions';
@@ -216,8 +216,20 @@ export function attachClientHandlers(
       s.totalBgTasks = 0;
       s.broadcast(JSON.stringify({ type: 'clear' }));
     } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
-      channel.setBrowsing(ws, false);
-      handleSend(s, msg);
+      // A send from a client that navigated to another session belongs to THAT session.
+      // handleSend only sees the entry state, so left in this entry the text would take
+      // the mid-turn-inject branch and be written into the stdin of the turn the client
+      // walked away from - visible to everyone watching that session, and not to the
+      // sender. Detaching first gives the client its own entry bound to what it is
+      // viewing, so the send spawns a normal turn with --resume on that session.
+      const detached = channel.detachToBrowsedSession(ws);
+      if (detached) {
+        if (!detached.sendLog) initChannelSession(detached, model);
+        handleSend(detached, msg);
+      } else {
+        channel.setBrowsing(ws, false);
+        handleSend(s, msg);
+      }
     } else if (msg.type === 'getSettings') {
       ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
     } else if (msg.type === 'restartDaemon') {
@@ -372,6 +384,10 @@ export function attachClientHandlers(
       listAllSessions().then(sessions => {
         try { ws.send(JSON.stringify({ type: 'allSessionList', sessions, currentId })); } catch {}
       }).catch(() => {});
+    } else if (msg.type === 'getActiveSessions') {
+      // Initial sync for a client that just connected; later changes arrive as
+      // `activeSessions` pushes from notifyActiveSessions().
+      ws.send(JSON.stringify({ type: 'activeSessions', sessions: listActiveSessions() }));
     } else if (msg.type === 'listDir') {
       ws.send(JSON.stringify({ type: 'dirList', ...listDir(typeof msg.path === 'string' ? msg.path : undefined) }));
     }
@@ -546,6 +562,18 @@ function handleToolAnswer(s: SessionState, msg: { type: string; id?: string; ans
 }
 
 function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, id: string) {
+  // If this session is mid-turn in another entry (another panel, or the entry this client
+  // detached from on a browsed send), join it instead of reading the transcript. The file
+  // on disk stops at the last committed turn, so loading it would drop the turn in flight
+  // and leave the client with no progress indicator and no further output.
+  const live = channel.attachToLiveSession(ws, id);
+  if (live) {
+    live.sendLog('info', `Joined session ${id}, turn already in progress`);
+    // The snapshot replay restores the blocks but not the counters behind the timer.
+    const outputTokens = live.completedOutputTokens + Math.ceil(live.liveOutputChars / 4);
+    try { ws.send(JSON.stringify({ type: 'token_update', inputTokens: live.liveInputTokens, outputTokens })); } catch {}
+    return;
+  }
   // Don't kill currentProc - the active CLI turn belongs to the whole entry, not this client.
   const procRunning = !!s.currentProc && !s.cliDone;
   // isBrowsing: proc is active AND the user is viewing a session other than the one being streamed.
@@ -554,7 +582,10 @@ function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, i
   // Only update the session pointer when the proc is idle or the user is returning to the live session.
   // Updating it while browsing a different session would corrupt the --resume arg for the next spawn.
   if (!isBrowsing) s.sessionId = id;
-  channel.setBrowsing(ws, isBrowsing);
+  // Record what this client now has on screen. The entry keeps pointing at the streaming
+  // session, so without this a send from here has no way back to the session the user is
+  // actually looking at, and lands in the running turn instead.
+  channel.setBrowsing(ws, isBrowsing, isBrowsing ? id : undefined);
   const messages = loadSession(id, s.workspaceDir);
   s.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);
   ws.send(JSON.stringify({ type: 'sessionLoaded', id, messages }));
