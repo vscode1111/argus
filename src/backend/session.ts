@@ -7,8 +7,11 @@ import { IS_WIN, resolveClaudeBin, killProc, killAllClaude, plural, classifyErro
 import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
 import { getSkills } from './skills';
 import { readFilePreview } from './filePreview';
-import { fetchAccountInfo, fetchUsage, fetchModels } from './accountUsage';
+// No fetchUsage here on purpose: usagePoller.ts is the only caller of the usage API,
+// so the per-process rate floor cannot be bypassed by a client-triggered handler.
+import { fetchAccountInfo, fetchModels } from './accountUsage';
 import { collectUsageInsights } from './usageInsights';
+import { getUsageSnapshot, noteUsageActivity, requestUsageRefresh } from './usagePoller';
 import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
@@ -318,8 +321,14 @@ export function attachClientHandlers(
       const result = readFilePreview(msg.path, s.workspaceDir);
       ws.send(JSON.stringify({ type: 'filePreview', ...result }));
     } else if (msg.type === 'getAccountUsage') {
+      // An explicit refresh means the user is at the machine looking at the numbers,
+      // so it reopens the poller's activity window; merely opening the modal does not.
+      if (msg.force) noteUsageActivity();
       const accountP = fetchAccountInfo();
-      const usageP = fetchUsage(msg.force);
+      // Never a per-client fetch: the server refreshes at most once per
+      // USAGE_MIN_REFRESH_MS however many panels ask, and broadcasts what it gets, so
+      // opening this modal also updates every other client's header indicator.
+      const usageP = requestUsageRefresh();
       accountP.then((account) => {
         ws.send(JSON.stringify({ type: 'accountUsage', account, usagePending: true }));
       }).catch(() => {});
@@ -388,6 +397,24 @@ export function attachClientHandlers(
       // Initial sync for a client that just connected; later changes arrive as
       // `activeSessions` pushes from notifyActiveSessions().
       ws.send(JSON.stringify({ type: 'activeSessions', sessions: listActiveSessions() }));
+    } else if (msg.type === 'getUsageLimits') {
+      // Initial sync for a client that just connected; later refreshes arrive as
+      // `usageLimits` pushes from the daemon's poller.
+      const snap = getUsageSnapshot();
+      if (snap.windows.length > 0) {
+        ws.send(JSON.stringify({ type: 'usageLimits', windows: snap.windows, fetchedAt: snap.fetchedAt }));
+      } else {
+        // Nothing cached yet (a fresh process, or every attempt so far has failed). Ask
+        // the server to refresh, which is rate-floored and shared - a client connecting
+        // cannot turn into an API call of its own. Always answer, empty windows included:
+        // one request gets exactly one reply, so a client can tell "unavailable" from
+        // "still loading".
+        requestUsageRefresh().then((s2) => {
+          try { ws.send(JSON.stringify({ type: 'usageLimits', windows: s2.windows, error: s2.error, fetchedAt: s2.fetchedAt || Date.now() })); } catch {}
+        }).catch((err) => {
+          try { ws.send(JSON.stringify({ type: 'usageLimits', windows: [], error: String(err), fetchedAt: Date.now() })); } catch {}
+        });
+      }
     } else if (msg.type === 'listDir') {
       ws.send(JSON.stringify({ type: 'dirList', ...listDir(typeof msg.path === 'string' ? msg.path : undefined) }));
     }
@@ -397,6 +424,9 @@ export function attachClientHandlers(
 function handleSend(s: SessionState, msg: { type?: string; text?: string; images?: Array<{ data: string; mediaType: string; name?: string }>; mode?: string; _silent?: boolean; _askResume?: boolean }) {
   const text = msg.text ?? '';
   const images = msg.images;
+  // Any send spends tokens, including a mid-turn inject and a silent retry, so it is
+  // what keeps the usage poller awake (and wakes it after a paused hour).
+  noteUsageActivity();
 
   if (s.currentProc?.stdin?.writable && !s.cliDone && !msg._silent && !msg._askResume) {
     s.lastMessage = { text, images, mode: msg.mode };

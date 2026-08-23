@@ -58,6 +58,10 @@ export default defineConfig({
     url: 'http://localhost:5173',
     reuseExistingServer: true,
     timeout: 15_000,
-    env: { ARGUS_CONFIG: e2eConfig },
+    // ARGUS_USAGE_POLL=0: the dev server runs the usage poller like the daemon, and a
+    // suite that reconnects hundreds of times would keep calling the live usage API on
+    // a timer - which is what rate-limits the account (HTTP 429) and then makes the
+    // API-dependent specs skip.
+    env: { ARGUS_CONFIG: e2eConfig, ARGUS_USAGE_POLL: '0' },
   },
 });

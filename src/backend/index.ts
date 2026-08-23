@@ -9,6 +9,7 @@ import { attachClientHandlers } from './session';
 import { getOrCreateChannel } from './channel';
 import { findWorkspaceForSession } from './sessions';
 import { readConfig, CONFIG_PATH } from './config';
+import { startUsagePoller } from './usagePoller';
 
 export type { ArgusConfig } from './config';
 
@@ -305,6 +306,11 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       // Arm the idle timer at startup too, so a daemon that never gets a client still
       // exits (no-op unless idleTimeoutMs is set; the first connection clears it).
       scheduleIdleShutdown();
+      // One usage poller per server process (daemon or dev), never per client. It lives
+      // here rather than in daemon.ts so the dev server shows real numbers too, and so
+      // a transient failure (the usage API rate-limits hard) is retried a minute later
+      // instead of leaving the indicator blank until someone reloads the page.
+      startUsagePoller((msg) => console.log(`[argus-server] ${msg}`));
       resolve({ httpServer, port: actualPort, nonce, close: () => { clearIdleTimer(); clearInterval(pingTimer); wss.close(); httpServer.close(); } });
     });
   });

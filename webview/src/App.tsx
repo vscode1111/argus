@@ -5,6 +5,7 @@ import { LogPanel } from './components/LogPanel';
 import { SessionHistoryModal } from './components/SessionHistoryModal';
 import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
+import { UsageIndicator } from './components/UsageIndicator';
 import { AutoFileViewer } from './components/AutoFileViewer';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { PreviewProvider } from './contexts/PreviewContext';
@@ -12,6 +13,7 @@ import { postMessage, isVsCode } from './vscode';
 import { reducer, initialState, type AppAction } from './reducer';
 import { SessionSummary, ActiveSession } from './types';
 import { basename } from './utils/path';
+import { type RateLimitInfo } from './utils/usage';
 import { fmtLineCount } from './utils/text';
 
 function playCompletionSound(): void {
@@ -89,6 +91,12 @@ function AppInner() {
   // Sessions with a turn running right now, anywhere on this server (any workspace,
   // any panel). Server-pushed, never cached, so the history list marks them live.
   const [activeIds, setActiveIds] = React.useState<Set<string>>(() => new Set());
+  // Current rate-limit windows for the header indicator. Pushed by the daemon's
+  // central poller (one API call per minute for the whole machine, not per panel).
+  const [usageWindows, setUsageWindows] = React.useState<RateLimitInfo[]>([]);
+  // Why usage is missing, when the server said so - shown in the indicator's tooltip
+  // so an empty widget is never mistaken for a missing feature.
+  const [usageError, setUsageError] = React.useState<string | undefined>(undefined);
   const [editingName, setEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState('');
   const [showSessionBar, setShowSessionBar] = React.useState(() => {
@@ -230,14 +238,31 @@ function AppInner() {
         setEditingName(false);
       } else if (t === 'activeSessions' && Array.isArray(e.data.sessions)) {
         setActiveIds(new Set((e.data.sessions as ActiveSession[]).map(a => a.id)));
+      } else if (t === 'usageLimits' && Array.isArray(e.data.windows)) {
+        // Empty means the fetch behind it failed (a reconnect landing on a 429, say).
+        // Keep whatever we are already showing and only record the reason - same rule the
+        // server applies to its own snapshot; blanking good bars on a transient failure is
+        // strictly worse than showing numbers a minute old.
+        const windows = e.data.windows as RateLimitInfo[];
+        if (windows.length > 0) setUsageWindows(windows);
+        setUsageError(windows.length > 0 ? undefined : (typeof e.data.error === 'string' ? e.data.error : undefined));
+      } else if (t === 'accountUsage' && Array.isArray(e.data.rateLimits) && e.data.rateLimits.length > 0) {
+        // The Account & Usage modal fetched usage; keep the header indicator in step with
+        // what it is showing. The server also adopts those windows and broadcasts them, so
+        // this is belt and braces - but it is instant, and it still works against an older
+        // daemon that predates that broadcast (panel/daemon version skew is routine here).
+        setUsageWindows(e.data.rateLimits as RateLimitInfo[]);
+        setUsageError(undefined);
       } else if (t === 'ws_status' && e.data.connected) {
         // A reconnect (daemon restart, workspace switch) means missed pushes; the
-        // server only sends the set on change, so ask for the current one.
+        // server only sends these on change, so ask for the current ones.
         postMessage({ type: 'getActiveSessions' });
+        postMessage({ type: 'getUsageLimits' });
       }
     }
     window.addEventListener('message', onSessionMsg);
     postMessage({ type: 'getActiveSessions' });
+    postMessage({ type: 'getUsageLimits' });
     return () => window.removeEventListener('message', onSessionMsg);
   }, []);
 
@@ -452,16 +477,9 @@ function AppInner() {
           {workspaceName && (
             <WorkspaceMenu currentPath={state.workspacePath} name={workspaceName} onSelect={switchWorkspace} />
           )}
-          <button
-            className="btn-icon"
-            title="Account & usage"
-            aria-label="Account & usage"
-            onClick={() => setAccountUsageOpen(true)}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </button>
+          {/* Doubles as the Account & usage button: it opens the modal, and falls
+              back to that button's icon when there are no windows to draw. */}
+          <UsageIndicator windows={usageWindows} error={usageError} onClick={() => setAccountUsageOpen(true)} />
         </>
       )}
       <button
