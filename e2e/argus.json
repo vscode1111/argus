@@ -20,6 +20,7 @@
   "runtimeDefaultModel": "",
   "daemonLastStartAt": 0,
   "modelDataUpdatedAt": 0,
+  "modelDataAttemptedAt": 0,
   "modelFamilyDescriptions": {},
   "modelListCache": [],
   "effort": "low",

@@ -58,6 +58,33 @@ The registry itself is greppable (technique: [cli-bundle-mining.md](cli-bundle-m
 `{id:"claude-sonnet-5",...,context:{window:1e6,native_1m:!0,supports_1m_beta:!0,...}}`, resolved by
 a `jxi(model, betaHeaders)` chain that falls through to a `200000` default constant.
 
+## The window is only as fresh as the last successful refresh, and the fallback is silent
+
+`contextWindowFor()` does not call `/v1/models`; it reads `modelListCache` from `argus.json`,
+which the daemon fills on its daily refresh. So the pill depends on a cache that can go stale, and
+the failure is **silent in the direction that hurts**: an id missing from the cache returns
+`DEFAULT_CONTEXT_WINDOW` (200k), which on a 1M model reports a percentage five times too high.
+Nothing in the UI distinguishes "the window is 200k" from "I do not know the window".
+
+Two consequences when a percentage looks wrong:
+
+- Check `modelDataUpdatedAt` and the cache contents before suspecting the arithmetic. A genuine
+  cache hit and a fallback produce identical output, so compare the id against `modelListCache`
+  rather than reading the number:
+
+  ```bash
+  node -e 'const c=require(require("os").homedir()+"/.claude/argus.json");
+    console.log(c.modelDataUpdatedAt&&new Date(c.modelDataUpdatedAt).toISOString());
+    for(const m of c.modelListCache||[]) console.log(m.id, m.contextWindow??"(none)")'
+  ```
+
+- A refresh whose `/v1/models` fetch failed keeps the previously cached windows rather than
+  blanking them, which is why a stale cache is usually *right*. It is a brand-new model, absent
+  from a cache that predates it, that falls back.
+
+Refresh scheduling and the two clocks that bound how long a failure can hide this:
+[../tasks/model-refresh-retry-backoff/notes.md](../tasks/model-refresh-retry-backoff/notes.md).
+
 ## The official percentage excludes output tokens
 
 From the same bundle:

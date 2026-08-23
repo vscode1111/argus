@@ -2,8 +2,8 @@ import { spawn, execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { readConfig, writeConfig } from './config';
-import { fetchModels } from './accountUsage';
+import { readConfig, writeConfig, type ArgusConfig } from './config';
+import { fetchModels, type ModelInfo } from './accountUsage';
 
 // Model metadata upkeep: family-based descriptions (mirroring the CLI's own
 // substring classifier, so new snapshots of known families never render blank),
@@ -65,6 +65,10 @@ export function contextWindowFor(id: string, cache?: Array<{ id: string; context
 // Refresh no more than once a day; a long-running daemon re-checks hourly.
 export const MODEL_DATA_REFRESH_MS = 24 * 60 * 60 * 1000;
 const REFRESH_RECHECK_MS = 60 * 60 * 1000;
+// How long to wait before retrying after an attempt that fetched no model list.
+// Shorter than the success interval so a transient failure (offline, expired token)
+// costs an hour of a possibly wrong context window rather than a full day.
+export const MODEL_DATA_RETRY_MS = 60 * 60 * 1000;
 const DETECT_TIMEOUT_MS = 60_000;
 
 type Log = (msg: string) => void;
@@ -238,9 +242,49 @@ export interface ModelRefreshResult {
 
 let refreshInFlight = false;
 
+// Config subset the refresh scheduling decision depends on. Taking it as an argument
+// (rather than reading the config here) keeps the decision pure and testable.
+export type RefreshClock = Pick<ArgusConfig, 'modelDataUpdatedAt' | 'modelDataAttemptedAt'>;
+
+// Two independent gates, both of which must open:
+//   - success gate: the last *fetched* data must be at least a day old.
+//   - attempt gate: the last try, successful or not, must be at least an hour old.
+// The attempt gate is what makes it safe for a failure to leave modelDataUpdatedAt
+// alone. Without it, a permanently broken environment (logged out, offline) would be
+// stale forever and therefore re-attempt on every daemon start, and each attempt
+// spawns a real CLI turn to detect the default model.
+export function shouldRefreshModelData(cfg: RefreshClock, now: number = Date.now()): boolean {
+  if (now - (cfg.modelDataUpdatedAt || 0) < MODEL_DATA_REFRESH_MS) return false;
+  if (now - (cfg.modelDataAttemptedAt || 0) < MODEL_DATA_RETRY_MS) return false;
+  return true;
+}
+
+// Merge a refresh result into the config. Every field is written only when the
+// corresponding lookup actually produced something, so a partial failure keeps the
+// previous value instead of blanking it.
+//
+// The important asymmetry: `modelDataAttemptedAt` always advances, `modelDataUpdatedAt`
+// only when a model list came back. The model list is what `contextWindowFor` reads,
+// so stamping the success clock after a failed fetch would report a model whose window
+// is unknown as the 200k default for a full day, which on a 1M model is a percentage
+// five times too high.
+export function applyRefreshResult(
+  cfg: ArgusConfig,
+  result: { defaultModel: string | null; families: Record<string, string>; models: ModelInfo[] },
+  now: number = Date.now(),
+): ArgusConfig {
+  const next: ArgusConfig = { ...cfg, modelDataAttemptedAt: now };
+  if (result.defaultModel) next.runtimeDefaultModel = result.defaultModel;
+  if (Object.keys(result.families).length > 0) next.modelFamilyDescriptions = result.families;
+  if (result.models.length > 0) {
+    next.modelListCache = result.models;
+    next.modelDataUpdatedAt = now;
+  }
+  return next;
+}
+
 // Refreshes runtimeDefaultModel, modelFamilyDescriptions and modelListCache in the
-// global config. Partial failures keep the previous values; modelDataUpdatedAt is
-// stamped regardless so a broken environment retries daily instead of on every start.
+// global config. Partial failures keep the previous values (see applyRefreshResult).
 export async function refreshModelData(log: Log): Promise<ModelRefreshResult> {
   if (refreshInFlight) {
     log('model-data refresh already in progress, skipping');
@@ -255,13 +299,11 @@ export async function refreshModelData(log: Log): Promise<ModelRefreshResult> {
     ]);
     const families = extractFamilyDescriptions(log);
 
-    const cfg = readConfig();
-    const next = { ...cfg, modelDataUpdatedAt: Date.now() };
-    if (defaultModel) next.runtimeDefaultModel = defaultModel;
-    if (Object.keys(families).length > 0) next.modelFamilyDescriptions = families;
-    if (models.length > 0) next.modelListCache = models;
-    writeConfig(next);
+    writeConfig(applyRefreshResult(readConfig(), { defaultModel, families, models }));
 
+    if (models.length === 0) {
+      log('model list fetch returned nothing; keeping the cached windows and retrying in an hour');
+    }
     log(`model data refreshed: default=${defaultModel ?? '(unchanged)'}, families=${Object.keys(families).length}, models=${models.length}`);
     return { defaultModel, families, cachedModels: models.length };
   } finally {
@@ -270,17 +312,17 @@ export async function refreshModelData(log: Log): Promise<ModelRefreshResult> {
 }
 
 // Called by the daemon on startup: records the launch time in the global config and
-// keeps model data at most a day old. The gate is modelDataUpdatedAt rather than the
-// previous launch time - the daemon idle-exits and respawns many times a day, so a
-// start-to-start gate would never reach 24h. ARGUS_MODEL_REFRESH=0 disables the
-// refresh (used by e2e daemon specs, which must not spawn real CLI turns).
+// keeps model data at most a day old. The gates are the two timestamps in
+// shouldRefreshModelData, never the previous launch time - the daemon idle-exits and
+// respawns many times a day, so a start-to-start gate would never reach 24h.
+// ARGUS_MODEL_REFRESH=0 disables the refresh (used by e2e daemon specs, which must
+// not spawn real CLI turns).
 export function scheduleModelDataRefresh(log: Log): void {
   writeConfig({ ...readConfig(), daemonLastStartAt: Date.now() });
   if (process.env.ARGUS_MODEL_REFRESH === '0') return;
 
   const maybeRefresh = () => {
-    const cfg = readConfig();
-    if (Date.now() - (cfg.modelDataUpdatedAt || 0) < MODEL_DATA_REFRESH_MS) return;
+    if (!shouldRefreshModelData(readConfig())) return;
     refreshModelData(log).catch((err) => log(`model-data refresh failed: ${(err as Error).message ?? err}`));
   };
   maybeRefresh();

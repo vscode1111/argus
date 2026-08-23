@@ -69,6 +69,19 @@ Only these four are real subscription windows among the top-level keys; everythi
 
 **The endpoint rate-limits aggressively.** Cache results (Argus uses a 60s TTL) and treat `429` as transient. Tests that hit it live should tolerate an empty/`429` result rather than fail hard.
 
+A `429` is not rare under development load: a day of e2e runs, each reconnecting and re-fetching, put the account into a sustained rate limit that lasted well beyond a single window and made every API-dependent spec skip. Budget calls deliberately.
+
+## Polling it continuously
+
+If a feature needs the windows kept fresh rather than fetched on demand, poll in **one place per server process, never per client** - the windows are machine-global, so N panels asking produces N times the requests and the same three numbers. Argus does this in `src/backend/usagePoller.ts`, started from `startServer()`:
+
+- **Activity-gated**, because the numbers only move while tokens are being spent: any send (or an explicit refresh) opens a one-hour window during which it refreshes once a minute; an hour of silence clears the timer entirely, so an idle machine makes no requests at all.
+- **A failed poll keeps the previous snapshot.** With `429` this common, dropping to empty on every failure would blank the UI more often than not.
+- **Client-triggered refreshes go through the same module** (`requestUsageRefresh()`), never a per-client `fetchUsage`: it answers from the snapshot when the last *attempt* is younger than `USAGE_MIN_REFRESH_MS` (60s), joins a request already in flight, or spends the one request the process is allowed - so opening the modal and clicking refresh in five panels is one request, not five.
+- **`ARGUS_USAGE_POLL=0` disables it** - required for test runs (see [e2e-testing.md](e2e-testing.md), "A spec that depends on a live external API").
+
+The general shape (one owning module, an attempt-based floor, coalescing, fan-out, keep-last-good) applies to any rate-limited endpoint this repo calls: [rate-limited-external-apis.md](rate-limited-external-apis.md).
+
 ## Where Argus uses it
 
-`src/backend/accountUsage.ts` (`fetchUsage`, `parseUsageResponse`). See [tasks/account-and-usage/notes.md](../tasks/account-and-usage/notes.md).
+`src/backend/accountUsage.ts` (`fetchUsage`, `parseUsageResponse`) and `src/backend/usagePoller.ts` (the central poller). See [tasks/account-and-usage/notes.md](../tasks/account-and-usage/notes.md) and [tasks/usage-limits-indicator/notes.md](../tasks/usage-limits-indicator/notes.md).

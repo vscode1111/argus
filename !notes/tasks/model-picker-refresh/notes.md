@@ -78,6 +78,23 @@ The literal request was "if 24h passed since the daemon last started". The daemo
 - Fable description corrected to the CLI's wording "Most capable for your hardest and longest-running tasks".
 - Company task registry (`scub111g/!notes/tasks/`) not updated: its scope line restricts it to cross-project/infra tasks, and argus per-task notes have never been mirrored there.
 
+## Superseded
+
+- **Was:** one clock, `modelDataUpdatedAt`, stamped at the end of every refresh regardless of
+  whether the `/v1/models` fetch succeeded, so a broken environment retried daily rather than on
+  every daemon start.
+- **Actually:** two clocks. `modelDataUpdatedAt` advances only when a model list actually came
+  back; a new `modelDataAttemptedAt` advances on every attempt and gates retries to once an hour.
+  `shouldRefreshModelData()` requires both.
+- **Why it was wrong:** not wrong when written, it was a deliberate tradeoff (see the comment it
+  carried), but it charged the wrong thing for respawn protection. A failed fetch left the window
+  unknown, and `contextWindowFor` then falls back to 200k, which on a 1M model is a percentage 5x
+  too high, held for a full day. The attempt clock buys the same protection without that cost.
+- **Corrected by:** [model-refresh-retry-backoff](../model-refresh-retry-backoff/notes.md)
+
+The "gate on `modelDataUpdatedAt`, not `daemonLastStartAt`" decision above still holds; only the
+stamping rule changed.
+
 ## Remaining work
 - ~~Not committed yet~~ Committed and pushed on 2026-08-06 as `79b8461` on `main` (version 0.0.82).
 - The live daemon still runs the old build: activate with `yarn daemon:stop` + open a panel (or the Settings restart button). Not done from the agent session because it kills live CLI sessions hanging off the daemon. Confirmed still true on 2026-08-06 (daemon spawned from the installed `local.argus-0.0.80` folder, so the extension install also needs a rebuild+reinstall for the webview side).

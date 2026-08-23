@@ -92,6 +92,14 @@ Integration specs run against a real model, so an assertion is only stable if it
   else if (e.type === 'done' && started) done = true;
   ```
   Without that gate, `stop-then-send-integration.spec.ts` reported a fixed build as still broken (the stop's own `done`, arriving *before* the new turn's `thinking_start`, was read as the new turn ending in 200ms). The timestamps were what exposed it - an out-of-order pair in the frame log, not a wrong value.
+- **To prove data came from a background job, assert its age at request time - not an absolute cutoff.** When a feature's whole point is that the server produced something *before* anyone asked (a poller, a cache, a warm snapshot), the reply looks identical to an on-request fetch; only its timestamp separates them. The first attempt at `usage-indicator-integration.spec.ts` took a cutoff right after the daemon started listening and required `fetchedAt < cutoff`. It failed on a working build: the startup poll is a network round trip that completes a few hundred ms **after** the listen callback, so its own data is stamped later than the cutoff. Record the instant of the *request* instead and assert the data is already older than it by a margin, retrying until the background job lands:
+  ```ts
+  const reqAt = Date.now();
+  ws.send(JSON.stringify({ type: 'getUsageLimits' }));
+  const msg = await waitForFrame(ws, 'usageLimits');
+  return reqAt - (msg.fetchedAt as number) > 1_500;   // predates the request => not fetched for it
+  ```
+  Pair it with a **control that disables the background job** and asserts the opposite (age ≈ 0). Without the control, "any reply at all" satisfies the test and a poller that never ran still passes. Diagnosing the failed first attempt is also a case for probing the unit directly (`!notes/tasks/usage-limits-indicator/scripts/probe-poller.js` showed the poller filling its snapshot in ~340ms, which located the bug in the assertion rather than the feature).
 - **Put a threshold at the real boundary, not at a comfortable-looking number.** If a behaviour is binary in the code, find the value that separates the two branches and assert *that*; anything above it is a second, unstated assertion about model speed. `streaming-partial-integration.spec.ts` required `>= 3` `text_chunk` frames when the code's actual boundary is 1 (with `--include-partial-messages` off, `handleAssistant` sends a single frame with the whole text via `!s.receivedDeltas`). Frames beyond the second only count how long generation lasted, since the CLI flushes deltas on a ~0.8s timer - so a correct 2-frame run failed. Where a small count is unavoidable, also **size the prompt so the effect is observable**: 80 numbers generate in under a second and yield 2 frames, 200 numbers yield 5-6.
 
 ### Run the red before trusting a regression test
@@ -125,6 +133,27 @@ fails and with what value. Two things this catches, both hit while writing
   closed by "some event during streaming" but specifically by the turn-commit boundary. A
   spec that only asserts the broken cases proves less than one that also pins down where the
   breakage stops.
+- **When the fix *creates* the function under test, mutate instead of reverting.** Extracting a
+  pure seam while fixing a bug (`applyRefreshResult` in `model-data-refresh.spec.ts`) leaves
+  nothing to revert to: the old tree has no such export, so a "red" run is a module error, not a
+  failing assertion, and proves nothing. Put the **old behaviour** back inside the new function
+  instead (one line, marked `TEMPORARY MUTATION`), run, then restore and assert the marker count
+  is 0 so the mutation cannot be committed. The red there was 3 failed / 7 passed with the
+  failures confined to the persistence tests, which is the same localisation signal as the bullet
+  above.
+
+### `-integration` means a real CLI or backend, not merely "not a UI test"
+
+The suffix routes the file into the serial `workers: 1` project, so it is a cost, not a label.
+A test that exercises **compiled backend code as plain functions** drives no CLI and no server,
+so it belongs in `mock`, which is parallel and runs first: `model-data-refresh.spec.ts` was
+briefly named `-integration` out of habit before being moved.
+
+Related, and easy to cargo-cult in the other direction: the child-process ceremony in
+`context-window-integration.spec.ts` and `workspace-info-config-integration.spec.ts` exists only
+because the functions they test read `ARGUS_CONFIG`, which `config.ts` resolves at **import**
+time. A function that takes the config as an argument has no such coupling and can be called
+directly with `require()` on the `out/` bundle, guarded by a `yarn compile` in `beforeAll`.
 
 ### Gotcha: reading the clipboard right after clicking a copy button
 
@@ -177,6 +206,14 @@ Close the dialog first (`page.keyboard.press('Escape')`, then assert `toHaveCoun
 The same overlay is `aria-hidden`, which is why role-based locators cannot see inside these modals and have to go through `[role="dialog"]` (see `preview-navigation.spec.ts`).
 
 Found in `session-active-marker-integration.spec.ts`; full write-up in [../tasks/session-active-marker/notes.md](../tasks/session-active-marker/notes.md).
+
+## A spec that depends on a live external API
+
+Two separate obligations, and the second is the one that gets skipped.
+
+**The spec must skip, not fail, when the API is unavailable.** Probe the dependency first and `test.skip(...)` on a bad answer, so a `429` is reported as "not exercised" rather than as a broken feature (`account-usage-integration.spec.ts` and `usage-indicator-integration.spec.ts` both do this). Then make sure *something* still runs unconditionally: assert the round trip in a form that holds when the API is down - one request yields exactly one reply, carrying either data or a stated `error`. Otherwise every assertion about that path evaporates precisely when the environment is degraded, and a wiring regression looks like a rate limit.
+
+**The suite must not be what exhausts the quota.** Anything the server does on a timer runs for the whole suite, multiplied by every reconnect. Argus's usage poller is disabled for tests in two places - `ARGUS_USAGE_POLL: '0'` in `playwright.config.ts`'s `webServer.env` (the dev server on `:3001`) and in `e2e/daemonHelpers.ts` (spawned daemons) - after a day of runs put the account into a sustained `429` that then made the API-dependent specs skip. A background job added to `startServer` needs the same treatment, or it silently degrades every later run.
 
 ## Integration config: `e2e/argus.json`
 

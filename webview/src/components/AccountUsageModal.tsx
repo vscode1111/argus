@@ -5,6 +5,7 @@ import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
 import { useWebviewMessage } from '../hooks/useWebviewMessage';
 import { type ModelEntry, FALLBACK_MODELS, makeDefaultEntry, sameModel, toModelEntry } from '../utils/model';
+import { type RateLimitInfo, formatReset, sortWindows, usagePercent, usageTier, windowLabel } from '../utils/usage';
 import styles from './AccountUsageModal.module.css';
 import shell from './shared/centeredModal.module.css';
 
@@ -14,14 +15,6 @@ interface AccountInfo {
   email?: string;
   orgName?: string;
   subscriptionType?: string;
-}
-
-interface RateLimitInfo {
-  rateLimitType: string;
-  utilization: number; // 0..1
-  resetsAt?: number;   // unix epoch seconds
-  status?: string;
-  label?: string;      // server-provided display label (model-scoped windows, e.g. "Weekly Fable")
 }
 
 interface InsightRow {
@@ -78,15 +71,6 @@ const AUTH_LABELS: Record<string, string> = {
   'api_key': 'API Key',
 };
 
-// Friendly label + display order for known rate-limit windows.
-const RATE_LIMIT_META: Record<string, { label: string; order: number }> = {
-  five_hour: { label: 'Session (5hr)', order: 0 },
-  seven_day: { label: 'Weekly (7 day)', order: 1 },
-  seven_day_fable: { label: 'Weekly Fable', order: 2 },
-  seven_day_opus: { label: 'Weekly Opus', order: 3 },
-  seven_day_sonnet: { label: 'Weekly Sonnet', order: 4 },
-};
-
 // "What's contributing to your limits usage?" behavior insights: official copy,
 // keyed by the behavior keys the server reports (sorted by cost there). Unknown
 // future keys are skipped rather than rendered without wording.
@@ -117,45 +101,6 @@ const BEHAVIOR_META: Record<string, { headline: (pct: number) => string; body: s
 // show the top 8 rows.
 const MIN_BEHAVIOR_PCT = 10;
 const TABLE_ROW_CAP = 8;
-
-function rateLimitLabel(type: string): string {
-  if (RATE_LIMIT_META[type]) return RATE_LIMIT_META[type].label;
-  // Fallback: prettify the raw type, e.g. "five_hour" -> "Five Hour"
-  return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
-function rateLimitOrder(type: string): number {
-  return RATE_LIMIT_META[type]?.order ?? 100;
-}
-
-function formatReset(resetsAt: number): string {
-  const target = resetsAt * 1000;
-  const diffMs = target - Date.now();
-  if (diffMs <= 0) return 'Resets soon';
-
-  // Relative countdown (two-unit precision).
-  const totalMin = Math.floor(diffMs / 60_000);
-  let rel: string;
-  if (totalMin < 60) {
-    rel = `${totalMin}m`;
-  } else {
-    const totalHr = Math.floor(totalMin / 60);
-    if (totalHr < 24) {
-      const m = totalMin % 60;
-      rel = m > 0 ? `${totalHr}h ${m}m` : `${totalHr}h`;
-    } else {
-      const days = Math.floor(totalHr / 24);
-      const h = totalHr % 24;
-      rel = h > 0 ? `${days}d ${h}h` : `${days}d`;
-    }
-  }
-
-  // Absolute reset moment, like the official panel (e.g. "Sun 9:00 PM").
-  const d = new Date(target);
-  const day = d.toLocaleDateString('en-US', { weekday: 'short' });
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  return `Resets in ${rel} · ${day} ${time}`;
-}
 
 export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 'high', thinkingEnabled = true }: Props) {
   const [tab, setTabState] = useState<Tab>(() => (getDialogState('accountUsage')?.tab as Tab) || 'usage');
@@ -204,6 +149,14 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
         setRateLimits(Array.isArray(d.rateLimits) ? d.rateLimits : []);
         setUsageError(typeof d.usageError === 'string' ? d.usageError : undefined);
         setUsageLoading(false);
+      } else if (e.data?.type === 'usageLimits' && Array.isArray(e.data.windows) && e.data.windows.length > 0) {
+        // The server pushes these when its shared snapshot changes (the poller, or
+        // another panel's refresh). Adopt them so an open modal cannot sit on numbers
+        // older than the header indicator behind it. Empty pushes are ignored: this is
+        // a sync, not a load, and it must not blank bars we already have.
+        setRateLimits(e.data.windows as RateLimitInfo[]);
+        setUsageError(undefined);
+        setUsageLoading(false);
       } else if (e.data?.type === 'usageInsights') {
         const d = e.data;
         const hasReports = d.day && d.week;
@@ -250,9 +203,7 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
     postMessage({ type: 'switchModel', model: id });
   }
 
-  const sortedLimits = [...rateLimits].sort(
-    (a, b) => rateLimitOrder(a.rateLimitType) - rateLimitOrder(b.rateLimitType)
-  );
+  const sortedLimits = sortWindows(rateLimits);
 
   const report = insights ? insights[insightsRange] : null;
   const hasAttribution = !!report &&
@@ -316,15 +267,16 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
                   </div>
                 )}
                 {sortedLimits.map(rl => {
-                  const percent = Math.max(0, Math.min(100, Math.round(rl.utilization * 100)));
+                  const percent = usagePercent(rl.utilization);
+                  const tier = usageTier(percent);
                   const barClass = [
                     styles.progressBar,
-                    percent >= 90 ? styles.progressHigh : percent >= 50 ? styles.progressMedium : '',
+                    tier === 'high' ? styles.progressHigh : tier === 'medium' ? styles.progressMedium : '',
                   ].filter(Boolean).join(' ');
                   return (
                     <div key={rl.rateLimitType} className={styles.usageRow}>
                       <div className={styles.usageHeader}>
-                        <span className={styles.usageName}>{rl.label ?? rateLimitLabel(rl.rateLimitType)}</span>
+                        <span className={styles.usageName}>{windowLabel(rl)}</span>
                         <span className={styles.usagePercent}>{percent}%</span>
                       </div>
                       <div className={styles.progressTrack}>
