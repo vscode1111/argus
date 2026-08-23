@@ -46,6 +46,10 @@ export interface StartOpts {
   // Sets ARGUS_CONFIG to an isolated argus.json - the daemon reads daemonPort/idle
   // from it. Rewriting this file then restarting moves the daemon to the new port.
   configPath?: string;
+  // Opt back in to the usage poller, which is off for test daemons by default (it
+  // calls the live usage API on a timer). Only the spec that asserts the daemon
+  // polls on its own sets this, and it skips when the API is unavailable.
+  usagePoll?: boolean;
 }
 
 export function uniqueConfigFile(tag: string): string {
@@ -77,6 +81,9 @@ export async function startDaemon(opts: StartOpts): Promise<DaemonHandle> {
     // daemons off the user's real ~/.claude/argus.json and skip the refresh.
     ARGUS_CONFIG: opts.configPath ?? uniqueConfigFile('default'),
     ARGUS_MODEL_REFRESH: '0',
+    // Same reasoning for the usage poller: a test daemon must not call the live
+    // usage API on a timer with the user's OAuth token.
+    ARGUS_USAGE_POLL: opts.usagePoll ? '1' : '0',
   };
   if (opts.port != null) env.ARGUS_DAEMON_PORT = String(opts.port);
   else delete env.ARGUS_DAEMON_PORT; // let config drive the port

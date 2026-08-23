@@ -37,9 +37,14 @@ export interface ArgusConfig {
   runtimeDefaultModel: string;
   // Unix ms of the last daemon start (written by the daemon on every launch).
   daemonLastStartAt: number;
-  // Unix ms of the last model-data refresh (default model detection, description
-  // extraction, model list cache). The daemon refreshes when older than a day.
+  // Unix ms of the last model-data refresh that actually fetched a model list.
+  // The daemon refreshes when older than a day. Only a real fetch advances this, so a
+  // failed one (expired token, offline) cannot hide a stale context window for a day.
   modelDataUpdatedAt: number;
+  // Unix ms of the last refresh *attempt*, successful or not. Backs off retries after
+  // a failure: without it a permanently broken environment would re-attempt on every
+  // daemon start, and the daemon idle-exits and respawns many times a day.
+  modelDataAttemptedAt: number;
   // Per-family model descriptions (fable/opus/sonnet/haiku) extracted from the
   // installed Claude CLI bundle. Empty falls back to baked-in strings (modelData.ts).
   modelFamilyDescriptions: Record<string, string>;
@@ -78,6 +83,7 @@ export const DEFAULT_CONFIG: ArgusConfig = {
   runtimeDefaultModel: '',
   daemonLastStartAt: 0,
   modelDataUpdatedAt: 0,
+  modelDataAttemptedAt: 0,
   modelFamilyDescriptions: {},
   modelListCache: [],
   effort: 'high',
