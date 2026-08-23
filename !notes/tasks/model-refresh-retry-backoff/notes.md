@@ -128,7 +128,7 @@ child-process ceremony would have been cargo cult.
 
 ## Remaining work
 
-- Not committed.
+- Committed in `38c1d39` (2026-08-24), together with the header usage indicator.
 - `modelDataAttemptedAt` is in `DEFAULT_CONFIG`, so like every other field there it is reachable
   through `updateSettings`. Consistent with the existing `modelDataUpdatedAt` / `modelListCache` /
   `daemonLastStartAt`, and `updateSettings` is only reachable over an already-authorized
