@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Implemented, not committed. Integration spec has a recorded **failed** run; no green run recorded (see Verification) |
+| Status | Implemented, not committed. Integration spec **verified green 2026-08-26** (8/8 on `--repeat-each=4`) after its prompt was fixed; see Remaining work |
 | Produced by | Claude Code, model claude-opus-5 |
 
 ## Problem
@@ -131,9 +131,14 @@ may still be finishing and legitimately marked at the same time. Both tabs stamp
 
 ## Remaining work
 
-- Re-run `npx playwright test e2e/session-active-marker-integration.spec.ts --project=integration`
-  and confirm green before committing. Until then treat the feature as implemented but
-  unverified end to end.
+- ~~Re-run the integration spec and confirm green before committing.~~ **Done 2026-08-26:**
+  green, 8/8 on `--repeat-each=4`. It needed a fix first. `LONG_PROMPT` ("list the numbers
+  from 1 to 300") was supposed to keep the turn alive while the modal opens, but the model
+  abbreviates rather than emitting 300 lines (6s, ~610 output tokens), so **both** tests in
+  the file flaked, alternating between them. The prompt now holds the turn open with a
+  foreground Bash `sleep 10`, which does not depend on model speed. See
+  [../empty-1s-turn/notes.md](../empty-1s-turn/notes.md) and
+  [../../common/e2e-testing.md](../../common/e2e-testing.md).
 - Not committed. Sits in the working tree with the browse-send-routing and pending-tool-pulse
   changes, which touch the same files (`channel.ts`, `session.ts`, `SessionHistoryModal.tsx`).
 - Scope is **this server process**: a turn running under a different daemon, or a `claude`

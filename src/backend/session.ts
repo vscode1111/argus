@@ -501,6 +501,7 @@ function handleSend(s: SessionState, msg: { type?: string; text?: string; images
   s.liveInputTokens = 0;
   s.suppressCliOutput = false;
   s.cliDone = false;
+  s.autonomousTurn = false;
   s.toolMap.clear();
   s.answeredTools.clear();
   s.pendingAskTools.clear();
