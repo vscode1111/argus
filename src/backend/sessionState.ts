@@ -17,6 +17,10 @@ export interface SessionState {
   answeredTools: Set<string>;
   pendingAskTools: Set<string>;
   cliDone: boolean;
+  // True while the turn in flight is one the CLI started on its own (a background-task
+  // notification), false while it is the one the user asked for. handleResult needs the
+  // difference: both kinds of turn report `origin.kind === 'task-notification'`.
+  autonomousTurn: boolean;
   suppressCliOutput: boolean;
   pendingFollowUp: { answers: Record<string, string>; toolId: string; mode?: string } | undefined;
   pendingBgTasks: Set<string>;
@@ -56,6 +60,7 @@ export function createSessionState(workspaceDir: string): SessionState {
     answeredTools: new Set(),
     pendingAskTools: new Set(),
     cliDone: false,
+    autonomousTurn: false,
     suppressCliOutput: false,
     pendingFollowUp: undefined,
     pendingBgTasks: new Set(),

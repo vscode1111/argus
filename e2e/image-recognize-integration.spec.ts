@@ -11,7 +11,12 @@ test('paste text.jpg via Ctrl+V and recognize text in response', async ({ page }
   await waitForApp(page);
 
   const textarea = page.getByPlaceholder('Ask Argus');
-  await textarea.fill('Recognize text');
+  // The assertions below demand four exact identifiers out of the screenshot, so the
+  // prompt has to ask for a transcription and nothing else. "Recognize text" left that
+  // open: the model answered with a summary ("...plus streaming/tool-approval/no-Python
+  // conventions") and then editorialised about the doc looking outdated, so the
+  // identifiers never appeared and the test failed on output the prompt never required.
+  await textarea.fill('Transcribe every line of text in this image verbatim. Output only the transcription, with no summary and no commentary.');
   await textarea.focus();
 
   await page.evaluate(async (b64: string) => {

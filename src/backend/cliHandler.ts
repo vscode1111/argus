@@ -22,6 +22,7 @@ export function handleCliEvent(s: SessionState, event: Record<string, unknown>):
     s.pendingFollowUp = undefined;
     s.resetStaleTimer();
     s.watchdog.state.active = true;
+    s.autonomousTurn = true;
     s.broadcast(JSON.stringify({ type: 'thinking_start', reused: true }));
     s.sendLog('info', 'Background task notification: starting autonomous turn');
   }
@@ -209,6 +210,22 @@ function handleUserEvent(s: SessionState, event: Record<string, unknown>): void 
 }
 
 function handleResult(s: SessionState, event: Record<string, unknown>): void {
+  // The CLI runs mini-turns of its own for background-task notifications, and each one
+  // emits a `result` like any other turn. One of them lands before the user's message is
+  // even dequeued: on `--resume` startup the CLI replays a notification for every task
+  // orphaned by the previous CLI process, so a fresh spawn answers the *notification*
+  // first (`num_turns: 0`, empty result) while the user's send waits in its queue. Taken
+  // as the end of the user's turn it committed an empty ~1s assistant message and pushed
+  // the real answer into the autonomous-turn recovery path above, which is the reported
+  // "finished in 1s, then starts working 5-15s later".
+  // A notification turn Argus itself surfaced (a background task that finished while the
+  // session was idle) must still end normally - measured, that one carries the very same
+  // origin.kind, so who started the turn is the only sound discriminator.
+  const origin = event.origin as { kind?: string } | undefined;
+  if (origin?.kind === 'task-notification' && !s.autonomousTurn) {
+    s.sendLog('info', 'Ignoring task-notification result: the user turn it interrupted is still queued');
+    return;
+  }
   s.cliDone = true;
   s.resetStaleTimer();
   s.watchdog.state.active = false;
