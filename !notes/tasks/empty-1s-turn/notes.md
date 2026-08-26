@@ -4,7 +4,7 @@
 |---|---|
 | Reported | 2026-08-26, from a live session in `d:\_Projects\CCS` |
 | Produced by | Claude Code, model claude-opus-5 |
-| Status | Fixed, not committed |
+| Status | Fixed, committed and pushed |
 
 ## Symptom
 
@@ -133,7 +133,7 @@ behaviour), and it needs the quota to recover before it can be re-measured. Not 
 
 ## Remaining work
 
-- Not committed.
+- ~~Not committed~~ Committed and pushed on 2026-08-27 as `d94b242` on `main`.
 - **The running daemon must be restarted** for the fix to take effect (it serves the
   compiled build it was launched from). See `!notes/common/backend-restart.md`.
 - Untouched, cosmetic: the orphan replay also broadcasts `tool_end` frames for tool ids
