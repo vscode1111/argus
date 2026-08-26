@@ -8,8 +8,14 @@ import { waitForApp } from './helpers';
 // and because the point of the feature is that a turn started in one panel is visible
 // in another one's history list.
 
-// A prompt long enough that the turn is still running while the modal opens.
-const LONG_PROMPT = 'List the numbers from 1 to 300, each on its own line. No other text.';
+// The turn has to still be running while a modal opens AND a session list loads off disk.
+// A generation-length prompt does not buy that: "list the numbers from 1 to 300" came back
+// in 6s (~610 output tokens - the model abbreviates rather than emitting 300 lines), which
+// flaked both tests, one on the marker already being gone and one on the row not being
+// listed yet. How long the model talks is model-owned; a Bash sleep is not, and holds the
+// turn open for a fixed window however fast the model is. Bash is in ALLOWED_TOOLS, so it
+// needs no approval, and Stop kills the whole process tree with it.
+const LONG_PROMPT = 'Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE.';
 
 async function startTurn(page: Page, prompt: string) {
   await page.getByPlaceholder('Ask Argus').fill(prompt);
