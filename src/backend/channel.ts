@@ -90,6 +90,10 @@ export interface Channel {
    *  When browsing, pass the session the client navigated to: the entry still points at
    *  the streaming one, so this is what makes the client's own view recoverable. */
   setBrowsing(ws: WebSocket, browsing: boolean, sessionId?: string): void;
+  /** The session this client is browsing, if any. The entry's own sessionId still points
+   *  at the streaming session, so this is the only record of what is on the client's
+   *  screen - and therefore which transcript a tool-image request must be read from. */
+  getViewingSessionId(ws: WebSocket): string | undefined;
   /** Move a browsing client into its own entry, bound to the session it is viewing, and
    *  return that entry's state. Undefined when the client is not browsing. Lets a send
    *  start a turn on the session that is on screen instead of being injected into the
@@ -475,6 +479,9 @@ export function getOrCreateChannel(dir: string): Channel {
         entry.browsingClients.delete(ws);
         _cd.clientViewing.delete(ws);
       }
+    },
+    getViewingSessionId(ws) {
+      return _cd.clientViewing.get(ws);
     },
     detachToBrowsedSession(ws) {
       const viewing = _cd.clientViewing.get(ws);

@@ -112,7 +112,6 @@ export type StreamingState = {
   stopped: boolean;
   retryStatus: RetryStatus | null;
   watchdogRetries: number;
-  backgroundWaiting?: boolean;
   askPausedAt?: number;
   liveTokens?: { input: number; output: number };
 };

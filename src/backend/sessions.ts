@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { imageFromBlock, stringifyToolResult, type ToolImage } from './toolResult';
 
 // Local session history: enumerate, replay, and delete the Claude CLI transcripts
 // that the CLI persists per project directory under
@@ -399,15 +400,48 @@ function readCwd(files: Array<{ full: string; mtime: number }>): string | null {
 
 // A tool_result's content can be a string or an array of content blocks; flatten
 // it to a single string for display.
-function stringifyResult(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .map(b => (typeof b === 'string' ? b : (b && (b as { type?: string }).type === 'text' ? (b as { text?: string }).text ?? '' : JSON.stringify(b))))
-      .join('\n');
+// Image bytes are stripped here (see toolResult.ts) and fetched per click by
+// readToolImage below, so replaying a session full of image reads costs kilobytes
+// instead of tens of megabytes.
+const stringifyResult = stringifyToolResult;
+
+// Regex over the id the CLI assigns a tool call. Only used for comparison, never to
+// build a path, but a bounded charset keeps a pathological id out of the line scan.
+const TOOL_USE_ID_RE = /^[A-Za-z0-9_-]{1,100}$/;
+
+/**
+ * The image a tool call returned, read back out of the transcript by tool_use_id.
+ *
+ * This is what the model actually saw, so a preview opened months later still works
+ * after the file has been renamed, moved into a package, or deleted - the case that
+ * started this: `scan` wrote `out/согласие/p2.jpg/<name>.jpg`, the agent read it, then
+ * moved it to `out/согласие/Согласие 2.jpg`, and the old path previewed as ENOENT.
+ */
+export function readToolImage(sessionId: string, workspaceDir: string, toolUseId: string): ToolImage | null {
+  if (!TOOL_USE_ID_RE.test(toolUseId)) return null;
+  const file = resolveSessionFile(sessionId, workspaceDir);
+  if (!file || !fs.existsSync(file)) return null;
+  let content: string;
+  try { content = fs.readFileSync(file, 'utf8'); } catch { return null; }
+
+  for (const line of content.split(/\r?\n/)) {
+    // Cheap prefilter before JSON.parse: transcripts run to tens of MB and exactly
+    // one line mentions any given tool_use_id.
+    if (!line || !line.includes(toolUseId)) continue;
+    let o: { message?: { content?: unknown } };
+    try { o = JSON.parse(line); } catch { continue; }
+    const blocks = o.message?.content;
+    if (!Array.isArray(blocks)) continue;
+    for (const b of blocks as Array<Record<string, unknown>>) {
+      if (b.type !== 'tool_result' || b.tool_use_id !== toolUseId) continue;
+      const inner = Array.isArray(b.content) ? b.content : [b.content];
+      for (const part of inner) {
+        const img = imageFromBlock(part);
+        if (img) return img;
+      }
+    }
   }
-  if (content == null) return '';
-  return JSON.stringify(content);
+  return null;
 }
 
 // Validate that a sessionId maps to a transcript file directly inside the project

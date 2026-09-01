@@ -74,11 +74,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
 
     case 'thinking_start': {
       const prev = state.streaming;
-      const inheritStart = prev && !prev.backgroundWaiting;
       return {
         ...state,
         isStreaming: true,
-        streaming: { thinking: '', blocks: [], startTime: prev ? prev.startTime : (action.startedAt ?? Date.now()), lastEventTime: Date.now(), logsAtStart: (inheritStart ? prev!.logsAtStart : state.logs.length), reused: action.reused ?? false, stopped: false, retryStatus: inheritStart ? prev!.retryStatus : null, watchdogRetries: (inheritStart ? prev!.watchdogRetries : 0) },
+        streaming: { thinking: '', blocks: [], startTime: prev ? prev.startTime : (action.startedAt ?? Date.now()), lastEventTime: Date.now(), logsAtStart: prev ? prev.logsAtStart : state.logs.length, reused: action.reused ?? false, stopped: false, retryStatus: prev ? prev.retryStatus : null, watchdogRetries: prev ? prev.watchdogRetries : 0 },
       };
     }
 
@@ -188,14 +187,21 @@ export function reducer(state: AppState, action: AppAction): AppState {
       const resolvedMessages = state.messages.map(m =>
         m.outcome === 'background_waiting' ? { ...m, outcome: 'background_done' as const } : m
       );
+      // A turn that leaves background tasks behind is still a finished turn. The CLI's own
+      // protocol says so: a `run_in_background` tool returns immediately, the turn continues
+      // and ends, and the task later announces itself through a task_notification turn of its
+      // own. Argus used to keep a synthetic streaming state alive here instead, which claimed
+      // the session was still working - so the completion sound and notification never fired,
+      // Stop stayed armed, and a task that never ends (a browser launched for CDP, a watcher)
+      // left the "Waiting N background tasks" spinner running forever with nothing able to
+      // clear it. The still-pending tasks are recorded on the message instead, as a passive
+      // note; `background_waiting` now means "finished, tasks outlived it", not "still busy".
       return {
         ...state,
         messages: [...resolvedMessages, msg],
-        streaming: hasPendingBg
-          ? { thinking: '', blocks: [], startTime: state.streaming.startTime, lastEventTime: Date.now(), logsAtStart: state.logs.length, reused: true, stopped: false, retryStatus: null, watchdogRetries: 0, backgroundWaiting: true }
-          : null,
-        isStreaming: hasPendingBg,
-        turnCompletions: hasPendingBg ? state.turnCompletions : state.turnCompletions + 1,
+        streaming: null,
+        isStreaming: false,
+        turnCompletions: state.turnCompletions + 1,
       };
     }
 

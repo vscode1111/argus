@@ -61,7 +61,9 @@ approval routing cleanly separable without growing into a monolith.
 - Slash commands: built-in and custom skills from `~/.claude/skills/`.
 - Model picker with live model list and per-family descriptions; model data (list, descriptions, detected CLI default) auto-refreshes daily via the daemon (`yarn update-models` to force).
 - Image paste via `Ctrl+V`.
-- Inline diff and file viewers next to tool calls.
+- Inline diff and file viewers next to tool calls. An `.html` file opens as the rendered document, painted in the panel's own theme, with its source one click away.
+- Images a tool read open from the conversation itself, so a file the agent has since renamed, packaged or deleted still previews; the bytes are fetched per click instead of travelling inside the message.
+- Clickable paths and URLs everywhere in messages, including code blocks: a file path opens an in-app preview (dotted underline), a URL opens in the browser.
 - OS toast notifications on task completion.
 - Optional "Ask Argus" code lens above functions and classes.
 - Optional inline completions (Haiku model, Copilot-style).

@@ -3,6 +3,7 @@ import type { spawn } from 'child_process';
 import { plural, classifyError, API_ERROR_RE, killProc } from './cli';
 import { parseRateLimitEvent } from './accountUsage';
 import { contextWindowFor } from './modelData';
+import { stringifyToolResult } from './toolResult';
 import type { SessionState } from './sessionState';
 
 export function handleCliEvent(s: SessionState, event: Record<string, unknown>): void {
@@ -186,7 +187,10 @@ function handleToolResult(s: SessionState, event: Record<string, unknown>): void
   const toolId = event.tool_use_id as string;
   if (suppressToolResult(s, toolId)) return;
   const tc = s.toolMap.get(toolId);
-  s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: event.content } }));
+  // Same flattening as the `user` path above: `content` can be a block array here too,
+  // and the webview's ToolCall treats `result` as a string (it calls .trim() on it).
+  const result = stringifyToolResult(event.content);
+  s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result } }));
 }
 
 function handleUserEvent(s: SessionState, event: Record<string, unknown>): void {
@@ -200,7 +204,10 @@ function handleUserEvent(s: SessionState, event: Record<string, unknown>): void 
       const toolId = block.tool_use_id as string;
       if (suppressToolResult(s, toolId)) continue;
       const tc = s.toolMap.get(toolId);
-      const content = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
+      // Images are replaced by a marker: the bytes are fetched per click straight from
+      // the transcript (readToolImage), so a remote client never pays for an image it
+      // does not open, and one deleted since the tool ran still previews.
+      const content = stringifyToolResult(block.content);
       s.sendLog('debug', `tool_result ${toolId}: ${String(content).slice(0, 100)}`);
       s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content } }));
     } else if (block.type === 'text' && block.text) {

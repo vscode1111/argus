@@ -215,6 +215,18 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* Inside a preview modal that was opened before its content arrived (an image read
+   back out of the transcript, a file off disk). Smaller than .sessionSpinner, which
+   covers the whole app for a session replay; this one only fills the modal body. */
+.previewSpinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--vscode-panel-border, #474747);
+  border-top-color: var(--vscode-button-background, #0e639c);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 .logDivider {
   width: 2px;
   flex-shrink: 0;
@@ -282,6 +294,18 @@ body {
 .file-path-link:hover {
   border-bottom-style: solid;
   text-decoration: none;
+}
+
+/* Deliberately not the dotted underline of .file-path-link: the two do different
+   things on click (open a file preview vs leave the app), and the dotted style is
+   what tells the reader a click stays inside Argus. */
+.external-url-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  cursor: pointer;
+}
+.external-url-link:hover {
+  text-decoration: underline;
 }
 
 .mention-path {

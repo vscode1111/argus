@@ -1,3 +1,21 @@
+/* The modal opens on the click and waits here for the host to send the content: an
+   image now comes out of the transcript rather than with the message, so over a remote
+   link there is a real gap to fill. The header already names the file being read. */
+.loadingBody {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 140px;
+}
+/* Rendered .html. White rather than transparent: an exported document sets colours for
+   paper, so on the panel's dark background its black text would be invisible. */
+.htmlFrame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
 .imageBody {
   display: flex;
   align-items: center;

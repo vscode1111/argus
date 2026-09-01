@@ -20,6 +20,10 @@ const INPUT = {
 
 const dialog = (page: Page) => page.locator('[role="dialog"]');
 
+// 1x1 transparent PNG, standing in for what the host reads out of the transcript.
+const PNG_1PX =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
 test.describe('preview modals survive an active session', () => {
   test.beforeEach(async ({ page }) => {
     await waitForApp(page);
@@ -72,18 +76,25 @@ test.describe('preview modals survive an active session', () => {
     await expect(dialog(page)).toBeVisible();
   });
 
-  // The two previews whose content comes from the backend over the WS (so these
-  // also prove the hoisted host still does the readFilePreview round trip).
+  // A preview whose content comes from the host over the WS, rather than from data the
+  // message already carried. The file-path-link test below still does that round trip
+  // for real (readFilePreview is not suppressed in mock mode); an image now asks for
+  // `readToolImage`, which is suppressed, so the reply is injected here and the real
+  // round trip for it lives in tool-image-preview-integration.spec.ts.
   test('an image preview opened mid-turn survives the turn finishing', async ({ page }) => {
-    const input = { file_path: 'media/argus-icon.ico' };
+    const input = { file_path: 'media/argus-icon.png' };
     await fire(page,
       { type: 'thinking_start' },
       { type: 'tool_start', call: { id: 'im1', name: 'Read', input } },
-      { type: 'tool_end', call: { id: 'im1', name: 'Read', input, result: '[image]' } },
+      { type: 'tool_end', call: { id: 'im1', name: 'Read', input, result: '[image image/png 2 KB]' } },
     );
     await page.locator('[class*="toolSummary"]').first().click();
     const img = dialog(page).locator('img');
-    await expect(img).toBeVisible({ timeout: 10_000 });
+    // The modal registers its listener in an effect, so re-dispatch until it lands.
+    await expect(async () => {
+      await fire(page, { type: 'toolImage', toolUseId: 'im1', path: input.file_path, content: PNG_1PX });
+      await expect(img).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
 
     await fire(page, { type: 'text_chunk', text: 'Done.' }, { type: 'done' });
     await expect(img).toBeVisible();

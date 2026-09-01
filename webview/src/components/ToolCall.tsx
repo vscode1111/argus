@@ -86,10 +86,11 @@ export function ToolCall({ call, sessionDone }: Props) {
     name === 'Edit' ? (input.new_string as string) || undefined :
     undefined;
 
-  // What this tool's file/output preview shows. An image has no content here -
-  // the preview host reads it off disk and opens when the data arrives.
+  // What this tool's file/output preview shows. An image has no content here - the
+  // bytes are stripped before the result crosses the wire, so the host fetches them
+  // from the transcript by tool call id (falling back to reading the file).
   function fileRequest(): PreviewRequest | null {
-    if (isImageFile) return { kind: 'path', key: `${call.id}:file`, path: filePath };
+    if (isImageFile) return { kind: 'toolImage', key: `${call.id}:file`, path: filePath, toolUseId: call.id };
     const content = fileViewerContent ?? result;
     if (content === undefined) return null;
     return {
