@@ -1,0 +1,142 @@
+---
+proj  : d---Projects-scub111g-argus
+title : Reflect task short name in session name
+prompt: "Is it possible to reflect task short name in session name when you create name to find task faster?"
+TAG   : session-name-task-tag (score 16, wrote-notes) 
+runners-up: -
+---
+proj  : d---Projects-scub111g-argus
+title : Fix URL highlighting bug
+prompt: "bug\nfix that highlingting url"
+TAG   : url-linkified-as-path (score 104, wrote-notes) 
+runners-up: INDEX.md:16
+---
+proj  : d---Projects-CCS
+title : Собрать данные по задаче B2BADM-6264
+prompt: "https://youtrack.office.lan/issue/B2BADM-6264\nдавай соберем данные по этой задаче, что готово и что надо сдела"
+TAG   : B2BADM-6264 (score 560, wrote-notes) 
+runners-up: INDEX.md:24, B2BADM-6188:8
+---
+proj  : d---Projects-GMTrade
+title : Read chat messages
+prompt: "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract"
+TAG   : CON-45 (score 116, user-text+wrote-notes+wrote-path) 
+runners-up: CON-37:14, CON-40:14, ADR-0002:14
+---
+proj  : d---Projects-scub111g-argus
+title : Git commit and push changes
+prompt: "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\git-commit-push\n\n# Commit and Push\n\nFollow all st"
+TAG   : empty-1s-turn (score 24, wrote-notes) 
+runners-up: -
+---
+proj  : d---Projects-scub111g-argus
+title : Fix request processing delay issue
+prompt: "I saw new frequent bug\nsometime when I send new request It shows that was fineshed in 1 sec and after 5-15 sec"
+TAG   : empty-1s-turn (score 112, wrote-notes) 
+runners-up: session-active-marker:24, INDEX.md:16
+---
+proj  : d---Projects-GMTrade
+title : Fix token 2022 transfer fee accounting in GT Bank deposits
+prompt: "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\start-task\n\n# Start Task\n\nYou are starting work o"
+TAG   : CON-45 (score 234, first-prompt+wrote-notes+wrote-path) 
+runners-up: INDEX.md:16
+---
+proj  : d---Projects-GMTrade
+title : Assess josh guha satisfaction from lead perspective
+prompt: "How do you estimata satisfaction of @joshguha by my lead from you perspective ?"
+TAG   : CON-16 (score 238, wrote-notes+wrote-path) 
+runners-up: josh-standing-assessment:64
+---
+proj  : d---Projects-GMTrade
+title : Read chat history
+prompt: "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract"
+TAG   : CON-16 (score 476, wrote-notes+wrote-path) 
+runners-up: CON-42:208, CON-45:56, CON-37:14
+---
+proj  : d---Projects-CCS
+title : Как тестировать задачу B2BADM-7281
+prompt: "Объясни просто как тестировать эту задачу https://youtrack.office.lan/issue/B2BADM-7281 ?\nКогда уже МР есть и "
+TAG   : B2BADM-7281 (score 192, wrote-notes) 
+runners-up: INDEX.md:16
+---
+proj  : d---Projects-CCS
+title : Investigate YouTrack issue B2BADM-5850
+prompt: "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\start-task\n\n# Start Task\n\nYou are starting work o"
+TAG   : B2BADM-5850 (score 272, wrote-notes) 
+runners-up: INDEX.md:48
+---
+proj  : d---Projects-CCS
+title : Review YouTrack issue B2BADM-6803
+prompt: "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\start-task\n\n# Start Task\n\nYou are starting work o"
+TAG   : B2BADM-6803 (score 184, wrote-notes) 
+runners-up: INDEX.md:16, B2BADM-5508:8
+---
+proj  : d---Projects-GMTrade
+title : Document and prove builder fee invariants
+prompt: "https://linear.app/gmtradepro/issue/CON-42/document-and-prove-the-builder-fee-invariants-end-to-end\nMy leas re"
+TAG   : CON-42 (score 374, first-prompt+wrote-notes+wrote-path) 
+runners-up: -
+---
+proj  : d---Projects-GMTrade
+title : Check PR #416 approval status
+prompt: "1. PR #416 (CON-40) is approved (msg 196105, 12:11 UTC) check that"
+TAG   : CON-40 (score 108, first-prompt+wrote-notes+wrote-path) 
+runners-up: INDEX.md:8
+---
+proj  : d---Projects-GMTrade
+title : Read chat messages
+prompt: "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract"
+TAG   : CON-37 (score 10, first-prompt)   <-- AMBIGUOUS vs CON-40(10)
+runners-up: CON-40:10
+---
+proj  : d---Projects-CCS
+title : Review GitLab merge request for dependencies
+prompt: "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\review\n\n# Skill: review\n\nReview a GitLab merge re"
+TAG   : B2BADM-5850 (score 136, wrote-notes) 
+runners-up: INDEX.md:8
+---
+proj  : d---Projects-GMTrade
+title : Read chat messages
+prompt: "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract"
+TAG   : CON-42 (score 92, user-text+wrote-notes+wrote-path) 
+runners-up: CON-49:32, CON-16:28, INDEX.md:16
+---
+proj  : d---Projects-scub111g-argus
+title : Git commit and push changes
+prompt: "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\git-commit-push\n\n# Commit and Push\n\nFollow all st"
+TAG   : model-refresh-retry-backoff (score 8, wrote-notes) 
+runners-up: -
+---
+proj  : d---Projects-scub111g-argus
+title : Implement activity indicator with horizontal lines
+prompt: "New feature\nImplement simple indicatore there with 3 horizontan lines to show current limits \nIt should update"
+TAG   : usage-limits-indicator (score 176, wrote-notes) 
+runners-up: INDEX.md:24
+---
+proj  : d---Projects-GMTrade
+title : Подготовить документ-ликбез по протоколу CON-16
+prompt: "Мне надо подгтовить документ на русском языке, чтобы как для \"чайника\" объяснить, начинаю от назначения проток"
+TAG   : CON-16 (score 15, first-prompt+ai-title) 
+runners-up: -
+---
+proj  : d---Projects-GMTrade
+title : Read chat messages
+prompt: "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract"
+TAG   : CON-40 (score 182, first-prompt+wrote-notes+wrote-path+user-text) 
+runners-up: CON-41:56, INDEX.md:16, CON-37:14
+---
+proj  : d---Projects-scub111g-argus
+title : Update notes
+prompt: "test"
+TAG   : session-active-marker (score 16, wrote-notes)   <-- AMBIGUOUS vs INDEX.md(16)
+runners-up: INDEX.md:16, model-refresh-retry-backoff:16, model-picker-refresh:8
+---
+proj  : d---Projects-scub111g-argus
+title : Fix prompts appearing in wrong session
+prompt: "test"
+TAG   : browse-send-routing (score 40, wrote-notes) 
+runners-up: INDEX.md:24, pending-tool-pulse:8
+
+===== SUMMARY over 300 transcripts =====
+produced a tag : 23
+ambiguous top-2: 2

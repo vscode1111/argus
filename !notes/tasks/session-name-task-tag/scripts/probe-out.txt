@@ -1,0 +1,2745 @@
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reflect task short name in session name
+prompt  : "Is it possible to reflect task short name in session name when you create name to find task faster?"
+  ticket(prompt): -
+  ticket(any)   : CON-41
+  notes task    : session-name-task-tag
+  tracker url   : -
+  branch        : -
+---
+proj    : c--Users-Admin--claude
+ai-title: Git commit and push changes
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\git-commit-push\n\n# Commit and Push\n\nFollow all steps from `skills/git-commit/skill.md` (s"
+  ticket(prompt): -
+  ticket(any)   : CON-41, CON-123, ADR-0001
+  notes task    : INDEX.md, home-msistation-setup, msistation-internet-loss, B2BADM-6973
+  tracker url   : CON-41
+  branch        : -
+---
+proj    : d---Projects-scub111g-people-research
+ai-title: Проанализируй переписку с Таней
+prompt  : "Проанализируй переписку с Таней"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : INDEX.md
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-people-research
+ai-title: Загрузить переписку с Анней и обработать через RAG
+prompt  : "Загрузи переписку с Анней и обработай через Раг"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : c--Users-Admin--claude
+ai-title: Add task short name to session naming
+prompt  : "Is it possible to reflect task short name in session name when you create name to find task faster?"
+  ticket(prompt): -
+  ticket(any)   : CON-16
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: Reflect task short name in session name
+prompt  : "Is it possible to reflect task short name in session name when you create name to find task faster?"
+  ticket(prompt): -
+  ticket(any)   : CON-39, CON-40, CON-41
+  notes task    : -
+  tracker url   : CON-39
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Fix URL highlighting bug
+prompt  : "bug\nfix that highlingting url"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : x.md, url-linkified-as-path, empty-1s-turn, INDEX.md
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: Проверить скиллы review на MR ответственного гемблинга
+prompt  : "Проверь скиллы /review  /git-remarks  на примере этого мр https://gitlab.xbet.lan/v3group/backend/applications/cms/responsible-gaming-service/-/merge_"
+  ticket(prompt): -
+  ticket(any)   : MS-7758
+  notes task    : B2BADM-7417, url-linkified-as-path
+  tracker url   : -
+  branch        : 155, 50
+---
+proj    : d---Projects-CCS
+ai-title: Собрать данные по задаче B2BADM-6264
+prompt  : "https://youtrack.office.lan/issue/B2BADM-6264\nдавай соберем данные по этой задаче, что готово и что надо сделать или может кого-то еще спросить чтобы "
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : B2BADM-6264, B2BADM-6188, INDEX.md, B2BADM-6926
+  tracker url   : B2BADM-6264, B2BADM-6212, B2BADM-6961, B2BADM-7015
+  branch        : 118, B2BADM-5279, B2BADM-6183
+---
+proj    : d---Projects-GMTrade
+ai-title: Read chat messages
+prompt  : "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract\" Telegram group (id `-5331267796`) and "
+  ticket(prompt): -
+  ticket(any)   : CON-37, CON-40, ADR-0002, CON-41, CON-54, CON-42
+  notes task    : CON-45, josh-standing-assessment, INDEX.md
+  tracker url   : CON-23, CON-45, CON-53, CON-41
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: Work report
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\work-report\n\n# Work Report\n\nYou are **Work Reporter** - you compile a summary of everythi"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : B2BADM-6264, B2BADM-5850, B2BADM-7281, B2BADM-6803
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Git commit and push changes
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\git-commit-push\n\n# Commit and Push\n\nFollow all steps from `skills/git-commit/skill.md` (s"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : INDEX.md, empty-1s-turn, session-active-marker, workspace-info-config
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Fix request processing delay issue
+prompt  : "I saw new frequent bug\nsometime when I send new request It shows that was fineshed in 1 sec and after 5-15 sec starts process that request"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : empty-1s-turn, B2BADM-6264, INDEX.md, session-active-marker
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+custom  : scub-tok-b-1787777501151
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm acknowledgment
+custom  : scub-tok-a-1787777494271
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session start
+custom  : scub-browse-b-1787777478946
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session start
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+custom  : scub-browse-a-1787777460678
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Single word confirmation request
+prompt  : "Reply with just the single word \"yes\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge with ok response
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reply with confirmation
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reply with single word confirmation
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbers 1 to 200
+prompt  : "Write the numbers from 1 to 200, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-stop-send-Qvr8T7
+ai-title: Count numbers one to four hundred
+prompt  : "Count from 1 to 400, one number per line, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-browsing-no-stream-1787777250257-x9tax46gnda
+ai-title: Scub-ping test response
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-no-kill-on-resume-1787777245000-03n7txp4rr49
+ai-title: Respond to scub-ping command
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-newsession-1787777238324-fmv049u6sli
+ai-title: (none)
+prompt  : "shared-start"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm receipt
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: List numbers 1 to 20
+prompt  : "List the numbers from 1 to 20, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Send confirmation message
+custom  : scub-header-renamed-1787777200710
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Simple acknowledgment request
+custom  : scub-renamed-1787777191631
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Store token scub-7731 for future use
+prompt  : "Remember this token for later: scub-7731. Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+custom  : scub-tok-b-1787777136231
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+custom  : scub-tok-a-1787777129571
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session start
+custom  : scub-browse-b-1787777117041
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: User confirmation
+custom  : scub-browse-a-1787777104882
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep 10 command in bash
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep command and confirm completion
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Check package version number
+prompt  : "Read package.json and tell me the version number."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Review package.json and CLAUDE.md
+prompt  : "Read package.json, then read CLAUDE.md, then summarize both."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-resumelive-attach-1787777043593-v9nyn25ey
+ai-title: Generate list of numbers 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Check build tag from conversation history
+prompt  : "What build tag did I mention earlier in this conversation? Answer from conversation context only - do not read any files. If you have no record of it,"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm build tag reference
+prompt  : "My build tag for this conversation is scub-1787777028839-663021. Reply with just \"OK\" - do not save this anywhere."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Write numbers 1 to 80
+prompt  : "Write the numbers from 1 to 80, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Transcribe text from image
+prompt  : "Transcribe every line of text in this image verbatim. Output only the transcription, with no summary and no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Read package.json file
+prompt  : "read the file package.json using the Read tool, nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge instruction
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm acknowledgment
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "hi"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "say ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Say scub-after-clear
+prompt  : "say \"scub-after-clear\" and nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-routing-1787776869438-m5ua4mzdhsk
+ai-title: Generate numbered list one to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-leak-1787776875482-oknnvu0j6x7
+ai-title: Generate numbered list from 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-leak-1787776875482-oknnvu0j6x7
+ai-title: Reply with confirmation message
+prompt  : "Reply with exactly: ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-routing-1787776869438-m5ua4mzdhsk
+ai-title: User confirmation request
+prompt  : "Reply with exactly: ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Transcribe text from image
+prompt  : "Transcribe every line of text in this image verbatim. Output only the transcription, with no summary and no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Transcribe text from image
+prompt  : "Transcribe every line of text in this image verbatim. Output only the transcription, with no summary and no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Transcribe text from image
+prompt  : "Transcribe every line of text in this image verbatim. Output only the transcription, with no summary and no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep command in bash
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep command in bash
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep command in bash
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep command in foreground
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep command and confirm completion
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep command in bash
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep 10 command in bash
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep command with Bash tool
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep 10 bash command
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Run sleep 10 command in bash
+prompt  : "Run exactly `sleep 10` with the Bash tool, in the foreground (not in the background), then reply DONE."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbered list from 1 to 300
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbered list from 1 to 300
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Recognize text
+prompt  : "Recognize text"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm simple affirmation
+prompt  : "Reply with just the single word \"yes\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reply with confirmation
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reply with ok
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbers 1 to 200
+prompt  : "Write the numbers from 1 to 200, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-stop-send-wtx3Ko
+ai-title: Count from 1 to 400
+prompt  : "Count from 1 to 400, one number per line, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-browsing-no-stream-1787776190038-v3ty6wsl4r8
+ai-title: Respond to scub-ping command
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-no-kill-on-resume-1787776186921-yclkaai0cym
+ai-title: scub-ping health check
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-newsession-1787776180039-iszz472loqj
+ai-title: (none)
+prompt  : "shared-start"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge with OK
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm understanding
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: List numbers one to twenty
+prompt  : "List the numbers from 1 to 20, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+custom  : scub-header-renamed-1787776142195
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+custom  : scub-renamed-1787776135512
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Store authentication token for later use
+prompt  : "Remember this token for later: scub-7731. Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge with OK
+custom  : scub-tok-b-1787776066629
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+custom  : scub-tok-a-1787776061060
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge instruction
+custom  : scub-browse-b-1787776047873
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session start
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm receipt
+custom  : scub-browse-a-1787776036676
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbered list from 1 to 300
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbers 1 to 300
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Check package.json version number
+prompt  : "Read package.json and tell me the version number."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Review package.json and CLAUDE.md files
+prompt  : "Read package.json, then read CLAUDE.md, then summarize both."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-resumelive-attach-1787775958244-zhy0xrsadc
+ai-title: Generate numbered list from 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Check build tag from conversation history
+prompt  : "What build tag did I mention earlier in this conversation? Answer from conversation context only - do not read any files. If you have no record of it,"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Build tag acknowledgment
+prompt  : "My build tag for this conversation is scub-1787775943204-529397. Reply with just \"OK\" - do not save this anywhere."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbers 1 to 80
+prompt  : "Write the numbers from 1 to 80, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Recognize text
+prompt  : "Recognize text"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Read package.json file
+prompt  : "read the file package.json using the Read tool, nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm acknowledgment
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: User acknowledgment request
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "say ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "hi"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Say scub-after-clear
+prompt  : "say \"scub-after-clear\" and nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-routing-1787775790800-3zpzhqvpfic
+ai-title: Generate list of numbers 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-leak-1787775795889-y5mfsqicb2
+ai-title: Reply with confirmation message
+prompt  : "Reply with exactly: ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-leak-1787775795889-y5mfsqicb2
+ai-title: Generate numbers 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-routing-1787775790800-3zpzhqvpfic
+ai-title: User confirmation test
+prompt  : "Reply with exactly: ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: Fix token 2022 transfer fee accounting in GT Bank deposits
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\start-task\n\n# Start Task\n\nYou are starting work on a new tracker task (e.g. YouTrack). Fo"
+  ticket(prompt): CON-45
+  ticket(any)   : CON-45, ADR-0002, CON-42, CON-23, CON-16, CON-39
+  notes task    : INDEX.md, CON-45, CON-23, CON-33
+  tracker url   : CON-45, CON-53, CON-13, CON-16
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: Assess josh guha satisfaction from lead perspective
+prompt  : "How do you estimata satisfaction of @joshguha by my lead from you perspective ?"
+  ticket(prompt): -
+  ticket(any)   : ADR-0002, CON-42, CON-23, CON-16, CON-39, CON-33
+  notes task    : INDEX.md, CON-33, CON-42, CON-40
+  tracker url   : CON-23, CON-53, CON-16, CON-45
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: Read chat history
+prompt  : "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract\" Telegram group (id `-5331267796`) and "
+  ticket(prompt): -
+  ticket(any)   : CON-37, CON-40, CON-44, CON-45, CON-53, CON-42
+  notes task    : CON-42, CON-16, CON-45, INDEX.md
+  tracker url   : CON-44, CON-45, CON-53, CON-16
+  branch        : 42
+---
+proj    : d---Projects-CCS
+ai-title: Как тестировать задачу B2BADM-7281
+prompt  : "Объясни просто как тестировать эту задачу https://youtrack.office.lan/issue/B2BADM-7281 ?\nКогда уже МР есть и что дальше"
+  ticket(prompt): -
+  ticket(any)   : WPDO-11037, WPDO-10575, WPDO-11165, WPDO-11131
+  notes task    : B2BADM-7281, B2BADM-5862, B2BADM-6188, INDEX.md
+  tracker url   : B2BADM-7281, B2BADM-5859, B2BADM-7282, WPDO-11037
+  branch        : B2BADM-7140, B2BADM-6870, WPDO-11131
+---
+proj    : d---Projects-CCS
+ai-title: Investigate YouTrack issue B2BADM-5850
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\start-task\n\n# Start Task\n\nYou are starting work on a new tracker task (e.g. YouTrack). Fo"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : INDEX.md, B2BADM-6188, B2BADM-7282, B2BADM-5862
+  tracker url   : B2BADM-5850, B2BADM-6212, B2BADM-6961, B2BADM-7015
+  branch        : 45, B2BADM-5850, B2BADM-7140
+---
+proj    : C--Users-Admin-AppData-Local-Temp
+ai-title: (none)
+prompt  : "say:"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-career-agent
+ai-title: Chat with LinkedIn
+prompt  : "Base directory for this skill: D:\\_Projects\\scub111g\\career-agent\\.claude\\skills\\chat\n\nYou run a back-and-forth chat with recruiters/HR inside the use"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Say scub-after-clear
+prompt  : "say \"scub-after-clear\" and nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: Review YouTrack issue B2BADM-6803
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\start-task\n\n# Start Task\n\nYou are starting work on a new tracker task (e.g. YouTrack). Fo"
+  ticket(prompt): -
+  ticket(any)   : WPAS-2682, WPAS-2760, WPAS-2509, WPAS-1948, WPAS-1854, WPDO-10167
+  notes task    : INDEX.md, B2BADM-6803, B2BADM-6188, B2BADM-5508
+  tracker url   : B2BADM-6803, B2BADM-6212, B2BADM-6961, B2BADM-7015
+  branch        : B2BADM-7140, 349, 32
+---
+proj    : d---Projects-GMTrade
+ai-title: Document and prove builder fee invariants
+prompt  : "https://linear.app/gmtradepro/issue/CON-42/document-and-prove-the-builder-fee-invariants-end-to-end\nMy leas replied"
+  ticket(prompt): CON-42
+  ticket(any)   : CON-42, CON-23, CON-16, ADR-0002, CON-39, CON-33
+  notes task    : CON-23, CON-33, CON-42, CON-16
+  tracker url   : CON-42, CON-23, CON-44, CON-45
+  branch        : 28
+---
+proj    : d---Projects-scub111g-estate-agent
+ai-title: Найти запись в ФНС
+prompt  : "Я приехал в ФНС и не могут найти мою запись"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: Check PR #416 approval status
+prompt  : "1. PR #416 (CON-40) is approved (msg 196105, 12:11 UTC) check that"
+  ticket(prompt): CON-40
+  ticket(any)   : CON-40, CON-23, CON-16, ADR-0002, CON-39, CON-33
+  notes task    : CON-23, CON-33, CON-40, CON-41
+  tracker url   : CON-44, CON-45, CON-53, CON-40
+  branch        : 2, 25
+---
+proj    : d---Projects-scub111g-estate-agent
+ai-title: Консультация по налогам при продаже подаренной квартиры
+prompt  : "Ездил сегодня в налоговую, консультировался с их инспекторов и объяснил ситуацию\n-  у меня есть половина квартиры, которую подарила мама 5 лет назад, "
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: Проверка готовности к тестированию
+prompt  : "То есть все готово для тестирования?"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : B2BADM-6803, B2BADM-5508, B2BADM-6264, B2BADM-7281
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: (none)
+prompt  : "Go on"
+  ticket(prompt): -
+  ticket(any)   : ADR-0002, CON-42, CON-23, CON-16, CON-39, CON-33
+  notes task    : CON-42, CON-23, CON-33
+  tracker url   : CON-42, CON-23
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: Review CMS decor merge request
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\review\n\n# Skill: review\n\nReview a GitLab merge request (diff mode) or audit the full code"
+  ticket(prompt): -
+  ticket(any)   : PD-25019
+  notes task    : -
+  tracker url   : B2BADM-6212, B2BADM-6961, B2BADM-7015
+  branch        : 1., 155, B2BADM-7528
+---
+proj    : d---Projects-CCS
+ai-title: Обсуждение итоговых замечаний
+prompt  : "Ок, так какие в итоге замечания?"
+  ticket(prompt): -
+  ticket(any)   : PSR-4
+  notes task    : B2BADM-5850, B2BADM-6264, B2BADM-6803, INDEX.md
+  tracker url   : B2BADM-7522, B2BADM-6665, B2BADM-6212, B2BADM-6961
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: (none)
+prompt  : "продолжай"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : B2BADM-5508, B2BADM-6803, B2BADM-6264, B2BADM-7281
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: (none)
+prompt  : "Go on"
+  ticket(prompt): -
+  ticket(any)   : CON-23, CON-16, ADR-0002, CON-39, CON-33, CON-43
+  notes task    : CON-23, CON-33, CON-42, CON-49
+  tracker url   : CON-42
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: Перепроверить глубже
+prompt  : "Перепроверь еще глубже"
+  ticket(prompt): -
+  ticket(any)   : PROD-2026
+  notes task    : B2BADM-4562, B2BADM-4577, B2BADM-4462, B2BADM-4432
+  tracker url   : B2BADM-7522
+  branch        : B2BADM-6406, B2BADM-6664, B2BADM-6409-fix
+---
+proj    : C--Users-Admin-AppData-Local-Temp
+ai-title: (none)
+prompt  : "say:"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: Read chat messages
+prompt  : "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract\" Telegram group (id `-5331267796`) and "
+  ticket(prompt): -
+  ticket(any)   : CON-37, CON-40, CON-44, CON-45, CON-53, CON-42
+  notes task    : CON-42, CON-49
+  tracker url   : CON-44, CON-45, CON-53, CON-23
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: Review event logos service merge request
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\review\n\n# Skill: review\n\nReview a GitLab merge request (diff mode) or audit the full code"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : B2BADM-6665, B2BADM-6212, B2BADM-6961, B2BADM-7015
+  branch        : 1., B2BADM-7522
+---
+proj    : d---Projects-CCS
+ai-title: Перепроверить более глубоко
+prompt  : "Перепроверь еще глубже"
+  ticket(prompt): -
+  ticket(any)   : PROD-2026
+  notes task    : B2BADM-4562, B2BADM-4577, B2BADM-4462, B2BADM-4432
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-estate-agent
+ai-title: Налоги на продажу подаренной квартиры
+prompt  : "Мой отец усомнился в очередной раз что не надо никаких налогов заплатить продаже квартиры, если мама мне подарит вторую половину"
+  ticket(prompt): -
+  ticket(any)   : BV-4, CON-33
+  notes task    : CON-33, vpn-debug, session-active-marker
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: Review translations service admin merge request
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\review\n\n# Skill: review\n\nReview a GitLab merge request (diff mode) or audit the full code"
+  ticket(prompt): -
+  ticket(any)   : WPDO-11573
+  notes task    : B2BADM-7015
+  tracker url   : B2BADM-7015
+  branch        : 1., B2BADM-7015, WPDO-11573
+---
+proj    : d---Projects-CCS
+ai-title: Review GitLab merge request for dependencies
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\review\n\n# Skill: review\n\nReview a GitLab merge request (diff mode) or audit the full code"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : B2BADM-5850, B2BADM-6188, B2BADM-7281, INDEX.md
+  tracker url   : B2BADM-5850, B2BADM-5864, B2BADM-6483, B2BADM-7381
+  branch        : 1., 155, B2BADM-5850
+---
+proj    : d---Projects-GMTrade
+ai-title: Read chat messages
+prompt  : "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract\" Telegram group (id `-5331267796`) and "
+  ticket(prompt): -
+  ticket(any)   : CON-37, CON-40, ADR-0002, CON-16, CON-23, CON-33
+  notes task    : CON-16, CON-23, CON-33, CON-49
+  tracker url   : CON-16, CON-13, CON-49, CON-42
+  branch        : -
+---
+proj    : d---Projects-scub111g-people-research
+ai-title: Загрузить чат с ТГ Тани
+prompt  : "Загрузи чат с ТГ Тани"
+  ticket(prompt): -
+  ticket(any)   : CON-40, CON-123, ADR-0001
+  notes task    : CON-40
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-people-research
+ai-title: Загрузить и анализировать сообщения из ТГ
+prompt  : "ТГ"
+  ticket(prompt): -
+  ticket(any)   : CON-123, ADR-0001, CON-40
+  notes task    : CON-40
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-career-agent
+ai-title: Add Gmail integration to chat feature
+prompt  : "Upgrade /chat to add feature communicate not only through Li, but also gmail. check inbox scub111b"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp
+ai-title: (none)
+prompt  : "say:"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-career-agent
+ai-title: (none)
+prompt  : "Base directory for this skill: D:\\_Projects\\scub111g\\career-agent\\.claude\\skills\\chat\n\nYou run a back-and-forth chat with recruiters/HR inside the use"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp
+ai-title: (none)
+prompt  : "say:"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-estate-agent
+ai-title: Уточнение о LLM модели
+prompt  : "Какая твоя LLM?"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-CCS
+ai-title: Review responsible gaming service merge request
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\git-remarks\n\n# Fix Reviewer Remarks\n\nYou are **Remark Resolver** - a meticulous engineer "
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : B2BADM-6665
+  tracker url   : B2BADM-6909, B2BADM-5736
+  branch        : 50, B2BADM-6665, B2BADM-6285
+---
+proj    : d---Projects-scub111g-research-agent
+ai-title: Update notes
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\update-notes\n\n# Update Project Docs\n\nUpdate all relevant project documentation to reflect"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : INDEX.md, ozon-white-shorts
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-research-agent
+ai-title: Уточнить текущую модель Claude
+prompt  : "Какая сейчас у тебя модель?"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : INDEX.md
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-people-research
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Git commit and push changes
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\git-commit-push\n\n# Commit and Push\n\nFollow all steps from `skills/git-commit/skill.md` (s"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : INDEX.md, model-picker-refresh, model-refresh-retry-backoff, usage-limits-indicator
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Implement activity indicator with horizontal lines
+prompt  : "New feature\nImplement simple indicatore there with 3 horizontan lines to show current limits \nIt should update centeraly on demon 1 per minute at once"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : usage-limits-indicator, INDEX.md, model-picker-refresh, model-refresh-retry-backoff
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-people-research
+ai-title: Обновить раг по переписке с Олей
+prompt  : "Прочти переписку Оли из ТГ и обнови раг"
+  ticket(prompt): -
+  ticket(any)   : CON-40
+  notes task    : CON-40
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm with single word response
+prompt  : "Reply with just the single word \"yes\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reply with confirmation message
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reply with confirmation
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reply with single word ok
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Write numbers 1 to 200
+prompt  : "Write the numbers from 1 to 200, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-stop-send-cxDhfy
+ai-title: Count numbers from 1 to 400
+prompt  : "Count from 1 to 400, one number per line, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-browsing-no-stream-1787523190186-uw392gm0dvq
+ai-title: Respond to scub-ping command
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-no-kill-on-resume-1787523185866-w3zud7kr7rp
+ai-title: Respond to scub-ping command
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-newsession-1787523179536-rgsh6i2alqn
+ai-title: Shared start
+prompt  : "shared-start"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session start
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: List numbers one to twenty
+prompt  : "List the numbers from 1 to 20, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge instruction
+custom  : scub-header-renamed-1787523156534
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+custom  : scub-renamed-1787523151266
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Store token for later reference
+prompt  : "Remember this token for later: scub-7731. Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+custom  : scub-tok-b-1787523101587
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+custom  : scub-tok-a-1787523094471
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge simple request
+custom  : scub-browse-b-1787523086596
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+custom  : scub-browse-a-1787523076463
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbered list from 1 to 300
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Check package.json version number
+prompt  : "Read package.json and tell me the version number."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Review package.json and CLAUDE.md
+prompt  : "Read package.json, then read CLAUDE.md, then summarize both."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-resumelive-attach-1787523024712-v87hk7kwms
+ai-title: Generate numbers one to four hundred
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-panel-isolation-1787523021594-wluy9isyojo
+ai-title: (none)
+prompt  : "scub-panel-isolation"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Retrieve build tag from conversation
+prompt  : "What build tag did I mention earlier in this conversation? Answer from conversation context only - do not read any files. If you have no record of it,"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge build tag reference
+prompt  : "My build tag for this conversation is scub-1787523011646-713004. Reply with just \"OK\" - do not save this anywhere."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbered list one to eighty
+prompt  : "Write the numbers from 1 to 80, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Recognize text
+prompt  : "Recognize text"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Read package.json file
+prompt  : "read the file package.json using the Read tool, nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Simple acknowledgment response
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: User acknowledgment request
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session start
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "say ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "hi"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Say scub-after-clear
+prompt  : "say \"scub-after-clear\" and nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "write a detailed essay about the history of computing"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-routing-1787522862071-d0eeu6vm8ne
+ai-title: Generate numbers 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-leak-1787522867973-k1697yjq6ko
+ai-title: Generate numbered list one to four hundred
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-leak-1787522867973-k1697yjq6ko
+ai-title: Reply with confirmation message
+prompt  : "Reply with exactly: ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-routing-1787522862071-d0eeu6vm8ne
+ai-title: Reply with confirmation message
+prompt  : "Reply with exactly: ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-career-agent
+ai-title: (none)
+prompt  : "Base directory for this skill: D:\\_Projects\\scub111g\\career-agent\\.claude\\skills\\chat\n\nYou run a back-and-forth chat with recruiters/HR inside the use"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp
+ai-title: (none)
+prompt  : "say:"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: Подготовить документ-ликбез по протоколу CON-16
+prompt  : "Мне надо подгтовить документ на русском языке, чтобы как для \"чайника\" объяснить, начинаю от назначения протокола, какие у него основные функции, возм"
+  ticket(prompt): CON-16
+  ticket(any)   : CON-16, CON-23, CON-39, ADR-0001, ADR-0002, CON-33
+  notes task    : CON-16, CON-23, CON-33, CON-39
+  tracker url   : CON-16, CON-13, CON-23
+  branch        : -
+---
+proj    : d---Projects-GMTrade
+ai-title: Read chat messages
+prompt  : "Base directory for this skill: d:\\_Projects\\GMTrade\\.claude\\skills\\read-chat\n\nRead the \"GMTrade Smart Contract\" Telegram group (id `-5331267796`) and "
+  ticket(prompt): -
+  ticket(any)   : CON-37, CON-40, CON-16, CON-23, CON-33, CON-38
+  notes task    : CON-33, CON-38, CON-40, CON-41
+  tracker url   : -
+  branch        : 36
+---
+proj    : d---Projects-scub111g-career-agent
+ai-title: (none)
+prompt  : "Base directory for this skill: D:\\_Projects\\scub111g\\career-agent\\.claude\\skills\\chat\n\nYou run a back-and-forth chat with recruiters/HR inside the use"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Update notes
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : INDEX.md, browse-send-routing, pending-tool-pulse, session-active-marker
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Git commit and push changes
+prompt  : "Base directory for this skill: C:\\Users\\Admin\\.claude\\skills\\git-commit-push\n\n# Commit and Push\n\nFollow all steps from `skills/git-commit/skill.md` (s"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : INDEX.md, browse-send-routing, pending-tool-pulse, session-active-marker
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp
+ai-title: (none)
+prompt  : "say:"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm single word response
+prompt  : "Reply with just the single word \"yes\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge single word response
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reply with single word confirmation
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: User confirmation request
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbers one to two hundred
+prompt  : "Write the numbers from 1 to 200, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-stop-send-nwVCgU
+ai-title: Count from 1 to 400
+prompt  : "Count from 1 to 400, one number per line, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-browsing-no-stream-1787387036819-0hvut2abmj44
+ai-title: Scub-ping health check
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-no-kill-on-resume-1787387032912-5kwa07p0htl
+ai-title: Scub-ping test response
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-newsession-1787387026884-7ds2hy3j3jy
+ai-title: (none)
+prompt  : "isolated-session-test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-newsession-1787387026884-7ds2hy3j3jy
+ai-title: (none)
+prompt  : "shared-start"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm understanding
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: OK
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbered list one to twenty
+prompt  : "List the numbers from 1 to 20, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Simple acknowledgment request
+custom  : scub-header-renamed-1787387001769
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+custom  : scub-renamed-1787386996124
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Remember token for later
+prompt  : "Remember this token for later: scub-7731. Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge instruction
+custom  : scub-tok-b-1787386964952
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge with OK
+custom  : scub-tok-a-1787386959985
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm session acknowledgment
+custom  : scub-browse-b-1787386952746
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Simple confirmation task
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm acknowledgment
+custom  : scub-browse-a-1787386946209
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbers 1 to 300
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Check package.json version number
+prompt  : "Read package.json and tell me the version number."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Review package.json and CLAUDE.md files
+prompt  : "Read package.json, then read CLAUDE.md, then summarize both."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-resumelive-attach-1787386899810-7pdmvi3csdc
+ai-title: Generate numbered list from 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-panel-isolation-1787386896992-a96wozhb2wp
+ai-title: (none)
+prompt  : "scub-panel-isolation"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Check conversation memory for build tag
+prompt  : "What build tag did I mention earlier in this conversation? Answer from conversation context only - do not read any files. If you have no record of it,"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Build tag acknowledgment
+prompt  : "My build tag for this conversation is scub-1787386888306-617018. Reply with just \"OK\" - do not save this anywhere."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Write numbers 1 to 80
+prompt  : "Write the numbers from 1 to 80, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Recognize text
+prompt  : "Recognize text"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Read package.json file
+prompt  : "read the file package.json using the Read tool, nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm acknowledgment
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge with ok
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "say ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "hi"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Say scub-after-clear
+prompt  : "say \"scub-after-clear\" and nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-routing-1787386791563-zwgp0n4457
+ai-title: Generate numbered list from 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: (none)
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-leak-1787386796810-jquubm5mgvb
+ai-title: Reply with confirmation
+prompt  : "Reply with exactly: ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-leak-1787386796810-jquubm5mgvb
+ai-title: Generate numbered list from 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-browse-routing-1787386791563-zwgp0n4457
+ai-title: Reply with confirmation
+prompt  : "Reply with exactly: ok"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Fix prompts appearing in wrong session
+prompt  : "test"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : INDEX.md, browse-send-routing, pending-tool-pulse, session-active-marker
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session start
+custom  : scub-tok-b-1787359246960
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge instruction
+custom  : scub-tok-a-1787359240835
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Respond with confirmation
+prompt  : "Reply with just the single word \"yes\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge confirmation
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge confirmation
+custom  : scub-browse-b-1787359230187
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: User acknowledgment test
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: User confirmation request
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Reply with single word confirmation
+prompt  : "Reply with the single word \"ok\" and nothing else."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session start
+custom  : scub-browse-a-1787359217524
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Write numbers 1 to 200
+prompt  : "Write the numbers from 1 to 200, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate list of numbers 1 to 300
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-stop-send-5RzOfj
+ai-title: Count numbers from 1 to 400
+prompt  : "Count from 1 to 400, one number per line, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Generate numbered list 1 to 300
+prompt  : "List the numbers from 1 to 300, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Check package.json version number
+prompt  : "Read package.json and tell me the version number."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-browsing-no-stream-1787359166156-pky8npvxie
+ai-title: Scub-ping response test
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-no-kill-on-resume-1787359163245-2q15vsh5chs
+ai-title: Respond to scub-ping command
+prompt  : "scub-ping: reply with the single word \"scub-ok\""
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Review package.json and CLAUDE.md files
+prompt  : "Read package.json, then read CLAUDE.md, then summarize both."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-channel-newsession-1787359155963-og5dr72fkbp
+ai-title: (none)
+prompt  : "shared-start"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : C--Users-Admin-AppData-Local-Temp-argus-resumelive-attach-1787359138762-yl07b0appx
+ai-title: Generate numbered list 1 to 400
+prompt  : "List the numbers from 1 to 400, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Retrieve build tag from conversation history
+prompt  : "What build tag did I mention earlier in this conversation? Answer from conversation context only - do not read any files. If you have no record of it,"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: List numbers one to twenty
+prompt  : "List the numbers from 1 to 20, each on its own line. No other text."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge build tag
+prompt  : "My build tag for this conversation is scub-1787359126724-506977. Reply with just \"OK\" - do not save this anywhere."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Write numbers one to eighty
+prompt  : "Write the numbers from 1 to 80, one per line, nothing else. No code block, no commentary."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge request
+custom  : scub-header-renamed-1787359121228
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Recognize text
+prompt  : "Recognize text"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+custom  : scub-renamed-1787359114743
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Read package.json file
+prompt  : "read the file package.json using the Read tool, nothing else"
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Remember token scub-7731
+prompt  : "Remember this token for later: scub-7731. Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Confirm session understanding
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge session start
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge message
+prompt  : "Reply with just \"ok\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge instruction
+custom  : scub-tok-b-1787359069488
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+---
+proj    : d---Projects-scub111g-argus
+ai-title: Acknowledge instruction
+custom  : scub-tok-a-1787359063997
+prompt  : "Reply with just \"OK\"."
+  ticket(prompt): -
+  ticket(any)   : -
+  notes task    : -
+  tracker url   : -
+  branch        : -
+
+===== SUMMARY over 300 transcripts =====
+with ai-title        : 259
+with custom-title    : 36
+ticket in 1st prompt : 4
+ticket anywhere      : 28
+!notes/tasks touched : 42
+tracker url          : 25
+ANY detector fired   : 46
