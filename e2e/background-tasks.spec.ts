@@ -1,11 +1,26 @@
 import { test, expect, type Page } from '@playwright/test';
 import { waitForApp } from './helpers';
 
-function send(page: Page, data: object) {
-  return page.evaluate((d) => {
-    window.dispatchEvent(new MessageEvent('message', { data: d }));
-  }, data);
+declare global {
+  interface Window { __soundPlays?: number }
 }
+
+function send(page: Page, data: object) {
+  // Dispatch a synthetic extension message, then flush two RAFs so React commits the
+  // update (and any completion effect) before resolving.
+  return page.evaluate(
+    (d) =>
+      new Promise<void>((resolve) => {
+        window.dispatchEvent(new MessageEvent('message', { data: d }));
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+    data
+  );
+}
+
+const soundPlays = (page: Page) => page.evaluate(() => window.__soundPlays ?? 0);
+
+const note = (page: Page) => page.getByTestId('background-tasks-note');
 
 async function startBgTask(page: Page, toolId: string, description: string, command: string) {
   await send(page, { type: 'tool_start', call: { id: toolId, name: 'Bash', input: { description, command } } });
@@ -19,42 +34,88 @@ async function completeBgTask(page: Page, toolId: string, summary: string, outpu
 
 test.describe('background tasks', () => {
   test.beforeEach(async ({ page }) => {
+    // playCompletionSound() constructs one AudioContext per beep, so counting
+    // constructions tells us whether the sound fired.
+    await page.addInitScript(() => {
+      window.__soundPlays = 0;
+      const Orig = window.AudioContext
+        || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Orig) return;
+      function Spy(this: unknown) {
+        window.__soundPlays = (window.__soundPlays ?? 0) + 1;
+        return new Orig();
+      }
+      Spy.prototype = Orig.prototype;
+      window.AudioContext = Spy as unknown as typeof AudioContext;
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext =
+        Spy as unknown as typeof AudioContext;
+    });
     await waitForApp(page);
   });
 
-  test('single background task shows waiting indicator without counter', async ({ page }) => {
+  // The regression: a turn that spawns a background task used to keep a synthetic
+  // streaming state alive, so the app claimed to be working until some *later* turn
+  // ended. A task that never ends (a browser started for CDP, a watcher) therefore
+  // left the spinner running forever with nothing able to clear it.
+  test('a turn with a pending task finishes instead of staying live', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg task' } });
     await send(page, { type: 'thinking_start' });
     await send(page, { type: 'text_chunk', text: 'Running in background.' });
     await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5 && echo done');
     await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
 
-    const indicator = page.locator('[class*="working"]');
-    await expect(indicator).toBeVisible();
-    await expect(indicator).toContainText('Waiting 1 background task');
-    // No counter for single task
-    await expect(indicator).not.toContainText('(');
+    // Idle: the Stop button only exists while the app believes a turn is in flight.
+    await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
+    // No spinner anywhere: no streaming message, no "working" indicator.
+    await expect(page.locator('[class*="streaming"]')).toHaveCount(0);
+    await expect(page.locator('[class*="working"]')).toHaveCount(0);
+    // The turn is reported as finished, with its own duration.
+    await expect(page.locator('[class*="responseTimeSuccess"]')).toBeVisible();
   });
 
-  test('single bg task: waiting indicator removed after completion', async ({ page }) => {
+  // The turn ending is what fires the completion sound and the OS notification, so
+  // this is the user-visible half of the same bug: both were silently suppressed for
+  // every turn that left a background task behind.
+  test('completion sound fires even though a task is still running', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-bg-sound' } });
+    await send(page, { type: 'thinking_start' });
+    await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5');
+    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+
+    await expect.poll(() => soundPlays(page)).toBeGreaterThan(0);
+  });
+
+  test('single pending task: note without a counter', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg task' } });
+    await send(page, { type: 'thinking_start' });
+    await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5 && echo done');
+    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+
+    await expect(note(page)).toBeVisible();
+    await expect(note(page)).toContainText('1 background task still running');
+    // No counter for a single task
+    await expect(note(page)).not.toContainText(' of ');
+  });
+
+  test('note is removed once the task reports back', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg task' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5');
     await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
 
-    const indicator = page.locator('[class*="working"]');
-    await expect(indicator).toBeVisible();
+    await expect(note(page)).toBeVisible();
 
-    // Simulate task completion: autonomous turn
+    // Simulate task completion: the CLI's own task-notification turn
     await completeBgTask(page, 't1', 'Background command "Sleep 5s" completed (exit code 0)', 'done');
     await send(page, { type: 'thinking_start', reused: true });
     await send(page, { type: 'text_chunk', text: 'Task completed.' });
     await send(page, { type: 'done' });
 
-    await expect(indicator).not.toBeVisible();
+    await expect(note(page)).toHaveCount(0);
   });
 
-  test('multiple bg tasks show plural label with counter', async ({ page }) => {
+  test('multiple tasks: note says how many are still running', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run 3 tasks' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
@@ -62,12 +123,10 @@ test.describe('background tasks', () => {
     await startBgTask(page, 't3', 'Task 3', 'sleep 30');
     await send(page, { type: 'done', pendingBackgroundTasks: 3, totalBackgroundTasks: 3 });
 
-    const indicator = page.locator('[class*="working"]');
-    await expect(indicator).toBeVisible();
-    await expect(indicator).toContainText('Waiting 3 background tasks (0/3)');
+    await expect(note(page)).toContainText('3 of 3 background tasks still running');
   });
 
-  test('counter updates as tasks complete', async ({ page }) => {
+  test('the running count drops as tasks complete', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run 3 tasks' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
@@ -81,8 +140,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'text_chunk', text: 'Task 1 done.' });
     await send(page, { type: 'done', pendingBackgroundTasks: 2, totalBackgroundTasks: 3 });
 
-    let indicator = page.locator('[class*="working"]');
-    await expect(indicator).toContainText('Waiting 3 background tasks (1/3)');
+    await expect(note(page)).toContainText('2 of 3 background tasks still running');
 
     // Task 2 completes
     await completeBgTask(page, 't2', 'completed (exit code 0)');
@@ -90,8 +148,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'text_chunk', text: 'Task 2 done.' });
     await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 3 });
 
-    indicator = page.locator('[class*="working"]');
-    await expect(indicator).toContainText('Waiting 3 background tasks (2/3)');
+    await expect(note(page)).toContainText('1 of 3 background tasks still running');
 
     // Task 3 completes (last one)
     await completeBgTask(page, 't3', 'completed (exit code 0)');
@@ -99,10 +156,10 @@ test.describe('background tasks', () => {
     await send(page, { type: 'text_chunk', text: 'All done.' });
     await send(page, { type: 'done' });
 
-    await expect(indicator).not.toBeVisible();
+    await expect(note(page)).toHaveCount(0);
   });
 
-  test('only latest message shows waiting indicator', async ({ page }) => {
+  test('only the latest message carries the note', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run 2 tasks' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
@@ -115,30 +172,16 @@ test.describe('background tasks', () => {
     await send(page, { type: 'text_chunk', text: 'Task 1 done.' });
     await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 2 });
 
-    // Only one indicator should be visible (on the latest message)
-    const indicators = page.locator('[class*="working"]');
-    await expect(indicators).toHaveCount(1);
+    await expect(note(page)).toHaveCount(1);
   });
 
-  test('background_waiting shows live elapsed timer, not static response time', async ({ page }) => {
+  test('a turn that leaves tasks behind still shows its own success timer', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
     await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
 
-    const timer = page.locator('[class*="responseTime"]');
-    await expect(timer).toBeVisible();
-    // No color-coded class (not success/error/stopped), just base responseTime
-    await expect(timer).not.toHaveClass(/responseTimeSuccess/);
-  });
-
-  test('background_waiting indicator shows elapsed timer on separate line', async ({ page }) => {
-    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
-    await send(page, { type: 'thinking_start' });
-    await startBgTask(page, 't1', 'Task 1', 'sleep 10');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
-
-    const timer = page.locator('[class*="responseTime"]');
+    const timer = page.locator('[class*="responseTimeSuccess"]');
     await expect(timer).toBeVisible();
     await expect(timer).toContainText('s');
   });
@@ -155,7 +198,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'done' });
 
     const timer = page.locator('[class*="responseTimeSuccess"]');
-    await expect(timer).toBeVisible();
+    await expect(timer).toHaveCount(2);
   });
 
   test('Out link pulses green while task is running', async ({ page }) => {
@@ -208,17 +251,6 @@ test.describe('background tasks', () => {
     await expect(modal).toContainText('scub-test-result');
   });
 
-  test('StreamingMessage hidden during backgroundWaiting', async ({ page }) => {
-    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
-    await send(page, { type: 'thinking_start' });
-    await startBgTask(page, 't1', 'Task 1', 'sleep 5');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
-
-    // StreamingMessage should not be visible (it returns null for backgroundWaiting)
-    const streaming = page.locator('[class*="streaming"]');
-    await expect(streaming).toHaveCount(0);
-  });
-
   test('counter resets between separate user requests', async ({ page }) => {
     // First request: 1 bg task
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'first' } });
@@ -239,18 +271,16 @@ test.describe('background tasks', () => {
     await startBgTask(page, 't4', 'Task D', 'sleep 30');
     await send(page, { type: 'done', pendingBackgroundTasks: 3, totalBackgroundTasks: 3 });
 
-    // Counter should show 0/3 (not 0/4 or 1/4)
-    const indicator = page.locator('[class*="working"]');
-    await expect(indicator).toContainText('(0/3)');
+    // Totals are per-request: 3, not 4
+    await expect(note(page)).toContainText('3 of 3 background tasks still running');
 
-    // After one completes: 1/3
+    // After one completes: 2 of 3
     await completeBgTask(page, 't2', 'completed');
     await send(page, { type: 'thinking_start', reused: true });
     await send(page, { type: 'text_chunk', text: 'Task B done.' });
     await send(page, { type: 'done', pendingBackgroundTasks: 2, totalBackgroundTasks: 3 });
 
-    const latestIndicator = page.locator('[class*="working"]');
-    await expect(latestIndicator).toContainText('(1/3)');
+    await expect(note(page)).toContainText('2 of 3 background tasks still running');
   });
 
   test('multiple Out links: completed ones stop pulsing, running ones keep pulsing', async ({ page }) => {
@@ -274,23 +304,22 @@ test.describe('background tasks', () => {
     await expect(outLinks.nth(1)).toHaveClass(/toolOutLinkRunning/);
   });
 
-  test('background_done messages do not show waiting indicator or timer', async ({ page }) => {
+  test('a superseded message keeps its timer and drops the note', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run 2 tasks' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
     await startBgTask(page, 't2', 'Task 2', 'sleep 20');
     await send(page, { type: 'done', pendingBackgroundTasks: 2, totalBackgroundTasks: 2 });
 
-    // Task 1 completes
+    // Task 1 completes: the first message becomes background_done, the new one carries the note
     await completeBgTask(page, 't1', 'completed');
     await send(page, { type: 'thinking_start', reused: true });
     await send(page, { type: 'text_chunk', text: 'Task 1 done.' });
     await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 2 });
 
-    // The first message (now background_done) should have no indicator and no timer
-    const assistantMessages = page.locator('[class*="assistant"]');
-    const firstMessage = assistantMessages.first();
-    await expect(firstMessage.locator('[class*="working"]')).toHaveCount(0);
-    await expect(firstMessage.locator('[class*="responseTime"]')).toHaveCount(0);
+    const firstMessage = page.locator('[class*="assistant"]').first();
+    await expect(firstMessage.getByTestId('background-tasks-note')).toHaveCount(0);
+    // It is an ordinary finished turn now, so it keeps its duration like any other.
+    await expect(firstMessage.locator('[class*="responseTime"]')).toHaveCount(1);
   });
 });

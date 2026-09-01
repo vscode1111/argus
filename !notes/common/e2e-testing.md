@@ -32,6 +32,8 @@ Limits, in order of how badly they bite:
 - **Results are still config-dependent** - the `model-picker.spec.ts` failure above is exactly what running this way looks like. A failure here has to be diffed against the two configs before it is believed.
 - Inherited relative paths (`testDir`, `outputDir`, `webServer.cwd`) resolve against the **config file's own directory**, so they are re-anchored at the repo root inside it; moving that file means fixing the `../` depth.
 
+If you stop the dev server instead, the prior question is not cost but **safety**: when the run is driven from inside an Argus conversation, check that the answering CLI is not a descendant of the process about to be killed, or the kill aborts the turn doing it. The `:3001` dev server and the daemon are different pids and usually only one of them is your parent - the ancestor-chain probe is in [backend-restart.md](backend-restart.md). Also read this section *before* reaching for `yarn dev:stop`: on 2026-08-27 the guard fired, the server was stopped and later restored, and the escape hatch above was only noticed afterwards. For the single-file run it was the cheaper route; for the full 250-test mock suite stopping was still the right call, since `model-picker.spec.ts` reads server settings and fails against the real config.
+
 ## Integration concurrency: `workers: 1`
 
 The `integration` project sets `workers: 1`. Each integration test drives a real Claude CLI **plus** a Chromium instance against the one shared `:3001` backend.
@@ -307,3 +309,32 @@ Some features (e.g. `killAllClaude`, see [../tasks/stop-all-claude-button/notes.
 - Test the result-rendering side by simulating the reply (`window.dispatchEvent`, above) rather than by letting the real action fire.
 - Verify the underlying OS command's mechanics (parsing, counting, success/failure paths) against a **decoy target** (e.g. a throwaway `notepad++.exe`), not the real one, before trusting it in the shipped code.
 - If a feature like this ever needs a true integration test, it must not run against this dev machine's ambient processes - spawn and target a disposable child process created by the test itself.
+
+## Asserting inside a sandboxed iframe, and what the fixture has to prove
+
+Added 2026-09-02 (`html-preview` task). The previewer renders `.html` in
+`<iframe srcDoc sandbox="">`, and testing that has three traps:
+
+- **Playwright reaches inside it.** `page.frameLocator('[data-testid="..."]')` and
+  `locator.evaluate()` both work; `sandbox=""` blocks the page's own scripts, not CDP. No
+  need to fall back to attribute checks.
+- **Assert the computed value, not the declaration.** The injected theme sheet exists to
+  *win a cascade*, so the fixture paints itself the opposite colour and the assertion reads
+  `getComputedStyle(body).backgroundColor` from inside the frame. Checking that the
+  `<style>` element is present passes on a build where the sheet never applied - verified
+  by mutating `srcDoc={htmlDoc}` back to `srcDoc={code}`, where only that test went red.
+- **Prove the sandbox by behaviour.** Put a `<script>` in the fixture that would insert a
+  marker element and assert the marker is absent. `toHaveAttribute('sandbox', '')` only
+  restates the source.
+
+## A fixture's own escaping is part of the test
+
+Same task. A probe built its input with `String.raw`, where `` \` `` stays a literal
+backslash-backtick - so the case labelled "in a code span" was escaped into prose, and both
+cases exercised the same path. It still found a bug, which is what made it convincing, but
+not the reported one, and the intended case went untested until the strings were rebuilt by
+concatenation.
+
+Print the input, or assert something that can only be true in the intended context (here:
+the rendered text keeps its backslashes, which only happens inside a code span). A fixture
+that quietly becomes a different fixture is indistinguishable from a passing test.

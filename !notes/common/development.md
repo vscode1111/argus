@@ -66,6 +66,31 @@ should not fire on every dev restart - but it means a dev-only environment keeps
 `modelListCache`, which is the input to the context-window percentage
 ([model-context-windows.md](model-context-windows.md)). `yarn update-models` refreshes it by hand.
 
+## `yarn dev:stop` does not stop `yarn dev`
+
+`scripts/dev-stop.js` kills whatever holds :5173 and :3001, but `scripts/dev.js` runs the
+backend under `tsx watch`, and **that supervisor survives and respawns the server within
+seconds** (observed 2026-09-01: `dev:stop` reported both pids stopped, and a `/health`
+probe a minute later answered from a new pid whose parent was the still-running
+`tsx/dist/cli.mjs watch`). The symptom is Playwright's `global-setup` guard firing on a
+dev server "you already stopped", still on the real `~/.claude/argus.json`.
+
+Kill the supervisors themselves (`tsx ... watch` and `vite/bin/vite.js` for this repo),
+then re-check that neither port has a `LISTENING` socket. When matching processes by
+command line, match the **executable**, not just the repo path: a pattern loose enough to
+hit `scripts.dev\.js` also matches the agent's own shell processes, whose command lines
+carry the cwd - that killed two live tool shells in the same run.
+
+The mirror image bites harder: **a dev server Playwright started can outlive the run**, and
+it holds `ARGUS_CONFIG=e2e/argus.json`. `global-setup` protects the tests from the user's
+server, but nothing protects the user from the test server - their tab keeps working, now
+against e2e settings (`appendSystemPrompt`, pinned model, `showLogs`). Observed
+2026-09-01: after an integration run, a fresh `yarn dev` had its Vite die with exit 1 on
+the busy port while `/health` answered `configPath: ...\e2e\argus.json`. **After any run
+that stopped the user's server, finish by asserting `/health` reports
+`C:\Users\Admin\.claude\argus.json`** - "the ports are listening again" is not the check,
+the config path is. `env -u ARGUS_CONFIG yarn dev` keeps an exported var out of it too.
+
 ## Stuck loading spinner after restarting `yarn dev`
 
 A browser tab left open from a previous `yarn dev` process can get stuck on the app's loading spinner (`#root` never mounts, just the `.app-loader` spinner) after the dev server behind it is stopped and restarted - even though the new server instance is fully healthy. Confirmed healthy by loading the exact same URL in an unrelated browser context, where it mounted immediately (WS showed "Connected"), and by checking that every request (`GET /`, `/src/index.dev.tsx`, `/nonce`, etc.) returned 200. So this is client-side state in that specific tab, not a server problem - do not spend time re-checking `yarn dev`'s own output once you've confirmed it started cleanly (`VITE ... ready`, `WebSocket agent ready`, no `EADDRINUSE`).

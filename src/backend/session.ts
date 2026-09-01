@@ -18,7 +18,7 @@ import { type SessionState } from './sessionState';
 import { type Channel, broadcastToAllChannels, listActiveSessions } from './channel';
 import { describeModel } from './modelData';
 import { attachProcHandlers } from './cliHandler';
-import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath } from './sessions';
+import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage } from './sessions';
 import { readServerVersion } from './version';
 import { buildWorkspaceInfo } from './workspaceInfo';
 
@@ -170,6 +170,7 @@ export function attachClientHandlers(
       path?: string;
       force?: boolean;
       id?: string;
+      toolUseId?: string;
       title?: string;
     };
     try { msg = JSON.parse(data.toString()); } catch {
@@ -320,6 +321,20 @@ export function attachClientHandlers(
     } else if (msg.type === 'readFilePreview' && msg.path) {
       const result = readFilePreview(msg.path, s.workspaceDir);
       ws.send(JSON.stringify({ type: 'filePreview', ...result }));
+    } else if (msg.type === 'readToolImage' && msg.toolUseId) {
+      // The image a tool returned, on demand. Preferring the transcript over the file
+      // is the point: it holds the bytes the model actually saw, so a preview still
+      // opens after the file was renamed, packaged or deleted. The disk read is the
+      // fallback for a transcript that has no image for this call - an old session, or
+      // a tool whose result line the CLI has not flushed yet.
+      const viewing = channel.getViewingSessionId(ws) ?? s.sessionId;
+      const img = viewing ? readToolImage(viewing, s.workspaceDir, String(msg.toolUseId)) : null;
+      const reply = img
+        ? { path: String(msg.path ?? ''), content: `data:${img.mediaType};base64,${img.data}` }
+        : msg.path
+          ? readFilePreview(String(msg.path), s.workspaceDir)
+          : { path: '', content: 'Error: no image recorded for this tool call' };
+      ws.send(JSON.stringify({ type: 'toolImage', toolUseId: msg.toolUseId, ...reply }));
     } else if (msg.type === 'getAccountUsage') {
       // An explicit refresh means the user is at the machine looking at the numbers,
       // so it reopens the poller's activity window; merely opening the modal does not.

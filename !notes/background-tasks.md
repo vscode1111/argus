@@ -20,9 +20,20 @@ When Claude runs a Bash tool with `run_in_background: true`, the tool result ret
 
 ### UI (`webview/src/App.tsx`, types, components)
 
-1. **Outcome**: `background_waiting` added to the `Outcome` type
-2. **Done with pending tasks**: reducer commits the assistant message with `outcome: 'background_waiting'` and keeps `streaming` in a `backgroundWaiting` state (no timer, `isStreaming` stays true)
-3. **Waiting indicator**: `StreamingMessage` renders a `WorkingIndicator` with "Waiting background task ..." text while `streaming.backgroundWaiting` is true
-4. **Timer suppression**: `ChatMessage` hides the green response timer for messages with `outcome === 'background_waiting'`
-5. **Resolution**: when the autonomous turn completes (second `done`), all `background_waiting` messages are resolved to `outcome: 'success'` and show their timers
-6. **Sound/notification**: suppressed during the waiting phase (`isStreaming` stays true); fires only when the autonomous turn finishes
+> Rewritten 2026-08-27. Points 2-6 used to describe a synthetic streaming state that kept the
+> app "busy" until some later turn ended; a task that never ends left it busy forever. See
+> [tasks/background-waiting-forever/notes.md](tasks/background-waiting-forever/notes.md).
+
+1. **Outcome**: `background_waiting` added to the `Outcome` type. It means "this turn finished
+   and its tasks outlived it", not "still busy"
+2. **Done with pending tasks**: reducer commits the assistant message exactly like any other
+   turn (`streaming: null`, `isStreaming: false`, `turnCompletions + 1`); the only difference is
+   `outcome: 'background_waiting'` plus `bgTasksCompleted`/`bgTasksTotal` on the message
+3. **Passive note**: `ChatMessage` renders `BackgroundTasksNote` under such a message ("2 of 3
+   background tasks still running"). Static by design - no spinner, no dots, no ticking timer,
+   since Argus cannot tell a build that will finish from a browser started for CDP that will not
+4. **Timer**: shown like any other finished turn (the turn really did finish)
+5. **Resolution**: when a later turn completes, every `background_waiting` message is resolved to
+   `background_done`, which drops the note and keeps the timer
+6. **Sound/notification**: fire normally on the turn that spawned the tasks, and again on the
+   task-notification turn when it reports back

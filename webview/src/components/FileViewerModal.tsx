@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useEncoding } from '../hooks/useEncoding';
@@ -91,10 +91,46 @@ interface Props {
   content: string;
   line?: number;
   copyText?: string;
+  /** Opened before its content exists: hold a spinner until the host answers. */
+  loading?: boolean;
   onClose: () => void;
 }
 
 const isDataUrl = (s: string) => s.startsWith('data:image/');
+
+const HTML_RE = /\.html?$/i;
+
+/**
+ * A stylesheet that repaints a previewed document in the panel's own colours.
+ *
+ * It is appended **after** the file's markup rather than injected into its head: a style
+ * before the doctype would put the document into quirks mode, and coming last it wins
+ * every specificity tie against the document's own rules. `!important` covers the rest -
+ * a markdown export ships VS Code's markdown.css, which paints its own backgrounds.
+ *
+ * Colours are read from the live panel, not hardcoded, so the preview follows whatever
+ * theme is in use; the values have to be resolved here because a sandboxed srcdoc frame
+ * cannot see the parent's custom properties.
+ */
+function darkThemeStyle(): string {
+  const css = getComputedStyle(document.body);
+  const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+  const bg = v('--bg', '#1e1e1e');
+  const fg = v('--fg', '#cccccc');
+  const border = v('--border', '#454545');
+  const code = v('--tool-bg', '#242526');
+  const link = v('--vscode-textLink-foreground', '#4daafc');
+  const dim = v('--thinking-fg', '#8c8c8c');
+  return `<style id="argus-theme">
+:root { color-scheme: dark; }
+html, body { background: ${bg} !important; color: ${fg} !important; }
+a { color: ${link} !important; }
+hr { border-color: ${border} !important; }
+table, th, td { border-color: ${border} !important; }
+code, kbd, samp, pre { background: ${code} !important; color: ${fg} !important; }
+blockquote { border-left: 3px solid ${border} !important; color: ${dim} !important; }
+</style>`;
+}
 
 const dirOf = (p: string) => p.replace(/[\\/][^\\/]*$/, '');
 
@@ -121,7 +157,7 @@ interface Frame {
   line?: number;
 }
 
-export function FileViewerModal({ path, content, line, copyText, onClose }: Props) {
+export function FileViewerModal({ path, content, line, copyText, loading, onClose }: Props) {
   // Default to dark unless VS Code explicitly marks the theme as light.
   const isDark = !document.body.classList.contains('vscode-light');
   const { copied, copy } = useCopyFeedback();
@@ -166,6 +202,22 @@ export function FileViewerModal({ path, content, line, copyText, onClose }: Prop
   const { encoding, setEncoding, decoded: code } = useEncoding(rawCode);
   const filename = current.path.split(/[\\/]/).pop() ?? current.path;
 
+  // An .html file is a document, not source, so it always opens rendered - the same
+  // call markdown already makes. An offset does NOT switch this to source: the read the
+  // user clicks is usually a slice (`file.html:359-499`), a browser renders a fragment
+  // perfectly well, and defaulting those to source meant the whole feature looked like
+  // it had not shipped. The line is still reachable - Source scrolls to it.
+  const isHtml = HTML_RE.test(current.path) && !isImage;
+  const [showSource, setShowSource] = useState(false);
+  useEffect(() => { setShowSource(false); }, [current.path]);
+  const renderHtml = isHtml && !showSource;
+  // The document follows the panel's theme: a white page inside a dark panel is what
+  // the plain render looked like, and it is the one thing every preview here shares.
+  const htmlDoc = useMemo(
+    () => (renderHtml ? code + (isDark ? darkThemeStyle() : '') : ''),
+    [renderHtml, code, isDark],
+  );
+
   const bodyRef = useRef<HTMLDivElement>(null);
   const currentLine = current.line;
 
@@ -178,11 +230,13 @@ export function FileViewerModal({ path, content, line, copyText, onClose }: Prop
   }, [currentLine]);
 
   useEffect(() => {
-    if (!currentLine) return;
-    // Delay to let SyntaxHighlighter render line elements
+    if (!currentLine || renderHtml) return;
+    // Delay to let SyntaxHighlighter render line elements. `renderHtml` is a dependency
+    // because an html file opens rendered: the line elements only exist once the user
+    // switches to Source, and without it that switch landed at the top of the file.
     const timer = setTimeout(scrollToLine, 50);
     return () => clearTimeout(timer);
-  }, [currentLine, code, scrollToLine]);
+  }, [currentLine, code, scrollToLine, renderHtml]);
 
   // A followed document starts at the top, not where the previous one was.
   useEffect(() => {
@@ -236,7 +290,16 @@ export function FileViewerModal({ path, content, line, copyText, onClose }: Prop
             )}
           </div>
           <div className={modal.actions}>
-            {!isImage && <EncodingSelect value={encoding} onChange={setEncoding} />}
+            {isHtml && !loading && (
+              <button
+                className={modal.btnOpen}
+                onClick={e => { e.stopPropagation(); setShowSource(v => !v); }}
+                title={showSource ? 'Render the HTML' : 'Show the HTML source'}
+              >
+                {showSource ? 'Preview' : 'Source'}
+              </button>
+            )}
+            {!isImage && !renderHtml && !loading && <EncodingSelect value={encoding} onChange={setEncoding} />}
             {/* No editor to open in outside VS Code - the button was a silent no-op there. */}
             {isVsCode && (
               <button className={modal.btnOpen} onClick={openInEditor} title="Open in VS Code editor">
@@ -247,10 +310,34 @@ export function FileViewerModal({ path, content, line, copyText, onClose }: Prop
           </div>
         </div>
         <div className={`${modal.body} fileViewerBody`} ref={bodyRef}>
-          {isImage ? (
+          {loading ? (
+            <div
+              className={styles.loadingBody}
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+              aria-label="Loading preview"
+              data-testid="preview-loading"
+            >
+              <div className="previewSpinner" />
+            </div>
+          ) : isImage ? (
             <div className={styles.imageBody}>
               <img src={content} alt={filename} />
             </div>
+          ) : renderHtml ? (
+            // srcdoc in a fully restricted sandbox: no scripts, no forms, no access to
+            // this page's origin. The file was written by whatever the agent was doing
+            // and is not trusted content - an inline `onerror=` would run in the app's
+            // own origin otherwise, next to the live WS. A document that needs its
+            // script (an unpkg mermaid export, say) shows its static text instead.
+            <iframe
+              className={styles.htmlFrame}
+              srcDoc={htmlDoc}
+              sandbox=""
+              title={`HTML preview: ${filename}`}
+              data-testid="html-preview"
+            />
           ) : language === 'markdown' ? (
             <div className={styles.mdBody}>
               <PreviewNavContext.Provider value={navigate}>

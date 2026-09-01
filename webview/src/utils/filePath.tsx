@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePreview } from '../contexts/PreviewContext';
+import { URL_RE, trimUrl, openExternal } from './url';
 
 // Matches file paths with optional :line or :line-endLine suffix
 // Windows absolute: D:\path\to\file.ext:123
@@ -7,7 +8,13 @@ import { usePreview } from '../contexts/PreviewContext';
 // Relative: src/file.ext, webview/src/App.tsx (at least one dir separator + extension)
 // Directory segments may start with "!" (the !notes convention); the final
 // filename class stays without it so prose like "done!file.md" is not swallowed.
-const FILE_PATH_RE = /((?:(?<![a-zA-Z])[A-Za-z]:[\\\/])[\w.\-!\\\/]+\.\w+|\/(?:[\w.\-!]+\/)+[\w.\-]+\.\w+|(?:[\w.\-@!]+[\\\/])+[\w.\-]+\.\w+)(?::(\d+)(?:-(\d+))?)?/g;
+// The suffix is `.ext` plus any number of `-part` groups, because a dotfile name is
+// routinely hyphenated (`.corp-account`, `.menu-cms`): with a plain `\.\w+` the match
+// stopped at the hyphen and the link pointed at `...\credentials\.corp`, a file that
+// does not exist. `\w` excludes Cyrillic, so a Russian suffix ("`.md`-файл") still
+// ends the match. The final segment may also start with the dot (`/etc/.gitignore`),
+// hence `*` rather than `+` before it on the unix and relative branches.
+const FILE_PATH_RE = /((?:(?<![a-zA-Z])[A-Za-z]:[\\\/])[\w.\-!\\\/]+\.\w+(?:-\w+)*|\/(?:[\w.\-!]+\/)+[\w.\-]*\.\w+(?:-\w+)*|(?:[\w.\-@!]+[\\\/])+[\w.\-]*\.\w+(?:-\w+)*)(?::(\d+)(?:-(\d+))?)?/g;
 
 // The preview itself is owned by PreviewProvider, not by this link: markdown is
 // re-rendered constantly while a turn streams and the message it belongs to is
@@ -33,15 +40,33 @@ function FilePathLink({ path: origPath, line, display }: { path: string; line?: 
 
 const MAX_LINKIFY_LENGTH = 5000;
 
-/**
- * Takes a plain text string and returns React nodes with detected file paths
- * rendered as clickable links that open a FileViewerModal on click.
- */
-export function linkifyPaths(text: string): React.ReactNode {
-  if (text.length > MAX_LINKIFY_LENGTH) return text;
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
+// A URL's path component is indistinguishable from a real path, so FILE_PATH_RE used to
+// claim the tail of a link: `https://192.168.0.12/ui/scripts/main.js` came out with
+// `/192.168.0.12/ui/scripts/main.js` underlined and opening a preview for a file that does
+// not exist, and `http://localhost:3001/webview.js` broke mid-host into `3001/webview.js`.
+// The URL is still a link - it just has to open as a URL, so it is matched first and
+// rendered by UrlLink, and the path scan only ever sees the spans between URLs. In prose
+// remark-gfm has already produced an <a> (which withLinkedPaths skips); this covers the
+// places it does not reach - code spans, fenced blocks and the body of a user message.
+function UrlLink({ url }: { url: string }) {
+  return (
+    <a
+      className="external-url-link"
+      href={url}
+      title={`Open ${url}`}
+      onClick={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        openExternal(url);
+      }}
+    >
+      {url}
+    </a>
+  );
+}
 
+function pushLinkedPaths(text: string, offset: number, parts: React.ReactNode[]): void {
+  let lastIndex = 0;
   FILE_PATH_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -56,17 +81,42 @@ export function linkifyPaths(text: string): React.ReactNode {
     // match[3] (the end of a `:12-80` range) is part of the link text only - the
     // viewer scrolls to a single line and has never accepted an end line.
     parts.push(
-      <FilePathLink key={match.index} path={filePath} line={line} display={fullMatch} />
+      <FilePathLink key={offset + match.index} path={filePath} line={line} display={fullMatch} />
     );
 
     lastIndex = match.index + fullMatch.length;
   }
 
-  if (parts.length === 0) return text;
-
   if (lastIndex < text.length) {
     parts.push(text.slice(lastIndex));
   }
+}
+
+/**
+ * Takes a plain text string and returns React nodes with detected file paths
+ * rendered as clickable links that open a FileViewerModal on click.
+ */
+export function linkifyPaths(text: string): React.ReactNode {
+  if (text.length > MAX_LINKIFY_LENGTH) return text;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  URL_RE.lastIndex = 0;
+  let url: RegExpExecArray | null;
+
+  while ((url = URL_RE.exec(text)) !== null) {
+    pushLinkedPaths(text.slice(lastIndex, url.index), lastIndex, parts);
+    const href = trimUrl(url[0]);
+    parts.push(<UrlLink key={`u${url.index}`} url={href} />);
+    // Punctuation the regex swallowed is ordinary text, not part of the link.
+    if (href.length < url[0].length) parts.push(url[0].slice(href.length));
+    lastIndex = url.index + url[0].length;
+  }
+  pushLinkedPaths(text.slice(lastIndex), lastIndex, parts);
+
+  // Nothing matched: hand back the original string rather than a fragment.
+  if (parts.length === 1 && typeof parts[0] === 'string') return parts[0];
+  if (parts.length === 0) return text;
 
   return <>{parts}</>;
 }

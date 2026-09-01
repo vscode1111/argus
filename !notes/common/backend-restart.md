@@ -116,13 +116,65 @@ powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'ProcessId
 
 | Changed | Needs | Restart daemon? |
 |---------|-------|-----------------|
-| `webview/src/**` (React UI) | `yarn build` -> `media/webview.{js,css}` | **No** - reload the page. The HTTP handler `readFileSync`s the asset per request, so the next load picks it up |
+| `webview/src/**` (React UI) | `yarn build` -> `media/webview.{js,css}` **of the serving install** | **No** - reload the page, *if* the build reached that install (see below) |
 | `src/backend/**` | `yarn compile` -> `out/backend/daemon.js` | **Yes** |
 | `src/frontend/**` (extension host) | `yarn compile` | No - reload the VS Code window |
 | Anything, under `yarn dev` (port 3001) | nothing | **No** - `tsx watch` restarts the backend, Vite HMRs the frontend |
 
 The `yarn dev` path is the fast loop and is not idle-killed; the daemon path is what the
 installed extension and the browser UI at `http://localhost:<port>/` use.
+
+### "No restart needed" still assumes the build reached the right `media/`
+
+The install-origin fact above applies to the **webview bundle** too, and it is easier to miss
+there because the row says no restart is needed. `MEDIA_DIR` is resolved relative to the
+running `daemon.js`, so a daemon spawned from `local.argus-0.0.88` serves
+`C:\Users\Admin\.vscode\extensions\local.argus-0.0.88\media\webview.js`. A `yarn build` in this
+repo writes the repo's `media/`, which that process never opens - the page reloads and shows
+the old UI, with a freshly built, correct bundle sitting on disk a few folders away.
+
+Symptom to recognise: the fix is in the source, the e2e suite is green (it runs against Vite,
+which serves the source), the bundle verifiably contains the change, and the actual Argus
+window is unchanged. Check the origin before concluding the fix is wrong:
+
+```sh
+node -e "console.log(require('child_process').execSync('wmic process where \"ProcessId=<pid>\" get CommandLine /format:list',{encoding:'utf8'}).trim())"
+```
+
+Routes out: view it through the Vite dev server (`http://localhost:5173/?dir=…`, which serves
+the source and needs no build at all), or `yarn ext:package` + `yarn ext:install` and restart
+the daemon so the serving install *is* this repo's build.
+
+### Proving the change is in the built bundle
+
+`media/webview.js` is minified, and esbuild **re-escapes regex literals** - a source
+`[a-z0-9+.\-]*://` is emitted as `[a-z0-9+.\-]*:\/\/`. Grepping for the source text therefore
+returns a confident false negative on a bundle that does contain the change. Match on a
+distinctive character class, or read the literal back out of the region around a nearby stable
+string, rather than comparing against what the editor shows.
+
+### Which server am I a child of?
+
+Before killing any server in this repo - the daemon *or* the `yarn dev` backend on :3001 -
+settle whether the CLI answering right now is one of its descendants, because that decides
+whether the kill aborts the turn doing the killing. It is a walk up `ParentProcessId`, and the
+daemon appears as `Code.exe` (Electron-as-Node), not as `node.exe`:
+
+```sh
+node -e "
+const {execSync}=require('child_process');
+const rows=execSync('wmic process get ProcessId,ParentProcessId,Name /format:csv',{encoding:'utf8'})
+  .split(/\r?\n/).filter(l=>l.includes(',')).slice(1).map(l=>l.split(','))
+  .filter(a=>a.length>=4).map(a=>({name:a[1],ppid:+a[2],pid:+a[3]}));
+const by=new Map(rows.map(r=>[r.pid,r]));
+let cur=by.get(process.pid), chain=[];
+while(cur&&chain.length<15){chain.push(cur.pid+' '+cur.name);cur=by.get(cur.ppid);}
+console.log(chain.join(' -> '));"
+```
+
+Observed 2026-08-27: `node -> bash -> claude.exe -> cmd.exe -> Code.exe 14584`, and 14584 was
+the discovery-file pid, so the daemon was off limits while the :3001 dev server (a separate
+pid) could be stopped and restarted freely mid-conversation.
 
 ## Stale installs are worth pruning
 

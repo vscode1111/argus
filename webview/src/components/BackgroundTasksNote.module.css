@@ -1,0 +1,15 @@
+.note {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--thinking-fg);
+  font-style: italic;
+  font-size: 0.9em;
+  opacity: 0.85;
+  padding: 2px 0;
+}
+
+.glyph {
+  font-style: normal;
+  line-height: 1;
+}
