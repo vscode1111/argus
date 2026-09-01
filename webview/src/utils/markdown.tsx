@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { withLinkedPaths } from './filePath';
+import { openExternal } from './url';
 import { usePreviewNav } from '../contexts/PreviewNavContext';
 
 // Escape backslashes in Windows file paths so the markdown parser preserves them.
@@ -10,7 +11,11 @@ import { usePreviewNav } from '../contexts/PreviewNavContext';
 // Covers drive-letter paths and relative backslash paths; "!" is allowed in
 // directory segments (the !notes convention) - without it the escape stopped at
 // the bang and markdown ate the preceding backslash (`CCS\!notes` -> `CCS!notes`).
-const WIN_PATH_RE = /(?<![a-zA-Z`])(?:[A-Za-z]:\\|(?:[\w.\-@!]+\\)+)[\w.\-!\\\/]*[\w.\-]+\.\w+(?::\d+(?:-\d+)?)?/g;
+// The filename suffix must accept the same class as FILE_PATH_RE in filePath.tsx (see
+// the note there): a hyphenated dotfile (`\credentials\.corp-account`) matched neither,
+// so in prose markdown ate the backslashes around it and it rendered as
+// `C:\Users\Admin.claude\...\credentials.corp-account`.
+const WIN_PATH_RE = /(?<![a-zA-Z`])(?:[A-Za-z]:\\|(?:[\w.\-@!]+\\)+)[\w.\-!\\\/]*[\w.\-]*\.\w+(?:-\w+)*(?::\d+(?:-\d+)?)?/g;
 // Code spans and fences keep backslashes literal, so escaping inside them would
 // double them (`CCS\!notes` -> `CCS\\!notes`). Split them out and leave them alone.
 const CODE_SPAN_RE = /(`+)[\s\S]*?\1/g;
@@ -99,8 +104,16 @@ function MarkdownLink({ href, children }: { href?: string; children: React.React
       </a>
     );
   }
+  // http(s) is opened through the host rather than followed: in browser mode a bare
+  // href navigates the Argus page itself away, losing the conversation view. `#` and
+  // `mailto:` keep their default behaviour.
+  const isHttp = !!href && /^https?:\/\//i.test(href);
   return (
-    <a href={isExternal ? href : undefined} style={{ color: 'var(--vscode-textLink-foreground)' }}>
+    <a
+      href={isExternal ? href : undefined}
+      style={{ color: 'var(--vscode-textLink-foreground)' }}
+      onClick={isHttp ? e => { e.preventDefault(); e.stopPropagation(); openExternal(href!); } : undefined}
+    >
       {children}
     </a>
   );
