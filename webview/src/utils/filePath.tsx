@@ -3,9 +3,9 @@ import { usePreview } from '../contexts/PreviewContext';
 import { URL_RE, trimUrl, openExternal } from './url';
 
 // Matches file paths with optional :line or :line-endLine suffix
-// Windows absolute: D:\path\to\file.ext:123
-// Unix absolute: /path/to/file.ext:123
-// Relative: src/file.ext, webview/src/App.tsx (at least one dir separator + extension)
+// Windows absolute: D:\path\to\file.ext:123, D:\path\to\folder, D:\path\to\folder\
+// Unix absolute: /path/to/file.ext:123, /path/to/folder/
+// Relative: src/file.ext, webview/src/App.tsx, src/backend/
 // Directory segments may start with "!" (the !notes convention); the final
 // filename class stays without it so prose like "done!file.md" is not swallowed.
 // The suffix is `.ext` plus any number of `-part` groups, because a dotfile name is
@@ -14,7 +14,23 @@ import { URL_RE, trimUrl, openExternal } from './url';
 // does not exist. `\w` excludes Cyrillic, so a Russian suffix ("`.md`-файл") still
 // ends the match. The final segment may also start with the dot (`/etc/.gitignore`),
 // hence `*` rather than `+` before it on the unix and relative branches.
-const FILE_PATH_RE = /((?:(?<![a-zA-Z])[A-Za-z]:[\\\/])[\w.\-!\\\/]+\.\w+(?:-\w+)*|\/(?:[\w.\-!]+\/)+[\w.\-]*\.\w+(?:-\w+)*|(?:[\w.\-@!]+[\\\/])+[\w.\-]*\.\w+(?:-\w+)*)(?::(\d+)(?:-(\d+))?)?/g;
+//
+// A directory is a first-class target (the previewer lists one), so the "must end in
+// .ext" requirement is dropped - but ONLY on the Windows branch, where the drive letter
+// says "this is a filesystem path" and nothing else does. The whole run matches, ending
+// in a final segment plus an optional separator. Two guards on that final segment:
+//   - it may not end in a dot, so a sentence's full stop stays prose, and the elision
+//     `C:\...` (shorthand for a path, not a path) does not linkify;
+//   - it may not be empty, so a bare `C:\` is not a link either.
+// Dropping the extension requirement on the slash branches was tried and reverted: a
+// URL path in prose is shaped exactly like a directory, so `GET /api/probes/headers`
+// and `/api/v4/projects/6829/merge_requests/99/discussions/` both became links to
+// folders that do not exist. A leading slash is not evidence of a filesystem, and for a
+// bare relative path there is no evidence at all ("and/or", "24/7").
+// Without the Windows widening the link stopped at the last dotted segment: the folder
+// `C:\Users\Admin\.claude\skills\git-remarks\scripts\` came out as a link to
+// `C:\Users\Admin\.claude`, a real but entirely different directory.
+const FILE_PATH_RE = /((?<![a-zA-Z])[A-Za-z]:[\\\/](?:[\w.\-!]+[\\\/])*[\w.\-!]*[\w\-!][\\\/]?|\/(?:[\w.\-!]+\/)+[\w.\-]*\.\w+(?:-\w+)*|(?:[\w.\-@!]+[\\\/])+[\w.\-]*\.\w+(?:-\w+)*)(?::(\d+)(?:-(\d+))?)?/g;
 
 // The preview itself is owned by PreviewProvider, not by this link: markdown is
 // re-rendered constantly while a turn streams and the message it belongs to is

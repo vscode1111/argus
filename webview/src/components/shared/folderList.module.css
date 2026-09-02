@@ -1,0 +1,50 @@
+/* Folder-explorer rows, shared by the Workspace History "Browse" tab and the
+   directory preview. Moved here verbatim from WorkspaceHistoryModal.module.css;
+   the local class names are kept so the existing `[class*="browseName"]` e2e
+   locators still match. */
+
+.browseRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.browseRow:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.folderIcon {
+  flex-shrink: 0;
+  color: var(--vscode-charts-blue, #75beff);
+  opacity: 0.9;
+}
+
+.fileIcon {
+  flex-shrink: 0;
+  color: var(--thinking-fg);
+  opacity: 0.9;
+}
+
+.upIcon {
+  flex-shrink: 0;
+  color: var(--thinking-fg);
+}
+
+.browseName {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowMeta {
+  flex-shrink: 0;
+  font-size: 0.82em;
+  color: var(--thinking-fg);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}

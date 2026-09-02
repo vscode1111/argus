@@ -59,7 +59,11 @@ import { Markdown } from '../utils/markdown';
 import { PreviewNavContext } from '../contexts/PreviewNavContext';
 import { EncodingSelect } from './shared/EncodingSelect';
 import { CopyIcon, CheckIcon, BackIcon } from './shared/icons';
+import { BrowseRow, FileTypeIcon, FolderIcon, UpRow, formatSize } from './shared/FolderList';
 import { useCopyFeedback } from '../hooks/useCopyFeedback';
+import { PreviewEntry } from '../types';
+import { matchesRequestedPath } from '../utils/path';
+import { plural } from '../utils/text';
 import modal from './shared/modal.module.css';
 import styles from './FileViewerModal.module.css';
 
@@ -91,6 +95,12 @@ interface Props {
   content: string;
   line?: number;
   copyText?: string;
+  /** Set when `path` is a directory: render its listing instead of file content. */
+  entries?: PreviewEntry[];
+  /** Parent of that directory; absent at a filesystem root. */
+  dirParent?: string;
+  /** Entries the host dropped past its cap. */
+  truncated?: number;
   /** Opened before its content exists: hold a spinner until the host answers. */
   loading?: boolean;
   onClose: () => void;
@@ -155,9 +165,51 @@ interface Frame {
   path: string;
   content: string;
   line?: number;
+  entries?: PreviewEntry[];
+  dirParent?: string;
+  truncated?: number;
 }
 
-export function FileViewerModal({ path, content, line, copyText, loading, onClose }: Props) {
+/**
+ * A clicked path that turned out to be a folder. Same rows as the Workspace
+ * History "Browse" tab (shared FolderList), with files included and clickable -
+ * opening one pushes it onto the previewer's own stack, so Back walks back out.
+ */
+function DirListingBody({ entries, parent, truncated, onOpen }: {
+  entries: PreviewEntry[];
+  parent?: string;
+  truncated?: number;
+  onOpen: (path: string) => void;
+}) {
+  const folders = entries.filter(e => e.isDir).length;
+  const files = entries.length - folders;
+
+  return (
+    <div className={styles.dirBody} data-testid="dir-listing">
+      {parent && <UpRow onClick={() => onOpen(parent)} />}
+      {entries.length === 0 ? (
+        <div className={styles.dirEmpty}>This folder is empty.</div>
+      ) : (
+        entries.map(entry => (
+          <BrowseRow
+            key={entry.path}
+            icon={entry.isDir ? <FolderIcon /> : <FileTypeIcon name={entry.name} />}
+            name={entry.name}
+            meta={entry.size !== undefined ? formatSize(entry.size) : undefined}
+            title={entry.path}
+            onClick={() => onOpen(entry.path)}
+          />
+        ))
+      )}
+      <div className={styles.dirFooter}>
+        {plural(folders, 'folder')}, {plural(files, 'file')}
+        {truncated ? ` · ${truncated} more not shown` : ''}
+      </div>
+    </div>
+  );
+}
+
+export function FileViewerModal({ path, content, line, copyText, entries, dirParent, truncated, loading, onClose }: Props) {
   // Default to dark unless VS Code explicitly marks the theme as light.
   const isDark = !document.body.classList.contains('vscode-light');
   const { copied, copy } = useCopyFeedback();
@@ -167,7 +219,9 @@ export function FileViewerModal({ path, content, line, copyText, loading, onClos
   const [stack, setStack] = useState<Frame[]>([]);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
 
-  const current: Frame = stack.length ? stack[stack.length - 1] : { path, content, line };
+  const current: Frame = stack.length
+    ? stack[stack.length - 1]
+    : { path, content, line, entries, dirParent, truncated };
 
   useEscapeKey(onClose);
 
@@ -177,25 +231,39 @@ export function FileViewerModal({ path, content, line, copyText, loading, onClos
     setPendingPath(null);
   }, [path]);
 
-  const navigate = useCallback((href: string) => {
-    const target = resolveRelative(current.path, href);
+  // Ask the host for another path and push whatever comes back onto the stack -
+  // a file, or another directory listing. Back walks the trail either way.
+  const openPath = useCallback((target: string) => {
     setPendingPath(target);
     postMessage({ type: 'readFilePreview', path: target });
-  }, [current.path]);
+  }, []);
+
+  const navigate = useCallback(
+    (href: string) => openPath(resolveRelative(current.path, href)),
+    [current.path, openPath],
+  );
 
   useEffect(() => {
     if (!pendingPath) return;
     function onMessage(e: MessageEvent) {
       if (e.data?.type !== 'filePreview') return;
       const got: string = e.data.path ?? '';
-      if (got !== pendingPath && !got.endsWith(pendingPath!)) return;
-      setStack(prev => [...prev, { path: got || pendingPath!, content: e.data.content }]);
+      if (!matchesRequestedPath(got, pendingPath!)) return;
+      setStack(prev => [...prev, {
+        path: got || pendingPath!,
+        content: e.data.content,
+        entries: Array.isArray(e.data.entries) ? e.data.entries : undefined,
+        dirParent: typeof e.data.parent === 'string' ? e.data.parent : undefined,
+        truncated: typeof e.data.truncated === 'number' ? e.data.truncated : undefined,
+      }]);
       setPendingPath(null);
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [pendingPath]);
 
+  const dirEntries = current.entries;
+  const isDir = dirEntries !== undefined;
   const isImage = isDataUrl(current.content);
   const language = isImage ? 'text' : detectLanguage(current.path);
   const rawCode = isImage ? '' : stripLineNumbers(current.content);
@@ -207,7 +275,7 @@ export function FileViewerModal({ path, content, line, copyText, loading, onClos
   // user clicks is usually a slice (`file.html:359-499`), a browser renders a fragment
   // perfectly well, and defaulting those to source meant the whole feature looked like
   // it had not shipped. The line is still reachable - Source scrolls to it.
-  const isHtml = HTML_RE.test(current.path) && !isImage;
+  const isHtml = HTML_RE.test(current.path) && !isImage && !isDir;
   const [showSource, setShowSource] = useState(false);
   useEffect(() => { setShowSource(false); }, [current.path]);
   const renderHtml = isHtml && !showSource;
@@ -299,9 +367,10 @@ export function FileViewerModal({ path, content, line, copyText, loading, onClos
                 {showSource ? 'Preview' : 'Source'}
               </button>
             )}
-            {!isImage && !renderHtml && !loading && <EncodingSelect value={encoding} onChange={setEncoding} />}
-            {/* No editor to open in outside VS Code - the button was a silent no-op there. */}
-            {isVsCode && (
+            {!isImage && !renderHtml && !isDir && !loading && <EncodingSelect value={encoding} onChange={setEncoding} />}
+            {/* No editor to open in outside VS Code - the button was a silent no-op there.
+                A folder is not something showTextDocument can open either. */}
+            {isVsCode && !isDir && (
               <button className={modal.btnOpen} onClick={openInEditor} title="Open in VS Code editor">
                 Open in editor
               </button>
@@ -321,6 +390,13 @@ export function FileViewerModal({ path, content, line, copyText, loading, onClos
             >
               <div className="previewSpinner" />
             </div>
+          ) : dirEntries ? (
+            <DirListingBody
+              entries={dirEntries}
+              parent={current.dirParent}
+              truncated={current.truncated}
+              onOpen={openPath}
+            />
           ) : isImage ? (
             <div className={styles.imageBody}>
               <img src={content} alt={filename} />

@@ -351,7 +351,19 @@ export function attachClientHandlers(
         const rateLimits = usage.windows.length > 0 ? usage.windows : Array.from(s.rateLimits.values());
         const usageError = rateLimits.length === 0 ? usage.error : undefined;
         ws.send(JSON.stringify({ type: 'accountUsage', account, rateLimits, usageError, usagePending: false }));
-      }).catch(() => {});
+      }).catch((err) => {
+        // One request, one reply - the invariant getUsageLimits and getUsageInsights
+        // already hold. Swallowing here meant a failure sent nothing at all, so the
+        // modal spun on "Loading..." with no reason on screen and a waiting client had
+        // no frame to wake on.
+        ws.send(JSON.stringify({
+          type: 'accountUsage',
+          account: { loggedIn: false },
+          rateLimits: [],
+          usageError: (err as Error)?.message ?? String(err),
+          usagePending: false,
+        }));
+      });
     } else if (msg.type === 'getUsageInsights') {
       collectUsageInsights(msg.force).then((insights) => {
         ws.send(JSON.stringify({ type: 'usageInsights', day: insights.day, week: insights.week }));
