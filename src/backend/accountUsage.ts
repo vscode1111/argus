@@ -213,24 +213,35 @@ export async function fetchModels(): Promise<ModelsResult> {
 // Resolves to { loggedIn: false } on any error so the UI can show a logged-out state.
 export function fetchAccountInfo(): Promise<AccountInfo> {
   return new Promise((resolve) => {
-    const bin = resolveClaudeBin();
-    execFile(bin, ['auth', 'status', '--json'], { timeout: 10_000, shell: IS_WIN, windowsHide: true }, (err, stdout) => {
-      if (err) {
-        resolve({ loggedIn: false });
-        return;
-      }
-      try {
-        const data = JSON.parse(stdout.trim());
-        resolve({
-          loggedIn: data.loggedIn ?? false,
-          authMethod: data.authMethod,
-          email: data.email,
-          orgName: data.orgName,
-          subscriptionType: data.subscriptionType,
-        });
-      } catch {
-        resolve({ loggedIn: false });
-      }
-    });
+    // execFile throws SYNCHRONOUSLY when the OS refuses a new process (resource
+    // exhaustion -> "spawn UNKNOWN", errno -4094), a different path from the callback's
+    // `err` - the same trap handleSend guards spawn() against. Inside a promise executor
+    // an unguarded throw REJECTS this promise, breaking the "always resolves" contract
+    // above that every caller relies on: getAccountUsage swallows rejections, so the
+    // client got no reply at all and its modal spun on "Loading..." forever. Only shows
+    // up under load, which is why a full e2e run found it and single runs never did.
+    try {
+      const bin = resolveClaudeBin();
+      execFile(bin, ['auth', 'status', '--json'], { timeout: 10_000, shell: IS_WIN, windowsHide: true }, (err, stdout) => {
+        if (err) {
+          resolve({ loggedIn: false });
+          return;
+        }
+        try {
+          const data = JSON.parse(stdout.trim());
+          resolve({
+            loggedIn: data.loggedIn ?? false,
+            authMethod: data.authMethod,
+            email: data.email,
+            orgName: data.orgName,
+            subscriptionType: data.subscriptionType,
+          });
+        } catch {
+          resolve({ loggedIn: false });
+        }
+      });
+    } catch {
+      resolve({ loggedIn: false });
+    }
   });
 }

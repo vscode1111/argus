@@ -141,6 +141,18 @@ test.describe('account & usage (integration)', () => {
 
     const dialog = page.getByRole('dialog', { name: 'Account' });
 
+    // The guard above probed the endpoint once; the SERVER then makes its own call a
+    // second or two later, and this endpoint rate-limits hard enough that the two
+    // routinely disagree. When that happens the modal says so - which is the product
+    // behaving correctly - and demanding rows here fails on a no-data state the test
+    // could never have controlled (observed: probe returned 3 windows, the modal showed
+    // "Usage data is unavailable: rate limited (HTTP 429)", the assertion wanted 3 rows
+    // and got 0). An immediate isVisible() is right here rather than a wait: the modal
+    // has already settled, since "Loading..." is gone.
+    if (await dialog.getByText('Usage data is unavailable').isVisible()) {
+      test.skip(true, 'server-side usage fetch was rate limited after the probe succeeded');
+    }
+
     // Only the known windows the API returned are rendered (codename windows like
     // `tangelo`/`iguana_necktie` and null windows like Opus must be filtered out).
     await expect(page.locator('[class*="usageRow"]')).toHaveCount(live!.length);

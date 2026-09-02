@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { waitForApp } from './helpers';
 
 // The running-session marker end to end against the real backend: `listActiveSessions`
@@ -41,6 +41,23 @@ async function openHistory(page: Page) {
   return dialog;
 }
 
+// The modal reads the session list ONCE on mount, so waiting on the row with a plain
+// toBeVisible() can never see a session whose transcript the CLI has not written yet:
+// nothing inside that wait re-reads the directory, and the row only turns up if some
+// later `sessionList` push happens to land. Measured on the failure this fixes - the
+// transcript appeared 8 seconds AFTER the 15s assertion had already given up, which is
+// why the failure screenshot showed the row sitting there. Drive the re-fetch instead of
+// waiting for one. The refresh button disables itself while a request is in flight, so
+// click() waits that out on its own.
+async function waitForRow(dialog: Locator, id: string): Promise<Locator> {
+  const row = dialog.locator(`[data-session-id="${id}"]`);
+  await expect(async () => {
+    await dialog.getByRole('button', { name: 'Refresh sessions' }).click();
+    await expect(row).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
+  return row;
+}
+
 test.describe('running-session marker (integration)', () => {
   test('the live session is marked while its turn runs and unmarked when it ends', async ({ page }) => {
     await waitForApp(page);
@@ -49,8 +66,7 @@ test.describe('running-session marker (integration)', () => {
 
     // Mid-turn: the session's own row is both the current one and marked as working.
     const dialog = await openHistory(page);
-    const row = dialog.locator(`[data-session-id="${id}"]`);
-    await expect(row).toBeVisible({ timeout: 15_000 });
+    const row = await waitForRow(dialog, id);
     await expect(row.getByRole('img', { name: 'Working now' })).toHaveCount(1, { timeout: 15_000 });
 
     // The modal must be closed to reach Stop: the centered-modal shell renders a
@@ -65,8 +81,7 @@ test.describe('running-session marker (integration)', () => {
     // Reopening reads the ids from App state (server-pushed), not from the row cache,
     // so the finished turn is unmarked.
     const reopened = await openHistory(page);
-    const stoppedRow = reopened.locator(`[data-session-id="${id}"]`);
-    await expect(stoppedRow).toBeVisible({ timeout: 15_000 });
+    const stoppedRow = await waitForRow(reopened, id);
     await expect(stoppedRow.getByRole('img', { name: 'Working now' })).toHaveCount(0, { timeout: 15_000 });
   });
 
@@ -81,8 +96,7 @@ test.describe('running-session marker (integration)', () => {
     const id = await currentSessionId(page);
 
     const dialog = await openHistory(other);
-    const row = dialog.locator(`[data-session-id="${id}"]`);
-    await expect(row).toBeVisible({ timeout: 15_000 });
+    const row = await waitForRow(dialog, id);
     await expect(row.getByRole('img', { name: 'Working now' })).toHaveCount(1, { timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Stop' }).click();
