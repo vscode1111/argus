@@ -6,6 +6,7 @@ import { plural } from '../utils/text';
 import { relativeTime } from '../utils/time';
 import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
+import { BrowseRow, FolderIcon, UpRow } from './shared/FolderList';
 import { useWebviewMessage } from '../hooks/useWebviewMessage';
 import shell from './shared/centeredModal.module.css';
 import styles from './WorkspaceHistoryModal.module.css';
@@ -17,14 +18,6 @@ interface Props {
 }
 
 type Tab = 'recent' | 'browse';
-
-function FolderIcon() {
-  return (
-    <svg className={styles.folderIcon} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
 
 // Workspace switcher dialog, modelled on the Session History modal. Two tabs:
 // "Recent" lists projects the CLI has been run in (recovered from
@@ -226,13 +219,7 @@ export function WorkspaceHistoryModal({ currentPath, onSelect, onClose }: Props)
 
           <div className={shell.body}>
             {dir && dir.parent !== null && (
-              <div className={styles.browseRow} onClick={() => browseTo(dir.parent ?? undefined)}>
-                <svg className={styles.upIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <line x1="12" y1="19" x2="12" y2="5" />
-                  <polyline points="5 12 12 5 19 12" />
-                </svg>
-                <span className={styles.browseName}>Up</span>
-              </div>
+              <UpRow onClick={() => browseTo(dir.parent ?? undefined)} />
             )}
             {dirLoading && !dir ? (
               <div className={shell.placeholder}>Loading...</div>
@@ -240,15 +227,14 @@ export function WorkspaceHistoryModal({ currentPath, onSelect, onClose }: Props)
               <div className={shell.placeholder}>No sub-folders here.</div>
             ) : (
               dir?.entries.map(entry => (
-                <div
+                <BrowseRow
                   key={entry.path}
-                  className={[styles.browseRow, entry.path === current ? shell.rowCurrent : ''].filter(Boolean).join(' ')}
-                  onClick={() => browseTo(entry.path)}
+                  icon={<FolderIcon />}
+                  name={entry.name}
                   title={entry.path}
-                >
-                  <FolderIcon />
-                  <span className={styles.browseName}>{entry.name}</span>
-                </div>
+                  className={entry.path === current ? shell.rowCurrent : undefined}
+                  onClick={() => browseTo(entry.path)}
+                />
               ))
             )}
           </div>

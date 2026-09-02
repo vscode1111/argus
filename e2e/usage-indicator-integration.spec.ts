@@ -108,12 +108,17 @@ test.describe('usage indicator (integration)', () => {
     const other = await openClient(nonce);
     try {
       opener.send(JSON.stringify({ type: 'getAccountUsage', force: true }));
-      // The reply arrives in two phases; the second carries the windows.
+      // The reply arrives in two phases; the second carries the windows. The settled
+      // frame is the answer whether or not it has any - looping until `windows` filled
+      // waited for a third frame that the handler has no code to send, so a rate-limited
+      // API (empty `rateLimits` plus `usageError`, the correct no-data reply) timed out
+      // here instead of reaching the skip below. Measured: exactly two frames per request.
       let windows: Array<Record<string, unknown>> = [];
-      for (let i = 0; i < 3 && windows.length === 0; i++) {
+      for (let i = 0; i < 3; i++) {
         const msg = await waitForFrame(opener, 'accountUsage');
         if (msg.usagePending) continue;
         windows = (msg.rateLimits as Array<Record<string, unknown>>) ?? [];
+        break;
       }
       test.skip(windows.length === 0, 'live usage API unavailable (rate limited / offline)');
 

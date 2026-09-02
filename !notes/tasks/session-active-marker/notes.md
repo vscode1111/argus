@@ -129,6 +129,32 @@ may still be finishing and legitimately marked at the same time. Both tabs stamp
   overlay interception described above. The spec was then edited to press Escape first, but
   **no green run is recorded**, and this session did not re-run it.
 
+## Follow-up (2026-09-03): the row race the `sleep 10` prompt did not cover
+
+`a turn running in one panel is marked in another panel list` failed on the **row** not
+being visible (not the marker). The `sleep 10` fix above addressed the marker half; this is
+the other half the same comment names ("one on the row not being listed yet").
+
+`SessionHistoryModal` reads its list **once on mount**, so
+`expect(row).toBeVisible({ timeout: 15_000 })` can never see a session whose transcript the
+CLI has not written yet - nothing in that window re-reads the directory. The failure
+**screenshot showed the row present**, which is the tell: it arrived after the assertion
+gave up (transcript created 00:36:08, assertion window 00:35:45-00:36:00).
+
+Fix: `waitForRow()` drives the modal's own Refresh button in a `toPass` loop, used by all
+three row lookups in the spec. Proving it needed a **constructed** red, since both forms
+pass whenever the transcript already exists - a throwaway spec that opened the modal and
+wrote a transcript 4s later failed on the plain assertion and passed on the loop. Then
+3x green, plus `session-history-integration` (3 tests) green. Generalised in
+[../../common/e2e-testing.md](../../common/e2e-testing.md).
+
+Still not addressed, and visible in the same screenshot: the model ran `sleep 10` as a
+**background task** (`task_started` in the debug log) despite the prompt saying foreground,
+which ends the turn early and can flake the *marker* assertion again. Left alone
+deliberately - strengthening the prompt further is the model-owned battle the `LONG_PROMPT`
+comment already describes losing. The durable fix is to assert against something Argus owns
+rather than the model's tool choice.
+
 ## Remaining work
 
 - ~~Re-run the integration spec and confirm green before committing.~~ **Done 2026-08-26:**

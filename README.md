@@ -64,6 +64,7 @@ approval routing cleanly separable without growing into a monolith.
 - Inline diff and file viewers next to tool calls. An `.html` file opens as the rendered document, painted in the panel's own theme, with its source one click away.
 - Images a tool read open from the conversation itself, so a file the agent has since renamed, packaged or deleted still previews; the bytes are fetched per click instead of travelling inside the message.
 - Clickable paths and URLs everywhere in messages, including code blocks: a file path opens an in-app preview (dotted underline), a URL opens in the browser.
+- A path pointing at a **folder** opens a browsable listing with file-type icons and sizes, sorted folders-first like an explorer: click a sub-folder to walk in, a file to preview it, Back to walk out.
 - OS toast notifications on task completion.
 - Optional "Ask Argus" code lens above functions and classes.
 - Optional inline completions (Haiku model, Copilot-style).

@@ -15,7 +15,16 @@ import { usePreviewNav } from '../contexts/PreviewNavContext';
 // the note there): a hyphenated dotfile (`\credentials\.corp-account`) matched neither,
 // so in prose markdown ate the backslashes around it and it rendered as
 // `C:\Users\Admin.claude\...\credentials.corp-account`.
-const WIN_PATH_RE = /(?<![a-zA-Z`])(?:[A-Za-z]:\\|(?:[\w.\-@!]+\\)+)[\w.\-!\\\/]*[\w.\-]*\.\w+(?:-\w+)*(?::\d+(?:-\d+)?)?/g;
+// A trailing extension is likewise not required any more, for the same reason it is not
+// there: a directory is a path too, and one that ends in `\` or in a dotless segment has
+// to survive the parser intact or the linkifier never sees it whole.
+// This escapes deliberately MORE than FILE_PATH_RE links, and the asymmetry is the point:
+// the two regexes answer different questions. Escaping asks "would markdown eat this
+// backslash", which is true of `C:\` and of the elision `C:\...` (both rendered as `C:`
+// and `C:...` before this, in prose); linking asks "is this a path worth opening", which
+// neither is. Over-escaping only makes a backslash visible, which is right either way -
+// under-escaping silently corrupts the text.
+const WIN_PATH_RE = /(?<![a-zA-Z`])(?:[A-Za-z]:\\|(?:[\w.\-@!]+\\)+)(?:[\w.\-!]+[\\\/])*(?:[\w.\-!]*[\w\-!])?[\\\/]?(?::\d+(?:-\d+)?)?/g;
 // Code spans and fences keep backslashes literal, so escaping inside them would
 // double them (`CCS\!notes` -> `CCS\\!notes`). Split them out and leave them alone.
 const CODE_SPAN_RE = /(`+)[\s\S]*?\1/g;

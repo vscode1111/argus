@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { postMessage } from '../vscode';
 import { FileViewerModal } from '../components/FileViewerModal';
 import { DiffViewerModal } from '../components/DiffViewerModal';
+import { PreviewEntry } from '../types';
+import { matchesRequestedPath } from '../utils/path';
 
 /**
  * What to preview. `key` (a tool call id) identifies the thing being shown, so a
@@ -10,6 +12,9 @@ import { DiffViewerModal } from '../components/DiffViewerModal';
 export type PreviewRequest =
   | { kind: 'file'; key?: string; path: string; content: string; line?: number; copyText?: string }
   | { kind: 'diff'; key?: string; path: string; oldString: string; newString: string }
+  /** The clicked path turned out to be a folder; only the host can tell, so this
+   *  kind is never opened directly - a 'path' request settles into it. */
+  | { kind: 'dir'; key?: string; path: string; entries: PreviewEntry[]; parent?: string; truncated?: number }
   /** No content in hand: the host reads the file and opens once it arrives. */
   | { kind: 'path'; key?: string; path: string; line?: number }
   /** The image a tool call returned, fetched from the transcript by tool_use_id. The
@@ -99,11 +104,21 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     if (!pending) return;
     const { req, loadId } = pending;
     const wanted = req.path;
-    const settle = (path: string, content: string) => {
+    const settle = (path: string, content: string, dir?: MessageEvent['data']) => {
       // A closed modal leaves no frame with this id, so this is simply a no-op then.
-      setStack(prev => prev.map(f => (f.loadId === loadId
-        ? { ...f, path, content, loading: false }
-        : f)));
+      setStack(prev => prev.map(f => {
+        if (f.loadId !== loadId) return f;
+        // The host answered with a listing: this is a folder, not a file. The frame
+        // changes kind - it was opened optimistically as a file, before anyone knew.
+        if (dir) {
+          return {
+            kind: 'dir', key: f.key, path, entries: dir.entries, loadId,
+            parent: typeof dir.parent === 'string' ? dir.parent : undefined,
+            truncated: typeof dir.truncated === 'number' ? dir.truncated : undefined,
+          };
+        }
+        return { ...f, path, content, loading: false };
+      }));
       setPending(null);
     };
     function onMessage(e: MessageEvent) {
@@ -115,11 +130,12 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         if (e.data.type !== 'toolImage' || e.data.toolUseId !== req.toolUseId) return;
       } else {
         // The backend answers with the resolved absolute path, which a relative or
-        // slash-flipped request will only match by suffix.
+        // slash-flipped request will only match by suffix (and a directory request
+        // carries a trailing separator the resolution drops).
         if (e.data.type !== 'filePreview') return;
-        if (got !== wanted && !got.endsWith(wanted) && !got.endsWith(wanted.replace(/\//g, '\\'))) return;
+        if (!matchesRequestedPath(got, wanted)) return;
       }
-      settle(got || wanted, e.data.content);
+      settle(got || wanted, e.data.content, Array.isArray(e.data.entries) ? e.data : undefined);
     }
     window.addEventListener('message', onMessage);
     postMessage(req.kind === 'toolImage'
@@ -146,24 +162,35 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
   return (
     <PreviewContext.Provider value={api}>
       {children}
-      {stack.map((req, i) => (req.kind === 'diff'
-        ? <DiffViewerModal
+      {stack.map((req, i) => {
+        if (req.kind === 'diff') {
+          return (
+            <DiffViewerModal
+              key={i}
+              path={req.path}
+              oldString={req.oldString}
+              newString={req.newString}
+              onClose={() => closeFrom(i)}
+            />
+          );
+        }
+        const dir = req.kind === 'dir' ? req : undefined;
+        const file = req.kind === 'file' ? req : undefined;
+        return (
+          <FileViewerModal
             key={i}
             path={req.path}
-            oldString={req.oldString}
-            newString={req.newString}
-            onClose={() => closeFrom(i)}
-          />
-        : <FileViewerModal
-            key={i}
-            path={req.path}
-            content={req.content}
-            line={req.line}
-            copyText={req.copyText}
+            content={file?.content ?? ''}
+            line={file?.line}
+            copyText={file?.copyText}
+            entries={dir?.entries}
+            dirParent={dir?.parent}
+            truncated={dir?.truncated}
             loading={req.loading}
             onClose={() => closeFrom(i)}
           />
-      ))}
+        );
+      })}
     </PreviewContext.Provider>
   );
 }

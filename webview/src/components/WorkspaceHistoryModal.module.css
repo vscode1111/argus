@@ -1,6 +1,7 @@
 /* Overlay, modal shell, header, close, refresh, search, body, row, tab bar and
-   placeholder come from shared/centeredModal.module.css. Only the folder browser
-   and recent-row specifics live here. */
+   placeholder come from shared/centeredModal.module.css; the folder rows and their
+   icons from shared/folderList.module.css (the directory preview uses the same
+   ones). Only the breadcrumb, the footer and the recent-row specifics live here. */
 
 .browsePath {
   padding: 8px 16px 9px;
@@ -31,38 +32,6 @@
   padding: 5px 10px;
   font-size: 0.9em;
   outline: none;
-}
-
-.browseRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.browseRow:hover {
-  background: rgba(128, 128, 128, 0.12);
-}
-
-.folderIcon {
-  flex-shrink: 0;
-  color: var(--vscode-charts-blue, #75beff);
-  opacity: 0.9;
-}
-
-.upIcon {
-  flex-shrink: 0;
-  color: var(--thinking-fg);
-}
-
-.browseName {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.9em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .browseFooter {

@@ -137,6 +137,14 @@ fails and with what value. Two things this catches, both hit while writing
   closed by "some event during streaming" but specifically by the turn-commit boundary. A
   spec that only asserts the broken cases proves less than one that also pins down where the
   breakage stops.
+- **A polling assertion cannot catch a *later* overwrite.** `toContainText` / `toHaveText`
+  retry until they match and stop at the first success, so asserting right after triggering
+  a fetch passes on the value that is momentarily correct and never sees the real reply land
+  330ms later. A probe written that way "proved" the `getInfo` clobber did not exist and
+  nearly closed the investigation; rewritten as `waitForTimeout(1500)` then read
+  `innerText()`, the same probe printed `0.0.91` without the fix and `0.0.79` with it. When
+  the bug *is* a late overwrite, wait first and read once - do not poll for the value you
+  expect to survive.
 - **When the fix *creates* the function under test, mutate instead of reverting.** Extracting a
   pure seam while fixing a bug (`applyRefreshResult` in `model-data-refresh.spec.ts`) leaves
   nothing to revert to: the old tree has no such export, so a "red" run is a module error, not a
@@ -192,6 +200,36 @@ The Claude CLI auto-loads `~/.claude/projects/<encoded-cwd>/memory/` (and `CLAUD
 `loadSession` (`src/backend/sessions.ts`) rebuilds messages from the `.jsonl` with only `outcome: 'success'` - it sets no `responseTime`, no `finishedAt`, and no token fields. So after a **disk replay** (opening or returning to a session that is not live in memory) there is no `[class*="responseTime"]` element in the DOM at all.
 
 Consequence for tests that browse away mid-stream and come back: the "stream already finished" branch cannot assert token counts, because the data does not exist on that path. `session-browse-during-stream-integration.spec.ts` used to have such a branch and failed with `element(s) not found` whenever the model outran the browse round-trip (more likely since `--effort low`). The fix is to keep the live precondition (longer prompt) and `test.skip(!isLive, reason)` otherwise - never assert a state the architecture cannot produce. Branching to a second assertion "just in case" hides that the branch is impossible.
+
+### Gotcha: you cannot wait on a list that is only fetched once
+
+`SessionHistoryModal` reads its rows **once on mount**. So
+`await expect(row).toBeVisible({ timeout: 15_000 })` can never see a session whose
+transcript the CLI has not written yet: nothing inside that 15s re-reads the directory, and
+the row only appears if some later `sessionList` push happens to land. The row does not
+"take a while to show up", it will not show up at all - the long timeout just makes the
+failure slower and disguises it as flakiness.
+
+`session-active-marker-integration.spec.ts` failed exactly this way, and its failure
+**screenshot showed the row present**, which is the tell: it arrived after the assertion
+gave up (transcript created at 00:36:08, assertion window 00:35:45-00:36:00). Fix: drive the
+re-fetch instead of waiting for one, via the modal's own Refresh button
+(`aria-label="Refresh sessions"`, which disables itself in flight, so `click()` waits it
+out):
+
+```ts
+await expect(async () => {
+  await dialog.getByRole('button', { name: 'Refresh sessions' }).click();
+  await expect(row).toBeVisible({ timeout: 2_000 });
+}).toPass({ timeout: 15_000 });
+```
+
+Proving this needs a **constructed** red - both forms pass whenever the transcript happens
+to exist already. A throwaway spec that opens the modal and writes a transcript 4s later
+failed on the plain assertion and passed on the loop.
+
+More generally: before writing a long timeout, ask what would make the value appear. If the
+answer is "another request that nobody is going to send", the timeout is not the fix.
 
 ### Gotcha: an open centered modal blocks every click on the app behind it
 
@@ -251,7 +289,7 @@ The "mock" project still runs against a live backend, so a component that fires 
 Three independent fixes, pick per constraint:
 
 1. **Suppress the outgoing query globally** by adding its type to `MOCK_SUPPRESSED` in `webview/index.html` - then no real reply ever exists. This is how `getSkills`, `listSessions`, and `getModels` are handled. Not always possible: `getServerInfo` cannot go there because `kill-all-claude.spec.ts` asserts on the outgoing send itself (a `WebSocket.prototype.send` interception).
-2. **Drop the outgoing query per-spec** when the global list is off-limits: `page.addInitScript` patches `WebSocket.prototype.send` to swallow just that message type before the app scripts load (see `version-skew.spec.ts`'s `beforeEach`). This is how version-skew was deflaked - its failures were invisible while the real `serverVersion` happened to equal the mocked one and went guaranteed-red after the 0.0.81 bump made them diverge.
+2. **Drop the outgoing query per-spec** when the global list is off-limits: `page.addInitScript` patches `WebSocket.prototype.send` to swallow just that message type before the app scripts load (see `version-skew.spec.ts`'s `beforeEach`). This is how version-skew was deflaked - its failures were invisible while the real `serverVersion` happened to equal the mocked one and went guaranteed-red after the 0.0.81 bump made them diverge. **Fixing one message type does not fix the spec.** That same spec kept the identical hole on its *other* row for another ten versions: the client version is injected as `workspaceInfo`, and `getInfo` was never dropped, so the backend's real reply won whenever it landed last. It went red at 0.0.91 with `expected "0.0.79 (stale)", received "0.0.91"` - precisely the shape its own comment had predicted. When applying this fix, enumerate **every** query whose reply overlaps the injected state, not only the one that flaked. Observing it costs one page listener: log every inbound `workspaceInfo` and the real one shows up on mount *and* ~330ms after each `getInfo`.
 3. **Re-dispatch until observed**: when the consuming component registers its `message` listener in a `useEffect` (after paint), a single dispatch can also be lost outright. Wrap dispatch + a cheap visibility assert in `expect(...).toPass()` (see `deliverModelList` in `model-picker.spec.ts`, same pattern as `clickAndWaitForModal` in file-path-links).
 4. **Wait for the real reply, then dispatch over it**: `openModal` in `account-usage.spec.ts` blocks until `Loading...` clears - which means a real `claude auth status --json` spawn has answered (15s budget) - so the injected message is the last write. It needs no global suppression, but it makes a *mock* spec depend on backend latency. `account-usage.spec.ts:92` flaked once in a full run and then passed 5/5 in isolation; load-dependent timing is the natural suspect, though the artifact was wiped before anyone read it. Prefer 1-3 wherever the query can be suppressed.
 

@@ -49,6 +49,40 @@ npx playwright test e2e/session-info-integration.spec.ts --project=integration -
 
 4 passed (mock), 2 passed (integration, pre-existing equal-version case unaffected).
 
+## Follow-up (2026-09-03): the same clobber on the other row
+
+The spec went red again at version 0.0.91:
+`expected "0.0.79 (stale)", received "0.0.91"`.
+
+The `beforeEach` drops `getServerInfo` because its real reply overwrites the mocked
+**server** version. The identical hole was still open on the **client** row and went
+unnoticed for ten versions: the client version is injected as a `workspaceInfo` message,
+and `getInfo` was never dropped, so the backend's real reply (this build's actual version)
+won whenever it landed last. Timing decided which, which is why it survived until the
+numbers diverged - exactly what this file's own comment predicted.
+
+Observed rather than inferred, by logging every inbound `workspaceInfo`:
+
+```
+after load : version 0.0.91   (reply to the app's own getInfo on mount)
+injected   : version 0.0.79
++330ms     : version 0.0.91   (reply to an explicit getInfo)
+```
+
+Fix: drop both types in the init script (`DROP = { getServerInfo: true, getInfo: true }`).
+
+| Throwaway probe | Client row after 1.5s |
+|---|---|
+| without the drop | **0.0.91** - the reported failure, reproduced |
+| with the drop | **0.0.79** |
+
+**Near-miss worth keeping:** the first probe asserted `toContainText('0.0.79')` immediately
+after triggering the fetch and **passed**, because `toContainText` matches on its first poll
+and stops - before the real reply landed 330ms later. It "proved" the clobber did not exist.
+An assertion meant to catch a *later* overwrite has to wait, then read once. Generalised in
+[../../common/e2e-testing.md](../../common/e2e-testing.md).
+
 ## Remaining work
 
-None. Committed and pushed as `83f1b4f`.
+None. Original fix committed and pushed as `83f1b4f`; the `getInfo` follow-up is uncommitted
+(see [../dir-preview/notes.md](../dir-preview/notes.md) for the session it came from).

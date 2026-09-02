@@ -48,3 +48,4 @@ See [tasks/INDEX.md](tasks/INDEX.md) for the full per-task table.
 | [background-tasks.md](background-tasks.md) | Background task implementation notes |
 | [optimizations.md](optimizations.md) | Performance work and benchmarks |
 | [security-audit.md](security-audit.md) | Security audit findings and fixes |
+| [request-reply-invariant.md](common/request-reply-invariant.md) | Answering a client request that failed | Answer every request exactly once, including on failure: two `.catch(() => {})` made a handler send **zero** frames, leaving the modal on "Loading..." forever with nothing to time out; `execFile`/`spawn` throw **synchronously** when the OS refuses a process, which rejects a promise documented as always resolving, so guard them like `handleSend` does; the probe that proves it only works against the **compiled** bundle, because ESM binds the import and the same patch silently does nothing |

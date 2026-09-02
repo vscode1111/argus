@@ -128,3 +128,41 @@ result is a 25-character marker.
 - Tool results are stripped on both paths, but a **pasted user image** (the `images` field
   on a user message) still travels in full, in the live message and in every replay of it.
   Same technique would apply; out of scope here.
+
+## Open: the transcript lookup can miss data that is on disk (2026-09-03)
+
+`e2e/tool-image-preview-integration.spec.ts:22` failed once in a full-suite run and passes
+in isolation (7.6s). The dialog opened and settled on text instead of an image:
+
+```
+Error reading file: ENOENT: no such file or directory, stat '...\scub-tool-image-1788373054036.png'
+```
+
+That is the **disk fallback**, which `session.ts` takes only when `readToolImage` finds no
+image in the transcript - so the click fell through to the file the test had just deleted,
+which is the exact bug this spec exists to catch.
+
+**The transcript did have the image.** A scan
+([../dir-preview/scripts/probe-transcript.js](../dir-preview/scripts/probe-transcript.js))
+found the `tool_result` line for `toolu_01JyBhzRmoCQnUMnFUxhBNeW` in session
+`c811fed1-c669-4657-8444-5bfc3713c614` carrying a real base64 image block. So the lookup
+missed data that was sitting on disk.
+
+Two suspects, neither confirmed: the session id the lookup resolves against under
+full-suite conditions (`getViewingSessionId(ws) ?? s.sessionId`, with one backend shared
+across many sequential sessions), or a flush race between the turn ending in the UI and the
+CLI writing that line. Not reproducible in isolation, so both stay hypotheses.
+
+**Why it is hard to tell: a fallback is silent.** The only trace that a lookup failed is an
+ENOENT that reads like a missing file. One log line at the miss would settle the next
+occurrence in seconds - worth adding before chasing it again.
+
+*On the error text:* it now says `stat` rather than `open`, because `readFilePreview` stats
+before reading (directory preview, [../dir-preview/notes.md](../dir-preview/notes.md)).
+Same failure, different noun; the fallback path itself is unchanged. Artifact preserved at
+[../dir-preview/failure-tool-image/](../dir-preview/failure-tool-image/).
+
+*Search trap worth remembering:* the first transcript scan "confirmed" the image was absent,
+because it matched **this conversation's own transcript**, which mentions the filename only
+in prose. Scanning all project folders and excluding the current session id gave the
+opposite, correct answer.

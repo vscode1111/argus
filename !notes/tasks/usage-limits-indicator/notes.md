@@ -210,13 +210,50 @@ its reason; how to test both) lives in
   first successful poll (seconds). Persisting it to `argus.json` was considered and rejected: unlike
   a model list, a usage percentage goes stale quickly and a restored old value would mislead.
 - The hour-long pause path is covered by the pure gate, not by a live test (it would take an hour).
-- `e2e/usage-indicator-integration.spec.ts`'s "a modal fetch becomes the snapshot every other
-  client reads" has **not been executed once**: the live API was rate-limited (it would skip) and
-  the runner was blocked by the config guard against a dev server the user had open. The mechanism
-  is covered meanwhile by the `publishUsageWindows` test on the compiled bundle and the mock UI
-  sync tests. Run it on a healthy day before trusting it.
+- ~~`e2e/usage-indicator-integration.spec.ts`'s "a modal fetch becomes the snapshot every other
+  client reads" has **not been executed once**.~~ **Executed 2026-09-02/03** - it passes when
+  the live API is healthy, skips when rate-limited, and **fails intermittently in full-suite
+  runs for a reason still unknown**. See the follow-up section below before trusting it.
 - The extension panel needs `yarn build` **and** a daemon restart to pick this up - the daemon runs
   from the panel's own install, see [../../common/backend-restart.md](../../common/backend-restart.md).
+
+## Follow-up (2026-09-02/03): `usage-indicator-integration.spec.ts:105`
+
+Reported failing three times with `no accountUsage frame within 20000ms`. **One real spec
+bug fixed; the underlying intermittency is still unexplained.** Recorded in full because two
+confident diagnoses were wrong, and each looked convincing.
+
+**Fixed - the loop waited for a frame that has no sender.** The handler sends exactly two
+frames (`usagePending: true`, then the settled reply). The spec looped
+`for (i < 3 && windows.length === 0)`, so when the settled reply carried **no** windows it
+kept waiting for a third, and timed out before reaching the `test.skip` written for exactly
+that case one line below. So it failed precisely when the code did the right thing: a 429
+with empty `rateLimits` plus a stated `usageError` is the correct no-data reply. Fix is a
+`break` after the settled frame.
+
+**Wrong diagnosis #1 (real bug, not this one).** After that fix the same message returned,
+which - given at most two waits now happen - could only mean *zero* frames, and the only
+path to zero is a rejection both `.catch(() => {})` swallow. `execFile` does throw
+synchronously on `spawn UNKNOWN`, which rejects a promise documented as always resolving.
+Guarded, with a red/green probe. **The failure came back anyway**, so it was never the
+cause. Kept because that path really did leave the modal spinning forever; written up in
+[../../common/request-reply-invariant.md](../../common/request-reply-invariant.md).
+
+**Wrong diagnosis #2 (refuted by measurement).** Spawn latency under suite load delaying
+phase 1 past 20s: `scripts/probe-load.js` in [../dir-preview/](../dir-preview/) measures
+phase 1 at **518ms idle and 522ms** while the box churns 12 concurrent process spawns.
+
+What is measured and solid: the handler emits exactly two frames in ~520-630ms, **8/8**
+attempts, idle and under load, including while the API is 429ing. It only fails inside a
+full-suite run, and the error message cannot distinguish which of the two waits expired,
+which is why every hypothesis fit the evidence equally well. Also checked and cleared: the
+run did not straddle a `tsx watch` restart.
+
+**Next step is instrumentation, not another theory.** Run the suite with the backend owned
+outside the runner so stdout survives (see
+[../../common/e2e-testing.md](../../common/e2e-testing.md), "Run with the backend's stdout
+captured") - Playwright swallows `webServer` output, and this spec drives raw WS with no
+page, so its artifact carries only a source listing.
 
 ## Scripts
 

@@ -64,7 +64,33 @@ The first version learned usage solely from streamed CLI `rate_limit_event` fram
 - **Two-phase reply over a single `Promise.all`.** Account info is fast; usage can take up to its 10s timeout. Splitting the reply keeps the account instant.
 - **Surface only a short, non-sensitive reason** (HTTP status + plain English), never the token or raw response body.
 
+## Follow-up (2026-09-03): the handler could answer nothing at all
+
+Two defects in the two-phase reply above, both fixed.
+
+**`getAccountUsage` sent zero frames on failure.** Both phases ended in `.catch(() => {})`,
+so a rejection left the client with nothing to wait on: the modal sat on "Loading..."
+forever with no reason shown, and no timeout to end it. Its neighbours `getUsageLimits` and
+`getUsageInsights` already answer on failure. Phase 2 now sends a settled frame carrying the
+error.
+
+**`fetchAccountInfo` could reject despite promising not to.** `execFile` throws
+*synchronously* when the OS refuses a new process (`spawn UNKNOWN`, errno -4094) - a
+different path from the callback's `err` - and a throw inside a promise executor rejects it.
+Now guarded with a `try/catch` that resolves `{ loggedIn: false }`, matching the contract the
+comment already claimed. Full write-up, including the probe that has to run against the
+**compiled** bundle to work at all:
+[../../common/request-reply-invariant.md](../../common/request-reply-invariant.md).
+
+**`account-usage-integration.spec.ts:132` fixed too (test side).** Its guard probes the live
+API once; the **server** then makes its own call a second later, and this endpoint
+rate-limits hard enough that the two routinely disagree. The artifact showed the modal
+correctly rendering `Usage data is unavailable: rate limited (HTTP 429).` while the
+assertion demanded 3 rows. It now skips on that state, matching what the sibling test at
+:109 already tolerates.
+
 ## Related
 
 - [common/oauth-usage-api.md](../../common/oauth-usage-api.md) - the usage endpoint reference.
+- [common/request-reply-invariant.md](../../common/request-reply-invariant.md) - answer every request once, and the synchronous-throw trap behind `fetchAccountInfo`.
 - [streaming-and-input-ui/](../streaming-and-input-ui/) - same `main`-branch session lineage; touches `cliHandler.ts` / `session.ts` / `InputArea.tsx`.

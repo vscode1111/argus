@@ -16,6 +16,31 @@
   border: 0;
   background: #fff;
 }
+/* A clicked path that is a folder: the Browse tab's row list, inside the previewer. */
+.dirBody {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px 0;
+  overflow: auto;
+}
+.dirEmpty {
+  padding: 20px 8px;
+  text-align: center;
+  color: var(--thinking-fg);
+  font-size: 0.9em;
+}
+/* Counts stay put while the list scrolls above them, so a truncated listing always
+   says so. */
+.dirFooter {
+  position: sticky;
+  bottom: 0;
+  margin-top: 6px;
+  padding: 7px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--thinking-fg);
+  font-size: 0.82em;
+}
 .imageBody {
   display: flex;
   align-items: center;

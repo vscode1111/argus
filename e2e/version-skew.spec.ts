@@ -36,11 +36,19 @@ test.describe('Client/Server version skew direction', () => {
     // after a version bump). getServerInfo cannot go into MOCK_SUPPRESSED
     // (kill-all-claude.spec.ts asserts on the outgoing send), so drop the frame
     // at the socket for this spec only, before the app scripts load.
+    //
+    // `getInfo` needs the same treatment for the same reason, on the other row: its
+    // reply is a real `workspaceInfo` carrying this build's version, which overwrites
+    // setClientVersion's mock. The app re-sends it on mount and on every reconnect, so
+    // whether it lands before or after the injection is pure timing - which is why this
+    // survived until the version moved to 0.0.91 and then failed with "expected
+    // 0.0.79 (stale), received 0.0.91", the exact shape the comment above predicted.
     await page.addInitScript(() => {
+      const DROP: Record<string, true> = { getServerInfo: true, getInfo: true };
       const origSend = WebSocket.prototype.send;
       WebSocket.prototype.send = function (data: string | ArrayBufferLike | Blob | ArrayBufferView) {
         try {
-          if (typeof data === 'string' && JSON.parse(data).type === 'getServerInfo') return;
+          if (typeof data === 'string' && DROP[JSON.parse(data).type]) return;
         } catch { /* not JSON - pass through */ }
         return origSend.call(this, data);
       };

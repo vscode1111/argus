@@ -96,13 +96,59 @@ regex; it surfaced only when a probe tried to open one from prose and timed out.
 `u`-flagged pattern over `\p{L}` in both regexes is the fix, and it needs its own red/green
 pass - the character classes appear five times between the two files.
 
-**Still open:** a final segment with no dot at all does not fail to match, it matches a
-**shorter prefix**. `C:\Users\Admin\.claude\companies\CCS\credentials\corp` links
-`C:\Users\Admin\.claude`, an existing directory, so the click opens an EISDIR error on a
-path the text never named. Better to link nothing than to link something else; a lookahead
-refusing a match that is followed by more path characters would do it, at the cost of
-rejecting a legitimate path followed by a slash. Recorded in
-[../tasks/hyphen-in-filename-truncates-link/notes.md](../tasks/hyphen-in-filename-truncates-link/notes.md).
+## A directory is a path too (Windows branch only)
+
+*Previously listed here as "still open": a dotless final segment matched a **shorter
+prefix** rather than failing, so `C:\Users\Admin\.claude\skills\git-remarks\scripts\`
+linked `C:\Users\Admin\.claude` - an existing but entirely different directory. Fixed.*
+
+The extension requirement is dropped **on the Windows branch only**, because the drive
+letter is what identifies the text as a filesystem path and nothing else does. The tail is
+segments, then a final segment plus an optional separator, with two guards on that final
+segment:
+
+- **must not end in a dot**, so a sentence's full stop stays prose (`...\argus\src.`
+  links `...\argus\src`) and the elision `C:\...` is not a path;
+- **must not be empty**, so a bare `C:\` is not a link either.
+
+```
+(?<![a-zA-Z])[A-Za-z]:[\\\/](?:[\w.\-!]+[\\\/])*[\w.\-!]*[\w\-!][\\\/]?
+```
+
+`WIN_PATH_RE` widened in step, but deliberately **more loosely**: its final segment stays
+optional, so `C:\` and `C:\...` are escaped even though they are not linked. The asymmetry
+is the point - the two regexes answer different questions. Escaping asks "would markdown
+eat this backslash" (true for both), linking asks "is this worth opening" (false for both).
+Over-escaping only makes a backslash visible; under-escaping silently corrupts the text.
+
+### The slash branches were widened the same way and reverted
+
+A URL path in prose is shaped exactly like a directory. Widening unix/relative to accept a
+trailing separator passed a 17-case corpus whose bait was `and/or` and `24/7`, then
+rendering **one real session** immediately produced links to `/api/probes/` (out of
+`GET /api/probes/headers`) and `/api/v4/projects/6829/merge_requests/99/discussions/`.
+A leading slash is not evidence of a filesystem, and a bare relative path has no evidence
+at all. Reverted; both API paths are now permanent bait in
+[../tasks/dir-preview/scripts/probe-live-regex.js](../tasks/dir-preview/scripts/probe-live-regex.js),
+which pulls both literals **out of the source files** so it cannot pass against a probe that
+has drifted from the shipped code.
+
+The general lesson (a hand-written false-positive corpus is not sufficient evidence for a
+widening; render a real transcript and audit every hit) applies to any text-matching rule
+here, not just paths.
+
+### Widening the match changes what gets requested
+
+Second-order breakage, easy to miss: the link now carries a trailing separator, the host
+resolves it away, and `got.endsWith(wanted)` therefore **rejected the answer to its own
+question** - the preview spun until its 20s timeout. Fixed by `matchesRequestedPath()` in
+`webview/src/utils/path.ts`, used by both `PreviewContext` and `FileViewerModal`. When
+changing what these regexes match, re-check every matcher keyed on the resulting string.
+
+Still open from the same family: a dotless final segment on the **unix and relative**
+branches still fails to link at all (only the Windows branch was widened). Recorded in
+[../tasks/hyphen-in-filename-truncates-link/notes.md](../tasks/hyphen-in-filename-truncates-link/notes.md)
+and [../tasks/dir-preview/notes.md](../tasks/dir-preview/notes.md).
 
 ## Relative links are only navigable inside the previewer
 

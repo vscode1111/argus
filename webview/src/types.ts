@@ -93,6 +93,16 @@ export type DirListing = {
   entries: DirEntry[];   // sub-directories only
 };
 
+// One row of a directory preview (the `filePreview` reply for a path that turned
+// out to be a folder). Unlike DirListing above this carries files too - it is a
+// listing to read, not a workspace to pick.
+export type PreviewEntry = {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size?: number; // bytes, files only
+};
+
 export type RetryStatus = {
   attempt: number;
   maxRetries: number;
