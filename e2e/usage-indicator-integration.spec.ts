@@ -122,13 +122,21 @@ test.describe('usage indicator (integration)', () => {
       }
       test.skip(windows.length === 0, 'live usage API unavailable (rate limited / offline)');
 
-      // The other client now reads that same fetch: same windows, and data already older
-      // than its own request, which an on-request fallback fetch could not produce.
+      // The other client now reads that same fetch: same windows, and data not newer than
+      // its own request, which an on-request fallback fetch could not produce.
+      //
+      // The boundary is "not fetched AFTER the request", so it is `<=`, not `<`. With a
+      // warm snapshot fetchedAt is seconds old and either passes; but on a COLD one the
+      // modal's own fetch stamps `fetchedAt = Date.now()` in publishUsageWindows and the
+      // phase-2 frame goes out immediately after, so over localhost `reqAt` lands in the
+      // same millisecond and a strict `> 0` failed - reliably, on the first usage call of a
+      // suite. Nothing is lost: a real fallback fetch costs a round trip to the usage API,
+      // so it would land tens of ms on the wrong side of `reqAt` and still fail here.
       const reqAt = Date.now();
       other.send(JSON.stringify({ type: 'getUsageLimits' }));
       const snap = await waitForFrame(other, 'usageLimits');
       expect((snap.windows as unknown[]).length).toBe(windows.length);
-      expect(reqAt - (snap.fetchedAt as number)).toBeGreaterThan(0);
+      expect(snap.fetchedAt as number).toBeLessThanOrEqual(reqAt);
       expect((snap.windows as Array<Record<string, unknown>>).map(w => w.rateLimitType))
         .toEqual(windows.map(w => w.rateLimitType));
     } finally {

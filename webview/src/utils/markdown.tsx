@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { withLinkedPaths } from './filePath';
+import { withLinkedPaths, PATH_CH, PATH_SEG, PATH_FINAL } from './filePath';
 import { openExternal } from './url';
 import { usePreviewNav } from '../contexts/PreviewNavContext';
 
@@ -18,13 +18,28 @@ import { usePreviewNav } from '../contexts/PreviewNavContext';
 // A trailing extension is likewise not required any more, for the same reason it is not
 // there: a directory is a path too, and one that ends in `\` or in a dotless segment has
 // to survive the parser intact or the linkifier never sees it whole.
+// "@" is likewise part of a segment on both sides (`out\@snowy_137.json`,
+// `node_modules\@types\node`); here it is accepted anywhere in the run, since a
+// backslash is required either way and an email has none to eat.
 // This escapes deliberately MORE than FILE_PATH_RE links, and the asymmetry is the point:
 // the two regexes answer different questions. Escaping asks "would markdown eat this
 // backslash", which is true of `C:\` and of the elision `C:\...` (both rendered as `C:`
 // and `C:...` before this, in prose); linking asks "is this a path worth opening", which
 // neither is. Over-escaping only makes a backslash visible, which is right either way -
 // under-escaping silently corrupts the text.
-const WIN_PATH_RE = /(?<![a-zA-Z`])(?:[A-Za-z]:\\|(?:[\w.\-@!]+\\)+)(?:[\w.\-!]+[\\\/])*(?:[\w.\-!]*[\w\-!])?[\\\/]?(?::\d+(?:-\d+)?)?/g;
+// Built from the SAME parts as FILE_PATH_RE (filePath.tsx) because the two run in sequence
+// over the same text: a class one accepts while the other rejects yields a half-escaped,
+// half-linked path, which is exactly how the `.corp-account` bug managed to fail one way in
+// prose and a different way in a code span. Still deliberately LOOSER - its final segment
+// stays optional, so `C:\` and the elision `C:\...` are escaped (right: markdown would eat
+// those backslashes) without being linked (also right: neither is worth opening).
+const WIN_PATH_RE = new RegExp(
+  '(?<![a-zA-Z`])' +
+  `(?:[A-Za-z]:\\\\|(?:${PATH_CH}+\\\\)+)` +
+  `(?:${PATH_SEG}[\\\\/])*(?:${PATH_FINAL})?[\\\\/]?` +
+  '(?::\\d+(?:-\\d+)?)?',
+  'gu'
+);
 // Code spans and fences keep backslashes literal, so escaping inside them would
 // double them (`CCS\!notes` -> `CCS\\!notes`). Split them out and leave them alone.
 const CODE_SPAN_RE = /(`+)[\s\S]*?\1/g;
@@ -41,6 +56,12 @@ function protectPathBackslashes(text: unknown): string {
   return out + escapeWinPaths(text.slice(lastIndex));
 }
 
+// Known open, do not retry the obvious fix: in PROSE a mid-segment "@" whose tail looks
+// like a domain (`…\newYear\garland@2x.png`) is claimed by remark-gfm's email autolink
+// before the linkifier runs, so it renders as a folder link plus a `mailto:` link. Also
+// escaping "@" here was tried and reverted - the escape is emitted (`garland\@2x.png`,
+// verified) but micromark autolinks it regardless, so it was dead weight. Code spans are
+// unaffected (no parser runs inside them), which is where these paths usually appear.
 function escapeWinPaths(text: string): string {
   return text.replace(WIN_PATH_RE, match => match.replace(/\\/g, '\\\\'));
 }

@@ -460,6 +460,21 @@ function resolveSessionFile(sessionId: string, workspaceDir: string): string | n
 // (text/thinking/tool_use/tool_result/image) onto the webview's message shape.
 // Consecutive assistant lines (which share a turn) merge into one message until
 // the next real user input; tool_result blocks attach to their tool_use by id.
+// The CLI's own placeholder strings for an assistant turn that never happened, taken from
+// the bundle (`Dne` / `Zw`, declared next to `xx = "<synthetic>"`). Matching on the model
+// marker alone would be enough today, but both halves are cheap and the pair is what the
+// official client keys on.
+const SYNTHETIC_MODEL = '<synthetic>';
+const PLACEHOLDER_TEXTS = new Set(['No response requested.', '(no content)']);
+
+function isSyntheticPlaceholder(message: { model?: string; content?: unknown } | undefined): boolean {
+  if (!message || message.model !== SYNTHETIC_MODEL) return false;
+  const c = message.content;
+  if (!Array.isArray(c) || c.length !== 1) return false;
+  const block = c[0] as { type?: string; text?: string };
+  return block?.type === 'text' && typeof block.text === 'string' && PLACEHOLDER_TEXTS.has(block.text.trim());
+}
+
 export function loadSession(sessionId: string, workspaceDir: string): ReplayMessage[] {
   const file = resolveSessionFile(sessionId, workspaceDir);
   if (!file || !fs.existsSync(file)) return [];
@@ -486,8 +501,16 @@ export function loadSession(sessionId: string, workspaceDir: string): ReplayMess
 
   for (const line of content.split(/\r?\n/)) {
     if (!line) continue;
-    let o: { type?: string; message?: { id?: string; content?: unknown } };
+    let o: { type?: string; message?: { id?: string; model?: string; content?: unknown } };
     try { o = JSON.parse(line); } catch { continue; }
+
+    // The CLI patches a resumed conversation whose last message is an unanswered user
+    // message by splicing in a fake assistant turn that says "No response requested."
+    // (model "<synthetic>", zero tokens). It is bookkeeping, not something anyone said -
+    // the official client drops it in its renderer - so a replay must not show it as a
+    // reply the user never got. It is still sent to the model, which is a separate problem
+    // that hiding it here does not touch: !notes/tasks/no-response-requested/notes.md
+    if (o.type === 'assistant' && isSyntheticPlaceholder(o.message)) continue;
 
     if (o.type === 'user' && o.message) {
       const c = o.message.content;

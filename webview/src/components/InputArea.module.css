@@ -55,6 +55,49 @@
   background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.05));
 }
 
+/* "@" picker rows. The name takes the space it needs and truncates; the parent folder is
+   pushed to the right edge and dimmed, so the eye reads a column of names first and only
+   consults the folder when two names collide. */
+.fileRow {
+  gap: 8px;
+  min-width: 0;
+}
+.fileName {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Entry count on a folder row: an "@folder" inlines every file under it, so this is the
+   only signal of how much that costs before the user commits to it. */
+.fileCount {
+  flex: none;
+  font-size: 0.85em;
+  opacity: 0.5;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.fileParent {
+  flex: 0 1 auto;
+  margin-left: auto;
+  padding-left: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.45;
+  font-size: 0.9em;
+  /* Truncate a long parent from the LEFT: the tail (the folder the file is actually in) is
+     what disambiguates, while the workspace-root prefix repeats on every row. Pairs with
+     .fileParentText, which puts the text back into LTR - see the comment in InputArea.tsx. */
+  direction: rtl;
+  text-align: right;
+}
+.fileParentText {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 /* Non-selectable control rows (Effort dots, Thinking toggle).
    Same layout as slashMenuItem but a distinct class so tests can exclude them. */
 .slashMenuControl {

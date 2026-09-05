@@ -21,10 +21,18 @@ export interface SessionState {
   // notification), false while it is the one the user asked for. handleResult needs the
   // difference: both kinds of turn report `origin.kind === 'task-notification'`.
   autonomousTurn: boolean;
+  // True between a user stop and the moment the interrupted turn reports its `result`.
+  // Stop interrupts the CLI instead of killing it (see handleStop), so that turn keeps
+  // emitting for a few more milliseconds: its trailing chunks and its is_error result
+  // belong to a turn the user already ended and must reach neither the UI nor the state
+  // of the turn that replaces it.
+  stopping: boolean;
+  // Fallback for an interrupt the CLI never acknowledges: kills the process so a stopped
+  // turn cannot keep generating unseen.
+  stopKillTimer: NodeJS.Timeout | null;
   suppressCliOutput: boolean;
   pendingFollowUp: { answers: Record<string, string>; toolId: string; mode?: string } | undefined;
   pendingBgTasks: Set<string>;
-  totalBgTasks: number;
   turnInputTokens: number;
   turnOutputTokens: number;
   buffer: string;
@@ -61,10 +69,11 @@ export function createSessionState(workspaceDir: string): SessionState {
     pendingAskTools: new Set(),
     cliDone: false,
     autonomousTurn: false,
+    stopping: false,
+    stopKillTimer: null,
     suppressCliOutput: false,
     pendingFollowUp: undefined,
     pendingBgTasks: new Set(),
-    totalBgTasks: 0,
     turnInputTokens: 0,
     turnOutputTokens: 0,
     buffer: '',
