@@ -8,6 +8,24 @@ import type { SessionState } from './sessionState';
 
 export function handleCliEvent(s: SessionState, event: Record<string, unknown>): void {
   s.sendLog('debug', `event: ${event.type} ${JSON.stringify(event).slice(0, 120)}`);
+
+  // A stop interrupts the CLI instead of killing it, so the turn the user ended keeps
+  // emitting for a few more milliseconds and signs off with an is_error `result`. None of
+  // that may be acted on: the process is no longer detached (that is the point - it gets
+  // reused), so without this guard the trailing chunks would append to a message the UI has
+  // already committed, the recovery branch below would read them as a background-task turn
+  // and raise a phantom `thinking_start`, and the result would surface a "stopped" error
+  // block. The result is also the signal that the interrupt landed, which retires the
+  // fallback kill.
+  if (s.stopping) {
+    if (event.type === 'result') {
+      s.stopping = false;
+      if (s.stopKillTimer) { clearTimeout(s.stopKillTimer); s.stopKillTimer = null; }
+      s.sendLog('info', 'Stop: interrupted turn ended, CLI kept alive for reuse');
+    }
+    return;
+  }
+
   if (event.type !== 'ping' && event.type !== 'rate_limit_event') {
     s.watchdog.state.lastEventTime = Date.now();
   }
@@ -62,7 +80,6 @@ function handleSystemEvent(s: SessionState, event: Record<string, unknown>): voi
     if (changed) s.broadcast(JSON.stringify({ type: 'sessionId', id }));
   } else if (event.subtype === 'task_started') {
     s.pendingBgTasks.add(event.task_id as string);
-    s.totalBgTasks++;
   } else if (event.subtype === 'task_updated') {
     s.pendingBgTasks.delete(event.task_id as string);
   } else if (event.subtype === 'task_notification') {
@@ -246,7 +263,7 @@ function handleResult(s: SessionState, event: Record<string, unknown>): void {
   if (s.pendingFollowUp) {
     s.flushAskFollowUp();
   } else if (s.pendingAskTools.size === 0) {
-    s.broadcast(JSON.stringify({ type: 'done', ...(s.pendingBgTasks.size > 0 ? { pendingBackgroundTasks: s.pendingBgTasks.size, totalBackgroundTasks: s.totalBgTasks } : {}) }));
+    s.broadcast(JSON.stringify({ type: 'done', ...(s.pendingBgTasks.size > 0 ? { pendingBackgroundTasks: s.pendingBgTasks.size } : {}) }));
   }
 }
 

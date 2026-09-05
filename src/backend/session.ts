@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { WebSocket } from 'ws';
 
-import { IS_WIN, resolveClaudeBin, killProc, killAllClaude, plural, classifyError, API_ERROR_RE } from './cli';
+import { IS_WIN, resolveClaudeBin, killProc, interruptProc, killAllClaude, plural, classifyError, API_ERROR_RE } from './cli';
 import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
 import { getSkills } from './skills';
 import { readFilePreview } from './filePreview';
@@ -21,9 +21,15 @@ import { attachProcHandlers } from './cliHandler';
 import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage } from './sessions';
 import { readServerVersion } from './version';
 import { buildWorkspaceInfo } from './workspaceInfo';
+import { searchFiles, type FileSearchResult } from './fileSearch';
 
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
+
+// How long a stop waits for the interrupted turn's `result` before killing the CLI instead.
+// Measured against a real CLI the acknowledgement takes single-digit milliseconds; this is
+// sized for a wedged process, not for a slow one.
+const STOP_INTERRUPT_TIMEOUT_MS = 5_000;
 
 let cliLaunchCount = 0;
 export function getCliLaunchCount(): number { return cliLaunchCount; }
@@ -172,6 +178,7 @@ export function attachClientHandlers(
       id?: string;
       toolUseId?: string;
       title?: string;
+      query?: string;
     };
     try { msg = JSON.parse(data.toString()); } catch {
       s.sendLog('warn', `Malformed WS message: ${data.toString().slice(0, 200)}`);
@@ -210,6 +217,7 @@ export function attachClientHandlers(
     } else if (msg.type === 'send' && msg.text?.trim() === '/clear') {
       channel.setBrowsing(ws, false);
       s.sessionId = undefined;
+      abortPendingStop(s, '/clear during a pending stop: killing the CLI');
       if (s.currentProc) {
         const proc = s.currentProc;
         s.currentProc = undefined;
@@ -217,7 +225,6 @@ export function attachClientHandlers(
         killProc(proc);
       }
       s.pendingBgTasks.clear();
-      s.totalBgTasks = 0;
       s.broadcast(JSON.stringify({ type: 'clear' }));
     } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
       // A send from a client that navigated to another session belongs to THAT session.
@@ -396,7 +403,6 @@ export function attachClientHandlers(
       newState.sessionId = undefined;
       newState.lastMessage = null;
       newState.pendingBgTasks.clear();
-      newState.totalBgTasks = 0;
       // broadcast() on the new entry goes only to this client (the entry is fresh).
       newState.broadcast(JSON.stringify({ type: 'clear' }));
     } else if (msg.type === 'listSessions') {
@@ -444,6 +450,21 @@ export function attachClientHandlers(
       }
     } else if (msg.type === 'listDir') {
       ws.send(JSON.stringify({ type: 'dirList', ...listDir(typeof msg.path === 'string' ? msg.path : undefined) }));
+    } else if (msg.type === 'searchFiles') {
+      // Per-client (ws.send, not broadcast): one person's "@" typing is not an event for
+      // every panel on the channel. Scoped to this entry's workspace, so a relative
+      // mention resolves against the same cwd the CLI is spawned with.
+      const query = typeof msg.query === 'string' ? msg.query : '';
+      let result: FileSearchResult;
+      try {
+        result = searchFiles(s.workspaceDir, query);
+      } catch (e) {
+        // Always answer: the picker cannot tell "still walking" from "no reply" and would
+        // sit on a spinner forever - the invariant getAccountUsage had to learn the hard way.
+        result = { query, hits: [], truncated: false, mode: 'browse', base: '', parent: null };
+        s.sendLog('warn', `searchFiles failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      ws.send(JSON.stringify({ type: 'fileList', ...result }));
     }
   });
 }
@@ -534,6 +555,13 @@ function handleSend(s: SessionState, msg: { type?: string; text?: string; images
   s.pendingAskTools.clear();
   s.pendingFollowUp = undefined;
 
+  // A stop that has not settled yet (the interrupted turn still owes its `result`) must not
+  // hand its process to this turn: that pending result would be read as *this* turn's and
+  // end it a few milliseconds in, which is the empty-1s-turn failure in another costume.
+  // Measured, the acknowledgement takes single-digit ms, so this only trips when a send
+  // lands in that window - it falls back to the old kill-and-respawn, never to a wrong turn.
+  if (s.stopping) abortPendingStop(s, 'Send arrived before the stopped turn settled; respawning');
+
   const canReuse = s.currentProc?.stdin?.writable === true && s.currentProcKey === procKey;
   let proc: ReturnType<typeof spawn>;
   if (canReuse) {
@@ -568,8 +596,12 @@ function handleSend(s: SessionState, msg: { type?: string; text?: string; images
     attachProcHandlers(s, proc);
   }
 
+  // Cleared per turn, which makes the "N background tasks still running" note undercount
+  // a task that outlived the turn that started it. Kept anyway: a task whose notification
+  // never arrives (hard kill, daemon respawn, kill-all - orphans accumulate, see
+  // !notes/tasks/empty-1s-turn/notes.md) would otherwise stay pending forever and hang the
+  // note on every later turn. Undercounting a footnote beats a note that cannot be cleared.
   s.pendingBgTasks.clear();
-  s.totalBgTasks = 0;
   if (!msg._askResume) {
     s.broadcast(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
   }
@@ -658,6 +690,23 @@ function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, i
   }
 }
 
+// Gives up on an in-flight interrupt and falls back to the old kill-and-detach. Used
+// wherever a stopped turn's process must not survive into whatever comes next: a send that
+// beat the interrupt's acknowledgement, and the /clear reset. (newSession is deliberately
+// not one of them - it moves this client to a fresh entry and leaves the old one, process
+// and pending stop included, to whichever clients are still in it.)
+function abortPendingStop(s: SessionState, reason: string) {
+  if (!s.stopping) return;
+  s.stopping = false;
+  if (s.stopKillTimer) { clearTimeout(s.stopKillTimer); s.stopKillTimer = null; }
+  if (!s.currentProc) return;
+  const stale = s.currentProc;
+  s.currentProc = undefined;
+  s.currentProcKey = undefined;
+  s.sendLog('info', reason);
+  killProc(stale);
+}
+
 function handleStop(s: SessionState) {
   s.watchdog.state.active = false;
   if (s.watchdog.state.retryTimer) {
@@ -670,14 +719,36 @@ function handleStop(s: SessionState) {
     s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: JSON.stringify({ cancelled: true }) } }));
   }
   s.pendingAskTools.clear();
-  // Detach before killing, exactly like the /clear handler. `close` arrives a beat
-  // after killProc, and until it does the dying proc still has a writable stdin - so
-  // a send issued right after a stop was taken for a mid-turn inject (or reused the
-  // proc outright), wrote into a pipe nobody reads, and the pending close then ended
-  // the fresh turn with a bare `done`. Detached, it can be neither reused nor
-  // injected into, and its close is a no-op (isActiveProc === false).
-  if (s.currentProc) {
-    const proc = s.currentProc;
+  // Interrupt a live turn rather than killing the process. A killed CLI leaves its
+  // transcript ending on a user message nobody answered, and the CLI repairs that on the
+  // next `--resume` by splicing a synthetic "No response requested." assistant turn into
+  // the conversation - which it then sends to the model on every later turn (measured, see
+  // !notes/tasks/no-response-requested/notes.md), until the model starts answering real
+  // questions with those four words. The repair only fires when the *last* message is a
+  // user message, so keeping the process alive is what fixes it: the next send reuses it
+  // with no `--resume`, that answer lands after the abandoned message, and the abandoned
+  // message is no longer last.
+  const proc = s.currentProc;
+  if (proc && !s.cliDone && interruptProc(proc)) {
+    s.stopping = true;
+    s.sendLog('info', 'Stop: interrupting the turn, keeping the CLI for reuse');
+    s.stopKillTimer = setTimeout(() => {
+      // The interrupt was written but never acknowledged with a `result`. Fall back to the
+      // old behaviour rather than leave a stopped turn generating where nobody can see it.
+      if (!s.stopping) return;
+      s.stopping = false;
+      s.stopKillTimer = null;
+      s.sendLog('warn', 'Stop: interrupt not acknowledged, killing the CLI');
+      if (s.currentProc === proc) { s.currentProc = undefined; s.currentProcKey = undefined; }
+      killProc(proc);
+    }, STOP_INTERRUPT_TIMEOUT_MS);
+  } else if (proc) {
+    // No live turn to interrupt, or the pipe is already gone. Detach before killing,
+    // exactly like the /clear handler: `close` arrives a beat after killProc, and until it
+    // does the dying proc still has a writable stdin - so a send issued right after a stop
+    // was taken for a mid-turn inject (or reused the proc outright), wrote into a pipe
+    // nobody reads, and the pending close then ended the fresh turn with a bare `done`.
+    // Detached, it can be neither reused nor injected into, and its close is a no-op.
     s.currentProc = undefined;
     s.currentProcKey = undefined;
     killProc(proc);

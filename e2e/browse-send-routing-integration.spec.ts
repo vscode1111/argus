@@ -38,10 +38,23 @@ function makeTempDir(tag: string): string {
   return dir;
 }
 
+// Frames are buffered from construction, not from the caller's `record()` call. Joining an
+// entry that already has state makes the server replay `sessionLoaded` synchronously during
+// the upgrade, so that frame can arrive in the same TCP read as the handshake - `ws` then
+// emits 'open' and 'message' in one synchronous callback, while `record()` only attaches in
+// the promise continuation a microtask later, and the frame is missed. That is a flake by
+// load, not by logic: it took out "the watcher to sync" once and passed on the re-run.
+const EARLY = Symbol('early-frames');
+
 function openClient(nonce: string, dir: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const url = `ws://localhost:${PORT}/agent?nonce=${encodeURIComponent(nonce)}&dir=${encodeURIComponent(dir)}`;
     const ws = new WebSocket(url, { origin: 'http://localhost:5173' });
+    const early: Msg[] = [];
+    (ws as unknown as Record<symbol, Msg[]>)[EARLY] = early;
+    ws.on('message', (data: Buffer) => {
+      try { early.push(JSON.parse(data.toString()) as Msg); } catch { /* non-JSON */ }
+    });
     ws.on('open', () => resolve(ws));
     ws.on('unexpected-response', (_req, res) => reject(new Error(`upgrade failed: ${res.statusCode}`)));
     ws.on('error', reject);
@@ -59,9 +72,12 @@ function closeClient(ws: WebSocket): Promise<void> {
 type Msg = Record<string, unknown>;
 
 // Records every frame the client receives, so an assertion can be made about what did
-// NOT arrive as well as what did.
+// NOT arrive as well as what did. Seeded from the buffer openClient has been filling since
+// construction, so a frame the server sent during the upgrade is not lost; the copy and the
+// listener attach in the same synchronous step, so nothing is dropped or double-counted.
 function record(ws: WebSocket): Msg[] {
-  const seen: Msg[] = [];
+  const early = (ws as unknown as Record<symbol, Msg[] | undefined>)[EARLY];
+  const seen: Msg[] = early ? [...early] : [];
   ws.on('message', (data: Buffer) => {
     try { seen.push(JSON.parse(data.toString()) as Msg); } catch { /* non-JSON */ }
   });

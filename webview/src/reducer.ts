@@ -26,7 +26,7 @@ export type AppAction =
   | { type: 'text_chunk'; text: string }
   | { type: 'tool_start'; call: ToolCallData }
   | { type: 'tool_end'; call: ToolCallData }
-  | { type: 'done'; pendingBackgroundTasks?: number; totalBackgroundTasks?: number }
+  | { type: 'done'; pendingBackgroundTasks?: number }
   | { type: 'stop' }
   | { type: 'error'; text: string; errorKind?: string }
   | { type: 'clear' }
@@ -168,8 +168,6 @@ export function reducer(state: AppState, action: AppAction): AppState {
       const timedOut = state.streaming.retryStatus?.timedOut;
       const outcome = hasPendingBg ? 'background_waiting'
         : stopped ? 'stopped' : timedOut ? 'error' : watchdogRetries > 0 ? 'retried' : 'success';
-      const bgTotal = action.totalBackgroundTasks;
-      const bgCompleted = bgTotal != null ? bgTotal - (action.pendingBackgroundTasks ?? 0) : undefined;
       const msg: UIMessage = {
         id: generateId(),
         role: 'assistant',
@@ -180,8 +178,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         finishedAt: Date.now(),
         outcome,
         watchdogRetries: watchdogRetries > 0 ? watchdogRetries : undefined,
-        bgTasksCompleted: hasPendingBg ? bgCompleted : undefined,
-        bgTasksTotal: hasPendingBg ? bgTotal : undefined,
+        bgTasksPending: hasPendingBg ? action.pendingBackgroundTasks : undefined,
         finalTokens: state.streaming.liveTokens,
       };
       const resolvedMessages = state.messages.map(m =>
