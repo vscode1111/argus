@@ -1,10 +1,12 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import { ImageAttachment } from '../types';
 import { postMessage, isVsCode } from '../vscode';
 import { SettingsModal } from './SettingsModal';
 import { AccountUsageModal } from './AccountUsageModal';
 import { ImageViewerModal } from './ImageViewerModal';
 import { type ModelEntry, FALLBACK_MODELS, makeDefaultEntry, sameModel, toModelEntry } from '../utils/model';
+import { findMentions } from '../utils/filePath';
+import { FolderIcon, FileTypeIcon } from './shared/FolderList';
 import styles from './InputArea.module.css';
 import settings from './SettingsModal.module.css';
 
@@ -26,20 +28,45 @@ interface Skill {
   description?: string;
 }
 
-// Match "@path" mentions at a word boundary (start of input or after whitespace), so emails
-// like a@b.com aren't highlighted. Used by the highlight overlay to color paths blue.
-const MENTION_RE = /(?<=^|\s)@\S+/g;
+/** Mirrors FileHit in src/backend/fileSearch.ts - the frontend/backend tsconfig split
+ *  means the type cannot be imported, the same reason `plural()` is inlined in cli.ts. */
+interface FileHit {
+  rel: string;
+  name: string;
+  parent: string;
+  isDir: boolean;
+  childCount?: number;
+}
 
+// Long enough that walking a large workspace doesn't run on every keystroke, short enough
+// that the list feels attached to the typing.
+const FILE_SEARCH_DEBOUNCE_MS = 120;
+const MAX_FILE_ROWS = 60;
+/** Breathing room above the picker so it never sits flush against the top edge. */
+const MENU_TOP_GAP = 12;
+/** Floor for a very short window, where the measured space would be unusably small. */
+const MIN_MENU_HEIGHT = 140;
+
+/** Up-one-level arrow for the picker's ".." row, matching FolderList's up affordance. */
+function UpIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 19V5M5 12l7-7 7 7" />
+    </svg>
+  );
+}
+
+// Mention matching is shared with the sent bubble (utils/filePath) so the overlay and the
+// message can never disagree about where a path ends - keeping a second copy of the pattern
+// here is what made the "@path with spaces" bug land in two places at once.
 function renderHighlight(value: string): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
-  let m: RegExpExecArray | null;
-  MENTION_RE.lastIndex = 0;
-  while ((m = MENTION_RE.exec(value)) !== null) {
-    if (m.index > last) out.push(value.slice(last, m.index));
-    out.push(<span key={key++} className={styles.mention}>{m[0]}</span>);
-    last = m.index + m[0].length;
+  for (const m of findMentions(value)) {
+    if (m.start > last) out.push(value.slice(last, m.start));
+    out.push(<span key={key++} className={styles.mention}>{m.text}</span>);
+    last = m.end;
   }
   // Trailing text plus a newline so a final empty line keeps height (matches the textarea caret).
   out.push(value.slice(last) + '\n');
@@ -77,6 +104,12 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   const [skills, setSkills] = useState<Skill[]>([]);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [atQuery, setAtQuery] = useState<string | null>(null);
+  const [fileHits, setFileHits] = useState<FileHit[]>([]);
+  const [filesTruncated, setFilesTruncated] = useState(false);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [fileParent, setFileParent] = useState<string | null>(null);
+  const [menuMaxHeight, setMenuMaxHeight] = useState<number | null>(null);
   const [mode, setMode] = useState<'plan' | 'edit'>('edit');
   const [accountUsageOpen, setAccountUsageOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -93,6 +126,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   const dragStartH = useRef(0);
   const lastHeight = useRef(0);
   const skillsLoaded = useRef(false);
+  const justCommitted = useRef(false);
   const hasImagesRef = useRef(false);
   hasImagesRef.current = images.length > 0;
 
@@ -111,6 +145,13 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     function handleMessage(e: MessageEvent) {
       if (e.data?.type === 'skills') {
         setSkills(e.data.skills ?? []);
+      } else if (e.data?.type === 'fileList') {
+        setFileHits(Array.isArray(e.data.hits) ? e.data.hits : []);
+        setFilesTruncated(!!e.data.truncated);
+        // null when at the workspace root or searching, which is exactly when there is
+        // nothing to go up to.
+        setFileParent(typeof e.data.parent === 'string' ? e.data.parent : null);
+        setFilesLoading(false);
       } else if (e.data?.type === 'modelList') {
         const raw: ModelEntry[] = (e.data.models ?? []).map(toModelEntry);
         setFetchedModels(raw.length > 0 ? raw : null);
@@ -279,6 +320,48 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     }
   }
 
+  /**
+   * The "@" mention under the caret. Unlike the slash trigger, the query MAY contain
+   * spaces - the whole point is paths like `Бискуб - Анталья/`, and cutting the query at
+   * the first space would make the picker useless for exactly the names it was built for.
+   * A newline ends it, and `updateAtState` closes the menu once a query stops matching
+   * anything, which is what gets it out of the way when the "@" was ordinary prose.
+   */
+  function getAtContext(): { query: string; atIndex: number } | null {
+    const el = textareaRef.current;
+    if (!el || el.selectionStart !== el.selectionEnd) return null;
+    const cursor = el.selectionStart ?? 0;
+    const before = el.value.slice(0, cursor);
+    const atIndex = before.lastIndexOf('@');
+    if (atIndex === -1) return null;
+    // Word boundary only, so an email address never opens the picker.
+    const charBefore = atIndex > 0 ? before[atIndex - 1] : '';
+    if (charBefore !== '' && !/\s/.test(charBefore)) return null;
+    const raw = before.slice(atIndex + 1);
+    if (/\n/.test(raw)) return null;
+    // Quotes are transport, not part of the path: a committed mention reads
+    // `@"Бискуб .../Архив/"`, and searching for it verbatim would match nothing. Stripping
+    // them is what lets a folder that has just been inserted act as the next query.
+    return { query: raw.replace(/"/g, ''), atIndex };
+  }
+
+  function updateAtState() {
+    const ctx = getAtContext();
+    if (!ctx) {
+      setAtQuery(null);
+      return;
+    }
+    // A file commit leaves a complete mention under the caret, which would match itself and
+    // reopen the menu on the `select` event that setSelectionRange fires. Consumed once.
+    if (justCommitted.current) {
+      justCommitted.current = false;
+      setAtQuery(null);
+      return;
+    }
+    setAtQuery(ctx.query);
+    setHighlightIndex(0);
+  }
+
   const filteredSkills = slashQuery !== null
     ? skills.filter(s => s.name.toLowerCase().includes(slashQuery.toLowerCase()))
     : [];
@@ -325,6 +408,116 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     setAccountUsageOpen(true);
   }
 
+  // Debounced file search. The host owns the walk, so the webview never guesses where a
+  // path ends - which is the whole reason the picker exists (a space-bearing mention is
+  // not resolvable lexically; see !notes/tasks/path-with-spaces-mention).
+  useEffect(() => {
+    if (atQuery === null) return;
+    setFilesLoading(true);
+    const t = setTimeout(() => postMessage({ type: 'searchFiles', query: atQuery }), FILE_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [atQuery]);
+
+  // A stale list must not outlive its menu, or reopening "@" flashes the previous query's
+  // hits before the new reply lands.
+  useEffect(() => {
+    if (atQuery === null) {
+      setFileHits([]);
+      setFilesTruncated(false);
+      setFilesLoading(false);
+      setFileParent(null);
+    }
+  }, [atQuery]);
+
+  const visibleHits = fileHits.slice(0, MAX_FILE_ROWS);
+  // The up row is navigable like any other, so keyboard indices have to count it. Kept as
+  // one list rather than an index offset, which is where off-by-ones live.
+  const showUpRow = fileParent !== null;
+  const navCount = visibleHits.length + (showUpRow ? 1 : 0);
+  const hitAt = (i: number): FileHit | undefined => visibleHits[showUpRow ? i - 1 : i];
+  // Open only when it has something to offer: a query that matches nothing was ordinary
+  // prose after an "@", and a menu that lingers there swallows Enter. An up row alone still
+  // counts - an empty folder must be escapable.
+  const atMenuOpen = atQuery !== null && (navCount > 0 || filesLoading);
+
+  // The menu is anchored `bottom: 100%` inside .inputArea, so it grows upward into space
+  // that CSS cannot measure - the class's 260px cap left the list scrolling inside a
+  // letterbox with most of the window empty above it. The input area's own top edge IS the
+  // free height, and it moves (drag-resize, pasted images, the textarea auto-growing as you
+  // type), so this is measured rather than written as a vh fraction, which would spill off
+  // the top of the window once the input grew tall.
+  useLayoutEffect(() => {
+    if (!atMenuOpen) return;
+    const measure = () => {
+      const el = inputAreaRef.current;
+      if (!el) return;
+      const avail = Math.round(el.getBoundingClientRect().top - MENU_TOP_GAP);
+      setMenuMaxHeight(prev => {
+        const next = Math.max(MIN_MENU_HEIGHT, avail);
+        return prev === next ? prev : next; // same value must not re-render
+      });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [atMenuOpen, wrapperHeight, images.length, text, fileHits]);
+
+  /**
+   * Replaces the whole `@…` run under the caret. The inserted form is quoted when the path
+   * contains a space, because the CLI's own "@" parser stops at the first one and drops the
+   * mention silently - the bug that started this. Mirrors mentionFor() on the backend.
+   *
+   * Picking a DIRECTORY drills into it rather than finishing: the mention is written out in
+   * full (so the text is a valid, sendable mention at every step - a folder is a legitimate
+   * target, it inlines everything underneath) and the menu stays open with that folder as
+   * the query, listing its contents. Closing here instead was the reported bug - there was
+   * no way to reach anything inside a folder once it had been chosen. To keep the folder
+   * itself, just stop: typing a space or sending leaves the mention exactly as inserted.
+   */
+  function selectFile(hit: FileHit) {
+    const el = textareaRef.current;
+    if (el) {
+      const ctx = getAtContext();
+      if (ctx) {
+        const cursor = el.selectionStart ?? 0;
+        const mention = hit.rel.includes(' ') ? `@"${hit.rel}"` : `@${hit.rel}`;
+        // A file ends the mention, so it gets a trailing space to carry on typing.
+        const replacement = hit.isDir ? mention : `${mention} `;
+        el.value = el.value.slice(0, ctx.atIndex) + replacement + el.value.slice(cursor);
+        const newCursor = ctx.atIndex + replacement.length;
+        el.setSelectionRange(newCursor, newCursor);
+      }
+      el.focus();
+      adjustHeight();
+    }
+    if (hit.isDir) {
+      setAtQuery(hit.rel);
+      setHighlightIndex(0);
+    } else {
+      justCommitted.current = true;
+      setAtQuery(null);
+    }
+  }
+
+  /** Browse one level out. `rel` is '' at the workspace root, where the mention is a bare "@". */
+  function goUp(rel: string) {
+    const el = textareaRef.current;
+    if (el) {
+      const ctx = getAtContext();
+      if (ctx) {
+        const cursor = el.selectionStart ?? 0;
+        const mention = rel ? (rel.includes(' ') ? `@"${rel}"` : `@${rel}`) : '@';
+        el.value = el.value.slice(0, ctx.atIndex) + mention + el.value.slice(cursor);
+        const newCursor = ctx.atIndex + mention.length;
+        el.setSelectionRange(newCursor, newCursor);
+      }
+      el.focus();
+      adjustHeight();
+    }
+    setAtQuery(rel);
+    setHighlightIndex(0);
+  }
+
   // Reset the model picker whenever the slash menu closes.
   useEffect(() => { if (slashQuery === null) setModelPickerOpen(false); }, [slashQuery]);
 
@@ -356,6 +549,40 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Checked before the slash menu: both can never be open at once (the triggers are
+    // different characters), but the "@" query may contain "/" from a path, so ordering
+    // here is what keeps a path segment from being read as a command.
+    if (atMenuOpen) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlightIndex(i => Math.max(0, i - 1));
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlightIndex(i => Math.min(navCount - 1, i + 1));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (showUpRow && highlightIndex === 0) {
+          e.preventDefault();
+          goUp(fileParent!);
+          return;
+        }
+        const hit = hitAt(highlightIndex);
+        if (hit) {
+          e.preventDefault();
+          selectFile(hit);
+          return;
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setAtQuery(null);
+        return;
+      }
+    }
+
     if (slashQuery !== null && totalDropdownItems > 0) {
       if (e.key === 'ArrowUp') {
         e.preventDefault();
@@ -420,6 +647,67 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
         </div>
       )}
       <div className={styles.inputResizeHandle} onMouseDown={onDragStart} />
+      {atMenuOpen && (
+        <div
+          className={styles.slashMenu}
+          style={{ left: 0, ...(menuMaxHeight != null ? { maxHeight: menuMaxHeight } : {}) }}
+          data-testid="at-menu"
+        >
+          {navCount === 0 && filesLoading && (
+            <div className={styles.slashMenuEmpty}>Loading...</div>
+          )}
+          {showUpRow && (
+            <div
+              data-testid="at-menu-up"
+              className={[styles.slashMenuItem, styles.fileRow, highlightIndex === 0 ? styles.slashMenuItemActive : ''].filter(Boolean).join(' ')}
+              onMouseDown={e => { e.preventDefault(); goUp(fileParent!); }}
+              title={fileParent ? `Up to ${fileParent}` : 'Up to the workspace root'}
+            >
+              <UpIcon />
+              <span className={styles.fileName}>..</span>
+              <span className={styles.fileParent}>
+                <bdi className={styles.fileParentText}>{fileParent || '/'}</bdi>
+              </span>
+            </div>
+          )}
+          {visibleHits.map((hit, hitIdx) => {
+            const i = showUpRow ? hitIdx + 1 : hitIdx;
+            return (
+            <div
+              key={hit.rel}
+              data-testid="at-menu-item"
+              data-rel={hit.rel}
+              ref={i === highlightIndex ? el => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+              className={[styles.slashMenuItem, styles.fileRow, i === highlightIndex ? styles.slashMenuItemActive : ''].filter(Boolean).join(' ')}
+              // onMouseDown, not onClick: a click would blur the textarea first and the
+              // caret-relative getAtContext() would then have nothing to replace.
+              onMouseDown={e => { e.preventDefault(); selectFile(hit); }}
+              title={hit.rel}
+            >
+              {hit.isDir ? <FolderIcon /> : <FileTypeIcon name={hit.name} />}
+              <span className={styles.fileName}>{hit.name}{hit.isDir ? '/' : ''}</span>
+              {/* A folder mention inlines every file underneath it, so the count is the
+                  only warning the user gets before committing to that. */}
+              {hit.isDir && hit.childCount != null && (
+                <span className={styles.fileCount}>{hit.childCount}</span>
+              )}
+              {/* Two elements on purpose. The outer is direction:rtl so the ellipsis eats
+                  the HEAD of a deep path and leaves the folder the file is actually in.
+                  But an RTL paragraph reorders the NEUTRAL characters at each end, which
+                  rendered `.vscode/` as `/vscode.`; putting the isolate on the same element
+                  does not help, since the class then forces the isolate itself to RTL. The
+                  inner one restores LTR for the text, the outer keeps the truncation side. */}
+              <span className={styles.fileParent}>
+                <bdi className={styles.fileParentText}>{hit.parent}</bdi>
+              </span>
+            </div>
+            );
+          })}
+          {filesTruncated && (
+            <div className={styles.slashMenuEmpty}>Too many matches - keep typing to narrow</div>
+          )}
+        </div>
+      )}
       {slashQuery !== null && (
         <div className={styles.slashMenu} style={{ left: 0 }}>
           <div className={styles.slashMenuHeader}>Slash Commands</div>
@@ -541,7 +829,11 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
             className={styles.textarea}
             placeholder={PLACEHOLDER_TEXT}
             rows={images.length > 0 ? TEXTAREA_ROWS_WITH_IMAGES : TEXTAREA_ROWS_DEFAULT}
-            onInput={() => { adjustHeight(); updateSlashState(); }}
+            onInput={() => { adjustHeight(); updateSlashState(); updateAtState(); }}
+            // Arrow keys and clicks move the caret without firing onInput, and the "@"
+            // query is caret-relative, so the menu would keep showing hits for a run the
+            // cursor has already left.
+            onSelect={() => updateAtState()}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             onBlur={() => setSlashQuery(null)}

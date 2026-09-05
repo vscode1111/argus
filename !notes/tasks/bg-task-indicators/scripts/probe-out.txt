@@ -1,0 +1,20 @@
+cwd: C:\Users\Admin\AppData\Local\Temp\argus-bgprobe-t0Mdvk
+spawn: claude --print --verbose --output-format stream-json --input-format stream-json --include-partial-messages --allowedTools Bash --permission-mode bypassPermissions
+
+[+   715ms][turn 1] system/init
+[+   716ms][turn 1] system/status
+[+ 11338ms][turn 1] task_started  task_id=bnewu6j0q  tool_use_id=YPGNSff3
+[+ 11348ms][turn 1] system/status
+[+ 13586ms][turn 1] RESULT  num_turns=2  origin=-  "DONE1"
+
+--- turn 2: no new background task ---
+[+ 14142ms][turn 2] system/init
+[+ 14142ms][turn 2] system/status
+[+ 16301ms][turn 2] RESULT  num_turns=1  origin=-  "DONE2"
+
+===== summary =====
+task_started events: 1
+  turn 1  task_id=bnewu6j0q
+unique task_ids: 1
+
+VERDICT: task_started is emitted once per task. The inflated total comes from somewhere else.

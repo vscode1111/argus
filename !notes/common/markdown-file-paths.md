@@ -88,13 +88,84 @@ segment may *start* with the dot: `/etc/.gitignore` and `/home/x/.claude/creds/.
 produced no link at all before that. The Windows branch never had this gap, because its
 class includes the separators.
 
-**Still open, and bigger than it looks:** `\w` is ASCII-only, so **no path containing a
-non-ASCII segment linkifies at all** - `d:\_Projects\scub111g\people-research\people\tanya-gta\разделы-для-психолога\01-…html`
-is inert text in prose and in code spans alike. It stayed invisible because such paths
-usually arrive through a tool row, where `ToolCall` renders an `<a>` regardless of this
-regex; it surfaced only when a probe tried to open one from prose and timed out. A
-`u`-flagged pattern over `\p{L}` in both regexes is the fix, and it needs its own red/green
-pass - the character classes appear five times between the two files.
+## `@` is a filename character, and both branches need it
+
+`out\@snowy_137.json` (a per-handle dump) linked only `out\`. Because a directory is a
+valid target on the Windows branch, a final segment the class rejects does not fail the
+match - it falls back to **the longest directory prefix**, which exists, so the click
+opened a folder listing and nothing looked broken. Same failure shape as `.corp-account`,
+same lesson: a too-narrow class here produces a wrong target, not a missing link.
+
+Asymmetric on purpose:
+
+- **Windows branch: `@` anywhere.** The drive letter is the evidence, and an address
+  cannot appear after one. Required by the mid-segment cases, which are routine:
+  `garland@2x.png` and friends (retina assets), `browser@6e474dac…` (ms-playwright).
+- **Unix and relative branches: in a directory segment, and only at the *start* of the
+  final one (`@?`).** That is where a scoped package name puts it, while an address puts
+  it in the middle - so `docs/john@corp.com` stays prose.
+
+Without it on the slash branches, `/home/u/node_modules/@types/node/index.d.ts` fell
+through to the *relative* branch, which linked `home/u/…` - a path with **the leading
+slash silently dropped**. A path containing `@` was routinely split into two wrong links:
+the folder above it plus an orphan `@scope/…` fragment.
+
+**In prose, a mid-segment `@` is still lost, and the cause is not the regex:** remark-gfm
+autolinks `garland@2x.png` into `mailto:` before the linkifier runs, splitting the text
+node so the path link stops at the preceding backslash. Escaping it as `\@` in
+`escapeWinPaths` does not help (the escape is emitted, micromark autolinks it anyway -
+measured). Code spans are unaffected. Detail in
+[../tasks/at-in-filename-truncates-link/notes.md](../tasks/at-in-filename-truncates-link/notes.md).
+
+## Non-ASCII segments, and spaces inside a path
+
+*Previously listed here as "still open": `\w` is ASCII-only, so a path with a Cyrillic
+segment did not linkify. Fixed - but the fix alone was not enough, because the paths that
+prompted it have **both** properties.*
+
+Both regexes are now built from shared parts exported by `filePath.tsx` (`PATH_CH`,
+`PATH_SEG`, `PATH_FINAL`, `WIN_TAIL`) and carry the `u` flag. They were composed rather than
+written inline because with Unicode classes and the branches below they exceed ~500
+characters, which is not reviewable, and because `markdown.tsx` importing the same parts is
+what stops the pair drifting.
+
+**Unicode:** `[\p{L}\p{N}_]` replaces `\w`. Without it,
+`d:\_BiskubFamily\Docs\Бискуб Константин Николаевич\_index.md` linked
+`d:\_BiskubFamily\Docs\` - a real folder, so the click opened a listing and nothing looked
+broken. Same failure shape as `.corp-account` and `@snowy_137.json`; a too-narrow class here
+produces a **wrong target, not a missing link**.
+
+**Spaces, Windows branch only.** Real paths here are full of them (`Program Files`,
+`Бискуб Константин Николаевич\`, `Военный билет\`). Two guards keep prose out:
+
+- a segment may contain internal single spaces but **may not start with one**, so
+  `see d:\Docs\ and also x\y.md` stops at `d:\Docs\` instead of running through the sentence
+  to the next backslash;
+- a spaced segment **may not contain a dot**. The segment loop is greedy, so it otherwise ate
+  prose whenever a separator turned up later: `…\tools\vault.js show companies/GMTrade/credentials/.linear`
+  and `…\index.d.ts here.\` both linked whole. Every such false positive crosses a space that
+  follows a dotted filename, while real spaced directories are dot-free.
+
+**The final segment needs spaces too** (`…\Военный билет\Военный билет 12.jpg`), and that is
+where prose gets swallowed, so it is anchored on an extension and crosses spaces **lazily**:
+`file.md and see other.txt here` stops at `file.md`, whereas a greedy scan runs to
+`other.txt`. Its `(?:-…)*` tail is required or `.corp-account` regresses to `.corp`. A
+dotless alternative follows it for bare directories, which the extension anchor cannot
+express.
+
+**The extension itself stays ASCII** while the rest of the segment is Unicode. Widening it
+too made Russian initials read as one: `…\Согласие на дарение Бискуб Н.М` matched with `.М`
+as the extension. Initials next to a path are common; a Cyrillic-suffixed extension is not.
+
+**Collation is pinned, not inherited.** `Intl.Collator('en', {numeric: true})` in
+`fileSearch.ts`: the daemon resolves to `ru-RU`, where Cyrillic sorts *before* Latin, so a
+folder listing ended `Полезные ссылки.md, CLAUDE.md` while Windows Explorer showed those two
+the other way round.
+
+**Residual, and irreducible without touching the filesystem:** a dot-free prose run followed
+by a separator still matches (`D:/_Projects/_tools/telegram and check dist/`). Three distinct
+false positives (~24 occurrences) survive in the audit corpus. Same wall as the `@`-mention
+rules in [at-mentions.md](at-mentions.md) - only the filesystem settles it.
 
 ## A directory is a path too (Windows branch only)
 
@@ -111,9 +182,17 @@ segment:
   links `...\argus\src`) and the elision `C:\...` is not a path;
 - **must not be empty**, so a bare `C:\` is not a link either.
 
+The tail is `WIN_TAIL`, written as *either* one-or-more separator-terminated segments with an
+**optional** final one, *or* a final one alone:
+
 ```
-(?<![a-zA-Z])[A-Za-z]:[\\\/](?:[\w.\-!]+[\\\/])*[\w.\-!]*[\w\-!][\\\/]?
+(?:(?:SEG[\\/])+(?:FINAL)?|FINAL)
 ```
+
+Both halves are load-bearing. Making the final segment simply optional linkifies a bare `C:\`
+and the elision `C:\...`; requiring it truncates a spaced directory
+(`d:\Docs\Военный билет\` came out as `d:\Docs\Военный`, because the segment loop consumed
+the whole path and then had nothing left for a required final).
 
 `WIN_PATH_RE` widened in step, but deliberately **more loosely**: its final segment stays
 optional, so `C:\` and `C:\...` are escaped even though they are not linked. The asymmetry
@@ -136,6 +215,20 @@ has drifted from the shipped code.
 The general lesson (a hand-written false-positive corpus is not sufficient evidence for a
 widening; render a real transcript and audit every hit) applies to any text-matching rule
 here, not just paths.
+
+It held a second time on the Unicode/spaces widening above, and it is worth being precise
+about *how* it held: a 20-case hand-written set including deliberate prose bait was **fully
+green**, and the transcript audit then exposed **two false-positive mechanisms neither the
+author nor the bait had thought of** (the greedy segment loop crossing a space after a dotted
+filename, and Cyrillic initials parsing as a file extension). The corpus is not a formality
+to satisfy after the fact - it is the only step that finds the class of error you did not
+imagine. Harness:
+[../tasks/at-in-filename-truncates-link/scripts/audit-transcript.js](../tasks/at-in-filename-truncates-link/scripts/audit-transcript.js),
+which diffs HEAD-vs-worktree links over every transcript given to it (1,603 / 78,551 content
+blocks on the last run) and marks each added link `[exists]` when it resolves on this
+machine - the fastest signal for "is this a real path or swallowed prose". It handles both a
+single-line regex literal and the composed `new RegExp(...)` form, taking the `PATH_*` parts
+from whichever file declares them.
 
 ### Widening the match changes what gets requested
 

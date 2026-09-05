@@ -62,7 +62,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'thinking_start' });
     await send(page, { type: 'text_chunk', text: 'Running in background.' });
     await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5 && echo done');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     // Idle: the Stop button only exists while the app believes a turn is in flight.
     await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0);
@@ -81,7 +81,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'scub-bg-sound' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     await expect.poll(() => soundPlays(page)).toBeGreaterThan(0);
   });
@@ -90,7 +90,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg task' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5 && echo done');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     await expect(note(page)).toBeVisible();
     await expect(note(page)).toContainText('1 background task still running');
@@ -102,7 +102,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg task' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     await expect(note(page)).toBeVisible();
 
@@ -121,9 +121,13 @@ test.describe('background tasks', () => {
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
     await startBgTask(page, 't2', 'Task 2', 'sleep 20');
     await startBgTask(page, 't3', 'Task 3', 'sleep 30');
-    await send(page, { type: 'done', pendingBackgroundTasks: 3, totalBackgroundTasks: 3 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 3 });
 
-    await expect(note(page)).toContainText('3 of 3 background tasks still running');
+    // Pending only, never "3 of N". The denominator used to count every task_started
+    // since the last per-send counter reset, so it reported totals from turns the
+    // message had nothing to do with ("2 of 9" on a turn that launched two).
+    await expect(note(page)).toContainText('3 background tasks still running');
+    await expect(note(page)).not.toContainText(' of ');
   });
 
   test('the running count drops as tasks complete', async ({ page }) => {
@@ -132,23 +136,23 @@ test.describe('background tasks', () => {
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
     await startBgTask(page, 't2', 'Task 2', 'sleep 20');
     await startBgTask(page, 't3', 'Task 3', 'sleep 30');
-    await send(page, { type: 'done', pendingBackgroundTasks: 3, totalBackgroundTasks: 3 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 3 });
 
     // Task 1 completes
     await completeBgTask(page, 't1', 'completed (exit code 0)');
     await send(page, { type: 'thinking_start', reused: true });
     await send(page, { type: 'text_chunk', text: 'Task 1 done.' });
-    await send(page, { type: 'done', pendingBackgroundTasks: 2, totalBackgroundTasks: 3 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 2 });
 
-    await expect(note(page)).toContainText('2 of 3 background tasks still running');
+    await expect(note(page)).toContainText('2 background tasks still running');
 
     // Task 2 completes
     await completeBgTask(page, 't2', 'completed (exit code 0)');
     await send(page, { type: 'thinking_start', reused: true });
     await send(page, { type: 'text_chunk', text: 'Task 2 done.' });
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 3 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
-    await expect(note(page)).toContainText('1 of 3 background tasks still running');
+    await expect(note(page)).toContainText('1 background task still running');
 
     // Task 3 completes (last one)
     await completeBgTask(page, 't3', 'completed (exit code 0)');
@@ -164,13 +168,13 @@ test.describe('background tasks', () => {
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
     await startBgTask(page, 't2', 'Task 2', 'sleep 20');
-    await send(page, { type: 'done', pendingBackgroundTasks: 2, totalBackgroundTasks: 2 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 2 });
 
     // Task 1 completes
     await completeBgTask(page, 't1', 'completed');
     await send(page, { type: 'thinking_start', reused: true });
     await send(page, { type: 'text_chunk', text: 'Task 1 done.' });
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 2 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     await expect(note(page)).toHaveCount(1);
   });
@@ -179,7 +183,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     const timer = page.locator('[class*="responseTimeSuccess"]');
     await expect(timer).toBeVisible();
@@ -190,7 +194,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 5');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     await completeBgTask(page, 't1', 'completed');
     await send(page, { type: 'thinking_start', reused: true });
@@ -205,7 +209,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     const outLink = page.locator('a[class*="toolOutLink"]');
     await expect(outLink).toBeVisible();
@@ -216,7 +220,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     const outLink = page.locator('a[class*="toolOutLink"]');
     await expect(outLink).toHaveClass(/toolOutLinkRunning/);
@@ -230,7 +234,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Sleep 5s', 'sleep 5');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     // Complete with output
     await completeBgTask(page, 't1', 'Background command completed (exit code 0)', 'scub-test-result');
@@ -256,7 +260,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'first' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task A', 'sleep 5');
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 1 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     await completeBgTask(page, 't1', 'completed');
     await send(page, { type: 'thinking_start', reused: true });
@@ -269,18 +273,18 @@ test.describe('background tasks', () => {
     await startBgTask(page, 't2', 'Task B', 'sleep 10');
     await startBgTask(page, 't3', 'Task C', 'sleep 20');
     await startBgTask(page, 't4', 'Task D', 'sleep 30');
-    await send(page, { type: 'done', pendingBackgroundTasks: 3, totalBackgroundTasks: 3 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 3 });
 
-    // Totals are per-request: 3, not 4
-    await expect(note(page)).toContainText('3 of 3 background tasks still running');
+    // The note reports what is pending, not a running total across requests: 3, not 4.
+    await expect(note(page)).toContainText('3 background tasks still running');
 
-    // After one completes: 2 of 3
+    // After one completes
     await completeBgTask(page, 't2', 'completed');
     await send(page, { type: 'thinking_start', reused: true });
     await send(page, { type: 'text_chunk', text: 'Task B done.' });
-    await send(page, { type: 'done', pendingBackgroundTasks: 2, totalBackgroundTasks: 3 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 2 });
 
-    await expect(note(page)).toContainText('2 of 3 background tasks still running');
+    await expect(note(page)).toContainText('2 background tasks still running');
   });
 
   test('multiple Out links: completed ones stop pulsing, running ones keep pulsing', async ({ page }) => {
@@ -288,7 +292,7 @@ test.describe('background tasks', () => {
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
     await startBgTask(page, 't2', 'Task 2', 'sleep 20');
-    await send(page, { type: 'done', pendingBackgroundTasks: 2, totalBackgroundTasks: 2 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 2 });
 
     // Both Out links should pulse
     const outLinks = page.locator('a[class*="toolOutLink"]');
@@ -309,13 +313,13 @@ test.describe('background tasks', () => {
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
     await startBgTask(page, 't2', 'Task 2', 'sleep 20');
-    await send(page, { type: 'done', pendingBackgroundTasks: 2, totalBackgroundTasks: 2 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 2 });
 
     // Task 1 completes: the first message becomes background_done, the new one carries the note
     await completeBgTask(page, 't1', 'completed');
     await send(page, { type: 'thinking_start', reused: true });
     await send(page, { type: 'text_chunk', text: 'Task 1 done.' });
-    await send(page, { type: 'done', pendingBackgroundTasks: 1, totalBackgroundTasks: 2 });
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
     const firstMessage = page.locator('[class*="assistant"]').first();
     await expect(firstMessage.getByTestId('background-tasks-note')).toHaveCount(0);

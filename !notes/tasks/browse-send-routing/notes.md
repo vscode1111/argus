@@ -161,3 +161,34 @@ Green run passes (4.0s), plus `shared-channel-integration` 11/11 and
   `defaultEntry(_cd)` when a socket has no mapping, which routes to whichever entry is most
   recently active - i.e. the streaming one. Not the cause of either bug, but the same class
   of failure: guessing an entry instead of resolving one.
+
+## Flake: the spec's own WS client dropped the frame it was waiting for (2026-09-06)
+
+`a client watching the live session never sees the browsed send` timed out after 15s on
+"the watcher to sync", then passed on an immediate re-run and on two repeats after the fix.
+
+**Not a product bug - a harness race.** The watcher joins an entry that already has state,
+and `joinEntry` -> `replayToClient` (`channel.ts`) sends `sessionLoaded` **synchronously
+during the upgrade**. When that frame arrives in the same TCP read as the handshake
+response, `ws` emits `'open'` and `'message'` in one synchronous callback, while the spec's
+`const ws = await openClient(...); const seen = record(ws);` only attaches its listener in
+the promise continuation a microtask later. The frame is gone before anything is listening.
+
+Fixed by buffering inside `openClient` from construction and seeding `record()` from that
+buffer, copying and attaching in the same synchronous step. Durable version, plus the three
+other specs still using the unbuffered ordering, in
+[../../common/e2e-testing.md](../../common/e2e-testing.md).
+
+Artifact: `scripts/failure-2026-09-05/error-context.md` (source listing only - a raw-WS spec
+has no page, so there is no Debug Log in it).
+
+### Wrong turn worth keeping
+
+The first diagnosis was that the watcher's wait is **structurally** unsatisfiable: replay is
+deferred to `webviewReady` (`session.ts`), and this raw client never sends it, nor a
+`?session=`/`?panel=`. That reasoning was self-consistent and wrong. What killed it was
+checking the history rather than re-reading the code: the spec was added (`5079b6e`,
+2026-08-22) three weeks **after** the deferral landed (`c31f9f3`, 2026-07-29), so it must
+have passed - which sent the search to `joinEntry`, whose plain-join path replays
+unconditionally. A "this cannot ever have worked" conclusion about committed, previously
+green code is a signal to check when it was written, not to write it up.

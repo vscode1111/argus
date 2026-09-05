@@ -27,6 +27,28 @@ export function resolveClaudeBin(): string {
   return 'claude';
 }
 
+// Ends the CLI's current turn without ending the process, over the control channel the
+// stream-json input format already carries (the CLI's stdin parser accepts
+// `type: "control_request"` and rejects one with no `request`). Returns whether the frame
+// could be written; the caller falls back to killProc when it could not.
+//
+// Why this exists: killing the CLI mid-turn leaves its transcript ending on a user message
+// nobody answered, and the next `--resume` repairs that by splicing a synthetic
+// "No response requested." assistant turn into the conversation. That repair is sent to the
+// model on every later turn (measured), and once several accumulate the model starts
+// answering real questions with the same four words. An interrupted process stays alive and
+// is reused by the next send, so no rebuild happens and no repair is spliced.
+export function interruptProc(proc: ReturnType<typeof spawn>): boolean {
+  if (!proc.stdin?.writable) return false;
+  try {
+    const frame = { type: 'control_request', request_id: `argus-stop-${Date.now()}`, request: { subtype: 'interrupt' } };
+    proc.stdin.write(JSON.stringify(frame) + '\n');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function killProc(proc: ReturnType<typeof spawn>) {
   if (!proc.pid) return;
   if (IS_WIN) {

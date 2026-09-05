@@ -105,6 +105,7 @@ Integration specs run against a real model, so an assertion is only stable if it
   ```
   Pair it with a **control that disables the background job** and asserts the opposite (age ≈ 0). Without the control, "any reply at all" satisfies the test and a poller that never ran still passes. Diagnosing the failed first attempt is also a case for probing the unit directly (`!notes/tasks/usage-limits-indicator/scripts/probe-poller.js` showed the poller filling its snapshot in ~340ms, which located the bug in the assertion rather than the feature).
 - **Put a threshold at the real boundary, not at a comfortable-looking number.** If a behaviour is binary in the code, find the value that separates the two branches and assert *that*; anything above it is a second, unstated assertion about model speed. `streaming-partial-integration.spec.ts` required `>= 3` `text_chunk` frames when the code's actual boundary is 1 (with `--include-partial-messages` off, `handleAssistant` sends a single frame with the whole text via `!s.receivedDeltas`). Frames beyond the second only count how long generation lasted, since the CLI flushes deltas on a ~0.8s timer - so a correct 2-frame run failed. Where a small count is unavoidable, also **size the prompt so the effect is observable**: 80 numbers generate in under a second and yield 2 frames, 200 numbers yield 5-6.
+  - The same trap in its **off-by-one** form, and it hides behind a cache. `usage-indicator-integration.spec.ts` asserted `reqAt - snap.fetchedAt > 0` to prove a snapshot predates the request that read it. The real boundary is "not fetched **after** the request", i.e. `>=`: `publishUsageWindows` stamps `fetchedAt = Date.now()` and the reply goes out immediately after, so over localhost `reqAt` lands in the **same millisecond** and the difference is exactly `0`. Nothing was lost by relaxing it - a genuine on-request fetch costs a round trip to the usage API and lands tens of ms on the wrong side. What made it look random is that it is **conditional on cache state**, not timing luck: with a warm snapshot (inside the 60s refresh floor) `fetchedAt` is seconds old and it passes, so it fails on the *first* usage call of a suite and passes on every re-run - the worst possible signal, since re-running is the first thing anyone tries.
 
 ### Run the red before trusting a regression test
 
@@ -376,3 +377,28 @@ concatenation.
 Print the input, or assert something that can only be true in the intended context (here:
 the rendered text keeps its backslashes, which only happens inside a code span). A fixture
 that quietly becomes a different fixture is indistinguishable from a passing test.
+
+## A raw WS client must buffer from construction, not from `await open`
+
+The idiom `const ws = await openClient(...); const seen = record(ws);` drops frames, and the
+loss is silent. Joining a channel entry that already has state makes the server replay
+`sessionLoaded` **synchronously during the upgrade** (`joinEntry` -> `replayToClient` in
+`channel.ts`), so that frame can arrive in the same TCP read as the handshake response. The
+`ws` library then emits `'open'` and `'message'` in one synchronous callback, while the
+`await` continuation - where `record()` attaches its listener - only runs in the microtask
+that follows. The frame is gone before anything is listening.
+
+Nothing about it is probabilistic in a given run: it is missed **whenever the two reads
+coalesce**, which depends on machine load, so it presents as a flake. Observed 2026-09-05 as
+`browse-send-routing-integration.spec.ts` timing out on "the watcher to sync" (15s waiting
+for `sessionLoaded || thinking_start`), passing on an immediate re-run.
+
+Fix by buffering inside `openClient` from the moment the socket is constructed and seeding
+`record()` from that buffer; do the copy and the listener attach in the same synchronous
+step so nothing is dropped or double-counted. **Green runs are not evidence here** - the
+failure is intermittent by nature, so the argument has to be that the window no longer
+exists, not that it passed N times.
+
+Same shape wherever a raw `ws` client is used against a live entry:
+`resume-live-session-integration.spec.ts`, `shared-channel-integration.spec.ts`,
+`usage-indicator-integration.spec.ts` still use the unbuffered ordering.

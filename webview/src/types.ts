@@ -47,8 +47,7 @@ export type UIMessage = {
   outcome?: Outcome;
   watchdogRetries?: number;
   errorKind?: ErrorKind;
-  bgTasksCompleted?: number;
-  bgTasksTotal?: number;
+  bgTasksPending?: number;
   finalTokens?: { input: number; output: number };
 };
 

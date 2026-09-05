@@ -1,0 +1,177 @@
+scanned 1471 transcript(s), 60653 content blocks
+
+ADDED links (audit every one): 94 distinct
+    24x  "out/@joshguha.json"
+    22x  "D:\\_Projects\\_tools\\telegram\\out\\@Tanushka_gta.json"   [exists]
+    12x  "D:\\_Projects\\_tools\\telegram\\out\\@snowy_137.json"
+    10x  "C:/nvm4w/nodejs/node_modules/@anthropic-ai/claude-code/cli.js"
+     9x  "D:\\_Projects\\_tools\\telegram\\out\\@joshguha.json"   [exists]
+     6x  "out/@Tanushka_gta.json"
+     6x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/services/signer.service.d.ts"   [exists]
+     4x  "D:\\_Projects\\_tools\\telegram\\out\\@GMTrade_Jay.json"   [exists]
+     4x  "out/@snowy_137.json"
+     4x  "D:/_Projects/_tools/telegram/out/@snowy_137.json"
+     4x  "C:\\Users\\Admin\\AppData\\Local\\nvm\\v20.20.2\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe"   [exists]
+     4x  "/home/u/node_modules/@types/node/index.d.ts"
+     4x  "/home/u/telegram/out/@snowy_137.json"
+     4x  "D:\\_Projects\\_tools\\telegram\\out\\@Leeloo_moscow.json"   [exists]
+     4x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/helpers/index.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/consts/index.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/consts/signer.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/consts/system.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/helpers/createLogger.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/helpers/decode.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/helpers/getParams.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/helpers/index.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/helpers/key.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/helpers/signatureString.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/helpers/typeGuards.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/index.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/services/config.service.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/services/index.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/services/verify.service.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/types/apostilleConfig.type.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/types/index.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/types/signer.type.d.ts"   [exists]
+     4x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/types/verify.type.d.ts"   [exists]
+     3x  "C:\\nvm4w\\nodejs\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe"   [exists]
+     3x  "D:\\_Projects\\_tools\\telegram\\out\\@Olyalya_KY.json"   [exists]
+     2x  "D:/_Projects/CCS/b2b-admin/node_modules/@nestjs"   [exists]
+     2x  "D:/_Projects/CCS/b2b-admin/node_modules/@nestjs/common"
+     2x  "C:/Users/Admin/AppData/Local/Yarn/Cache/v6/npm-@nestjs-common-10.3.9-4e85d8fa6ae201a1c5f49d4d09b205bc3672ed1f-integrity"   [exists]
+     2x  "_Projects\\_tools\\telegram\\out\\@snowy_137.json"
+     2x  "D:/_Projects/_tools/telegram/out/@joshguha.json"   [exists]
+     2x  "C:\\Users\\Admin\\AppData\\Local\\nvm\\v20.20.2\\node_modules\\@anthropic-ai\\claude-code\\package.json"   [exists]
+     2x  "/c/nvm4w/nodejs/node_modules/@anthropic-ai/claude-code/bin/claude.exe"
+     2x  "C:/Users/Admin/AppData/Local/ms-playwright/b/browser@6e474dac0d92299fe328d6fb31ab7b56"   [exists]
+     2x  "D:/_Projects/_tools/telegram/out/@woodypye-media"   [exists]
+     2x  "/d/_Projects/CCS/b2b-admin/node_modules/@v3group/b2b-admin-nuxt3-layer/src/interfaces/token.ts"
+     2x  "/d/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/consts/no-restrictions.const.ts"
+     2x  "/d/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/enum/change-type.enum.ts"
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group/b2b-admin-nuxt3-layer/src/components/shared/components/debugButton/DebugButton.vue"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/components/composables/useCommonUpstreams.ts"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/components/composables/useDebugCookies.ts"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/components/composables/useServiceUpstreams.ts"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/components/DebugApp.vue"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/composables/useDebugStore.ts"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin\\types/index.ts:4"
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin\\types/index.ts:16"
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin\\types/index.ts:18"
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/composables/useCommonUpstreams.ts"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/composables/useServiceUpstreams.ts"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/debugServiceSettings/DebugServiceSettingsUpstreams.vue"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin\\constants/index.ts:1"
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/composables/useDebugCookies.ts"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/debugUpstreamButtons/DebugUpstreamButtons.vue"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/debugUpstreamTags/DebugUpstreamTags.vue"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/composables/useUpstreamsCookieStore.ts"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/debugUpstreamInsertConfigModal"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/debugUpstreamInsertConfigModal/DebugUpstreamInsertConfigModal.vue"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\greet-instruction\\main-instruction-select-project@2x.png"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\greet-instruction\\main-instruction-select-project@2x.webp"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\greet-instruction\\main-instruction-select-section@2x.png"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\greet-instruction\\main-instruction-select-section@2x.webp"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\greet-instruction\\main-instruction-start-edit@2x.png"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\greet-instruction\\main-instruction-start-edit@2x.webp"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\newYear\\garland-on@2x.png"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\newYear\\garland@2x.png"   [exists]
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\newYear\\garland@2x.webp"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/approval.service.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/decorator/api-ok-response-approval.decorator.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/dto/approval-common-response.dto.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/dto/approval-create-response.dto.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/dto/approval-delete-response.dto.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/dto/approval-update-response.dto.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/dto/challenge-confirmed-but-need-approvals-response.dto.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/enum/approval-result.enum.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/guard/approval-type.guard.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/utils/api/api-client.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/node_modules/logform/index.d.ts"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/services/signer.service.js"
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/consts/signer.js"
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/index.cjs"   [exists]
+     2x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/apostille/dist/index.mjs"   [exists]
+     2x  "D:\\_Projects\\CCS\\b2b-admin\\apps\\server\\node_modules\\@nestjs\\cli\\n"
+     1x  "_Projects\\_tools\\telegram\\out\\@joshguha.json"
+     1x  "_Projects\\_tools\\telegram\\out\\@Olyalya_KY.json"
+
+REMOVED links: 77 distinct
+   110x  "d:/_Projects/CCS/b2b-admin/apps/server/node_modules/"   [exists]
+    54x  "D:\\_Projects\\_tools\\telegram\\out\\"   [exists]
+    42x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\node_modules\\"   [exists]
+    10x  "C:/nvm4w/nodejs/node_modules/"   [exists]
+    10x  "@anthropic-ai/claude-code/cli.js"
+     8x  "D:/_Projects/_tools/telegram/out/"   [exists]
+     7x  "@anthropic-ai\\claude-code\\bin\\claude.exe"
+     6x  "C:\\Users\\Admin\\AppData\\Local\\nvm\\v20.20.2\\node_modules\\"   [exists]
+     6x  "@v3group/apostille/dist/services/signer.service.d.ts"
+     4x  "D:/_Projects/CCS/b2b-admin/node_modules/"   [exists]
+     4x  "home/u/node_modules/@types/node/index.d.ts"
+     4x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/helpers/index.ts"
+     4x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\greet-instruction\\main-instruction-select-project"
+     4x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\greet-instruction\\main-instruction-select-section"
+     4x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\greet-instruction\\main-instruction-start-edit"
+     4x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\newYear\\garland"
+     4x  "@v3group/apostille/dist/consts/index.d.ts"
+     4x  "@v3group/apostille/dist/consts/signer.d.ts"
+     4x  "@v3group/apostille/dist/consts/system.d.ts"
+     4x  "@v3group/apostille/dist/helpers/createLogger.d.ts"
+     4x  "@v3group/apostille/dist/helpers/decode.d.ts"
+     4x  "@v3group/apostille/dist/helpers/getParams.d.ts"
+     4x  "@v3group/apostille/dist/helpers/index.d.ts"
+     4x  "@v3group/apostille/dist/helpers/key.d.ts"
+     4x  "@v3group/apostille/dist/helpers/signatureString.d.ts"
+     4x  "@v3group/apostille/dist/helpers/typeGuards.d.ts"
+     4x  "@v3group/apostille/dist/index.d.ts"
+     4x  "@v3group/apostille/dist/services/config.service.d.ts"
+     4x  "@v3group/apostille/dist/services/index.d.ts"
+     4x  "@v3group/apostille/dist/services/verify.service.d.ts"
+     4x  "@v3group/apostille/dist/types/apostilleConfig.type.d.ts"
+     4x  "@v3group/apostille/dist/types/index.d.ts"
+     4x  "@v3group/apostille/dist/types/signer.type.d.ts"
+     4x  "@v3group/apostille/dist/types/verify.type.d.ts"
+     3x  "C:\\nvm4w\\nodejs\\node_modules\\"   [exists]
+     2x  "C:/Users/Admin/AppData/Local/Yarn/Cache/v6/npm-"
+     2x  "@anthropic-ai\\claude-code\\package.json"
+     2x  "c/nvm4w/nodejs/node_modules/@anthropic-ai/claude-code/bin/claude.exe"
+     2x  "C:/Users/Admin/AppData/Local/ms-playwright/b/browser"
+     2x  "d/_Projects/CCS/b2b-admin/node_modules/@v3group/b2b-admin-nuxt3-layer/src/interfaces/token.ts"
+     2x  "d/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/consts/no-restrictions.const.ts"
+     2x  "d/_Projects/CCS/b2b-admin/apps/server/node_modules/@v3group/nest-admin-dependencies/src/modules/approval/enum/change-type.enum.ts"
+     2x  "@v3group/b2b-admin-nuxt3-layer/src/components/shared/components/debugButton/DebugButton.vue"
+     2x  "@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/components/composables/useCommonUpstreams.ts"
+     2x  "@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/components/composables/useDebugCookies.ts"
+     2x  "@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/components/composables/useServiceUpstreams.ts"
+     2x  "@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/components/DebugApp.vue"
+     2x  "@v3group/b2b-admin-nuxt3-layer/src/plugins/common/debugPlugin/composables/useDebugStore.ts"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin\\types/index.ts:4"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin\\types/index.ts:16"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin\\types/index.ts:18"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/composables/useCommonUpstreams.ts"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/composables/useServiceUpstreams.ts"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/debugServiceSettings/DebugServiceSettingsUpstreams.vue"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin\\constants/index.ts:1"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/composables/useDebugCookies.ts"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/debugUpstreamButtons/DebugUpstreamButtons.vue"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/debugUpstreamTags/DebugUpstreamTags.vue"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/composables/useUpstreamsCookieStore.ts"
+     2x  "@v3group\\b2b-admin-nuxt3-layer\\src\\plugins\\common\\debugPlugin/components/debugUpstreamInsertConfigModal/DebugUpstreamInsertConfigModal.vue"
+     2x  "d:\\_Projects\\CCS\\b2b-admin\\apps\\client\\src\\assets\\img\\content\\newYear\\garland-on"
+     2x  "@v3group/nest-admin-dependencies/src/modules/approval/approval.service.ts"
+     2x  "@v3group/nest-admin-dependencies/src/modules/approval/decorator/api-ok-response-approval.decorator.ts"
+     2x  "@v3group/nest-admin-dependencies/src/modules/approval/dto/approval-common-response.dto.ts"
+     2x  "@v3group/nest-admin-dependencies/src/modules/approval/dto/approval-create-response.dto.ts"
+     2x  "@v3group/nest-admin-dependencies/src/modules/approval/dto/approval-delete-response.dto.ts"
+     2x  "@v3group/nest-admin-dependencies/src/modules/approval/dto/approval-update-response.dto.ts"
+     2x  "@v3group/nest-admin-dependencies/src/modules/approval/dto/challenge-confirmed-but-need-approvals-response.dto.ts"
+     2x  "@v3group/nest-admin-dependencies/src/modules/approval/enum/approval-result.enum.ts"
+     2x  "@v3group/nest-admin-dependencies/src/modules/approval/guard/approval-type.guard.ts"
+     2x  "@v3group/nest-admin-dependencies/src/utils/api/api-client.ts"
+     2x  "@v3group/apostille/node_modules/logform/index.d.ts"
+     2x  "@v3group/apostille/dist/services/signer.service.js"
+     2x  "@v3group/apostille/dist/consts/signer.js"
+     2x  "@v3group/apostille/dist/index.cjs"
+     2x  "@v3group/apostille/dist/index.mjs"
+     2x  "D:\\_Projects\\CCS\\b2b-admin\\apps\\server\\node_modules\\"   [exists]
+

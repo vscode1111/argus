@@ -1,0 +1,14 @@
+cwd: C:\Users\Admin\AppData\Local\Temp\argus-bgupd-UZuyBF
+
+[ 10.3s] task_started       task=bjb6f1tlk  last-output=""  summary=""
+[ 11.2s] RESULT  origin=-  "STARTED"
+[ 33.5s] task_updated       task=bjb6f1tlk  last-output=""  summary=""
+[ 33.6s] task_notification  task=bjb6f1tlk  last-output="MARK-3-FINAL"  summary="Background command "Print marks with del"
+[ 35.3s] RESULT  origin=task-notification  "Background command finished successfully"
+
+===== summary =====
+task_updated events: 1, of which fired before the task's final marker: 1
+  [33.5s] last-output=""  <- task still running here
+
+VERDICT: task_updated fires while the task is STILL RUNNING.
+         Deleting from pendingBgTasks on it undercounts the note.

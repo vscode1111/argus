@@ -30,7 +30,110 @@ import { URL_RE, trimUrl, openExternal } from './url';
 // Without the Windows widening the link stopped at the last dotted segment: the folder
 // `C:\Users\Admin\.claude\skills\git-remarks\scripts\` came out as a link to
 // `C:\Users\Admin\.claude`, a real but entirely different directory.
-const FILE_PATH_RE = /((?<![a-zA-Z])[A-Za-z]:[\\\/](?:[\w.\-!]+[\\\/])*[\w.\-!]*[\w\-!][\\\/]?|\/(?:[\w.\-!]+\/)+[\w.\-]*\.\w+(?:-\w+)*|(?:[\w.\-@!]+[\\\/])+[\w.\-]*\.\w+(?:-\w+)*)(?::(\d+)(?:-(\d+))?)?/g;
+//
+// "@" is a filename character (`out\@snowy_137.json`, a per-handle dump) and a directory
+// one (`node_modules\@types\node\index.d.ts`), and it is allowed **anywhere** on the
+// Windows branch, where the drive letter is the evidence and an email cannot appear.
+// On the slash branches it is allowed in a directory segment but only at the *start* of
+// the final one (`@?`), because that is where a scoped name puts it while an address puts
+// it in the middle: without that guard `docs/john@corp.com` becomes a file link. Failing
+// to accept it at all was not "no link" but a link to something else - the reported
+// `D:\_Projects\_tools\telegram\out\@snowy_137.json` linked the prefix
+// `D:\_Projects\_tools\telegram\out\`, an existing folder, so the click opened a
+// directory listing; `/home/u/node_modules/@types/node/index.d.ts` fell through to the
+// relative branch and linked `home/u/...`, silently dropping the leading slash.
+// `\w` is ASCII-only in JS, so a Cyrillic segment used to END the match and - because a
+// directory is a valid target - it fell back to the longest ASCII prefix:
+// `d:\_BiskubFamily\Docs\Бискуб Константин Николаевич\_index.md` linked
+// `d:\_BiskubFamily\Docs\`, a real folder, so the click opened a listing and nothing looked
+// broken. Same failure shape as the `@snowy_137.json` bug. Hence `[\p{L}\p{N}_]` + the `u`
+// flag. The post-extension `(?:-\w+)*` group stays deliberately ASCII: it exists for
+// hyphenated dotfiles (`.corp-account`), and widening it would swallow the Russian suffix
+// in "`.md`-файл", which the ASCII class is what keeps out of the link.
+//
+// A space is allowed in a NON-FINAL segment only, and on the Windows branch only. Real
+// paths here are full of them (`Бискуб Константин Николаевич\`, `Военный билет\`) and
+// without this the match merely breaks in a new place. The constraint is what keeps prose
+// out: a segment may not START with a space, so `see d:\Docs\ and also x\y.md` stops dead
+// at `d:\Docs\` instead of running through the sentence to the next backslash.
+//
+// The FINAL segment needs spaces too (`…\Военный билет\Военный билет 12.jpg` - the reported
+// path), and that is where prose gets swallowed, so it is anchored on an extension and the
+// space-crossing is LAZY: `file.md and see other.txt here` stops at `file.md` because zero
+// space-words already satisfies `.ext`, whereas a greedy scan would run to `other.txt`. The
+// same runaway killed every candidate rule for the @-mention. The `(?:-…)*` tail must stay
+// on that branch or a hyphenated dotfile regresses - `.corp-account` would match `.corp`,
+// the exact bug that branch was written for. The dotless alternative that follows keeps
+// bare directories working (`…\scripts\`), which the extension anchor cannot express.
+// The slash branches get Unicode but NOT spaces - a leading slash is not evidence of a
+// filesystem (see the reverted slash widening), and a bare relative path is no evidence.
+//
+// Composed from named parts rather than written as one literal: with Unicode classes and
+// the spaced/lazy branches it ran to ~500 inline characters, which is not reviewable, and
+// WIN_PATH_RE in markdown.tsx has to stay in step with it (they run in sequence over the
+// same text, so a class one accepts and the other rejects half-renders a path). The parts
+// are exported for that file to build its own, looser, pattern from.
+
+/** One character of a path segment. Unicode: a Cyrillic folder name is a folder name. */
+export const PATH_CH = '[\\p{L}\\p{N}_.\\-!@]';
+
+/** The same, minus the dot - see PATH_SEG for why a spaced segment must be dot-free. */
+const PATH_CH_ND = '[\\p{L}\\p{N}_\\-!@]';
+
+/**
+ * A non-final segment. Either several space-joined words, or one word that may contain
+ * dots - never both, and it may never START with a space.
+ *
+ * The no-leading-space guard stops `see d:\Docs\ and also x\y.md` at `d:\Docs\` instead of
+ * running to the next backslash. The dot-free guard is what a 78k-block transcript audit
+ * forced: the segment loop is greedy, so it happily ate prose whenever a separator turned
+ * up later in the sentence - `…\tools\vault.js show companies/GMTrade/credentials/.linear`
+ * and `…\index.d.ts here.\` were both linked whole. Every one of those starts by crossing a
+ * space that follows a dotted filename, while real spaced directories are dot-free
+ * (`Program Files`, `Бискуб Константин Николаевич`, `Военный билет`, `User Data`).
+ *
+ * Residual, and irreducible without touching the filesystem: a dot-free prose run that
+ * happens to be followed by a separator still matches (`_tools/telegram and check dist/`).
+ * That is the same ambiguity that killed every @-mention rule, and the reason the picker
+ * resolves against the host instead of guessing.
+ */
+export const PATH_SEG = `(?:${PATH_CH_ND}+(?: ${PATH_CH_ND}+)+|${PATH_CH}+)`;
+
+/**
+ * The final segment, as two alternatives in order:
+ *  1. spaces allowed, anchored on an extension, and crossing them LAZILY so
+ *     `file.md and see other.txt here` stops at `file.md`; a greedy scan would run to
+ *     `other.txt`, the same runaway that killed every candidate @-mention rule. Its
+ *     `(?:-…)*` tail is required or `.corp-account` regresses to `.corp`.
+ *  2. no spaces, no extension needed - bare directories (`…\scripts\`), which the
+ *     extension anchor cannot express. May not end in a dot, so a sentence's full stop
+ *     stays prose and the elision `C:\...` does not linkify.
+ *
+ * The extension itself stays ASCII while the rest of the segment is Unicode. Widening it
+ * too made Russian initials read as one: `…\Согласие на дарение Бискуб Н.М` matched with
+ * `.М` as the extension, so a spaced prose tail linked as a file. A genuinely
+ * Cyrillic-suffixed extension is vanishingly rare; initials next to a path are not.
+ */
+export const PATH_FINAL = `(?:${PATH_CH}+ )*?${PATH_CH}*\\.[A-Za-z\\d]+(?:-[A-Za-z\\d]+)*|${PATH_CH}*[\\p{L}\\p{N}\\-!]`;
+
+/**
+ * Drive-letter tail. Either one-or-more separator-terminated segments with an OPTIONAL
+ * final one, or a final one alone. Written this way so a spaced directory keeps its
+ * trailing separator (`d:\Docs\Военный билет\`) while a bare `C:\` and the elision
+ * `C:\...` still match nothing - making the final segment simply optional would linkify
+ * both of those, and requiring it truncated the directory to `d:\Docs\Военный`.
+ */
+export const WIN_TAIL = `(?:(?:${PATH_SEG}[\\\\/])+(?:${PATH_FINAL})?|${PATH_FINAL})`;
+
+const FILE_PATH_RE = new RegExp(
+  '(' +
+    `(?<![a-zA-Z])[A-Za-z]:[\\\\/]${WIN_TAIL}` +
+    `|\\/(?:${PATH_CH}+\\/)+@?[\\p{L}\\p{N}_.\\-]*\\.[\\p{L}\\p{N}_]+(?:-\\w+)*` +
+    `|(?:${PATH_CH}+[\\\\/])+@?[\\p{L}\\p{N}_.\\-]*\\.[\\p{L}\\p{N}_]+(?:-\\w+)*` +
+  ')' +
+  '(?::(\\d+)(?:-(\\d+))?)?',
+  'gu'
+);
 
 // The preview itself is owned by PreviewProvider, not by this link: markdown is
 // re-rendered constantly while a turn streams and the message it belongs to is
@@ -139,7 +242,39 @@ export function linkifyPaths(text: string): React.ReactNode {
 
 // Matches "@path" mentions at a word boundary (start or after whitespace), so emails
 // like a@b.com aren't highlighted.
-const MENTION_RE = /(?<=^|\s)@\S+/g;
+//
+// The quoted alternative is not cosmetic. The CLI expands `@notes.md` but NOT
+// `@My Folder/some file.md` - its own parser stops at the first space, so a path with
+// spaces is silently never attached to the turn, and the model goes hunting for a file it
+// was already handed. `@"path with spaces"` is the form it does accept (verified against a
+// real CLI, relative and absolute: !notes/tasks/path-with-spaces-mention/notes.md).
+//
+// Being delimited, that form is also unambiguous to match here, which is why deciding
+// where a mention ends needs no filesystem lookup. Three space-crossing rules were tried
+// and killed before this; `ping @snowy about the build see src/file.md` defeats all of
+// them, so do not reach for one again (scripts/probe-mention-re.js in that task).
+const MENTION_RE = /(?<=^|\s)@(?:"[^"\n]*"|\S+)/g;
+
+export interface MentionMatch {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/**
+ * Mention ranges in `text`. Shared by the two surfaces that colour them - the InputArea
+ * highlight overlay and the sent user bubble - which previously each kept their own copy
+ * of the pattern, which is exactly why the space bug had to be fixed in two places.
+ */
+export function findMentions(text: string): MentionMatch[] {
+  const out: MentionMatch[] = [];
+  MENTION_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = MENTION_RE.exec(text)) !== null) {
+    out.push({ start: m.index, end: m.index + m[0].length, text: m[0] });
+  }
+  return out;
+}
 
 /**
  * Like linkifyPaths, but additionally colors "@path" mentions blue (matching the input box).
@@ -149,15 +284,13 @@ export function linkifyWithMentions(text: string): React.ReactNode {
   if (text.length > MAX_LINKIFY_LENGTH) return text;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  MENTION_RE.lastIndex = 0;
 
-  while ((match = MENTION_RE.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(<React.Fragment key={`t${lastIndex}`}>{linkifyPaths(text.slice(lastIndex, match.index))}</React.Fragment>);
+  for (const m of findMentions(text)) {
+    if (m.start > lastIndex) {
+      parts.push(<React.Fragment key={`t${lastIndex}`}>{linkifyPaths(text.slice(lastIndex, m.start))}</React.Fragment>);
     }
-    parts.push(<span key={`m${match.index}`} className="mention-path">{match[0]}</span>);
-    lastIndex = match.index + match[0].length;
+    parts.push(<span key={`m${m.start}`} className="mention-path">{m.text}</span>);
+    lastIndex = m.end;
   }
 
   if (parts.length === 0) return linkifyPaths(text);

@@ -261,3 +261,31 @@ page, so its artifact carries only a source listing.
 |--------|---------|
 | [scripts/probe-poller.js](scripts/probe-poller.js) | Start the compiled poller in isolation and print the snapshot - answers "did the startup poll land?" with no daemon, WS or Playwright in the path |
 | [scripts/probe-ws-usage.js](scripts/probe-ws-usage.js) | Ask a running server for usage over a real WebSocket and print the raw reply (windows, error, data age) |
+
+## Flake: `a modal fetch becomes the snapshot every other client reads` (2026-09-06)
+
+Failed with `expect(reqAt - snap.fetchedAt).toBeGreaterThan(0)` receiving exactly `0`.
+
+**The assertion sat one millisecond off its real boundary.** The invariant being tested is
+"the snapshot was not fetched *after* the request", which is `>=`, not `>`.
+`publishUsageWindows` stamps `fetchedAt = Date.now()` and the phase-2 `accountUsage` frame
+goes out immediately after, so over localhost the client reaches its own `reqAt = Date.now()`
+in the same millisecond. Relaxed to `expect(snap.fetchedAt).toBeLessThanOrEqual(reqAt)`;
+nothing is lost, because a genuine on-request fallback fetch costs a round trip to the usage
+API and would land tens of ms on the wrong side of `reqAt`.
+
+**What made it look random is cache state, not timing luck.** With a warm snapshot (inside
+the 60s floor `requestUsageRefresh` measures from the last *attempt*) `fetchedAt` is seconds
+old and the strict form passes; it only fails when the modal's fetch is genuinely fresh -
+i.e. on the **first usage call of a suite**. So it fails once and passes on every re-run,
+which is the worst possible signal.
+
+Artifact: `scripts/failure-2026-09-06/error-context.md`. Durable version under "Put a
+threshold at the real boundary" in [../../common/e2e-testing.md](../../common/e2e-testing.md).
+
+**Not verified green on the failing path.** The re-run after the fix *skipped*
+(`windows.length === 0`, the live API rate-limiting), because repeated runs had exhausted the
+quota - the exact hazard this file's own notes warn about. The fix is sound by construction
+(relaxing `>` to `>=` on the same quantity can only turn the `0` into a pass and still fails
+a negative), but that is an argument, not an observation. Re-confirm as the first usage call
+of a cold suite.

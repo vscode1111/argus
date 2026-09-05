@@ -194,7 +194,7 @@ export function ChatMessage({ message, login }: Props) {
         </div>
       )}
       {message.outcome === 'background_waiting' && (
-        <BackgroundTasksNote completed={message.bgTasksCompleted} total={message.bgTasksTotal} />
+        <BackgroundTasksNote pending={message.bgTasksPending} />
       )}
     </div>
   );

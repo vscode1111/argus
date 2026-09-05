@@ -1,0 +1,49 @@
+lines: 753
+
+line types:
+    402  assistant
+    225  user
+     43  ai-title
+     42  last-prompt
+     32  queue-operation
+      7  attachment
+      2  system/api_error
+
+background launches: 11
+
+timeline:
+  2026-09-03T16:10:20.813Z  launch      EkFgkJ63  Run order module anchor tests with Pyth key
+  2026-09-03T16:10:21.005Z  accepted    EkFgkJ63  bg id bm3e0dhf3
+  2026-09-03T16:10:46.471Z  launch      wUU7ybYt  Wait for test result line then report
+  2026-09-03T16:10:46.672Z  accepted    wUU7ybYt  bg id b2nog2vbz
+  2026-09-03T16:15:57.259Z  launch      6MngVEin  Re-check CPU time after 20s to detect progress
+  2026-09-03T16:15:57.455Z  accepted    6MngVEin  bg id bdnyv5jrx
+  2026-09-03T16:29:09.943Z  launch      nbSXbM8p  Watch PR 428 check runs until completion
+  2026-09-03T16:29:10.181Z  accepted    nbSXbM8p  bg id bm6rkslnz
+  2026-09-03T16:29:52.705Z  launch      LmTv6qas  Wait 150s then report watcher progress
+  2026-09-03T16:29:52.864Z  accepted    LmTv6qas  bg id b9mq7vlxy
+  2026-09-03T16:30:06.321Z  launch      NaLDKPSE  Wait 4 min then report watcher progress
+  2026-09-03T16:30:06.522Z  accepted    NaLDKPSE  bg id bo2fyrk5f
+  2026-09-03T16:35:08.694Z  launch      nb8GL7v2  Run new test with the fix
+  2026-09-03T16:35:08.899Z  accepted    nb8GL7v2  bg id bhz16piee
+  2026-09-03T16:35:14.248Z  launch      krTXjY7V  Wait then report new test and CI status
+  2026-09-03T16:35:14.445Z  accepted    krTXjY7V  bg id b6q3aldre
+  2026-09-03T16:37:51.868Z  launch      ZgUQGNjA  Run new test against the old gate expecting failure
+  2026-09-03T16:37:52.012Z  accepted    ZgUQGNjA  bg id bijcm7i9f
+  2026-09-03T16:38:04.054Z  launch      WwiKh5bw  Wait then report control run and CI
+  2026-09-03T16:38:04.220Z  accepted    WwiKh5bw  bg id bq4y9k823
+  2026-09-03T16:38:52.861Z  launch      w79fhsLr  Wait then check control run result
+  2026-09-03T16:38:53.046Z  accepted    w79fhsLr  bg id bdm2g8woh
+
+launched but never reported back in this transcript: 11
+  EkFgkJ63  2026-09-03T16:10:20.813Z  Run order module anchor tests with Pyth key
+  wUU7ybYt  2026-09-03T16:10:46.471Z  Wait for test result line then report
+  6MngVEin  2026-09-03T16:15:57.259Z  Re-check CPU time after 20s to detect progress
+  nbSXbM8p  2026-09-03T16:29:09.943Z  Watch PR 428 check runs until completion
+  LmTv6qas  2026-09-03T16:29:52.705Z  Wait 150s then report watcher progress
+  NaLDKPSE  2026-09-03T16:30:06.321Z  Wait 4 min then report watcher progress
+  nb8GL7v2  2026-09-03T16:35:08.694Z  Run new test with the fix
+  krTXjY7V  2026-09-03T16:35:14.248Z  Wait then report new test and CI status
+  ZgUQGNjA  2026-09-03T16:37:51.868Z  Run new test against the old gate expecting failure
+  WwiKh5bw  2026-09-03T16:38:04.054Z  Wait then report control run and CI
+  w79fhsLr  2026-09-03T16:38:52.861Z  Wait then check control run result
