@@ -8,6 +8,68 @@ Two-project Playwright setup in `playwright.config.ts`: `mock` (no `-integration
 - This replaced an earlier `integration`-only override of `timeout: 90_000`. That 90s cap was too generous: a real CLI turn in these tests normally finishes in a few seconds, so anything actually hanging still burned close to a minute and a half before being reported. At a flat 30s the full 112-test integration run (108 passed, 4 known skips) completes in ~5 min when the backend is healthy - faster than the old 90s-tiered run, not slower, because nothing was legitimately using the extra headroom.
 - **A per-test `test.setTimeout(...)` override is allowed, but only as a rare, explicit, commented exception** for a test that provably needs more than 30s (e.g. `session-browse-during-stream-integration.spec.ts`'s three-real-CLI-turn test uses `test.setTimeout(60_000)`). This reverses the earlier blanket "never add per-test overrides" rule from when the project timeout was 90s - at 90s nothing needed one, so the rule was easy to keep; at a flat 30s a handful of genuinely multi-turn tests do. The bar stays high: justify it in a comment, don't reach for it to paper over a slow/flaky assertion.
 
+### An assertion timeout above 30s is dead text, and it hides which specs are at the cliff
+
+Twenty assertions across the integration specs still pass `{ timeout: 60_000 }` or
+`{ timeout: 90_000 }`, left over from when the project timeout was 90s. The test timeout
+always wins, so those numbers do nothing except make the failure message misleading: the log
+reports `Expect "toHaveCount" with timeout 90000ms` directly above `Test timeout of 30000ms
+exceeded`, which reads as if the wait was generous when it was cut at a third of that.
+
+The measurement that matters, taken from the debug log of a real failure
+(`!notes/tasks/e2e-turn-cost-budgets/artifacts/token-spending-failure/`): **a turn in this
+workspace is not "a few seconds"**. A *fresh* session (no `--resume` in the spawn line) starts
+at **77,346 input tokens** - this repo's `CLAUDE.md` alone is ~190KB - so
+`Reply with just the single word "yes"` cost 2.9s of CLI startup plus **17.6s to first
+token**, ~20s total, against a 30s budget that also pays for the page load and "New chat".
+
+The symptom that identifies this class: **which test fails changes between runs, and it is
+never the assertion the test is about.** Five distinct tests died this way across four runs
+on 2026-09-06 (`send-while-streaming`, two in `token-spending`, `new-chat`,
+`session-browse-during-stream`), every one at `toHaveCount(0)` on the Stop button, not one on
+its own subject. Whichever test draws the slowest API latency dies, so **do not debug the
+test named in the report**.
+
+The cheapest way to confirm it before touching anything: **read the page snapshot in
+`error-context.md` and check whether the thing the test asserts had already happened.** In
+the `new-chat` failure the reply on screen was `NO MEMORY` with the token absent, which is
+precisely what that test exists to prove - the feature worked and only the clock ran out.
+A snapshot showing the finished state is proof of a budget failure, not a logic one.
+
+Three different budgets can bind, and raising the wrong one changes nothing:
+
+- the **test** timeout (flat 30s), which is what a multi-turn test runs out of - `new-chat`
+  does two whole turns, so it now carries `test.setTimeout(90_000)`;
+- an **assertion** cap below the cost of a turn, which fails on its own however generous the
+  test budget is - `session-browse-during-stream`'s `sendAndWait` capped the wait at 20s
+  against turns that run 5-20s, raised to 45s. Raising a cap only extends the runs that
+  need it, so it costs nothing on healthy ones;
+- a **hand-rolled deadline inside the test body**, which no config change can reach.
+  `log-autoscroll` polls `while (stopBtn.count() > 0)` against `Date.now() + 15_000` and
+  failed by **90ms** on an 80-line answer. Such a bound exists to catch a stall, so it has to
+  sit *above* what a real turn costs and *below* the test timeout; at 15s it was neither, and
+  had become the thing that fails. Now 60s inside a 90s test. **Grep for `Date.now() +` and
+  bare `deadline` when rebudgeting a spec** - raising the project timeout would not have
+  touched this one.
+
+**Measure the test alone before believing it is slow.** `modal green highlight moves to the
+browsed session` failed twice at the file level, and it runs in **12.4s in isolation** - a 5x
+gap. The cause is inside the file rather than the test: `startStreaming` returns as soon as
+the Stop button appears and deliberately never waits for the turn, so **every test using it
+leaves a live CLI process behind**, and later tests in the same file compete with them.
+Budget accordingly (this one now matches its siblings at 90s) or stop the leftover turns;
+what does not work is treating the test that happens to run last as the slow one.
+
+`token-spending-integration.spec.ts` now carries a file-level `test.setTimeout(90_000)`,
+making the intent its assertions already stated actually true. Still silently capped and
+worth watching, all waiting out a real turn on a 60-90s assertion inside a 30s test:
+`new-chat`, `send-while-streaming` (observed failing this way once), `session-history`,
+`session-history-line-count`, `chat`, `effort-thinking`, `image-recognize`,
+`session-deep-link`, `session-info`.
+
+Note the second-order effect: anything that grows `CLAUDE.md` raises the floor under every
+integration turn in this workspace, since it is re-read on every spawn.
+
 ## Guard against a reused dev server with the wrong config
 
 `webServer.reuseExistingServer: true` (`playwright.config.ts`) means a `yarn dev` the user already had running gets adopted as the backend instead of Playwright starting its own. If that process was launched from a plain shell (no `ARGUS_CONFIG`), it reads and **writes** the real `~/.claude/argus.json` instead of `e2e/argus.json` - tests that change settings through the UI corrupt the user's actual config, and tests that depend on `e2e/argus.json` values (`showLogs`, `effort`, `allowedOrigins`, ...) fail against values they never set. This looks like several unrelated product bugs, not one environment problem.

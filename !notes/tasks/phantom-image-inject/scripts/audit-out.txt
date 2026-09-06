@@ -1,0 +1,60 @@
+files=1885 lines=158336 plainUserRecords=42204 metaUserRecords=707
+
+   197  text :: OTHER: Continue from where you left off.
+         e.g. Continue from where you left off.
+   178  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\update-no
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\update-notes # Update Project Docs Update all relevant project documentation to reflect changes mad
+    87  string :: [Image: ...]
+         e.g. [Image: original 2200x3200, displayed at 1375x2000. Multiply coordinates by 1.60 to map to original image.]
+    58  text :: OTHER: Base directory for this skill: d:\_Projects\GMTrade\.claude\skills\rea
+         e.g. Base directory for this skill: d:\_Projects\GMTrade\.claude\skills\read-chat Read the "GMTrade Smart Contract" Telegram group (id `-5331267796`) and report only
+    38  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\git-commi
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\git-commit-push # Commit and Push Follow all steps from `skills/git-commit/skill.md` (stages 1-5), 
+    35  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\review # 
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\review # Skill: review Review a GitLab merge request (diff mode) or audit the full codebase (full m
+    19  text :: OTHER: Base directory for this skill: D:\_Projects\scub111g\career-agent\.cla
+         e.g. Base directory for this skill: D:\_Projects\scub111g\career-agent\.claude\skills\chat You run a back-and-forth chat with recruiters/HR inside the user's **real*
+    13  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\work-repo
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\work-report # Work Report You are **Work Reporter** - you compile a summary of everything done sinc
+    12  text :: [Image: ...]
+         e.g. [Image: source: C:\Users\Admin\.claude\image-cache\a8d5b44d-de8a-42fb-be61-17f082ccb828\1.png]
+    11  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\git-remar
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\git-remarks # Fix Reviewer Remarks You are **Remark Resolver** - a meticulous engineer who tracks r
+     7  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\curate-no
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\curate-notes # Curate Task Knowledge Analyze the complete project task-note history, turn repeated 
+     6  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\start-tas
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\start-task # Start Task You are starting work on a new tracker task (e.g. YouTrack). Follow the ste
+     6  text :: OTHER: Base directory for this skill: d:\_Projects\scub111g\career-agent\.cla
+         e.g. Base directory for this skill: d:\_Projects\scub111g\career-agent\.claude\skills\chat You run a back-and-forth chat with recruiters/HR inside the user's **real*
+     5  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\challenge
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\challenge-review # Skill: challenge-review Phase two of `~/.claude/instructions/rules/falsify-befor
+     4  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\auto-task
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\auto-task # Auto Task Run a full task from a tracker issue (or free-text description) to a reviewed
+     4  string :: OTHER: This session is being continued from a previous conversation that ran 
+         e.g. This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation. Summary:
+     4  image+text :: OTHER: Base directory for this skill: d:\_Projects\scub111g\research-agent\.c
+         e.g. Base directory for this skill: d:\_Projects\scub111g\research-agent\.claude\skills\new-research # New Research Entry Turns a research request into a sourced ent
+     3  text :: OTHER: Load context for company "home". ## Resolution rules 1. List all subfo
+         e.g. Load context for company "home". ## Resolution rules 1. List all subfolders in `~/.claude/companies/` (excluding `index.md`). Each subfolder is a company. 2. Ma
+     3  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\git-exclu
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\git-exclude # Git Exclude Add `CLAUDE.md`, `.claude/`, `!notes/`, and `.obsidian/` to the **repo-lo
+     3  document :: OTHER: <no text block>
+         e.g. <no text block>
+     2  text :: OTHER: Base directory for this skill: C:\Users\Admin\AppData\Local\Temp\claud
+         e.g. Base directory for this skill: C:\Users\Admin\AppData\Local\Temp\claude\bundled-skills\2.1.195\ac17c8b2ba32ccaef45b34b371c587d5\claude-api # Building LLM-Powere
+     2  string :: OTHER: <local-command-caveat>Caveat: The messages below were generated by the
+         e.g. <local-command-caveat>Caveat: The messages below were generated by the user while running local commands. DO NOT respond to these messages or otherwise consider
+     2  string :: OTHER: [Your previous response had no visible output. Please continue and pro
+         e.g. [Your previous response had no visible output. Please continue and produce a user-visible response.]
+     2  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\git-revie
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\git-reviewers # Research Reviewers You are **Review Pattern Researcher** - an analyst who studies c
+     2  text :: OTHER: Base directory for this skill: d:\_Projects\scub111g\research-agent\.c
+         e.g. Base directory for this skill: d:\_Projects\scub111g\research-agent\.claude\skills\new-research # New Research Entry Turns a research request into a sourced ent
+     1  text :: OTHER: Load context for company "ccs". ## Resolution rules 1. List all subfol
+         e.g. Load context for company "ccs". ## Resolution rules 1. List all subfolders in `~/.claude/companies/` (excluding `index.md`). Each subfolder is a company. 2. Mat
+     1  text :: OTHER: Base directory for this skill: C:\Users\Admin\.claude\skills\ci-deploy
+         e.g. Base directory for this skill: C:\Users\Admin\.claude\skills\ci-deploy # CI Deploy Deploy the current branch to a stand, or fix a broken pipeline, using the `!n
+     1  text :: OTHER: Switch local development environment mode by editing `.env` files in `
+         e.g. Switch local development environment mode by editing `.env` files in `apps/server/` and `apps/client/`. This command ONLY modifies `.env` files. Do NOT run VPN 
+     1  text :: OTHER: Base directory for this skill: d:\_Projects\scub111g\people-research\.
+         e.g. Base directory for this skill: d:\_Projects\scub111g\people-research\.claude\skills\psy-portrait # Скил: портрет человека по переписке и контенту Ты ведёшь иссл

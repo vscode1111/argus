@@ -20,6 +20,11 @@ function bottomDistance(page: Page): Promise<number> {
 }
 
 test('debug log auto-scrolls to the bottom throughout a stream', async ({ page }) => {
+  // Watches a whole real turn, and the prompt deliberately asks for 80 lines so there is
+  // something to stream. A fresh session in this workspace starts at ~77k input tokens
+  // (CLAUDE.md plus the CLI system prompt), so the turn runs well past the flat 30s once
+  // generation is added (!notes/common/e2e-testing.md, timeout section).
+  test.setTimeout(90_000);
 
   await waitForApp(page);
 
@@ -41,9 +46,11 @@ test('debug log auto-scrolls to the bottom throughout a stream', async ({ page }
   // the list near the bottom; the generous threshold absorbs the brief window
   // between a burst render and the autoscroll effect firing.
   // Bounded so a stream that never ends fails on this assertion instead of running
-  // out the test timeout with no explanation.
+  // out the test timeout with no explanation. The bound has to sit above what a real turn
+  // costs and below the test timeout, or it stops being a stall detector and becomes the
+  // thing that fails: at 15s it did exactly that, missing by 90ms on an 80-line answer.
   let worstMidStream = 0;
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + 60_000;
   while ((await stopBtn.count()) > 0) {
     expect(Date.now(), 'stream did not finish in time').toBeLessThan(deadline);
     worstMidStream = Math.max(worstMidStream, await bottomDistance(page));

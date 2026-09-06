@@ -1,0 +1,16 @@
+== meta records carrying image/document: 7
+{"file":"7b537892-10f0-448e-bc0f-9cfa38b6cf5a.jsonl","kinds":"document","isMeta":true,"text":[]}
+{"file":"fe96958e-a512-4e10-9c17-91e5c713946c.jsonl","kinds":"document","isMeta":true,"text":[]}
+{"file":"d3130de2-37df-4e69-89e8-573c8468cc92.jsonl","kinds":"document","isMeta":true,"text":[]}
+{"file":"2f478641-4a22-47f1-bb18-dabe9f0194f5.jsonl","kinds":"image+text","isMeta":true,"text":["Base directory for this skill: d:\\_Projects\\scub111g\\research-agent\\.claude\\skills\\new-research # New Research"]}
+{"file":"6d465d19-60dd-4641-8399-821e339c8af6.jsonl","kinds":"image+text","isMeta":true,"text":["Base directory for this skill: d:\\_Projects\\scub111g\\research-agent\\.claude\\skills\\new-research # New Research"]}
+{"file":"803bd85d-9fc6-484e-b97b-673bbcf7abcf.jsonl","kinds":"image+text","isMeta":true,"text":["Base directory for this skill: d:\\_Projects\\scub111g\\research-agent\\.claude\\skills\\new-research # New Research"]}
+{"file":"f669c2d9-15b3-471f-8e27-365a46509ace.jsonl","kinds":"image+text","isMeta":true,"text":["Base directory for this skill: d:\\_Projects\\scub111g\\research-agent\\.claude\\skills\\new-research # New Research"]}
+
+== CLI-authored text NOT flagged meta:
+   52  /^\[Request interrupted/
+       a8d5b44d-de8a-42fb-be61-17f082ccb828.jsonl :: [Request interrupted by user for tool use]
+    2  /^<command-name>/
+       49219f3d-9b2c-46a4-851f-c1e7c35c4280.jsonl :: <command-name>/compact</command-name> <command-message>compact</command-message> <command-args></command-args>
+    2  /^<local-command-stdout>/
+       49219f3d-9b2c-46a4-851f-c1e7c35c4280.jsonl :: <local-command-stdout>Compacted </local-command-stdout>

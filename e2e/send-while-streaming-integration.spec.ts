@@ -2,6 +2,15 @@ import { test, expect } from '@playwright/test';
 import { waitForApp } from './helpers';
 
 test.describe('send while streaming', () => {
+  // Both tests run a whole turn with a mid-turn inject folded into it, and the second runs
+  // a second turn after that. They were written against the old 90s project timeout - the
+  // comment below still refers to it - and were never rebudgeted when it flattened to 30s,
+  // which no longer covers even one turn here with margin: a fresh session in this
+  // workspace starts at ~77k input tokens, so a turn costs 5-20s. Observed failing both
+  // inside a full suite run and in isolation, always on the wait rather than on an inject
+  // assertion (!notes/common/e2e-testing.md, timeout section).
+  test.setTimeout(90_000);
+
   test.beforeEach(async ({ page }) => {
     await waitForApp(page);
     // Start each test in a clean session. Integration tests share a channel entry
