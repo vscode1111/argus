@@ -15,7 +15,11 @@ async function sendAndWait(page: Page, text: string) {
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   const stopBtn = page.getByRole('button', { name: 'Stop' });
   await expect(stopBtn).toBeVisible({ timeout: 10_000 });
-  await expect(stopBtn).toHaveCount(0, { timeout: 20_000 });
+  // 20s was below what a turn actually costs here, so this cap - not the test timeout -
+  // was the binding constraint when it failed. A fresh session in this workspace starts at
+  // ~77k input tokens (CLAUDE.md + the CLI system prompt), so even `Reply with just "OK"`
+  // runs 5-20s. Raising a cap only extends the wait on the runs that need it.
+  await expect(stopBtn).toHaveCount(0, { timeout: 45_000 });
 }
 
 // Sends a prompt and returns as soon as the Stop button appears (CLI is live),
@@ -101,6 +105,13 @@ test.describe('browse past session during active streaming (integration)', () =>
   });
 
   test('modal green highlight moves to the browsed session', async ({ page }) => {
+    // Two real turns and four modal round-trips before the assertion can finish, which does
+    // not fit the flat 30s. 60s was not enough either, and the reason is not this test: it
+    // runs in 12.4s on its own. Every `startStreaming` in this file deliberately leaves its
+    // turn running when the test ends, so by the time this one runs it is competing with
+    // live CLI processes from its neighbours, and each turn stretches. Budgeted like its
+    // siblings rather than made faster, since the leftover turns are what the file is for.
+    test.setTimeout(90_000);
     await waitForApp(page);
 
     // 1. Create session A with a known title.

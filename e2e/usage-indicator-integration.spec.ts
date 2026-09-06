@@ -35,7 +35,12 @@ function openClient(nonce: string): Promise<WebSocket> {
 }
 
 // Wait for the first frame of a given type, or reject on timeout.
-function waitForFrame(ws: WebSocket, type: string, timeoutMs = 20_000): Promise<Record<string, unknown>> {
+// The default was 20s and produced `no accountUsage frame within 20000ms` in a full-suite
+// run while the machine was carrying ~70 node processes and a dozen CLIs - phase 1 of that
+// reply waits on a `claude auth status` subprocess, which is exactly what a saturated box is
+// slow to spawn. It passed alone. Every call here waits for a frame it expects, so this is a
+// cap rather than a cost: raising it only extends the runs that need it.
+function waitForFrame(ws: WebSocket, type: string, timeoutMs = 45_000): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { ws.off('message', onMsg); reject(new Error(`no ${type} frame within ${timeoutMs}ms`)); }, timeoutMs);
     function onMsg(raw: Buffer) {
