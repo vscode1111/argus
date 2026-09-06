@@ -475,6 +475,15 @@ function isSyntheticPlaceholder(message: { model?: string; content?: unknown } |
   return block?.type === 'text' && typeof block.text === 'string' && PLACEHOLDER_TEXTS.has(block.text.trim());
 }
 
+// The user-role counterpart: text the CLI wrote itself and recorded as a user message -
+// the note after an image Read, a slash command's expanded body, the compact-continuation
+// summary. The live path reads the same thing off the stream as `isSynthetic`, which the
+// CLI derives from exactly these two fields; they occur independently (703 vs 4 records
+// across the 1,885 transcripts on this machine), so both have to be tested.
+function isCliAuthoredUser(record: { isMeta?: unknown; isVisibleInTranscriptOnly?: unknown }): boolean {
+  return record.isMeta === true || record.isVisibleInTranscriptOnly === true;
+}
+
 export function loadSession(sessionId: string, workspaceDir: string): ReplayMessage[] {
   const file = resolveSessionFile(sessionId, workspaceDir);
   if (!file || !fs.existsSync(file)) return [];
@@ -501,7 +510,7 @@ export function loadSession(sessionId: string, workspaceDir: string): ReplayMess
 
   for (const line of content.split(/\r?\n/)) {
     if (!line) continue;
-    let o: { type?: string; message?: { id?: string; model?: string; content?: unknown } };
+    let o: { type?: string; message?: { id?: string; model?: string; content?: unknown }; isMeta?: unknown; isVisibleInTranscriptOnly?: unknown };
     try { o = JSON.parse(line); } catch { continue; }
 
     // The CLI patches a resumed conversation whose last message is an unanswered user
@@ -513,9 +522,10 @@ export function loadSession(sessionId: string, workspaceDir: string): ReplayMess
     if (o.type === 'assistant' && isSyntheticPlaceholder(o.message)) continue;
 
     if (o.type === 'user' && o.message) {
+      const cliAuthored = isCliAuthoredUser(o);
       const c = o.message.content;
       if (typeof c === 'string') {
-        if (c.trim()) { finalize(); messages.push({ id: newId(), role: 'user', content: c }); }
+        if (c.trim() && !cliAuthored) { finalize(); messages.push({ id: newId(), role: 'user', content: c }); }
         continue;
       }
       if (!Array.isArray(c)) continue;
@@ -523,7 +533,7 @@ export function loadSession(sessionId: string, workspaceDir: string): ReplayMess
       const images: Array<{ data: string; mediaType: string }> = [];
       for (const b of c as Array<Record<string, unknown>>) {
         if (b.type === 'text' && typeof b.text === 'string') {
-          texts.push(b.text);
+          if (!cliAuthored) texts.push(b.text);
         } else if (b.type === 'image' && (b.source as { type?: string })?.type === 'base64') {
           const src = b.source as { data: string; media_type: string };
           images.push({ data: src.data, mediaType: src.media_type });
@@ -536,7 +546,10 @@ export function loadSession(sessionId: string, workspaceDir: string): ReplayMess
         }
       }
       // Only text/image blocks are real user input; a pure tool_result line is the
-      // synthetic results message and must not create a user bubble.
+      // synthetic results message and must not create a user bubble. An image survives a
+      // CLI-authored record on purpose: a `/skill` invocation with an image pasted
+      // alongside it is recorded as one isMeta message holding the expanded skill body and
+      // the user's own image, so dropping the record whole would lose the image.
       if (texts.length || images.length) {
         finalize();
         messages.push({ id: newId(), role: 'user', content: texts.join('\n'), images: images.length ? images : undefined });

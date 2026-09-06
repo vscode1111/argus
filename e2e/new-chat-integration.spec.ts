@@ -13,6 +13,14 @@ async function sendAndWait(page: Page, text: string) {
 
 test.describe('new chat (integration)', () => {
   test('New chat resets the session so earlier context is gone', async ({ page }) => {
+    // Two whole real turns (establish the token, then ask for it back after the reset)
+    // plus the page load do not fit the flat 30s. A turn in this workspace is not "a few
+    // seconds": a fresh session starts at ~77k input tokens (this repo's CLAUDE.md plus the
+    // CLI system prompt), so one costs 5-20s depending on API latency. Observed failing at
+    // exactly that, and tellingly the assertion this test exists for had already passed -
+    // the reply on screen was "NO MEMORY" with no token leaked, only the clock had run out
+    // (!notes/common/e2e-testing.md, timeout section).
+    test.setTimeout(90_000);
     await waitForApp(page);
 
     // The token must be generated per run: a hard-coded one can end up in the CLI's

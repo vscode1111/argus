@@ -215,7 +215,20 @@ function handleUserEvent(s: SessionState, event: Record<string, unknown>): void 
   const userMsg = event as { message?: { content?: Array<Record<string, unknown>> }; content?: Array<Record<string, unknown>> };
   const raw = userMsg.message?.content ?? userMsg.content ?? [];
   const blocks = Array.isArray(raw) ? raw : [];
-  s.sendLog('debug', `user message: ${plural(blocks.length, 'block')}`);
+  // The CLI writes user-role messages of its own and streams them back like any other:
+  // the note that follows every image Read ("[Image: original 2200x3200, displayed at
+  // 1375x2000. Multiply coordinates by 1.60...]"), the body a slash command expands into,
+  // the compact-continuation summary. Rendered as user_inject they became bubbles the user
+  // never typed - a dozen of them down one document-reading session. The stream tags them
+  // `isSynthetic` (the CLI computes it as `isMeta || isVisibleInTranscriptOnly` when it
+  // serialises the event; measured against a real CLI in
+  // !notes/tasks/phantom-image-inject/scripts/probe-cli-image.js), which is the only
+  // sound test - the text itself is whatever the tool or the skill happened to say.
+  // Gated per block rather than per event, because a synthetic message can still carry a
+  // real one: a `/skill` invocation that had an image pasted with it arrives as the
+  // expanded skill text plus the user's own image.
+  const synthetic = event.isSynthetic === true;
+  s.sendLog('debug', `user message: ${plural(blocks.length, 'block')}${synthetic ? ' (synthetic)' : ''}`);
   for (const block of blocks) {
     if (block.type === 'tool_result') {
       const toolId = block.tool_use_id as string;
@@ -227,7 +240,7 @@ function handleUserEvent(s: SessionState, event: Record<string, unknown>): void 
       const content = stringifyToolResult(block.content);
       s.sendLog('debug', `tool_result ${toolId}: ${String(content).slice(0, 100)}`);
       s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content } }));
-    } else if (block.type === 'text' && block.text) {
+    } else if (block.type === 'text' && block.text && !synthetic) {
       s.broadcast(JSON.stringify({ type: 'user_inject', text: block.text }));
     }
   }

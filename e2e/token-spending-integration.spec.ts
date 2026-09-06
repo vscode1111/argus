@@ -8,6 +8,18 @@ import { waitForApp } from './helpers';
 // - Output token count never resets between API calls in a multi-step turn
 // - ThinkingBlock tok estimate is not inflated (no doubled content from handleAssistant)
 
+// Every test here waits out a whole real turn, and in this workspace that is not a few
+// seconds: a fresh session starts at ~77k input tokens (this repo's CLAUDE.md plus the CLI
+// system prompt), so even `Reply with just the word "yes"` costs ~3s of CLI startup and
+// ~17s to first token - measured from the debug log of a failing run,
+// !notes/tasks/e2e-turn-cost-budgets/. Against the flat 30s
+// budget, which also has to cover the page load and "New chat", whichever test happens to
+// draw the slowest API latency dies; two consecutive runs killed two different tests here,
+// neither on a token assertion. The `timeout: 90_000` the assertions below already ask for
+// was silently capped at 30s, so this makes the file's own stated intent true.
+// Justified per-test exception - see !notes/common/e2e-testing.md.
+test.setTimeout(90_000);
+
 const PROMPT = 'Reply with the single word "ok" and nothing else.';
 
 // Tests that intercept raw WS frames must register page.on('websocket') BEFORE
