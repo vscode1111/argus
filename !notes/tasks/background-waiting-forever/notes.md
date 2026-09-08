@@ -55,3 +55,10 @@ Backend untouched: it already ships the counters on `done` and already runs the 
 - Not yet observed against a real never-ending task in the extension. The daemon serving a panel may run from an installed `~/.vscode/extensions/local.argus-<v>/`, which never reads this repo's `media/`, so confirm the running build before judging the UI ([../../common/backend-restart.md](../../common/backend-restart.md)).
 - Integration specs were not run (nothing here touches the backend), and the full mock suite was not run through the escape hatch (`model-picker.spec.ts` reads server settings and would fail against the real config).
 - Open question, deliberately left alone: a task that will never finish still leaves its note on the transcript forever. That matches upstream's `/tasks` list and is honest, but if it becomes noise the answer is a "Stop task" control (the CLI has `KillShell`/`KillBash`), not a timeout.
+
+## Superseded
+
+- **Was:** letting these turns complete normally restores the completion sound and the OS notification, which is the behaviour we want (listed above as a benefit of the fix, since both had been silently suppressed for every turn that spawned a task).
+- **Actually:** right for the turn that *spawns* the tasks, wrong for the task-notification turns that follow it. A CI watch is made of nothing else: 156 of them in one reported session, a ding and a toast every four minutes for work the user was already waiting on. Alerts are now withheld when an autonomous turn still leaves tasks pending, and fire again on the one that leaves none, which is the end of the chain.
+- **Why it was wrong:** the fix was reasoned about with one or two tasks in mind, where the extra alerts are invisible. The failure needs a session that polls for hours, and the pending-task counter that makes "another turn is coming" decidable was already on the message, unused.
+- **Corrected by:** [bg-turn-completion-noise](../bg-turn-completion-noise/notes.md)

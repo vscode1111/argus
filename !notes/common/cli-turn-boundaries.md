@@ -52,6 +52,49 @@ A useful side effect: the user's turn is never closed, so the real answer stream
 message already on screen instead of a fresh one, and the recovery branch does not fire at
 all for that case.
 
+## The same notification also arrives as a **user record**, but only in the transcript
+
+The `result` is only half of it. The CLI prompts itself first, and that prompt is a plain
+user-role message holding `<task-notification><task-id>…</task-id>…</task-notification>`.
+It is CLI-authored, but it carries **neither** `isMeta` nor `isVisibleInTranscriptOnly`, so
+the `isSynthetic` test that covers every other CLI-authored user message
+([../tasks/phantom-image-inject/notes.md](../tasks/phantom-image-inject/notes.md)) is false
+for it. Its only mark is the same `origin.kind === 'task-notification'` used above, so
+`loadSession` tests it (2026-09-07).
+
+Two things worth carrying:
+
+- **That record exists in the transcript and nowhere else.** The stream does not carry it:
+  a full background-task cycle against a real CLI emitted three `user` events, every one a
+  `tool_result` with no `origin`, and the only mention of `task-notification` in 75 lines of
+  stdout was the `result` (probed 2026-09-08,
+  [../tasks/bg-turn-cause-marker/scripts/probe-notification-event.js](../tasks/bg-turn-cause-marker/scripts/probe-notification-event.js)).
+  Live, the announcement is the `system`/`task_notification` event, which carries the same
+  fields as the XML (`task_id`, `tool_use_id`, `output_file`, `status`, `summary`). The
+  `origin.kind` test in `handleUserEvent` is a guard against a future CLI that starts
+  streaming the prompt, not a live code path.
+- **On replay it is a turn boundary.** Consecutive assistant records merge until real user
+  input, so hiding the prompt without also calling `finalize()` collapses an entire watch
+  into one enormous message. This is the opposite of every other CLI-authored record: the
+  image note lands *inside* a turn, where finalizing would split one answer in two.
+
+## Superseded
+
+- **Was:** live nothing rendered the notification prompt "by accident, not by design",
+  because the event lands while `cliDone` is still true and the reducer drops a `user_inject`
+  with no streaming state to attach to; any change raising the spinner earlier would surface
+  the raw XML as bubbles.
+- **Actually:** there is no such event on the stream at all, so nothing can surface it and
+  the branch written to handle it never ran.
+- **Why it was wrong:** the shape was read off a *transcript* record and assumed to hold for
+  the stream, and the test written for it used the same transcript-derived payload, so it
+  passed while the production path was dead. Absence on the stream was never checked because
+  the behaviour it "explained" (no bubbles) was the behaviour observed.
+- **Corrected by:** [bg-turn-cause-marker](../tasks/bg-turn-cause-marker/notes.md)
+
+The counting is worth knowing before judging a transcript: one reported watch held **156**
+notification prompts, and replaying it produced 42 XML bubbles among 115 user messages.
+
 ## The safety net, and why the failure is quiet
 
 Ignoring a `result` risks a turn that never ends. The watchdog covers it (no events for

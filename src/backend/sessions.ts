@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { imageFromBlock, stringifyToolResult, type ToolImage } from './toolResult';
+import { parseTaskNotification, type TaskNotice } from './taskNotification';
 
 // Local session history: enumerate, replay, and delete the Claude CLI transcripts
 // that the CLI persists per project directory under
@@ -42,7 +43,8 @@ interface ReplayTool {
 
 type ReplayBlock =
   | { type: 'text'; text: string }
-  | { type: 'tool'; call: ReplayTool };
+  | { type: 'tool'; call: ReplayTool }
+  | { type: 'bg_notice'; notice: TaskNotice };
 
 export interface ReplayMessage {
   id: string;
@@ -480,8 +482,29 @@ function isSyntheticPlaceholder(message: { model?: string; content?: unknown } |
 // summary. The live path reads the same thing off the stream as `isSynthetic`, which the
 // CLI derives from exactly these two fields; they occur independently (703 vs 4 records
 // across the 1,885 transcripts on this machine), so both have to be tested.
-function isCliAuthoredUser(record: { isMeta?: unknown; isVisibleInTranscriptOnly?: unknown }): boolean {
-  return record.isMeta === true || record.isVisibleInTranscriptOnly === true;
+//
+// A background task's completion prompt is CLI-authored too and carries *neither* flag;
+// its mark is origin.kind, the same field cliHandler trusts on the result event. Without
+// it a watch session replayed its plumbing as things the user had said: 42 raw
+// `<task-notification><task-id>...` bubbles out of 115 in the reported transcript.
+function isCliAuthoredUser(record: { isMeta?: unknown; isVisibleInTranscriptOnly?: unknown; origin?: unknown }): boolean {
+  if (record.isMeta === true || record.isVisibleInTranscriptOnly === true) return true;
+  return isTurnStartingPrompt(record);
+}
+
+// Hidden, but still the start of a new turn: the CLI woke itself to report a background
+// task and answered in its own turn, so the answers on either side are not one message.
+function isTurnStartingPrompt(record: { origin?: unknown }): boolean {
+  return (record.origin as { kind?: string } | undefined)?.kind === 'task-notification';
+}
+
+// The prompt is hidden but its content is the only statement of why the following turn
+// exists, so it is carried over as a marker block on that turn instead of being lost.
+function noticeFromContent(content: unknown): TaskNotice | null {
+  const text = typeof content === 'string' ? content
+    : Array.isArray(content) ? content.map(b => { const t = (b as { text?: unknown }).text; return typeof t === 'string' ? t : ''; }).join('\n')
+    : '';
+  return parseTaskNotification(text);
 }
 
 export function loadSession(sessionId: string, workspaceDir: string): ReplayMessage[] {
@@ -493,6 +516,11 @@ export function loadSession(sessionId: string, workspaceDir: string): ReplayMess
   const messages: ReplayMessage[] = [];
   const toolById = new Map<string, ReplayTool>();
   let current: ReplayMessage | null = null;
+  // Set by a notification prompt, consumed by the first assistant record after it. A real
+  // user message clears it: the CLI answers some notifications with an empty turn (the
+  // orphan replay on --resume), and that marker must not drift onto the turn the user
+  // started next.
+  let pendingNotice: TaskNotice | null = null;
   let counter = 0;
   const newId = () => `replay-${++counter}`;
 
@@ -510,7 +538,7 @@ export function loadSession(sessionId: string, workspaceDir: string): ReplayMess
 
   for (const line of content.split(/\r?\n/)) {
     if (!line) continue;
-    let o: { type?: string; message?: { id?: string; model?: string; content?: unknown }; isMeta?: unknown; isVisibleInTranscriptOnly?: unknown };
+    let o: { type?: string; message?: { id?: string; model?: string; content?: unknown }; isMeta?: unknown; isVisibleInTranscriptOnly?: unknown; origin?: unknown };
     try { o = JSON.parse(line); } catch { continue; }
 
     // The CLI patches a resumed conversation whose last message is an unanswered user
@@ -523,9 +551,15 @@ export function loadSession(sessionId: string, workspaceDir: string): ReplayMess
 
     if (o.type === 'user' && o.message) {
       const cliAuthored = isCliAuthoredUser(o);
+      // A notification prompt is hidden but it is still a turn boundary: the CLI woke
+      // itself and answered separately. Without this the whole watch collapses into one
+      // enormous assistant message, since consecutive assistant records merge until real
+      // user input. The other CLI-authored records are the opposite case - the image note
+      // lands *inside* a turn, so finalizing there would split one answer in two.
       const c = o.message.content;
+      if (isTurnStartingPrompt(o)) { finalize(); pendingNotice = noticeFromContent(c); }
       if (typeof c === 'string') {
-        if (c.trim() && !cliAuthored) { finalize(); messages.push({ id: newId(), role: 'user', content: c }); }
+        if (c.trim() && !cliAuthored) { finalize(); pendingNotice = null; messages.push({ id: newId(), role: 'user', content: c }); }
         continue;
       }
       if (!Array.isArray(c)) continue;
@@ -552,10 +586,14 @@ export function loadSession(sessionId: string, workspaceDir: string): ReplayMess
       // the user's own image, so dropping the record whole would lose the image.
       if (texts.length || images.length) {
         finalize();
+        pendingNotice = null;
         messages.push({ id: newId(), role: 'user', content: texts.join('\n'), images: images.length ? images : undefined });
       }
     } else if (o.type === 'assistant' && Array.isArray(o.message?.content)) {
-      if (!current) current = { id: o.message!.id || newId(), role: 'assistant', content: '', thinking: '', blocks: [], outcome: 'success' };
+      if (!current) {
+        current = { id: o.message!.id || newId(), role: 'assistant', content: '', thinking: '', blocks: [], outcome: 'success' };
+        if (pendingNotice) { current.blocks!.push({ type: 'bg_notice', notice: pendingNotice }); pendingNotice = null; }
+      }
       for (const b of o.message!.content as Array<Record<string, unknown>>) {
         if (b.type === 'thinking' && typeof b.thinking === 'string') {
           current.thinking = (current.thinking ?? '') + b.thinking;

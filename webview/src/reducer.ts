@@ -1,4 +1,4 @@
-import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState, RetryStatus } from './types';
+import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState, RetryStatus, TaskNotice } from './types';
 
 export type ContextUsage = { percent: number; inputTokens: number; outputTokens: number; contextWindow?: number };
 
@@ -12,6 +12,13 @@ export type AppState = {
   logs: LogEntry[];
   login: LoginState;
   contextUsage: ContextUsage | null;
+  /** Background tasks running right now, pushed by the server whenever the set changes.
+   *  Session state like contextUsage, not per-message history. */
+  bgTasks: number;
+  /** A background task reported in before its turn had started. The prompt reaches the
+   *  client while cliDone is still true, so there is no streaming state to hold the marker
+   *  yet; thinking_start picks it up a moment later. */
+  pendingNotice: TaskNotice | null;
   wsConnected: boolean;
   currentModel: string;
   currentEffort: string;
@@ -26,7 +33,9 @@ export type AppAction =
   | { type: 'text_chunk'; text: string }
   | { type: 'tool_start'; call: ToolCallData }
   | { type: 'tool_end'; call: ToolCallData }
-  | { type: 'done'; pendingBackgroundTasks?: number }
+  | { type: 'done'; pendingBackgroundTasks?: number; autonomous?: boolean }
+  | { type: 'bgTasks'; count: number }
+  | { type: 'bg_notice'; notice: TaskNotice }
   | { type: 'stop' }
   | { type: 'error'; text: string; errorKind?: string }
   | { type: 'clear' }
@@ -70,16 +79,28 @@ function extractText(blocks: ContentBlock[]): string {
 export function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'message':
-      return { ...state, messages: [...state.messages, action.message] };
+      // A message of the user's own supersedes a notice still waiting for a turn: the CLI
+      // answers some notifications with an empty turn (the orphan replay on --resume), and
+      // the marker must not end up opening the turn the user started.
+      return { ...state, messages: [...state.messages, action.message], pendingNotice: action.message.role === 'user' ? null : state.pendingNotice };
 
     case 'thinking_start': {
       const prev = state.streaming;
+      const blocks: ContentBlock[] = state.pendingNotice ? [{ type: 'bg_notice', notice: state.pendingNotice }] : [];
       return {
         ...state,
+        pendingNotice: null,
         isStreaming: true,
-        streaming: { thinking: '', blocks: [], startTime: prev ? prev.startTime : (action.startedAt ?? Date.now()), lastEventTime: Date.now(), logsAtStart: prev ? prev.logsAtStart : state.logs.length, reused: action.reused ?? false, stopped: false, retryStatus: prev ? prev.retryStatus : null, watchdogRetries: prev ? prev.watchdogRetries : 0 },
+        streaming: { thinking: '', blocks, startTime: prev ? prev.startTime : (action.startedAt ?? Date.now()), lastEventTime: Date.now(), logsAtStart: prev ? prev.logsAtStart : state.logs.length, reused: action.reused ?? false, stopped: false, retryStatus: prev ? prev.retryStatus : null, watchdogRetries: prev ? prev.watchdogRetries : 0 },
       };
     }
+
+    // The turn may or may not have started yet: live the prompt arrives while cliDone is
+    // still true (thinking_start comes with the first assistant event, a beat later), but a
+    // task that finishes mid-turn reports in while one is already streaming.
+    case 'bg_notice':
+      if (!state.streaming) return { ...state, pendingNotice: action.notice };
+      return { ...state, streaming: { ...state.streaming, blocks: [...state.streaming.blocks, { type: 'bg_notice', notice: action.notice }], lastEventTime: Date.now() } };
 
     case 'thinking_chunk':
       if (!state.streaming) return state;
@@ -179,6 +200,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         outcome,
         watchdogRetries: watchdogRetries > 0 ? watchdogRetries : undefined,
         bgTasksPending: hasPendingBg ? action.pendingBackgroundTasks : undefined,
+        autonomous: action.autonomous || undefined,
         finalTokens: state.streaming.liveTokens,
       };
       const resolvedMessages = state.messages.map(m =>
@@ -198,6 +220,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
         messages: [...resolvedMessages, msg],
         streaming: null,
         isStreaming: false,
+        // Same number the live `bgTasks` pushes carry; taken here too so the indicator is
+        // still right against a daemon old enough to predate those pushes (panel/daemon
+        // version skew is routine). The field is omitted when the set is empty.
+        bgTasks: action.pendingBackgroundTasks ?? 0,
         turnCompletions: state.turnCompletions + 1,
       };
     }
@@ -258,12 +284,15 @@ export function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'clear':
-      return { ...state, messages: [], streaming: null, isStreaming: false, logs: [], contextUsage: null };
+      return { ...state, messages: [], streaming: null, isStreaming: false, logs: [], contextUsage: null, bgTasks: 0, pendingNotice: null };
+
+    case 'bgTasks':
+      return { ...state, bgTasks: action.count };
 
     case 'sessionLoaded':
       // Replace the conversation with the replayed transcript and drop any
       // in-flight streaming/usage state from the previous session.
-      return { ...state, messages: action.messages, streaming: null, isStreaming: false, contextUsage: null };
+      return { ...state, messages: action.messages, streaming: null, isStreaming: false, contextUsage: null, bgTasks: 0, pendingNotice: null };
 
     case 'prefill':
       return { ...state, prefill: action.text + '\x00' + Date.now() };
@@ -415,6 +444,8 @@ export const initialState: AppState = {
   logs: [],
   login: { phase: 'idle' },
   contextUsage: null,
+  bgTasks: 0,
+  pendingNotice: null,
   wsConnected: true,
   currentModel: '',
   currentEffort: 'high',

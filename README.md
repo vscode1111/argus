@@ -65,7 +65,9 @@ approval routing cleanly separable without growing into a monolith.
 - Images a tool read open from the conversation itself, so a file the agent has since renamed, packaged or deleted still previews; the bytes are fetched per click instead of travelling inside the message.
 - Clickable paths and URLs everywhere in messages, including code blocks: a file path opens an in-app preview (dotted underline), a URL opens in the browser.
 - A path pointing at a **folder** opens a browsable listing with file-type icons and sizes, sorted folders-first like an explorer: click a sub-folder to walk in, a file to preview it, Back to walk out.
-- OS toast notifications on task completion.
+- OS toast notifications on task completion. A turn the CLI started by itself, to report a finished background task, stays silent while more are still running, so a long watch does not ping every few minutes; the one that ends the chain still notifies.
+- A `✻ N` pill beside the context pill counts the background tasks running right now, for as long as they run.
+- A turn the CLI started by itself says so: it opens with the report of the background task that woke it ("Background command "Watch CI until all checks complete" completed (exit code 0)") and a link to that task's output, instead of appearing out of nowhere. Its completion time is shown in a neutral colour rather than the success green while any task is still running.
 - Optional "Ask Argus" code lens above functions and classes.
 - Optional inline completions (Haiku model, Copilot-style).
 

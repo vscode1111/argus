@@ -149,3 +149,18 @@ older mechanism and is unchanged by this fix.
 by the CLI, so it still renders as a bubble. It is left alone: it marks a real thing the user
 did, and the official client shows it too. Suppressing it would need a text match, which is
 what this fix exists to avoid.
+
+## Superseded
+
+- **Was:** the three flags are the complete set of marks for a CLI-authored user message -
+  `isSynthetic` on the stream, `isMeta` / `isVisibleInTranscriptOnly` in the transcript.
+- **Actually:** a background task's completion prompt is CLI-authored and carries **none** of
+  them. Its mark is `origin.kind === 'task-notification'`, the field `handleResult` already
+  trusted on the result event. Replaying a CI watch therefore showed 42 raw
+  `<task-notification><task-id>…</task-id>` bubbles out of 115.
+- **Why it was wrong:** the 1,885-transcript audit counted the records that *had* the flags
+  and never asked which CLI-authored records lacked them. The live path hid the gap by
+  accident (the event lands before `thinking_start`, so the reducer drops the `user_inject`
+  for want of streaming state), so the only symptom was on replay, which was not the path
+  under test.
+- **Corrected by:** [bg-turn-completion-noise](../bg-turn-completion-noise/notes.md)

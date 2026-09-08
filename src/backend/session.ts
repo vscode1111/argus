@@ -17,7 +17,7 @@ import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
 import { type Channel, broadcastToAllChannels, listActiveSessions } from './channel';
 import { describeModel } from './modelData';
-import { attachProcHandlers } from './cliHandler';
+import { attachProcHandlers, broadcastBgTasks } from './cliHandler';
 import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage } from './sessions';
 import { readServerVersion } from './version';
 import { buildWorkspaceInfo } from './workspaceInfo';
@@ -225,6 +225,7 @@ export function attachClientHandlers(
         killProc(proc);
       }
       s.pendingBgTasks.clear();
+      broadcastBgTasks(s);
       s.broadcast(JSON.stringify({ type: 'clear' }));
     } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
       // A send from a client that navigated to another session belongs to THAT session.
@@ -404,6 +405,7 @@ export function attachClientHandlers(
       newState.lastMessage = null;
       newState.pendingBgTasks.clear();
       // broadcast() on the new entry goes only to this client (the entry is fresh).
+      broadcastBgTasks(newState);
       newState.broadcast(JSON.stringify({ type: 'clear' }));
     } else if (msg.type === 'listSessions') {
       ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(s.workspaceDir), currentId: s.sessionId }));
@@ -430,6 +432,10 @@ export function attachClientHandlers(
       // Initial sync for a client that just connected; later changes arrive as
       // `activeSessions` pushes from notifyActiveSessions().
       ws.send(JSON.stringify({ type: 'activeSessions', sessions: listActiveSessions() }));
+    } else if (msg.type === 'getBgTasks') {
+      // Same shape: the count is pushed only when it changes, so a client that joined
+      // mid-watch (page reload, daemon restart) has to ask for the current one.
+      ws.send(JSON.stringify({ type: 'bgTasks', count: s.pendingBgTasks.size }));
     } else if (msg.type === 'getUsageLimits') {
       // Initial sync for a client that just connected; later refreshes arrive as
       // `usageLimits` pushes from the daemon's poller.
@@ -494,6 +500,10 @@ function handleSend(s: SessionState, msg: { type?: string; text?: string; images
     const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: contentBlocks } });
     s.sendLog('info', `Mid-turn inject: ${stdinMsg.length} bytes to stdin`);
     s.currentProc.stdin.write(stdinMsg + '\n');
+    // The turn stops being the CLI's own the moment the user speaks into it: they are now
+    // waiting on this answer, so it must ring on completion. This branch returns before the
+    // reset block below that normally clears the flag.
+    s.autonomousTurn = false;
     s.broadcast(JSON.stringify({ type: 'user_inject', text }));
     return;
   }
@@ -596,12 +606,20 @@ function handleSend(s: SessionState, msg: { type?: string; text?: string; images
     attachProcHandlers(s, proc);
   }
 
-  // Cleared per turn, which makes the "N background tasks still running" note undercount
-  // a task that outlived the turn that started it. Kept anyway: a task whose notification
-  // never arrives (hard kill, daemon respawn, kill-all - orphans accumulate, see
-  // !notes/tasks/empty-1s-turn/notes.md) would otherwise stay pending forever and hang the
-  // note on every later turn. Undercounting a footnote beats a note that cannot be cleared.
-  s.pendingBgTasks.clear();
+  // Reaped when a *new* process is spawned, not on every send. An orphan is created by a
+  // process dying (hard kill, kill-all, daemon respawn - see
+  // !notes/tasks/empty-1s-turn/notes.md), and the replacement cannot deliver the
+  // notifications its predecessor's tasks owed, so that set is worthless to it; a reused
+  // process still owns its tasks and will report them. Clearing on every send instead
+  // dropped tasks that were genuinely still running - tolerable while the count was a
+  // footnote on one message, wrong now that it is a live indicator, because typing
+  // anything mid-watch zeroed it and nothing could restore it (`task_started` is emitted
+  // once per task and never re-emitted, measured in
+  // !notes/tasks/bg-task-indicators/scripts/probe-task-started.js).
+  if (!canReuse && s.pendingBgTasks.size > 0) {
+    s.pendingBgTasks.clear();
+    broadcastBgTasks(s);
+  }
   if (!msg._askResume) {
     s.broadcast(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
   }

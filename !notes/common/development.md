@@ -1,5 +1,42 @@
 # Local development setup
 
+## Source files are CRLF, notes are LF - a `\n` anchor in a script silently no-ops
+
+The working tree is mixed by convention: every `.ts`/`.tsx` under `src/` and `webview/` is
+**uniform CRLF** (`webview/src/reducer.ts`: 436 CRLF of 436 newlines), while `!notes/**` and
+`CLAUDE.md` are LF-only. `git status` says as much on every commit ("LF will be replaced by
+CRLF the next time Git touches it") and it is easy to read past.
+
+The consequence bites when a script edits source rather than the Edit tool:
+
+```js
+src.replace("  foo: bar,\n", "")        // matches nothing, no error, no diff
+src.replace(/^\s*foo: bar,\r?\n/m, "")  // works on both
+```
+
+Measured 2026-09-07: a one-line removal in `reducer.ts` reported success and changed
+nothing, and the e2e run that followed was green **because the revert had never been
+applied** - i.e. a verify-red step that silently verified nothing. Anchor on `\r?\n`, or
+better, use the Edit tool for source and keep scripts for the `!notes/` index rows, where
+the LF assumption holds.
+
+Corollary for `/update-notes` step 7: never run `sed -i 's/\r$//'` across "the files this
+session touched" when that list includes source. A uniform-CRLF file is following the
+convention, and stripping it rewrites every line.
+
+## Backticks inside a double-quoted `node -e` are executed by bash
+
+Same shape of failure, different layer. Editing `CLAUDE.md` through
+`node -e "...the \`system\`/\`task_notification\` event..."` runs `system` and
+`task_notification` as **commands**: bash performs command substitution inside double quotes,
+the empty output is spliced in, and the file receives "the / event". Observed 2026-09-08; the
+only visible sign was two `command not found` lines above a cheerful `applied 3 of 3`.
+
+Prose destined for a markdown file is full of backticks, so this is not an edge case here.
+Use the Edit tool for such text, or single-quote the whole `node -e` script, or write the
+script to a file under the task's `scripts/`. When a script does report success, read back the
+line it wrote before believing it.
+
 ## Nothing typechecks `webview/` - run it by hand
 
 No script in this repo typechecks the webview. `yarn build` is `vite build`, which uses

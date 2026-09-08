@@ -155,6 +155,25 @@ rather than hidden. Fixing it properly means keeping `pendingBgTasks` across
 turns plus a real orphan reaper (age-out, or reconciling against the CLI's own
 `/tasks` set) instead of the per-send `clear()` that stands in for one today.
 
+## Superseded
+
+- **Was:** the per-send `pendingBgTasks.clear()` has to stay, because it is what
+  garbage-collects orphans; keeping tasks across turn boundaries "trades a wrong
+  number for a note that can stick forever".
+- **Actually:** the reset moved to **per CLI spawn** (2026-09-07) and no orphan
+  reaper was needed. Every orphan case named above (hard kill, kill-all, daemon
+  respawn) destroys the process, so clearing when a *new* process is spawned
+  covers all three, while a reused process keeps the tasks it genuinely owns.
+- **Why it was wrong:** "per send" and "per dead process" coincided in every case
+  examined, so the send was credited with reaping that the process death was
+  doing. The difference stayed invisible while the count was a footnote on one
+  message; under a live indicator it is the whole behaviour, because typing
+  anything mid-watch zeroed a count that nothing could then restore.
+- **Corrected by:** [bg-turn-completion-noise](../bg-turn-completion-noise/notes.md)
+
+The undercount survives in a narrower form: a task outliving the process that
+started it is still lost, e.g. across a daemon respawn mid-watch.
+
 ## Scripts
 
 | script | what it does |

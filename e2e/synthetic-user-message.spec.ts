@@ -23,7 +23,8 @@ const CLI_HANDLER_JS = path.join(ROOT, 'out', 'backend', 'cliHandler.js');
 const SESSIONS_JS = path.join(ROOT, 'out', 'backend', 'sessions.js');
 
 type Ev = Record<string, unknown>;
-type ReplayMessage = { role: string; content: string; images?: unknown[] };
+type ReplayBlock = { type: string; notice?: { summary?: string } };
+type ReplayMessage = { role: string; content: string; images?: unknown[]; blocks?: ReplayBlock[] };
 
 let handleCliEvent: (s: unknown, event: Ev) => void;
 let loadSession: (sessionId: string, workspaceDir: string) => ReplayMessage[];
@@ -156,5 +157,120 @@ test.describe('CLI-authored user messages are not shown as things the user said'
     expect(withImages[0].content).toBe('');
 
     expect(messages.filter(m => m.role === 'assistant').length, 'assistant turns are untouched').toBeGreaterThan(0);
+  });
+
+  // A background task's completion is a CLI-authored user prompt too, and it is the one
+  // that carries *neither* isMeta nor isVisibleInTranscriptOnly, so isSynthetic is false
+  // for it. Its mark is origin.kind. Shape copied from a real transcript
+  // (d---Projects-GMTrade/a519d7b5-...jsonl), where a CI watch left 42 of these among 115
+  // user bubbles on replay. Live nothing rendered them for a simpler reason than the one
+  // recorded here earlier: the stream does not carry this record at all (probe cited two
+  // tests below), so the live case is a guard against a CLI that starts sending it rather
+  // than a reproduction of something seen.
+  const SUMMARY = 'Background command "Watch CI until all checks complete" completed (exit code 0)';
+  const NOTIFICATION_PROMPT = [
+    '<task-notification>',
+    '<task-id>byn35acls</task-id>',
+    '<tool-use-id>toolu_015xR8XGLX4w3Yh6AavnpeuX</tool-use-id>',
+    '<output-file>C:\\Users\\Admin\\AppData\\Local\\Temp\\claude\\tasks\\byn35acls.output</output-file>',
+    '<status>completed</status>',
+    `<summary>${SUMMARY}</summary>`,
+    '</task-notification>',
+  ].join('\n');
+
+  test('live: a background-task notification prompt produces no bubble', () => {
+    const s = makeState();
+
+    handleCliEvent(s, {
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'text', text: NOTIFICATION_PROMPT }] },
+      origin: { kind: 'task-notification' },
+      session_id: 'sess', uuid: 'u3', timestamp: '2026-09-07T13:31:59.000Z',
+    });
+    expect(injects(s), 'the CLI woke itself; the user typed nothing').toEqual([]);
+
+    // Control: the discriminator is origin.kind, not the presence of angle brackets.
+    handleCliEvent(s, REAL_INJECT);
+    expect(injects(s)).toEqual(['also check the second file']);
+  });
+
+  // Hidden is not the same as discarded: the turn a notification starts must say why it
+  // exists. Live that announcement is the `system` event, NOT the prompt above - a full
+  // background-task cycle against a real CLI emitted three user events, every one a
+  // tool_result with no origin, and the prompt only ever reaches the transcript
+  // (!notes/tasks/bg-turn-cause-marker/scripts/probe-notification-event.js). Payload below
+  // is that probe's capture, field for field.
+  test('live: the system notification is re-emitted as a marker carrying the CLI summary', () => {
+    const s = makeState();
+
+    handleCliEvent(s, {
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'baqv0e8j5',
+      tool_use_id: 'toolu_01T9G2G2uSzk1M1xcAnyMYVz',
+      status: 'completed',
+      output_file: 'C:\\Users\\Admin\\AppData\\Local\\Temp\\claude\\probe\\tasks\\baqv0e8j5.output',
+      summary: SUMMARY,
+      session_id: 'sess', uuid: 'u4',
+    });
+
+    const notices = s.sent.filter(m => m.type === 'bg_notice');
+    expect(notices, 'one marker per notification').toHaveLength(1);
+    expect(notices[0].notice).toMatchObject({
+      taskId: 'baqv0e8j5',
+      toolUseId: 'toolu_01T9G2G2uSzk1M1xcAnyMYVz',
+      status: 'completed',
+      summary: SUMMARY,
+    });
+
+    // Control: an ordinary user event produces no marker, so this is not "anything that
+    // mentions a task".
+    handleCliEvent(s, REAL_INJECT);
+    expect(s.sent.filter(m => m.type === 'bg_notice')).toHaveLength(1);
+  });
+
+  test('replay: notification prompts are not user bubbles', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scub-notif-'));
+    const id = '99999999-8888-4777-8666-555555555555';
+    const workspace = path.join(dir, 'workspace');
+    fs.mkdirSync(workspace, { recursive: true });
+    const encoded = path.resolve(workspace).replace(/[^a-zA-Z0-9]/g, '-');
+    const projects = path.join(dir, '.claude', 'projects', encoded);
+    fs.mkdirSync(projects, { recursive: true });
+
+    const lines = [
+      { type: 'user', message: { role: 'user', content: 'Да, следи' } },
+      { type: 'assistant', message: { id: 'm1', model: 'claude-opus-5', content: [{ type: 'text', text: 'Обе джобы идут.' }] } },
+      // No isMeta, no isVisibleInTranscriptOnly: only origin marks it.
+      { type: 'user', origin: { kind: 'task-notification' }, promptSource: 'sdk', message: { role: 'user', content: NOTIFICATION_PROMPT } },
+      { type: 'assistant', message: { id: 'm2', model: 'claude-opus-5', content: [{ type: 'text', text: 'Жду.' }] } },
+    ];
+    fs.writeFileSync(path.join(projects, `${id}.jsonl`), lines.map(l => JSON.stringify(l)).join('\n'));
+
+    const home = process.env.USERPROFILE;
+    const homeUnix = process.env.HOME;
+    process.env.USERPROFILE = dir;
+    process.env.HOME = dir;
+    let messages: ReplayMessage[];
+    try {
+      messages = loadSession(id, workspace);
+    } finally {
+      if (home === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = home;
+      if (homeUnix === undefined) delete process.env.HOME; else process.env.HOME = homeUnix;
+    }
+
+    const userMsgs = messages.filter(m => m.role === 'user');
+    expect(userMsgs.map(m => m.content), 'the only thing the user typed').toEqual(['Да, следи']);
+    // Control: the turns the notification triggered are the session's content and stay.
+    const assistants = messages.filter(m => m.role === 'assistant');
+    expect(assistants, 'both answers survive').toHaveLength(2);
+
+    // The prompt is hidden as a bubble but carried over as the marker that opens the turn
+    // it started. Reading the session back is where this matters most: a watch replays as
+    // a column of answers to questions that are nowhere on screen.
+    expect(assistants[0].blocks?.some(b => b.type === 'bg_notice'), 'the first turn was asked for').toBe(false);
+    const marker = assistants[1].blocks?.[0];
+    expect(marker?.type, 'the notification turn opens with its marker').toBe('bg_notice');
+    expect((marker as { notice?: { summary?: string } })?.notice?.summary).toBe(SUMMARY);
   });
 });

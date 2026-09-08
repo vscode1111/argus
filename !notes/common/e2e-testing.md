@@ -96,6 +96,22 @@ Limits, in order of how badly they bite:
 
 If you stop the dev server instead, the prior question is not cost but **safety**: when the run is driven from inside an Argus conversation, check that the answering CLI is not a descendant of the process about to be killed, or the kill aborts the turn doing it. The `:3001` dev server and the daemon are different pids and usually only one of them is your parent - the ancestor-chain probe is in [backend-restart.md](backend-restart.md). Also read this section *before* reaching for `yarn dev:stop`: on 2026-08-27 the guard fired, the server was stopped and later restored, and the escape hatch above was only noticed afterwards. For the single-file run it was the cheaper route; for the full 250-test mock suite stopping was still the right call, since `model-picker.spec.ts` reads server settings and fails against the real config.
 
+### Do not edit `src/backend/` (or `server/`) while a suite is running
+
+`scripts/dev.js` watches both folders and restarts the backend on save, so a source edit made
+during a run reconnects every client mid-test. The failure it produces is a WS drop, i.e. the
+signature of [the cascade](../issues/integration-suite-cascade-crash.md) and of an ordinary
+flake, in a spec that has nothing to do with the file that was edited. An 8-10 minute
+integration run is long enough that continuing to work feels natural, which is exactly why
+this needs saying.
+
+Measured 2026-09-07: a `session.ts` edit landed ~65 tests into a 140-test run and the run
+still came back green, so the hazard is real but not deterministic - which makes it worse,
+not better, since a green run teaches the habit. Park edits until the run reports, or drive
+the run from a second checkout. Editing `webview/src/` is safe for the **mock** project only
+in the sense that Vite serves from source (no backend restart); a mid-run HMR update still
+changes the app under an assertion, so the rule is the same.
+
 ## Integration concurrency: `workers: 1`
 
 The `integration` project sets `workers: 1`. Each integration test drives a real Claude CLI **plus** a Chromium instance against the one shared `:3001` backend.
@@ -439,6 +455,40 @@ concatenation.
 Print the input, or assert something that can only be true in the intended context (here:
 the rendered text keeps its backslashes, which only happens inside a code span). A fixture
 that quietly becomes a different fixture is indistinguishable from a passing test.
+
+## A payload copied from a transcript is not evidence about the stream
+
+The two look interchangeable and are not: the CLI records things in
+`~/.claude/projects/**.jsonl` that it never writes to stdout. A background task's
+`<task-notification>` prompt is one of them, so a live handler gated on it
+(`origin.kind === 'task-notification'` in `handleUserEvent`) was **dead code with a passing
+test** - the spec fed it a record lifted from a transcript, which is a fixture asserting our
+own belief back at us. Measured 2026-09-08: a full background-task cycle emits three `user`
+events, all `tool_result`, none carrying `origin`
+([../tasks/bg-turn-cause-marker/scripts/probe-notification-event.js](../tasks/bg-turn-cause-marker/scripts/probe-notification-event.js)).
+
+Worse, it had an explanation attached ("nothing renders it live because the event lands
+before `thinking_start`"), which predicted the observed behaviour correctly for the wrong
+reason and survived a review pass for that exact reason.
+
+So: when a spec's payload came from a transcript, a log, or a note rather than from the
+process under test, say so in the comment, and spend the ninety seconds of real CLI time
+before building on it. The probe pattern that works here is to spawn the CLI with the same
+args `session.ts` uses (stream-json both ways, so the process stays alive between turns) and
+hold stdin open through the event you are waiting for.
+
+## Quote the `-g` pattern when a script shells out to Playwright
+
+`spawnSync('npx', ['playwright', 'test', '-g', 'a marker with no turn behind it'], {shell:true})`
+joins the array **without quoting**, so the pattern breaks into shell tokens: the run greps
+for `does`, matches three unrelated tests, and reports `3 passed`. In a verify-red harness
+that prints as a verdict about the test ("still green, proves nothing") when it is a verdict
+about the harness. A second case matched nothing at all and printed `0 tests`.
+
+Pass one quoted command string, and keep an explicit "no tests ran" branch - without it the
+empty-grep case reads as a pass. Same family as the CRLF anchor no-op in
+[development.md](development.md): a verification step that silently verifies nothing is worse
+than no step, because it is recorded as evidence.
 
 ## A raw WS client must buffer from construction, not from `await open`
 

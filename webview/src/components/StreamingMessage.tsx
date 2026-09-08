@@ -3,6 +3,7 @@ import { StreamingState } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
 import { UserInjectBlock } from './UserInjectBlock';
+import { BackgroundNoticeBlock } from './BackgroundNoticeBlock';
 import { Markdown } from '../utils/markdown';
 import { StreamingTimer } from './StreamingTimer';
 import { WorkingIndicator } from './WorkingIndicator';
@@ -44,6 +45,7 @@ export function StreamingMessage({ streaming, logCount }: Props) {
         }
         if (block.type === 'tool') return <ToolCall key={block.call.id} call={block.call} />;
         if (block.type === 'user_inject') return <UserInjectBlock key={`inject-${i}`} text={block.text} />;
+        if (block.type === 'bg_notice') return <BackgroundNoticeBlock key={`notice-${i}`} notice={block.notice} />;
         return <div key={`text-${i}`} className={msg.messageContent}>
           <Markdown>{block.text}</Markdown>
         </div>;

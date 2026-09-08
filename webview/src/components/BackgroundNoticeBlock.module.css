@@ -1,0 +1,22 @@
+.notice {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--thinking-fg);
+  font-style: italic;
+  font-size: 0.9em;
+  padding: 2px 0 2px 8px;
+  margin-bottom: 6px;
+  border-left: 2px solid var(--border);
+}
+
+.glyph {
+  font-style: normal;
+  line-height: 1;
+  flex: none;
+}
+
+.text {
+  min-width: 0;
+  word-break: break-word;
+}

@@ -1,0 +1,12 @@
+live-marker      red (correct)                    1 failed
+replay-marker    red (correct)                    1 failed, 9 passed
+reducer-seeding  red (correct)                    1 failed, 19 passed
+notice-clearing  STILL GREEN (test proves nothing) 3 passed
+timer-colour     NO TESTS RAN (grep matched nothing) -
+
+--- summary ---
+live-marker      red (correct)                    the live path stops announcing the notification
+replay-marker    red (correct)                    a replayed watch loses the reason each turn exists
+reducer-seeding  red (correct)                    the notice arrives before the turn and is dropped again
+notice-clearing  STILL GREEN (test proves nothing) a stale marker leaks onto the turn the user started
+timer-colour     NO TESTS RAN (grep matched nothing) a turn that left work running claims success green again
