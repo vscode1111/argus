@@ -30,10 +30,22 @@ export type LoginState =
   | { phase: 'success' }
   | { phase: 'error'; message: string };
 
+/** Why a turn nobody asked for exists: the CLI's own report that a background task
+ *  finished. Parsed server-side from the prompt it wrote to itself
+ *  (src/backend/taskNotification.ts). */
+export type TaskNotice = {
+  taskId?: string;
+  toolUseId?: string;
+  outputFile?: string;
+  status?: string;
+  summary?: string;
+};
+
 export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool'; call: ToolCallData }
-  | { type: 'user_inject'; text: string };
+  | { type: 'user_inject'; text: string }
+  | { type: 'bg_notice'; notice: TaskNotice };
 
 export type UIMessage = {
   id: string;
@@ -48,6 +60,9 @@ export type UIMessage = {
   watchdogRetries?: number;
   errorKind?: ErrorKind;
   bgTasksPending?: number;
+  /** The CLI woke itself to report a background task; the user did not start this turn.
+   *  It completes like any other, but must not ring the sound or raise an OS toast. */
+  autonomous?: boolean;
   finalTokens?: { input: number; output: number };
 };
 

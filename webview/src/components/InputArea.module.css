@@ -606,6 +606,11 @@
   cursor: default;
   line-height: 1.4;
 }
+/* Same shape as the context pill so the two read as one row of session facts. */
+.bgPill {
+  composes: contextPill;
+  color: var(--thinking-fg);
+}
 .contextMedium {
   color: var(--vscode-editorWarning-foreground, #cca700);
 }

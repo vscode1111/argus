@@ -138,7 +138,7 @@ const FILE_PATH_RE = new RegExp(
 // The preview itself is owned by PreviewProvider, not by this link: markdown is
 // re-rendered constantly while a turn streams and the message it belongs to is
 // remounted when the turn commits, either of which would close a modal held here.
-function FilePathLink({ path: origPath, line, display }: { path: string; line?: number; display: string }) {
+export function FilePathLink({ path: origPath, line, display }: { path: string; line?: number; display: string }) {
   const previewer = usePreview();
 
   return (

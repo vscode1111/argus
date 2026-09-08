@@ -4,6 +4,7 @@ import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCall } from './ToolCall';
 import { UserInjectBlock } from './UserInjectBlock';
 import { BackgroundTasksNote } from './BackgroundTasksNote';
+import { BackgroundNoticeBlock } from './BackgroundNoticeBlock';
 import { Markdown } from '../utils/markdown';
 import { linkifyWithMentions } from '../utils/filePath';
 import { formatDuration, formatTime } from '../utils/time';
@@ -163,6 +164,7 @@ export function ChatMessage({ message, login }: Props) {
         }
         if (block.type === 'tool') return <ToolCall key={block.call.id} call={block.call} sessionDone={sessionDone} />;
         if (block.type === 'user_inject') return <UserInjectBlock key={`inject-${i}`} text={block.text} />;
+        if (block.type === 'bg_notice') return <BackgroundNoticeBlock key={`notice-${i}`} notice={block.notice} />;
         return <div key={`text-${i}`} className={msg.messageContent}>
           <Markdown>{block.text}</Markdown>
         </div>;
@@ -188,6 +190,13 @@ export function ChatMessage({ message, login }: Props) {
           message.outcome === 'error' ? msg.responseTimeError
           : message.outcome === 'stopped' ? msg.responseTimeStopped
           : message.outcome === 'retried' ? msg.responseTimeRetried
+          // Green is the claim "finished, nothing outstanding", and a turn that left
+          // background tasks behind cannot make it: the work continues and the CLI will
+          // wake itself again. Both background outcomes stay neutral, including the
+          // historical one - that a turn left work running is still true afterwards, and
+          // reading back a run of green completions during an hour-long watch is exactly
+          // what the report was about.
+          : message.outcome === 'background_waiting' || message.outcome === 'background_done' ? msg.responseTime
           : msg.responseTimeSuccess
         }>
           {formatDuration(responseTime)}{message.finishedAt ? ` (${formatTime(message.finishedAt)})` : ''}{message.outcome === 'retried' && message.watchdogRetries ? ` reconnected ${message.watchdogRetries}x` : ''}{message.finalTokens && (message.finalTokens.input > 0 || message.finalTokens.output > 0) ? ` · ${message.finalTokens.input.toLocaleString()} in / ${message.finalTokens.output.toLocaleString()} out` : ''}

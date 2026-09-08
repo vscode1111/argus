@@ -70,8 +70,10 @@ test.describe('background tasks', () => {
     // No spinner anywhere: no streaming message, no "working" indicator.
     await expect(page.locator('[class*="streaming"]')).toHaveCount(0);
     await expect(page.locator('[class*="working"]')).toHaveCount(0);
-    // The turn is reported as finished, with its own duration.
-    await expect(page.locator('[class*="responseTimeSuccess"]')).toBeVisible();
+    // The turn is reported as finished, with its own duration. Not in success green
+    // though, because a task it left running means the work is not over: see the colour
+    // pair below.
+    await expect(page.locator('[class*="responseTime"]')).toBeVisible();
   });
 
   // The turn ending is what fires the completion sound and the OS notification, so
@@ -179,15 +181,21 @@ test.describe('background tasks', () => {
     await expect(note(page)).toHaveCount(1);
   });
 
-  test('a turn that leaves tasks behind still shows its own success timer', async ({ page }) => {
+  // Green is the claim "finished, nothing outstanding", and a turn that left a task running
+  // cannot make it. The report behind this was a screen of identical green completions
+  // during an hour-long CI watch, each one reading as "the session is done" while the job
+  // it was waiting on had not started reporting yet. The timer itself stays: the turn did
+  // end, and how long it took is still true.
+  test('a turn that leaves tasks behind gets a neutral timer, not success green', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg' } });
     await send(page, { type: 'thinking_start' });
     await startBgTask(page, 't1', 'Task 1', 'sleep 10');
     await send(page, { type: 'done', pendingBackgroundTasks: 1 });
 
-    const timer = page.locator('[class*="responseTimeSuccess"]');
+    const timer = page.locator('[class*="responseTime"]');
     await expect(timer).toBeVisible();
     await expect(timer).toContainText('s');
+    await expect(page.locator('[class*="responseTimeSuccess"]')).toHaveCount(0);
   });
 
   test('final message shows timer after all tasks complete', async ({ page }) => {
@@ -201,8 +209,68 @@ test.describe('background tasks', () => {
     await send(page, { type: 'text_chunk', text: 'Done.' });
     await send(page, { type: 'done' });
 
-    const timer = page.locator('[class*="responseTimeSuccess"]');
-    await expect(timer).toHaveCount(2);
+    // The control for the colour rule above, and the half that keeps it honest: the second
+    // turn ended with nothing pending, so it is the real end of the work and does wear the
+    // success green, while the first stays neutral. Both timers are present either way, so
+    // a build that painted everything one colour fails one of these two counts.
+    await expect(page.locator('[class*="responseTime"]')).toHaveCount(2);
+    await expect(page.locator('[class*="responseTimeSuccess"]')).toHaveCount(1);
+  });
+
+  // Until this marker there was nothing on screen saying why a second turn existed. The CLI
+  // wakes itself when a background task finishes, so an answer appeared, did work and closed
+  // with a completion line, with no request from the user anywhere above it. Reported in
+  // exactly those terms: "there was no request from me, how can these turns be real".
+  test('a turn the user did not start opens with a marker naming its cause', async ({ page }) => {
+    const notice = {
+      taskId: 'bp24zwu32',
+      toolUseId: 'toolu_01Ne9Pi9hVzMEbg69v6KZf1i',
+      outputFile: 'C:\\Temp\\claude\\tasks\\bp24zwu32.output',
+      status: 'completed',
+      summary: 'Background command "Watch CI until all checks complete" completed (exit code 0)',
+    };
+    // The live order, and the reason the reducer holds the notice rather than dropping it:
+    // the prompt reaches the client while the previous turn is still marked done, so
+    // thinking_start follows it instead of preceding it.
+    await send(page, { type: 'bg_notice', notice });
+    await send(page, { type: 'thinking_start', reused: true });
+    await send(page, { type: 'text_chunk', text: 'CI is green.' });
+
+    const marker = page.getByTestId('bg-notice');
+    await expect(marker).toHaveCount(1);
+    await expect(marker).toContainText('Watch CI until all checks complete');
+
+    // Still there once the turn commits: the streaming block is remounted as a message
+    // block at that moment, which is where a marker held by the wrong owner would vanish.
+    await send(page, { type: 'done' });
+    await expect(marker).toHaveCount(1);
+    await expect(marker).toContainText('Watch CI until all checks complete');
+  });
+
+  // The CLI answers some notifications with an empty turn (the orphan replay on --resume),
+  // which leaves a marker waiting for a turn that never comes. It must not then label the
+  // turn the user starts next as something a background task caused.
+  test('a marker with no turn behind it does not open the next one the user starts', async ({ page }) => {
+    await send(page, { type: 'bg_notice', notice: { taskId: 'orphan', summary: 'Background command "stale watcher" completed (exit code 0)' } });
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'what is going on' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'text_chunk', text: 'Nothing much.' });
+    await send(page, { type: 'done' });
+
+    await expect(page.getByTestId('bg-notice')).toHaveCount(0);
+  });
+
+  // A task can finish while another turn is streaming, in which case the report lands
+  // inside that turn rather than starting one.
+  test('a task reporting in mid-turn marks the turn it lands in', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'keep going' } });
+    await send(page, { type: 'thinking_start' });
+    await send(page, { type: 'text_chunk', text: 'Working.' });
+    await send(page, { type: 'bg_notice', notice: { taskId: 'mid', summary: 'Background command "cargo build" completed (exit code 0)' } });
+    await send(page, { type: 'done' });
+
+    await expect(page.getByTestId('bg-notice')).toHaveCount(1);
+    await expect(page.getByTestId('bg-notice')).toContainText('cargo build');
   });
 
   test('Out link pulses green while task is running', async ({ page }) => {
@@ -325,5 +393,60 @@ test.describe('background tasks', () => {
     await expect(firstMessage.getByTestId('background-tasks-note')).toHaveCount(0);
     // It is an ordinary finished turn now, so it keeps its duration like any other.
     await expect(firstMessage.locator('[class*="responseTime"]')).toHaveCount(1);
+  });
+
+  // The pill answers "show the amount of bg processes". The per-message note only ever
+  // lives on the newest turn (the test above is what strips it from the rest), so in a
+  // watch session built of notification turns the count was visible nowhere.
+  test.describe('running-tasks pill', () => {
+    const pill = (page: Page) => page.getByTestId('bg-tasks-pill');
+
+    test('appears on a push, updates in place, and clears at zero', async ({ page }) => {
+      await expect(pill(page)).toHaveCount(0);
+
+      await send(page, { type: 'bgTasks', count: 1 });
+      await expect(pill(page)).toHaveText(/1/);
+      await expect(pill(page)).toHaveAttribute('title', /1 background task running now/);
+
+      await send(page, { type: 'bgTasks', count: 3 });
+      await expect(pill(page)).toHaveText(/3/);
+      await expect(pill(page)).toHaveAttribute('title', /3 background tasks running now/);
+
+      await send(page, { type: 'bgTasks', count: 0 });
+      await expect(pill(page)).toHaveCount(0);
+    });
+
+    // The point of the pill: it outlives the turn that started the tasks, and outlives the
+    // note being rewritten away by the next turn. Without this the count would be as
+    // ephemeral as the note it supplements.
+    test('survives the turn boundary that strips the note', async ({ page }) => {
+      await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'watch CI' } });
+      await send(page, { type: 'thinking_start' });
+      await startBgTask(page, 't1', 'Wait four minutes', 'sleep 240');
+      await send(page, { type: 'bgTasks', count: 1 });
+      await send(page, { type: 'done', pendingBackgroundTasks: 1 });
+      await expect(note(page)).toHaveCount(1);
+      await expect(pill(page)).toHaveText(/1/);
+
+      // The next notification turn strips the note from the message above it.
+      await send(page, { type: 'thinking_start', reused: true });
+      await send(page, { type: 'text_chunk', text: 'Still running.' });
+      await send(page, { type: 'done', autonomous: true, pendingBackgroundTasks: 1 });
+
+      await expect(page.locator('[class*="assistant"]').first().getByTestId('background-tasks-note')).toHaveCount(0);
+      await expect(pill(page)).toHaveText(/1/);
+    });
+
+    // A `done` with nothing pending omits the field entirely, so the pill has to read that
+    // absence as zero instead of leaving a stale count on screen.
+    test('a turn that ends with no tasks clears the pill', async ({ page }) => {
+      await send(page, { type: 'bgTasks', count: 2 });
+      await expect(pill(page)).toHaveText(/2/);
+
+      await send(page, { type: 'thinking_start' });
+      await send(page, { type: 'done' });
+
+      await expect(pill(page)).toHaveCount(0);
+    });
   });
 });
