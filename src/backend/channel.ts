@@ -13,9 +13,10 @@ interface ChannelTool {
 }
 
 interface ChannelBlock {
-  type: 'text' | 'tool' | 'user_inject';
+  type: 'text' | 'tool' | 'user_inject' | 'bg_notice';
   text?: string;
   call?: ChannelTool;
+  notice?: Record<string, unknown>;
 }
 
 export interface ChannelMessage {
@@ -37,7 +38,9 @@ const SESSION_STREAM_EVENTS = new Set([
   'done', 'error', 'message', 'user_inject', 'token_update',
   // 'sessionId' belongs to the live turn: a browsing client is viewing a different
   // transcript, so it must not have its address bar rewritten to this one.
-  'retry_status', 'retry_clean', 'contextUsage', 'sessionId',
+  // 'bgTasks' likewise counts this entry's tasks, not the ones of the session on screen.
+  // 'bg_notice' opens a turn in this entry, so it travels with that turn's own events.
+  'retry_status', 'retry_clean', 'contextUsage', 'sessionId', 'bgTasks', 'bg_notice',
 ]);
 
 // One SessionEntry per running (or recently-ran) session within a workspace.
@@ -53,6 +56,10 @@ interface SessionEntry {
   browsingClients: Set<WebSocket>; // within this entry: clients viewing a different transcript
   history: ChannelMessage[];
   snapshot: { thinking: string; blocks: ChannelBlock[] } | null;
+  // Mirrors the webview reducer's own pendingNotice: a background task reports in before
+  // the turn it starts exists, so the marker waits here for the thinking_start that opens
+  // the snapshot. Without it a client joining mid-turn replays the answer with no cause.
+  pendingNotice?: Record<string, unknown>;
   snapshotStartedAt: number | null;
   lastActivityAt: number;
 }
@@ -193,15 +200,24 @@ function applyMsg(entry: SessionEntry, p: Record<string, unknown>): void {
     case 'message': {
       const m = p.message as ChannelMessage | undefined;
       if (m) {
+        if (m.role === 'user') entry.pendingNotice = undefined;
         entry.history.push(m);
         if (entry.history.length > MAX_HISTORY) entry.history = entry.history.slice(-MAX_HISTORY);
       }
       break;
     }
     case 'thinking_start':
-      entry.snapshot = { thinking: '', blocks: [] };
+      entry.snapshot = { thinking: '', blocks: entry.pendingNotice ? [{ type: 'bg_notice', notice: entry.pendingNotice }] : [] };
+      entry.pendingNotice = undefined;
       entry.snapshotStartedAt = Date.now();
       break;
+    case 'bg_notice': {
+      const notice = p.notice as Record<string, unknown> | undefined;
+      if (!notice) break;
+      if (entry.snapshot) entry.snapshot.blocks.push({ type: 'bg_notice', notice });
+      else entry.pendingNotice = notice;
+      break;
+    }
     case 'thinking_chunk':
       if (entry.snapshot) entry.snapshot.thinking += String(p.text ?? '');
       break;

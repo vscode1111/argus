@@ -4,7 +4,28 @@ import { plural, classifyError, API_ERROR_RE, killProc } from './cli';
 import { parseRateLimitEvent } from './accountUsage';
 import { contextWindowFor } from './modelData';
 import { stringifyToolResult } from './toolResult';
+import { noticeFromSystemEvent, noticeLabel } from './taskNotification';
 import type { SessionState } from './sessionState';
+
+// The pending set is the only live inventory of background tasks anywhere in Argus, and
+// until now it was read once per turn, on `done`. A watch session runs for hours between
+// user sends, so the count needs to reach the UI when it changes rather than when a turn
+// happens to end. Broadcast only on a real change: `task_started` is emitted once per task
+// and the two deletes are idempotent, so a no-op mutation must not put a frame on the wire.
+export function broadcastBgTasks(s: SessionState): void {
+  s.broadcast(JSON.stringify({ type: 'bgTasks', count: s.pendingBgTasks.size }));
+}
+
+function addBgTask(s: SessionState, id: string | undefined): void {
+  if (!id || s.pendingBgTasks.has(id)) return;
+  s.pendingBgTasks.add(id);
+  broadcastBgTasks(s);
+}
+
+function removeBgTask(s: SessionState, id: string | undefined): void {
+  if (!id || !s.pendingBgTasks.delete(id)) return;
+  broadcastBgTasks(s);
+}
 
 export function handleCliEvent(s: SessionState, event: Record<string, unknown>): void {
   s.sendLog('debug', `event: ${event.type} ${JSON.stringify(event).slice(0, 120)}`);
@@ -79,11 +100,22 @@ function handleSystemEvent(s: SessionState, event: Record<string, unknown>): voi
     // page could not be shared or reloaded back into the same conversation.
     if (changed) s.broadcast(JSON.stringify({ type: 'sessionId', id }));
   } else if (event.subtype === 'task_started') {
-    s.pendingBgTasks.add(event.task_id as string);
+    addBgTask(s, event.task_id as string);
   } else if (event.subtype === 'task_updated') {
-    s.pendingBgTasks.delete(event.task_id as string);
+    removeBgTask(s, event.task_id as string);
   } else if (event.subtype === 'task_notification') {
-    s.pendingBgTasks.delete(event.task_id as string);
+    removeBgTask(s, event.task_id as string);
+    // The turn the CLI is about to run for this task has no other visible cause: it wakes
+    // itself, answers, and closes with a completion line identical to one the user asked
+    // for ("there was no request from me, how can these turns be real"). This event is the
+    // only live announcement of it - the prompt the CLI writes to itself is a transcript
+    // record and never reaches the stream, measured in
+    // !notes/tasks/bg-turn-cause-marker/scripts/probe-notification-event.js.
+    const notice = noticeFromSystemEvent(event);
+    if (notice) {
+      s.broadcast(JSON.stringify({ type: 'bg_notice', notice }));
+      s.sendLog('info', `Background task reported: ${noticeLabel(notice)}`);
+    }
     const toolUseId = event.tool_use_id as string | undefined;
     const summary = event.summary as string | undefined;
     const outputFile = event.output_file as string | undefined;
@@ -227,8 +259,22 @@ function handleUserEvent(s: SessionState, event: Record<string, unknown>): void 
   // Gated per block rather than per event, because a synthetic message can still carry a
   // real one: a `/skill` invocation that had an image pasted with it arrives as the
   // expanded skill text plus the user's own image.
-  const synthetic = event.isSynthetic === true;
+  // A background task's completion arrives as a user-role prompt too, and that one carries
+  // neither isMeta nor isVisibleInTranscriptOnly, so `isSynthetic` is false for it. Its own
+  // mark is origin.kind, the field handleResult already trusts below. Nothing rendered it
+  // live only by accident: the event lands while cliDone is still true, so the recovery
+  // branch has not raised thinking_start yet and the reducer drops a user_inject with no
+  // streaming state. Anything that raises the spinner earlier would surface the raw
+  // `<task-notification><task-id>...` XML as a bubble the user never typed.
+  const origin = event.origin as { kind?: string } | undefined;
+  const synthetic = event.isSynthetic === true || origin?.kind === 'task-notification';
   s.sendLog('debug', `user message: ${plural(blocks.length, 'block')}${synthetic ? ' (synthetic)' : ''}`);
+  // No marker is emitted here even though origin.kind marks the prompt: the stream does not
+  // carry that record at all (probe-notification-event.js saw three user events in a full
+  // background-task cycle, all tool_results), so the live marker rides the
+  // `system`/`task_notification` event in handleSystemEvent instead. The origin test stays
+  // in `synthetic` above because it costs nothing and keeps the prompt out of the bubbles
+  // if a future CLI does start streaming it.
   for (const block of blocks) {
     if (block.type === 'tool_result') {
       const toolId = block.tool_use_id as string;
@@ -276,7 +322,16 @@ function handleResult(s: SessionState, event: Record<string, unknown>): void {
   if (s.pendingFollowUp) {
     s.flushAskFollowUp();
   } else if (s.pendingAskTools.size === 0) {
-    s.broadcast(JSON.stringify({ type: 'done', ...(s.pendingBgTasks.size > 0 ? { pendingBackgroundTasks: s.pendingBgTasks.size } : {}) }));
+    // `autonomous` marks a turn the user did not start: the CLI woke itself to report a
+    // background task. It ends like any other turn, but it must not ring the completion
+    // sound or raise an OS toast - a CI watch produced 156 of these in one session, one
+    // every four minutes, each announcing "finished" for work the user was already waiting
+    // on. See !notes/tasks/bg-turn-completion-noise/notes.md.
+    s.broadcast(JSON.stringify({
+      type: 'done',
+      ...(s.pendingBgTasks.size > 0 ? { pendingBackgroundTasks: s.pendingBgTasks.size } : {}),
+      ...(s.autonomousTurn ? { autonomous: true } : {}),
+    }));
   }
 }
 

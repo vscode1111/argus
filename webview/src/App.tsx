@@ -133,6 +133,7 @@ function AppInner() {
       'tool_start', 'tool_end', 'done', 'error', 'clear', 'user_inject', 'sessionLoaded',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
       'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'token_update', 'retry_status', 'retry_clean', 'ws_status', 'modelChanged', 'effortChanged', 'thinkingChanged',
+      'bgTasks', 'bg_notice',
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;
@@ -150,8 +151,20 @@ function AppInner() {
     if (state.turnCompletions > prevTurnCompletions.current) {
       prevTurnCompletions.current = state.turnCompletions;
       const lastAssistant = [...state.messages].reverse().find(m => m.role === 'assistant');
-      // Don't fire on manual stop.
-      if (lastAssistant && lastAssistant.outcome !== 'stopped') {
+      // Don't fire on manual stop, nor on a link in a chain of turns the user did not
+      // start. The CLI wakes itself to report each finished background task, and a watch
+      // session is nothing but those: 156 in one reported session, a sound and an OS toast
+      // every four minutes, each announcing the completion of work the user was sitting
+      // there waiting for. The turn still completes (see the `done` case in reducer.ts);
+      // only the alert is withheld, an alert being a claim that something needs attention.
+      //
+      // But an autonomous turn that leaves *nothing* pending is the end of the chain, and
+      // it is the one alert worth having: no task remains to wake the CLI again, so this is
+      // the last output the user will get - the finished build, or the watch reporting that
+      // CI is green. Silencing that one too would suppress exactly the ping they were
+      // waiting for. So the test is "another turn is coming", not "the user started this".
+      const midChain = lastAssistant?.autonomous === true && (lastAssistant.bgTasksPending ?? 0) > 0;
+      if (lastAssistant && lastAssistant.outcome !== 'stopped' && !midChain) {
         if (soundOnComplete) playCompletionSound();
         if (notifyOnComplete) {
           const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
@@ -258,11 +271,13 @@ function AppInner() {
         // server only sends these on change, so ask for the current ones.
         postMessage({ type: 'getActiveSessions' });
         postMessage({ type: 'getUsageLimits' });
+        postMessage({ type: 'getBgTasks' });
       }
     }
     window.addEventListener('message', onSessionMsg);
     postMessage({ type: 'getActiveSessions' });
     postMessage({ type: 'getUsageLimits' });
+    postMessage({ type: 'getBgTasks' });
     return () => window.removeEventListener('message', onSessionMsg);
   }, []);
 
@@ -511,7 +526,7 @@ function AppInner() {
         <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
           {topRightActions}
           <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
-          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} wsConnected={state.wsConnected} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
+          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
           {loadingSession && (
             <div className="sessionLoader" role="status" aria-live="polite" aria-busy="true" aria-label="Loading session">
               <div className="sessionSpinner" />

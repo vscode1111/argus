@@ -6,6 +6,7 @@ import { AccountUsageModal } from './AccountUsageModal';
 import { ImageViewerModal } from './ImageViewerModal';
 import { type ModelEntry, FALLBACK_MODELS, makeDefaultEntry, sameModel, toModelEntry } from '../utils/model';
 import { findMentions } from '../utils/filePath';
+import { plural } from '../utils/text';
 import { FolderIcon, FileTypeIcon } from './shared/FolderList';
 import styles from './InputArea.module.css';
 import settings from './SettingsModal.module.css';
@@ -79,6 +80,7 @@ interface Props {
   workspacePath: string;
   version: string;
   contextUsage: { percent: number; inputTokens: number; outputTokens: number; contextWindow?: number } | null;
+  bgTasks?: number;
   wsConnected?: boolean;
   currentModel?: string;
   currentEffort?: string;
@@ -90,7 +92,7 @@ interface Props {
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'max'] as const;
 type EffortLevel = typeof EFFORT_LEVELS[number];
 
-export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, wsConnected = true, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop }: Props) {
+export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -875,6 +877,20 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
           >
             {mode === 'edit' ? 'Edit' : 'Plan'}
           </button>
+          {bgTasks > 0 && (
+            // The one durable home for the pending count. The per-message note reports what
+            // a *finished* turn left behind and is rewritten away by the next turn, so in a
+            // watch session it is visible nowhere; this says what is running right now and
+            // clears itself when the tasks report back. Static on purpose, like that note:
+            // a spinner here would run for the hours a dev server or a CDP browser lives.
+            <span
+              className={styles.bgPill}
+              data-testid="bg-tasks-pill"
+              title={`${plural(bgTasks, 'background task')} running now.\nStarted with run_in_background; each reports back when it completes.`}
+            >
+              ✻ {bgTasks}
+            </span>
+          )}
           {contextUsage && (
             <span
               className={[styles.contextPill, contextUsage.percent >= 80 ? styles.contextHigh : contextUsage.percent >= 50 ? styles.contextMedium : ''].filter(Boolean).join(' ')}
