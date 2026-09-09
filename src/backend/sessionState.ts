@@ -32,7 +32,9 @@ export interface SessionState {
   stopKillTimer: NodeJS.Timeout | null;
   suppressCliOutput: boolean;
   pendingFollowUp: { answers: Record<string, string>; toolId: string; mode?: string } | undefined;
-  pendingBgTasks: Set<string>;
+  // id -> the moment the task was launched. The timestamp is what lets a finished turn say
+  // how long the work it left behind has been running; the ids alone could only say that it has.
+  pendingBgTasks: Map<string, number>;
   turnInputTokens: number;
   turnOutputTokens: number;
   buffer: string;
@@ -73,7 +75,7 @@ export function createSessionState(workspaceDir: string): SessionState {
     stopKillTimer: null,
     suppressCliOutput: false,
     pendingFollowUp: undefined,
-    pendingBgTasks: new Set(),
+    pendingBgTasks: new Map(),
     turnInputTokens: 0,
     turnOutputTokens: 0,
     buffer: '',

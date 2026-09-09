@@ -18,8 +18,51 @@ export function broadcastBgTasks(s: SessionState): void {
 
 function addBgTask(s: SessionState, id: string | undefined): void {
   if (!id || s.pendingBgTasks.has(id)) return;
-  s.pendingBgTasks.add(id);
+  s.pendingBgTasks.set(id, Date.now());
   broadcastBgTasks(s);
+}
+
+// When the oldest task still running was launched, so a turn can report the age of the work
+// it left behind. The oldest rather than the newest: it is the one the reader is waiting on,
+// and it is the only choice that never goes backwards while tasks come and go.
+export function oldestBgTaskStart(s: SessionState): number | undefined {
+  let oldest: number | undefined;
+  for (const startedAt of s.pendingBgTasks.values()) {
+    if (oldest === undefined || startedAt < oldest) oldest = startedAt;
+  }
+  return oldest;
+}
+
+// A Bash call is not a background task, and `task_started` does not distinguish them: the CLI
+// emits `task_started` + `task_notification` for **every** Bash tool call. Measured with a run
+// that did nothing but a plain `echo scub-hello` with no `run_in_background`, which produced
+// both events (scripts/probe-foreground-bash.js in !notes/tasks/bg-turn-cause-marker/). Adding
+// on that event therefore blinked the `✻ N` pill on and off for every command the agent ran,
+// which is how it was reported ("появляется и исчезает").
+//
+// Two discriminators, and both are needed:
+//   - `run_in_background` on the tool input - what the model asked for;
+//   - `Command running in background with ID: <task-id>` in the tool result - what the CLI
+//     actually did. This is the only one that catches a command the CLI backgrounds on its
+//     own: in a real session a Bash with no `run_in_background` came back with exactly this
+//     string, and its notification arrived five minutes later and woke an autonomous turn.
+// The id in that string is the same `task_id` the system events carry (verified on both a
+// probe and a reported transcript), so either path feeds the same set.
+// Anchored at the start, like the webview's own pulse test (`result.startsWith(...)`), so the
+// two agree and a tool that merely *prints* this sentence - a `cat` of these notes would -
+// cannot inject a phantom id that nothing would ever remove.
+const BG_LAUNCH_RE = /^Command running in background with ID:\s*([A-Za-z0-9_-]+)/;
+
+function isBackgroundTool(s: SessionState, toolUseId: unknown): boolean {
+  if (typeof toolUseId !== 'string') return false;
+  const input = s.toolMap.get(toolUseId)?.input as Record<string, unknown> | undefined;
+  return input?.run_in_background === true;
+}
+
+function noteBackgroundLaunch(s: SessionState, result: unknown): void {
+  if (typeof result !== 'string') return;
+  const id = BG_LAUNCH_RE.exec(result.trimStart())?.[1];
+  if (id) addBgTask(s, id);
 }
 
 function removeBgTask(s: SessionState, id: string | undefined): void {
@@ -100,7 +143,9 @@ function handleSystemEvent(s: SessionState, event: Record<string, unknown>): voi
     // page could not be shared or reloaded back into the same conversation.
     if (changed) s.broadcast(JSON.stringify({ type: 'sessionId', id }));
   } else if (event.subtype === 'task_started') {
-    addBgTask(s, event.task_id as string);
+    // Foreground calls raise this event too; the result-text path adds the ones the CLI
+    // backgrounds by itself, whose input says nothing.
+    if (isBackgroundTool(s, event.tool_use_id)) addBgTask(s, event.task_id as string);
   } else if (event.subtype === 'task_updated') {
     removeBgTask(s, event.task_id as string);
   } else if (event.subtype === 'task_notification') {
@@ -111,7 +156,16 @@ function handleSystemEvent(s: SessionState, event: Record<string, unknown>): voi
     // only live announcement of it - the prompt the CLI writes to itself is a transcript
     // record and never reaches the stream, measured in
     // !notes/tasks/bg-turn-cause-marker/scripts/probe-notification-event.js.
-    const notice = noticeFromSystemEvent(event);
+    //
+    // Only when the CLI is idle, because that is exactly when this notification is about to
+    // wake a turn nobody asked for. A task that finishes *during* a turn is folded into the
+    // running one, which already has a cause on screen. The gate is `cliDone` rather than
+    // "was this a background task" on purpose: every Bash call emits this event, so without
+    // it the marker announced `echo one` / `echo two` / `echo three` (seen in
+    // scripts/probe-pill-flicker.log), and gating on the background test instead would drop
+    // the marker for any task the two discriminators failed to classify - the one case where
+    // the turn really does appear out of nowhere.
+    const notice = s.cliDone ? noticeFromSystemEvent(event) : null;
     if (notice) {
       s.broadcast(JSON.stringify({ type: 'bg_notice', notice }));
       s.sendLog('info', `Background task reported: ${noticeLabel(notice)}`);
@@ -239,6 +293,7 @@ function handleToolResult(s: SessionState, event: Record<string, unknown>): void
   // Same flattening as the `user` path above: `content` can be a block array here too,
   // and the webview's ToolCall treats `result` as a string (it calls .trim() on it).
   const result = stringifyToolResult(event.content);
+  noteBackgroundLaunch(s, result);
   s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result } }));
 }
 
@@ -284,6 +339,7 @@ function handleUserEvent(s: SessionState, event: Record<string, unknown>): void 
       // the transcript (readToolImage), so a remote client never pays for an image it
       // does not open, and one deleted since the tool ran still previews.
       const content = stringifyToolResult(block.content);
+      noteBackgroundLaunch(s, content);
       s.sendLog('debug', `tool_result ${toolId}: ${String(content).slice(0, 100)}`);
       s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content } }));
     } else if (block.type === 'text' && block.text && !synthetic) {
@@ -329,7 +385,7 @@ function handleResult(s: SessionState, event: Record<string, unknown>): void {
     // on. See !notes/tasks/bg-turn-completion-noise/notes.md.
     s.broadcast(JSON.stringify({
       type: 'done',
-      ...(s.pendingBgTasks.size > 0 ? { pendingBackgroundTasks: s.pendingBgTasks.size } : {}),
+      ...(s.pendingBgTasks.size > 0 ? { pendingBackgroundTasks: s.pendingBgTasks.size, backgroundTasksSince: oldestBgTaskStart(s) } : {}),
       ...(s.autonomousTurn ? { autonomous: true } : {}),
     }));
   }

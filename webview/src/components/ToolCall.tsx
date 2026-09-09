@@ -62,6 +62,8 @@ export function ToolCall({ call, sessionDone }: Props) {
   const [otherText, setOtherText] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState(0);
   const bashCommand = name === 'Bash' ? (input.command as string) || '' : '';
+  // True when the row shows two summaries: Bash's own description, then the command it ran.
+  const bashDesc = name === 'Bash' && !!bashCommand && summary !== bashCommand;
   const agentType = name === 'Agent' ? (input.subagent_type as string) || '' : '';
   const resultLineCount = useMemo(
     () => result ? result.trim().split('\n').filter(Boolean).length : 0,
@@ -382,10 +384,10 @@ export function ToolCall({ call, sessionDone }: Props) {
                   {summary}
                 </a>
               ) : (
-                <span className={[styles.toolSummary, name === 'Bash' && summary === bashCommand && styles.toolSummaryBash].filter(Boolean).join(' ')} title={summary}>{summary}</span>
+                <span className={[styles.toolSummary, name === 'Bash' && summary === bashCommand && styles.toolSummaryBash, bashDesc && styles.toolSummaryDesc].filter(Boolean).join(' ')} title={summary}>{summary}</span>
               )
             )}
-            {name === 'Bash' && bashCommand && summary !== bashCommand && (
+            {bashDesc && (
               <span className={[styles.toolSummary, styles.toolSummaryBash].join(' ')} title={bashCommand}>{bashCommand}</span>
             )}
             {name === 'Bash' && result && (

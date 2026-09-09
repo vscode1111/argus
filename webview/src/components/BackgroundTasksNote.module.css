@@ -13,3 +13,8 @@
   font-style: normal;
   line-height: 1;
 }
+
+/* Separated the way the response timer separates its own token counts. */
+.elapsed::before {
+  content: '· ';
+}
