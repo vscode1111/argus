@@ -71,7 +71,7 @@ function makeState(over: Partial<Record<string, unknown>> = {}) {
     toolMap: new Map(),
     answeredTools: new Set(),
     pendingAskTools: new Set(),
-    pendingBgTasks: new Set(),
+    pendingBgTasks: new Map(),
     currentProc: undefined,
     ...over,
   };
@@ -201,7 +201,10 @@ test.describe('CLI-authored user messages are not shown as things the user said'
   // (!notes/tasks/bg-turn-cause-marker/scripts/probe-notification-event.js). Payload below
   // is that probe's capture, field for field.
   test('live: the system notification is re-emitted as a marker carrying the CLI summary', () => {
-    const s = makeState();
+    // Idle, because that is when this notification wakes a turn of its own and therefore
+    // needs explaining. Every Bash call raises this event, so the mid-turn case is silent;
+    // both halves of that gate are in e2e/bg-task-counting.spec.ts.
+    const s = makeState({ cliDone: true });
 
     handleCliEvent(s, {
       type: 'system',

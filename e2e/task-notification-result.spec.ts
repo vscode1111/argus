@@ -91,7 +91,7 @@ function makeState(over: Partial<Record<string, unknown>> = {}) {
     toolMap: new Map(),
     answeredTools: new Set(),
     pendingAskTools: new Set(),
-    pendingBgTasks: new Set(),
+    pendingBgTasks: new Map(),
     pendingFollowUp: undefined,
     currentProc: undefined,
     ...over,

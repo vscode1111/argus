@@ -60,6 +60,9 @@ export type UIMessage = {
   watchdogRetries?: number;
   errorKind?: ErrorKind;
   bgTasksPending?: number;
+  /** When the oldest of those tasks was launched, so the note can count up from it. The
+   *  turn's own responseTime cannot stand in: that turn is over and its duration is a fact. */
+  bgTasksSince?: number;
   /** The CLI woke itself to report a background task; the user did not start this turn.
    *  It completes like any other, but must not ring the sound or raise an OS toast. */
   autonomous?: boolean;

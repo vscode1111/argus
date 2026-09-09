@@ -28,6 +28,10 @@ export interface ChannelMessage {
   blocks?: ChannelBlock[];
   outcome?: string;
   errorKind?: string;
+  // Carried so a client that joins mid-watch replays the same footnote, elapsed time and all,
+  // instead of a bare "1 background task still running" with the count and clock guessed.
+  bgTasksPending?: number;
+  bgTasksSince?: number;
 }
 
 // Session-streaming events: browsing clients (those that navigated away to a different
@@ -270,6 +274,8 @@ function applyMsg(entry: SessionEntry, p: Record<string, unknown>): void {
           thinking: entry.snapshot.thinking || undefined,
           blocks: blocks.length > 0 ? blocks : undefined,
           outcome: hasBg ? 'background_waiting' : 'success',
+          bgTasksPending: hasBg ? p.pendingBackgroundTasks as number : undefined,
+          bgTasksSince: hasBg ? p.backgroundTasksSince as number | undefined : undefined,
         });
         if (entry.history.length > MAX_HISTORY) entry.history = entry.history.slice(-MAX_HISTORY);
         entry.snapshot = null;
