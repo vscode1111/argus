@@ -33,7 +33,7 @@ export type AppAction =
   | { type: 'text_chunk'; text: string }
   | { type: 'tool_start'; call: ToolCallData }
   | { type: 'tool_end'; call: ToolCallData }
-  | { type: 'done'; pendingBackgroundTasks?: number; autonomous?: boolean }
+  | { type: 'done'; pendingBackgroundTasks?: number; backgroundTasksSince?: number; autonomous?: boolean }
   | { type: 'bgTasks'; count: number }
   | { type: 'bg_notice'; notice: TaskNotice }
   | { type: 'stop' }
@@ -200,6 +200,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         outcome,
         watchdogRetries: watchdogRetries > 0 ? watchdogRetries : undefined,
         bgTasksPending: hasPendingBg ? action.pendingBackgroundTasks : undefined,
+        bgTasksSince: hasPendingBg ? action.backgroundTasksSince : undefined,
         autonomous: action.autonomous || undefined,
         finalTokens: state.streaming.liveTokens,
       };

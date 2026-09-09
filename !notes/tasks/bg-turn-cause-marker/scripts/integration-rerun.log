@@ -1,0 +1,22 @@
+
+Running 17 tests using 1 worker
+
+[1A[2K[1/17] [integration] › e2e\effort-thinking-integration.spec.ts:89:7 › effort and thinking (integration) › Models tab shows Effort and Thinking controls
+[1A[2K[2/17] [integration] › e2e\effort-thinking-integration.spec.ts:105:7 › effort and thinking (integration) › slash menu shows Effort dots and Thinking toggle
+[1A[2K[3/17] [integration] › e2e\effort-thinking-integration.spec.ts:122:7 › effort and thinking (integration) › clicking effort dot in modal updates label and persists to config
+[1A[2K[4/17] [integration] › e2e\effort-thinking-integration.spec.ts:140:7 › effort and thinking (integration) › clicking effort dot in slash menu persists to config
+[1A[2K[5/17] [integration] › e2e\effort-thinking-integration.spec.ts:159:7 › effort and thinking (integration) › clicking thinking toggle in modal flips its state and persists to config
+[1A[2K[6/17] [integration] › e2e\effort-thinking-integration.spec.ts:185:7 › effort and thinking (integration) › clicking thinking toggle in slash menu persists to config
+[1A[2K[7/17] [integration] › e2e\effort-thinking-integration.spec.ts:214:7 › effort and thinking (integration) › effort and thinking are restored from config on reconnect
+[1A[2K[8/17] [integration] › e2e\effort-thinking-integration.spec.ts:232:7 › effort and thinking (integration) › modal shows restored effort after reconnect
+[1A[2K[9/17] [integration] › e2e\effort-thinking-integration.spec.ts:250:7 › effort and thinking (integration) › thinking=false forces --effort low in the CLI spawn log
+[1A[2K[10/17] [integration] › e2e\effort-thinking-integration.spec.ts:268:7 › effort and thinking (integration) › selected effort level is forwarded to the CLI spawn log
+[1A[2K[11/17] [integration] › e2e\effort-thinking-integration.spec.ts:287:7 › effort and thinking (integration) › clicking a model row in the modal persists to config
+[1A[2K[12/17] [integration] › e2e\effort-thinking-integration.spec.ts:310:7 › effort and thinking (integration) › selecting Default (CLI) in the modal clears the stored model
+[1A[2K[13/17] [integration] › e2e\effort-thinking-integration.spec.ts:331:7 › effort and thinking (integration) › selecting a model in the slash menu persists to config
+[1A[2K[14/17] [integration] › e2e\effort-thinking-integration.spec.ts:350:7 › effort and thinking (integration) › model persists across reconnect - slash menu hint shows model name
+[1A[2K[15/17] [integration] › e2e\effort-thinking-integration.spec.ts:360:7 › effort and thinking (integration) › model search in the modal filters the list
+[1A[2K[16/17] [integration] › e2e\effort-thinking-integration.spec.ts:370:7 › effort and thinking (integration) › selected model is forwarded to the CLI spawn log
+[1A[2K[17/17] [integration] › e2e\image-recognize-integration.spec.ts:6:5 › paste text.jpg via Ctrl+V and recognize text in response
+[1A[2K  17 passed (1.1m)
+exit=0

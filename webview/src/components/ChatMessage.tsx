@@ -203,7 +203,7 @@ export function ChatMessage({ message, login }: Props) {
         </div>
       )}
       {message.outcome === 'background_waiting' && (
-        <BackgroundTasksNote pending={message.bgTasksPending} />
+        <BackgroundTasksNote pending={message.bgTasksPending} since={message.bgTasksSince} />
       )}
     </div>
   );

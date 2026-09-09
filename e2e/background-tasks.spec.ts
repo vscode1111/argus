@@ -100,6 +100,38 @@ test.describe('background tasks', () => {
     await expect(note(page)).not.toContainText(' of ');
   });
 
+  // The turn timer beside the note is frozen by design (it reports how long the turn took),
+  // so on a 45-minute CI poller the whole screen looked stopped. The note carries the only
+  // number that is still moving, and it counts from the task's launch rather than from the
+  // turn's end - those differ by however long the turn ran after starting it.
+  test('the note counts up from when the task was launched', async ({ page }) => {
+    const launchedAt = Date.now() - (6 * 60 + 40) * 1000;
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'watch ci' } });
+    await send(page, { type: 'thinking_start' });
+    await startBgTask(page, 't1', 'Запустить фоновый поллер CI', 'node watch-ci.js');
+    await send(page, { type: 'done', pendingBackgroundTasks: 1, backgroundTasksSince: launchedAt });
+
+    const elapsed = page.getByTestId('background-tasks-elapsed');
+    await expect(elapsed).toHaveText(/^6m 4\ds$/);
+
+    // ...and it is actually running, rather than a one-off render of the launch age.
+    const first = await elapsed.textContent();
+    await expect.poll(() => elapsed.textContent(), { timeout: 4000 }).not.toBe(first);
+  });
+
+  // Control: the count alone must not start a clock at zero. A daemon older than this field
+  // sends no launch time, and guessing one (the turn's end, or first render) would report a
+  // poller that has run for half an hour as seconds old.
+  test('no elapsed time when the server did not send a launch time', async ({ page }) => {
+    await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'watch ci' } });
+    await send(page, { type: 'thinking_start' });
+    await startBgTask(page, 't1', 'Poller', 'node watch-ci.js');
+    await send(page, { type: 'done', pendingBackgroundTasks: 1 });
+
+    await expect(note(page)).toContainText('1 background task still running');
+    await expect(page.getByTestId('background-tasks-elapsed')).toHaveCount(0);
+  });
+
   test('note is removed once the task reports back', async ({ page }) => {
     await send(page, { type: 'message', message: { id: '1', role: 'user', content: 'run bg task' } });
     await send(page, { type: 'thinking_start' });

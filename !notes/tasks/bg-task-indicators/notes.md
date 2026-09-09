@@ -81,6 +81,17 @@ This is *not* established. It also sits awkwardly against the timer matching
 Argus's own debug log for that session (`sendLog` writes "Spawning claude" /
 "Reusing claude process" per send); the transcript cannot answer it.
 
+> **Resolved 2026-09-08, and the parenthetical above was the answer.** A foreground
+> Bash does not merely *sometimes* get auto-backgrounded: the CLI raises
+> `task_started` (and later `task_notification`) for **every** Bash tool call. A run
+> whose only command was `echo scub-hello`, with no `run_in_background` anywhere,
+> produced both. So "task_starteds since the last reset" was never a count of
+> background tasks at all, in any window, which is why the denominator could not be
+> reconciled with the launches visible in the transcript. Measured in
+> [../bg-turn-cause-marker/scripts/probe-foreground-bash.js](../bg-turn-cause-marker/scripts/probe-foreground-bash.js);
+> the same defect was still live in the surviving numerator and made the `✻ N` pill
+> blink on every command ([../bg-turn-cause-marker/notes.md](../bg-turn-cause-marker/notes.md)).
+
 **The recommendation below does not depend on resolving it** - under every
 candidate mechanism the denominator counts "task_starteds since the last reset",
 a window with no relationship to the message the note hangs on.

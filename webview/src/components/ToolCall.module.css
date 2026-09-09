@@ -39,6 +39,13 @@
 }
 .toolSummaryBash { color: var(--vscode-symbolIcon-variableForeground, #dcdcaa); }
 
+/* A Bash row puts the description and the command side by side, and flex shrinks items in
+   proportion to their content width - so a 500-char `node -e "..."` next to a 20-char
+   description dragged both down by the same ratio and left the description as four letters
+   and an ellipsis. The command is the half worth truncating; the description is the only
+   readable label the row has. Capped so a long one cannot take the row over instead. */
+.toolSummaryDesc { flex-shrink: 0; max-width: 45%; }
+
 .toolAgentType {
   color: var(--vscode-symbolIcon-enumeratorForeground, #b5cea8);
   font-family: var(--font-mono);

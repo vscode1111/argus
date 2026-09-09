@@ -361,6 +361,21 @@ await page.evaluate(() => {
 ```
 This simulates a server->webview message; it does not get re-sent to the backend.
 
+### Measuring in the same `evaluate` that dispatched reads the *previous* render
+
+The dispatch is synchronous, the React re-render is not, so anything reading geometry or text in that
+same callback sees the DOM as it was before the message landed. Specs avoid this by construction -
+`background-tasks.spec.ts`'s `send()` resolves only after two `requestAnimationFrame`s, and every
+locator assertion retries - but **manual verification through the Playwright MCP does not**, and that
+is where it bites, because a hand-run `evaluate` looks like it proves something.
+
+It cost a wrong conclusion on 2026-09-09: a flex fix was measured at `140px` against a predicted
+`519px` and nearly rewritten as broken. The `140px` was the width of the *previous* injection's first
+row, still on screen; reading `getComputedStyle` a moment later reported `flex: 0 0 auto`,
+`max-width: 45%`, `519.297px`, exactly as designed. Prefer the **computed style** over a bounding box
+when the question is "did this rule apply", and when a hand measurement contradicts a confident
+prediction, suspect the timing before suspecting the code.
+
 ## Mock data clobbered by real backend replies
 
 The "mock" project still runs against a live backend, so a component that fires a data query (`getModels`, `getServerInfo`, ...) gets a **real** reply alongside the test's injected one - and whichever lands last wins. The failure is load-dependent (the real reply's timing shifts under 4 parallel workers), so the spec passes in isolation and flakes in the full run.
@@ -455,6 +470,36 @@ concatenation.
 Print the input, or assert something that can only be true in the intended context (here:
 the rendered text keeps its backslashes, which only happens inside a code span). A fixture
 that quietly becomes a different fixture is indistinguishable from a passing test.
+
+## Never run a mock spec while the integration project is running
+
+Two Playwright runners share one dev server, and the second one costs twice:
+
+- **It wipes `test-results/` on start**, so the artifacts of a failure the integration run
+  produced minutes earlier are gone before they can be read. Observed 2026-09-08: a
+  verify-red mock run destroyed the `error-context.md` of an integration failure that had
+  just happened, leaving only the summary line to reason from.
+- **It is exactly the resource contention `workers: 1` exists to avoid.** The integration
+  project is serialised because a real CLI plus a Chromium per test already saturates the
+  machine; adding a second runner is the same overload with a different name, and it shows up
+  as a turn that never starts (Stop button never appears) or a model answer that never lands
+  inside the budget, i.e. as a *product* bug in a spec unrelated to the change.
+
+Wait for the run, or use a throwaway backend on a private port. The same applies to probes
+that spawn a real CLI.
+
+## A hand-built state mimic breaks silently when the real shape changes
+
+The bundle-driving specs (`bg-task-counting`, `synthetic-user-message`, `task-notification-result`)
+feed the compiled `handleCliEvent` a `SessionState` built as an untyped object literal - untyped by
+necessity, since the spec sits across the frontend/backend tsconfig boundary and stubs half the
+interface. The cost: when a real field's *shape* changes, `tsc` says nothing and the mimics fail at
+runtime, or worse, keep passing. On 2026-09-09 `pendingBgTasks` went `Set` -> `Map` (the elapsed-time
+note needs launch timestamps); every `src/` call site was audited as compatible, but all three mimics
+still said `new Set()`. Two `bg-task-counting` tests died on `.set is not a function` - and the other
+two specs stayed green only because their payloads never reach `addBgTask`, which is silence, not
+compatibility. When changing the shape of any `SessionState` field, grep `e2e/` for the field name
+and fix every mimic, including the ones that still pass.
 
 ## A payload copied from a transcript is not evidence about the stream
 

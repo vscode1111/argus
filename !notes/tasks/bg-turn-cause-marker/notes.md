@@ -95,8 +95,20 @@ outstanding" and "finished, a watcher is still running" were the same colour.
   | reducer-seeding | `thinking_start` seeding from `pendingNotice` | 1 failed |
   | notice-clearing | clearing on a user message | 1 failed |
   | timer-colour | the neutral branch | 2 failed |
+  | count-gate | the `run_in_background` test on `task_started` | 1 failed |
+  | auto-background | the result-text path | 1 failed |
+  | marker-idle-gate | the `cliDone` test on the marker | 1 failed |
 
-- Full `yarn test:e2e` (both projects): see the run log next to this file.
+- Full `yarn test:e2e` (both projects), round 1: **417 passed, 6 skipped, 0 failed**, 8.1m
+  (`scripts/full-suite.log`).
+- Round 2 (the counting fix): mock **287 passed** (`scripts/mock-final.log`); integration
+  **132 passed, 6 skipped, 2 failed** (`scripts/integration-final.log`). Both failures were
+  self-inflicted, not the change: verify-red mock runs were executing *concurrently* with the
+  integration project, which is the contention `workers: 1` exists to prevent, and which also
+  wiped one failure's artifacts before they could be read. Re-run alone in silence, both specs
+  pass (**17 passed**, `scripts/integration-rerun.log`), so all 134 are accounted for - though
+  not yet all green inside one uninterrupted run. Lesson written up in
+  [../../common/e2e-testing.md](../../common/e2e-testing.md).
 - Three pre-existing assertions were updated deliberately, not worked around: two asserted
   `responseTimeSuccess` on turns that leave tasks behind, which is the behaviour being
   changed. The pair that replaced them pins both directions (neutral when tasks are pending,
@@ -132,6 +144,48 @@ nothing rendered it only by accident, the event lands before the recovery branch
 thinking_start". There is no such event. The accident was imaginary and the code written to
 handle it never ran.
 
+## Round 2: the `✻ N` pill counted every Bash call
+
+Reported the same day against the same build: "Bg indicator still flicks while bg count
+disappears", then "✻ N появляется и исчезает". The answer to "indicator or count?" is **the
+count**.
+
+`task_started` is not a background-task event. A run whose only command was a plain
+`echo scub-hello`, no `run_in_background` anywhere:
+
+```
+17:19:37 TOOL_USE Bash run_in_background=undefined cmd="echo scub-hello"
+17:19:46 SYSTEM task_started       task=b6hrftz42
+17:19:48 SYSTEM task_notification  task=b6hrftz42 summary="Echo scub-hello"
+```
+
+So every command the agent ran pushed the count up and dropped it a second later. A second
+probe with exactly one real background task plus three foreground `echo`s recorded the count
+as `1 → 2 → 1 → 2 → 1` (`scripts/probe-pill-flicker.log`). It also caught the same defect in
+the marker shipped earlier in this task: it announced "Background task reported: Echo one".
+
+Two discriminators now gate membership, and each covers a case the other misses:
+
+| signal | what it means | case it catches |
+|---|---|---|
+| `run_in_background: true` on the tool input | the model asked for it | the ordinary launch, counted the moment `task_started` lands |
+| `Command running in background with ID: <id>` in the tool result | the CLI actually did it | a command the CLI backgrounds **by itself**, whose input says nothing |
+
+The second is not hypothetical: in the GMTrade session a Bash with no `run_in_background` came
+back with exactly that string (`bsbym70eo`), and its notification arrived five minutes later
+and woke an autonomous turn. The id in the string is the same `task_id` the system events
+carry, checked on both a probe and that transcript, so either path feeds one set.
+
+The marker is gated separately, on `s.cliDone`, since its job is to explain a turn that starts
+by itself. Gating it on the background test instead would have silenced it for exactly the
+tasks the discriminators failed to classify.
+
+**Two hypotheses died first, both cheap to re-derive, so they are written down:**
+`task_updated` does **not** fire on incremental output (probed with a task printing a line
+every two seconds: one event, at completion, 0.1s before the notification, so the 2026-09-03
+conclusion survives a harder case), and a long background task closes cleanly (`count=0` at
+the moment it ends, then the autonomous turn).
+
 ## Gotchas
 
 **A payload captured from a transcript proves nothing about the stream, and the test will not
@@ -141,6 +195,14 @@ spending ninety seconds of real CLI time on the answer. The general form is the
 external-service-isolation rule in `~/.claude/instructions/rules/`: when the question is what
 someone else's process emits, only that process can answer it, and a fixture is our own
 belief with a timestamp on it.
+
+**The CRLF anchor trap fired again, and the guard is what saved the round.** The
+`auto-background` case anchored on `'  noteBackgroundLaunch(s, result);\n'`, which matches
+nothing in a CRLF source file, exactly as [../../common/development.md](../../common/development.md)
+says. It reported `ERROR: anchor matched 0 times` instead of a green run, because `patch()`
+asserts the hit count rather than trusting `String.replace`. Without that assertion the case
+would have printed "still green, the test proves nothing" and the real conclusion (the test is
+fine, the harness never applied the revert) would have been inverted.
 
 **The verify-red harness lied on its first run.** `spawnSync(cmd, argsArray, {shell:true})`
 joins the array without quoting, so `-g a marker with no turn behind it` broke into shell
@@ -157,6 +219,29 @@ webview reducer so late joiners can be replayed to, so every new streaming frame
 there too, including the `pendingNotice` dance. Nothing failed when it was missing: the mock
 tests drive the webview directly, and no integration test opens a second client mid
 background-task turn. Found by reading, not by a red test, and it is still uncovered.
+
+## Round 3 (2026-09-09): the user reported the ungated markers, from the deployed build
+
+> I guess those massages are spare
+
+A screenshot of one turn carrying three `✻` lines - `✻ Обновить описание PR`,
+`✻ Проверить описание побайтово плюс структурные утверждения`, `✻ Постпубликационный аудит и CI` -
+each repeating the `description` of the Bash row immediately above it. This is the defect the round-2
+`s.cliDone` gate was written for, seen from the user's side, and it needed no new code.
+
+Two things worth keeping from confirming it:
+
+- **The report is evidence about the *deployed* build, not the working tree.** The gate was
+  uncommitted at the time and already compiled into this repo's `out/`, but the daemon serving the
+  user was `local.argus-0.0.95`, which predates it. Read the discovery file's pid and command line
+  before concluding that a live report contradicts the code in front of you
+  ([../../common/backend-restart.md](../../common/backend-restart.md)).
+- **The transcript settles what the stream cannot.** All three Bash calls in
+  `~/.claude/projects/d---Projects-GMTrade/baed4cb6-572e-49b8-9595-424a7d63ce23.jsonl` have
+  `run_in_background: undefined` - plain foreground commands. That is the `echo one / echo two /
+  echo three` case from round 2 occurring in real work, and it is the strongest evidence so far for
+  gating on `cliDone`: a marker gated on "was this a background task" would also have suppressed
+  these, but only by accident, and would still fire on the turn that appears from nowhere.
 
 ## Still open
 
@@ -179,6 +264,9 @@ background-task turn. Found by reading, not by a red test, and it is still uncov
 | script | what it does |
 |---|---|
 | `scripts/verify-red.js` | reverts each change in turn, asserts its test fails, restores |
+| `scripts/probe-foreground-bash.js` | proves `task_started`/`task_notification` fire for a plain foreground Bash |
+| `scripts/probe-task-updated.js` | kills the "`task_updated` fires on incremental output" theory, with a task that prints every 2s |
+| `scripts/probe-pill-flicker.js` | end-to-end reproduction: a real server plus a real CLI, logging every `bgTasks` frame with a timestamp |
 | `scripts/probe-notification-event.js` | spawns a real CLI with one background task and prints every `user` / `system` / `result` event; raw stdout kept as `probe-notification.out.jsonl` |
 | `scripts/sync-index-rows.js` | rewrites the `cli-turn-boundaries` summary tail in both index copies at once |
 | `scripts/sync-e2e-index-row.js` | appends this session's two e2e lessons to the `e2e-testing` row in both index copies |

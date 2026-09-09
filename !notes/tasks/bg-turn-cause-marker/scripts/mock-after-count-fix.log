@@ -1,0 +1,338 @@
+
+Running 287 tests using 4 workers
+
+[1A[2K[1/287] [mock] › e2e\account-usage.spec.ts:49:7 › account & usage › "Account & usage..." action appears under a Model header when typing /usage
+[1A[2K[2/287] [mock] › e2e\account-usage.spec.ts:92:7 › account & usage › renders usage bars sorted, with percent, color tier, and reset labels
+[1A[2K[3/287] [mock] › e2e\account-usage.spec.ts:78:7 › account & usage › renders account rows from the accountUsage message
+[1A[2K[4/287] [mock] › e2e\account-usage.spec.ts:64:7 › account & usage › Enter selects the highlighted account action and opens the modal
+[1A[2K[5/287] [mock] › e2e\account-usage.spec.ts:121:7 › account & usage › model-scoped weekly windows render their label in sort order (Weekly Fable)
+[1A[2K[6/287] [mock] › e2e\account-usage.spec.ts:145:7 › account & usage › high utilization uses the high (red) color tier
+[1A[2K[7/287] [mock] › e2e\account-usage.spec.ts:157:7 › account & usage › refresh button re-requests usage and updates the bars
+[1A[2K[8/287] [mock] › e2e\account-usage.spec.ts:178:7 › account & usage › shows a hint when no usage windows are available
+[1A[2K[9/287] [mock] › e2e\account-usage.spec.ts:187:7 › account & usage › surfaces the fetch failure reason (e.g. HTTP 429) in the hint
+[1A[2K[10/287] [mock] › e2e\account-usage.spec.ts:201:7 › account & usage › shows "Not logged in" when the account is logged out
+[1A[2K[11/287] [mock] › e2e\account-usage.spec.ts:210:7 › account & usage › Escape closes the modal
+[1A[2K[12/287] [mock] › e2e\account-usage.spec.ts:216:7 › account & usage › footer link is present
+[1A[2K[13/287] [mock] › e2e\ask-dialog-notify.spec.ts:33:7 › AskUserQuestion notifications › timer hides idle time while AskUserQuestion is pending
+[1A[2K[14/287] [mock] › e2e\ask-dialog-notify.spec.ts:53:7 › AskUserQuestion notifications › timer idle counter returns after AskUserQuestion is answered
+[1A[2K[15/287] [mock] › e2e\ask-dialog-notify.spec.ts:75:7 › AskUserQuestion notifications › completion sound plays when AskUserQuestion appears
+[1A[2K[16/287] [mock] › e2e\ask-dialog-notify.spec.ts:98:7 › AskUserQuestion notifications › sound does not play twice for the same AskUserQuestion
+[1A[2K[17/287] [mock] › e2e\ask-dialog-resume.spec.ts:31:7 › AskUserQuestion resume › answer continues streaming in the same message (no done between answer and follow-up)
+[1A[2K[18/287] [mock] › e2e\ask-dialog-resume.spec.ts:67:7 › AskUserQuestion resume › cancelled dialog sends done without follow-up
+[1A[2K[19/287] [mock] › e2e\ask-dialog-resume.spec.ts:92:7 › AskUserQuestion resume › original turn preserves thinking, text, and tool blocks after answer
+[1A[2K[20/287] [mock] › e2e\ask-dialog-resume.spec.ts:124:7 › AskUserQuestion resume › follow-up after answer does not lose previous messages
+[1A[2K[21/287] [mock] › e2e\ask-dialog-resume.spec.ts:159:7 › AskUserQuestion resume › multi-question result summary shows all Q/A pairs
+[1A[2K[22/287] [mock] › e2e\ask-dialog-resume.spec.ts:182:7 › AskUserQuestion resume › result summary not shown for cancelled dialog
+[1A[2K[23/287] [mock] › e2e\ask-dialog-resume.spec.ts:197:7 › AskUserQuestion resume › thinking continues after answer without losing dialog
+[1A[2K[24/287] [mock] › e2e\ask-dialog-selection.spec.ts:105:7 › AskUserQuestion option selection › selecting third option sends correct label (not first)
+[1A[2K[25/287] [mock] › e2e\ask-dialog-selection.spec.ts:128:7 › AskUserQuestion option selection › selecting last option sends correct label
+[1A[2K[26/287] [mock] › e2e\ask-dialog-selection.spec.ts:146:7 › AskUserQuestion option selection › selecting first option sends first label (baseline)
+[1A[2K[27/287] [mock] › e2e\ask-dialog-selection.spec.ts:160:7 › AskUserQuestion option selection › changing selection before submit sends final choice
+[1A[2K[28/287] [mock] › e2e\ask-dialog-selection.spec.ts:179:7 › AskUserQuestion option selection › multi-select non-first options sends correct labels
+[1A[2K[29/287] [mock] › e2e\ask-dialog-selection.spec.ts:198:7 › AskUserQuestion option selection › multi-tab: non-first selection in each tab sends correct labels
+[1A[2K[30/287] [mock] › e2e\ask-dialog-selection.spec.ts:222:7 › AskUserQuestion option selection › result summary matches submitted non-first option after tool_end
+[1A[2K[31/287] [mock] › e2e\ask-dialog-string-input.spec.ts:28:7 › AskUserQuestion with stringified questions › renders the dialog instead of crashing the app
+[1A[2K[32/287] [mock] › e2e\background-tasks.spec.ts:60:7 › background tasks › a turn with a pending task finishes instead of staying live
+[1A[2K[33/287] [mock] › e2e\background-tasks.spec.ts:82:7 › background tasks › completion sound fires even though a task is still running
+[1A[2K[34/287] [mock] › e2e\background-tasks.spec.ts:91:7 › background tasks › single pending task: note without a counter
+[1A[2K[35/287] [mock] › e2e\background-tasks.spec.ts:103:7 › background tasks › note is removed once the task reports back
+[1A[2K[36/287] [mock] › e2e\background-tasks.spec.ts:120:7 › background tasks › multiple tasks: note says how many are still running
+[1A[2K[37/287] [mock] › e2e\background-tasks.spec.ts:135:7 › background tasks › the running count drops as tasks complete
+[1A[2K[38/287] [mock] › e2e\background-tasks.spec.ts:168:7 › background tasks › only the latest message carries the note
+[1A[2K[39/287] [mock] › e2e\background-tasks.spec.ts:189:7 › background tasks › a turn that leaves tasks behind gets a neutral timer, not success green
+[1A[2K[40/287] [mock] › e2e\background-tasks.spec.ts:201:7 › background tasks › final message shows timer after all tasks complete
+[1A[2K[41/287] [mock] › e2e\background-tasks.spec.ts:224:7 › background tasks › a turn the user did not start opens with a marker naming its cause
+[1A[2K[42/287] [mock] › e2e\background-tasks.spec.ts:253:7 › background tasks › a marker with no turn behind it does not open the next one the user starts
+[1A[2K[43/287] [mock] › e2e\background-tasks.spec.ts:265:7 › background tasks › a task reporting in mid-turn marks the turn it lands in
+[1A[2K[44/287] [mock] › e2e\background-tasks.spec.ts:276:7 › background tasks › Out link pulses green while task is running
+[1A[2K[45/287] [mock] › e2e\background-tasks.spec.ts:287:7 › background tasks › Out link stops pulsing after task completes
+[1A[2K[46/287] [mock] › e2e\background-tasks.spec.ts:301:7 › background tasks › tool result updated with output on task completion
+[1A[2K[47/287] [mock] › e2e\background-tasks.spec.ts:326:7 › background tasks › counter resets between separate user requests
+[1A[2K[48/287] [mock] › e2e\background-tasks.spec.ts:358:7 › background tasks › multiple Out links: completed ones stop pulsing, running ones keep pulsing
+[1A[2K[49/287] [mock] › e2e\background-tasks.spec.ts:379:7 › background tasks › a superseded message keeps its timer and drops the note
+[1A[2K[50/287] [mock] › e2e\background-tasks.spec.ts:404:9 › background tasks › running-tasks pill › appears on a push, updates in place, and clears at zero
+[1A[2K[51/287] [mock] › e2e\background-tasks.spec.ts:422:9 › background tasks › running-tasks pill › survives the turn boundary that strips the note
+[1A[2K[52/287] [mock] › e2e\background-tasks.spec.ts:442:9 › background tasks › running-tasks pill › a turn that ends with no tasks clears the pill
+[1A[2K[53/287] [mock] › e2e\bg-task-counting.spec.ts:76:7 › only real background tasks reach the pending count › a plain Bash call is not counted, even though it raises task_started
+[1A[2K[54/287] [mock] › e2e\bg-task-counting.spec.ts:87:7 › only real background tasks reach the pending count › a run_in_background call is counted and cleared by its notification
+[1A[2K[55/287] [mock] › e2e\bg-task-counting.spec.ts:101:7 › only real background tasks reach the pending count › a command the CLI backgrounds by itself is counted, from its result
+[1A[2K[56/287] [mock] › e2e\bg-task-counting.spec.ts:115:7 › only real background tasks reach the pending count › the cause marker is raised for a turn nobody asked for, not for every command
+[1A[2K[57/287] [mock] › e2e\code-copy-button.spec.ts:37:7 › code block copy button › stays in the visible right corner while the block scrolls
+[1A[2K[58/287] [mock] › e2e\code-copy-button.spec.ts:64:7 › code block copy button › copies the code after the block has been scrolled
+[1A[2K[59/287] [mock] › e2e\dialog-state.spec.ts:41:7 › dialog state persistence › remembers the selected tab across close and reopen
+[1A[2K[60/287] [mock] › e2e\dialog-state.spec.ts:51:7 › dialog state persistence › remembers position and size across close and reopen
+[1A[2K[61/287] [mock] › e2e\dialog-state.spec.ts:79:7 › dialog state persistence › persists tab and size across a page refresh
+[1A[2K[62/287] [mock] › e2e\dialog-state.spec.ts:94:7 › dialog state persistence › does not persist size when the user only switches tabs (no manual resize)
+[1A[2K[63/287] [mock] › e2e\dialog-state.spec.ts:121:7 › dialog state persistence › "Reset layout" wipes the saved tab and size
+[1A[2K[64/287] [mock] › e2e\diff-viewer-scroll.spec.ts:32:7 › DiffViewerModal scroll › diff modal columns do not overlap at narrow viewport
+[1A[2K[65/287] [mock] › e2e\diff-viewer-scroll.spec.ts:66:7 › DiffViewerModal scroll › diff modal columns fill space at wide viewport
+[1A[2K[66/287] [mock] › e2e\file-path-at-sign.spec.ts:40:7 › paths containing @ › links the whole @-file in a code span, not the folder above it
+[1A[2K[67/287] [mock] › e2e\file-path-at-sign.spec.ts:51:7 › paths containing @ › keeps its backslashes in prose, where markdown would eat them
+[1A[2K[68/287] [mock] › e2e\file-path-at-sign.spec.ts:59:7 › paths containing @ › an @ inside a segment links whole (retina asset)
+[1A[2K[69/287] [mock] › e2e\file-path-at-sign.spec.ts:71:7 › paths containing @ › a scoped package path is one link, not a folder plus a fragment
+[1A[2K[70/287] [mock] › e2e\file-path-at-sign.spec.ts:80:7 › paths containing @ › a handle and an email are not paths, while a real path in the same line still links
+[1A[2K[71/287] [mock] › e2e\file-path-bang-folder.spec.ts:22:7 › file paths containing a ! folder › links the whole windows path, not just the part after the bang
+[1A[2K[72/287] [mock] › e2e\file-path-bang-folder.spec.ts:33:7 › file paths containing a ! folder › links a relative path through a bang folder
+[1A[2K[73/287] [mock] › e2e\file-path-bang-folder.spec.ts:44:7 › file paths containing a ! folder › links a unix path through a bang folder
+[1A[2K[74/287] [mock] › e2e\file-path-bang-folder.spec.ts:57:7 › file paths containing a ! folder › links a bang path inside inline code without doubling backslashes
+[1A[2K[75/287] [mock] › e2e\file-path-hyphen-dotfile.spec.ts:37:7 › hyphenated dotfile paths › links the whole name in a code span, not up to the hyphen
+[1A[2K[76/287] [mock] › e2e\file-path-hyphen-dotfile.spec.ts:48:7 › hyphenated dotfile paths › keeps its backslashes in prose, where markdown would eat them
+[1A[2K[77/287] [mock] › e2e\file-path-hyphen-dotfile.spec.ts:56:7 › hyphenated dotfile paths › a normal extension still links whole and stops at the space
+[1A[2K[78/287] [mock] › e2e\file-path-links.spec.ts:69:7 › file path links › renders file paths as clickable links in various markdown contexts
+[1A[2K[79/287] [mock] › e2e\file-path-links.spec.ts:91:7 › file path links › clicking a file path link opens FileViewerModal with file content
+[1A[2K[80/287] [mock] › e2e\file-path-links.spec.ts:104:7 › file path links › clicking a table cell file path opens FileViewerModal
+[1A[2K[81/287] [mock] › e2e\file-path-links.spec.ts:114:7 › file path links › file path with line number opens and scrolls to that line
+[1A[2K[82/287] [mock] › e2e\file-path-links.spec.ts:125:7 › file path links › file path with line range highlights the start line of the range
+[1A[2K[83/287] [mock] › e2e\file-path-links.spec.ts:138:7 › file path links › clicking a bold-wrapped file path opens FileViewerModal
+[1A[2K[84/287] [mock] › e2e\file-path-links.spec.ts:167:7 › relative file path links › renders relative paths as clickable links
+[1A[2K[85/287] [mock] › e2e\file-path-links.spec.ts:177:7 › relative file path links › clicking a relative path opens FileViewerModal with resolved content
+[1A[2K[86/287] [mock] › e2e\file-path-links.spec.ts:191:7 › relative file path links › relative path with line number opens at correct line
+[1A[2K[87/287] [mock] › e2e\file-path-links.spec.ts:203:7 › relative file path links › URLs are not broken by relative path detection
+[1A[2K[88/287] [mock] › e2e\file-path-links.spec.ts:239:7 › image file preview › clicking an image path opens FileViewerModal with <img> instead of code
+[1A[2K[89/287] [mock] › e2e\file-path-links.spec.ts:254:7 › image file preview › image modal has no encoding dropdown
+[1A[2K[90/287] [mock] › e2e\file-path-links.spec.ts:267:7 › image file preview › Escape closes the image modal
+[1A[2K[91/287] [mock] › e2e\file-path-links.spec.ts:280:7 › image file preview › relative image path opens as image preview
+[1A[2K[92/287] [mock] › e2e\file-path-links.spec.ts:305:7 › tool result count pluralization › Glob with 1 result shows inline result
+[1A[2K[93/287] [mock] › e2e\file-path-links.spec.ts:316:7 › tool result count pluralization › Glob with 3 results shows "3 files"
+[1A[2K[94/287] [mock] › e2e\file-path-links.spec.ts:327:7 › tool result count pluralization › Grep with 1 result shows inline result
+[1A[2K[95/287] [mock] › e2e\file-path-links.spec.ts:338:7 › tool result count pluralization › Grep with multiple results shows "N lines of output"
+[1A[2K[96/287] [mock] › e2e\file-viewer-modal.spec.ts:45:7 › Read tool line highlighting › Read with limit=80 shows :1-80 summary but does not highlight lines
+[1A[2K[97/287] [mock] › e2e\file-viewer-modal.spec.ts:61:7 › Read tool line highlighting › Read with offset=5 limit=10 highlights line 5 and scrolls to it
+[1A[2K[98/287] [mock] › e2e\file-viewer-modal.spec.ts:79:7 › Read tool line highlighting › Read without offset/limit shows plain path and no highlight
+[1A[2K[99/287] [mock] › e2e\file-viewer-modal.spec.ts:100:7 › FileViewerModal copy path button › copy path button copies file path to clipboard
+[1A[2K[100/287] [mock] › e2e\file-viewer-modal.spec.ts:116:7 › FileViewerModal copy path button › copy path button shows checkmark after click
+[1A[2K[101/287] [mock] › e2e\html-preview.spec.ts:45:7 › html preview › renders the document, and its scripts do not run
+[1A[2K[102/287] [mock] › e2e\html-preview.spec.ts:57:7 › html preview › toggles to the source and back
+[1A[2K[103/287] [mock] › e2e\html-preview.spec.ts:70:7 › html preview › a Read with an offset still renders the slice
+[1A[2K[104/287] [mock] › e2e\html-preview.spec.ts:90:7 › html preview › renders in the panel theme, over the document own colours
+[1A[2K[105/287] [mock] › e2e\html-preview.spec.ts:108:7 › html preview › a non-html file is untouched
+[1A[2K[106/287] [mock] › e2e\image-copy.spec.ts:45:7 › image viewer modal › click image opens modal with copy and close buttons
+[1A[2K[107/287] [mock] › e2e\image-copy.spec.ts:55:7 › image viewer modal › close button dismisses modal
+[1A[2K[108/287] [mock] › e2e\image-copy.spec.ts:63:7 › image viewer modal › Escape key dismisses modal
+[1A[2K[109/287] [mock] › e2e\image-copy.spec.ts:71:7 › image viewer modal › clicking overlay dismisses modal
+[1A[2K[110/287] [mock] › e2e\image-copy.spec.ts:80:7 › image viewer modal › copy button shows toast in browser mode
+[1A[2K[111/287] [mock] › e2e\image-copy.spec.ts:89:7 › image viewer modal › Ctrl+C shows toast in browser mode
+[1A[2K[112/287] [mock] › e2e\image-copy.spec.ts:101:7 › image viewer modal › toast auto-hides after 2 seconds
+[1A[2K[113/287] [mock] › e2e\image-copy.spec.ts:110:7 › image viewer modal › modal image displays correct alt text
+[1A[2K[114/287] [mock] › e2e\image-copy.spec.ts:118:7 › image viewer modal › multiple images open correct viewer
+[1A[2K[115/287] [mock] › e2e\kill-all-claude.spec.ts:50:7 › stop all Claude CLI processes button › arms on first click and auto-reverts, without sending a message
+[1A[2K[116/287] [mock] › e2e\kill-all-claude.spec.ts:67:7 › stop all Claude CLI processes button › renders a success result from a simulated reply
+[1A[2K[117/287] [mock] › e2e\kill-all-claude.spec.ts:75:7 › stop all Claude CLI processes button › renders a zero-count result from a simulated reply
+[1A[2K[118/287] [mock] › e2e\kill-all-claude.spec.ts:83:7 › stop all Claude CLI processes button › renders an error result from a simulated reply
+[1A[2K[119/287] [mock] › e2e\kill-all-claude.spec.ts:92:7 › stop all Claude CLI processes button › re-fetches server info after a kill result, so CLI launches etc. do not go stale
+[1A[2K[120/287] [mock] › e2e\modal-persistence.spec.ts:32:7 › preview modals survive an active session › diff opened mid-turn survives further streaming events
+[1A[2K[121/287] [mock] › e2e\modal-persistence.spec.ts:48:7 › preview modals survive an active session › diff opened mid-turn survives the turn finishing
+[1A[2K[122/287] [mock] › e2e\modal-persistence.spec.ts:61:7 › preview modals survive an active session › diff from a finished turn survives the next turn starting
+[1A[2K[123/287] [mock] › e2e\modal-persistence.spec.ts:84:7 › preview modals survive an active session › an image preview opened mid-turn survives the turn finishing
+[1A[2K[124/287] [mock] › e2e\modal-persistence.spec.ts:103:7 › preview modals survive an active session › a file path link in streaming text survives the turn finishing
+[1A[2K[125/287] [mock] › e2e\modal-persistence.spec.ts:120:7 › preview modals survive an active session › file output opened mid-turn survives the turn finishing
+[1A[2K[126/287] [mock] › e2e\model-data-refresh.spec.ts:67:7 › model-data refresh scheduling › the intervals are a day for success and an hour for retry
+[1A[2K[127/287] [mock] › e2e\model-data-refresh.spec.ts:80:7 › model-data refresh scheduling › day-old data refreshes when the last attempt is old too
+[1A[2K[128/287] [mock] › e2e\model-data-refresh.spec.ts:86:7 › model-data refresh scheduling › a recent failed attempt backs off even though the data is stale
+[1A[2K[129/287] [mock] › e2e\model-data-refresh.spec.ts:93:7 › model-data refresh scheduling › a failed attempt is retried after the retry window, not after a day
+[1A[2K[130/287] [mock] › e2e\model-data-refresh.spec.ts:102:7 › model-data refresh persistence › a successful fetch advances both clocks and replaces the cache
+[1A[2K[131/287] [mock] › e2e\model-data-refresh.spec.ts:118:7 › model-data refresh persistence › a failed fetch advances only the attempt clock and keeps the old windows
+[1A[2K[132/287] [mock] › e2e\model-data-refresh.spec.ts:137:7 › model-data refresh persistence › after a failed refresh the scheduler retries an hour later
+[1A[2K[133/287] [mock] › e2e\model-data-refresh.spec.ts:151:7 › model-data refresh persistence › a detected default model alone does not count as a successful fetch
+[1A[2K[134/287] [mock] › e2e\model-picker.spec.ts:61:7 › model picker › models without an explicit description fall back to their family wording
+[1A[2K[135/287] [mock] › e2e\model-picker.spec.ts:74:7 › model picker › a server-provided description wins; an unknown family without one renders none
+[1A[2K[136/287] [mock] › e2e\model-data-refresh.spec.ts:72:7 › model-data refresh scheduling › fresh data is not refreshed
+[1A[2K[137/287] [mock] › e2e\model-data-refresh.spec.ts:76:7 › model-data refresh scheduling › a first run with no timestamps refreshes
+[1A[2K[138/287] [mock] › e2e\model-picker.spec.ts:85:7 › model picker › a dated list id highlights when the active model is the dateless alias
+[1A[2K[139/287] [mock] › e2e\model-picker.spec.ts:101:7 › model picker › a dateless list id highlights when the active model is a dated snapshot
+[1A[2K[140/287] [mock] › e2e\model-picker.spec.ts:111:7 › model picker › quick picker in the slash menu checks the active model across date suffixes
+[1A[2K[141/287] [mock] › e2e\new-chat.spec.ts:15:7 › new chat › New chat button clears the conversation
+[1A[2K[142/287] [mock] › e2e\pending-tool-pulse.spec.ts:44:7 › pending tool pulse › a resultless tool in a finished turn does not pulse
+[1A[2K[143/287] [mock] › e2e\pending-tool-pulse.spec.ts:60:7 › pending tool pulse › a stopped turn does not leave its last tool pulsing
+[1A[2K[144/287] [mock] › e2e\pending-tool-pulse.spec.ts:74:7 › pending tool pulse › a tool still running in a LIVE turn keeps pulsing
+[1A[2K[145/287] [mock] › e2e\preview-navigation.spec.ts:38:7 › file previewer navigation › following a relative link loads the sibling doc in the same modal
+[1A[2K[146/287] [mock] › e2e\preview-navigation.spec.ts:49:7 › file previewer navigation › back returns to the previous document
+[1A[2K[147/287] [mock] › e2e\preview-navigation.spec.ts:64:7 › file previewer navigation › resolves links into a subfolder and back up with ..
+[1A[2K[148/287] [mock] › e2e\preview-navigation.spec.ts:76:7 › file previewer navigation › external links keep their href and do not navigate the previewer
+[1A[2K[149/287] [mock] › e2e\preview-navigation.spec.ts:83:7 › file previewer navigation › no "Open in editor" button in browser mode
+[1A[2K[150/287] [mock] › e2e\retry-clean.spec.ts:15:7 › retry cleanup › retry_clean preserves error-outcome assistant as retried
+[1A[2K[151/287] [mock] › e2e\retry-clean.spec.ts:37:7 › retry cleanup › retry_clean removes error-only (no assistant) messages
+[1A[2K[152/287] [mock] › e2e\retry-clean.spec.ts:52:7 › retry cleanup › retry_clean preserves successful messages before the error
+[1A[2K[153/287] [mock] › e2e\retry-clean.spec.ts:77:7 › retry cleanup › repeated retries do not create duplicate messages
+[1A[2K[154/287] [mock] › e2e\retry-clean.spec.ts:95:7 › retry cleanup › thinking_start after retry_clean initializes streaming
+[1A[2K[155/287] [mock] › e2e\retry-clean.spec.ts:112:7 › retry cleanup › retry_clean preserves retried messages from watchdog reconnects
+[1A[2K[156/287] [mock] › e2e\retry-clean.spec.ts:146:7 › retry cleanup › retry_clean does not remove successful assistant messages
+[1A[2K[157/287] [mock] › e2e\retry-indicator.spec.ts:18:7 › retry indicator › shows retry indicator on empty streaming message
+[1A[2K[158/287] [mock] › e2e\retry-indicator.spec.ts:31:7 › retry indicator › shows retry indicator below content when retrying after tools
+[1A[2K[159/287] [mock] › e2e\retry-indicator.spec.ts:57:7 › retry indicator › retry indicator clears when new content arrives
+[1A[2K[160/287] [mock] › e2e\retry-indicator.spec.ts:69:7 › retry indicator › retry indicator clears on thinking_chunk
+[1A[2K[161/287] [mock] › e2e\retry-indicator.spec.ts:80:7 › retry indicator › retry indicator clears on tool_start
+[1A[2K[162/287] [mock] › e2e\retry-indicator.spec.ts:92:7 › retry indicator › shows watchdog auto-retry reconnecting indicator
+[1A[2K[163/287] [mock] › e2e\retry-indicator.spec.ts:102:7 › retry indicator › shows timed out indicator when all watchdog retries exhausted
+[1A[2K[164/287] [mock] › e2e\retry-indicator.spec.ts:111:7 › retry indicator › watchdog auto-retry preserves previous blocks as committed message
+[1A[2K[165/287] [mock] › e2e\retry-indicator.spec.ts:127:7 › retry indicator › each watchdog retry commits a separate retried timer
+[1A[2K[166/287] [mock] › e2e\retry-indicator.spec.ts:153:7 › retry indicator › reconnecting indicator persists across thinking_start
+[1A[2K[167/287] [mock] › e2e\retry-indicator.spec.ts:168:7 › retry indicator › watchdog timeout + done ends session, no streaming remains
+[1A[2K[168/287] [mock] › e2e\retry-indicator.spec.ts:201:7 › retry indicator › no redundant error message after watchdog timeout with done
+[1A[2K[169/287] [mock] › e2e\retry-indicator.spec.ts:224:7 › retry indicator › late events after timeout do not create phantom session
+[1A[2K[170/287] [mock] › e2e\send-while-streaming.spec.ts:15:7 › send while streaming › send button is enabled during streaming
+[1A[2K[171/287] [mock] › e2e\send-while-streaming.spec.ts:24:7 › send while streaming › user_inject block renders inline in streaming content
+[1A[2K[172/287] [mock] › e2e\send-while-streaming.spec.ts:40:7 › send while streaming › user_inject block has fit-content width, not full width
+[1A[2K[173/287] [mock] › e2e\send-while-streaming.spec.ts:53:7 › send while streaming › user_inject copy button appears on hover
+[1A[2K[174/287] [mock] › e2e\send-while-streaming.spec.ts:72:7 › send while streaming › user_inject block preserved in committed message after done
+[1A[2K[175/287] [mock] › e2e\send-while-streaming.spec.ts:89:7 › send while streaming › user_inject appears between tool calls at correct position
+[1A[2K[176/287] [mock] › e2e\send-while-streaming.spec.ts:116:7 › send while streaming › multiple user_inject blocks render in order
+[1A[2K[177/287] [mock] › e2e\send-while-streaming.spec.ts:132:7 › send while streaming › stop clears streaming with user_inject blocks cleanly
+[1A[2K[178/287] [mock] › e2e\session-history.spec.ts:31:7 › session history › history button opens the modal and lists sessions with the current one marked
+[1A[2K[179/287] [mock] › e2e\session-history.spec.ts:47:7 › session history › search filters sessions by title and prompt
+[1A[2K[180/287] [mock] › e2e\session-history.spec.ts:59:7 › session history › delete optimistically removes a row
+[1A[2K[181/287] [mock] › e2e\session-history.spec.ts:73:7 › session history › sessionLoaded replays a conversation into the message list
+[1A[2K[182/287] [mock] › e2e\session-history.spec.ts:88:7 › session history › rename: pencil opens an inline editor and commits a new title on Enter
+[1A[2K[183/287] [mock] › e2e\session-history.spec.ts:110:7 › session history › rename: Escape cancels the edit without changing the title or closing the modal
+[1A[2K[184/287] [mock] › e2e\session-history.spec.ts:127:7 › session history › refresh button re-fetches the session list
+[1A[2K[185/287] [mock] › e2e\session-history.spec.ts:147:7 › session history › reopening paints the cached list without a refetch
+[1A[2K[186/287] [mock] › e2e\session-history.spec.ts:168:7 › session history › an optimistic delete survives a close and reopen
+[1A[2K[187/287] [mock] › e2e\session-history.spec.ts:186:7 › session history › the All workspaces tab is cached across a reopen
+[1A[2K[188/287] [mock] › e2e\session-history.spec.ts:208:7 › session history › a session with a running turn is marked, in both tabs, until it finishes
+[1A[2K[189/287] [mock] › e2e\session-history.spec.ts:243:7 › session history › Escape closes the modal
+[1A[2K[190/287] [mock] › e2e\slash-commands.spec.ts:27:7 › slash commands › typing "/" opens the slash menu
+[1A[2K[191/287] [mock] › e2e\slash-commands.spec.ts:37:7 › slash commands › skills message populates the menu with names and descriptions
+[1A[2K[192/287] [mock] › e2e\slash-commands.spec.ts:53:7 › slash commands › builtin commands have no scope badge
+[1A[2K[193/287] [mock] › e2e\slash-commands.spec.ts:64:7 › slash commands › project commands show "project" scope badge
+[1A[2K[194/287] [mock] › e2e\slash-commands.spec.ts:76:7 › slash commands › global commands show "global" scope badge
+[1A[2K[195/287] [mock] › e2e\slash-commands.spec.ts:87:7 › slash commands › commands without description show name only
+[1A[2K[196/287] [mock] › e2e\slash-commands.spec.ts:99:7 › slash commands › filtering narrows the list by query
+[1A[2K[197/287] [mock] › e2e\slash-commands.spec.ts:114:7 › slash commands › no match shows "No matching commands"
+[1A[2K[198/287] [mock] › e2e\slash-commands.spec.ts:124:7 › slash commands › Enter selects the highlighted command and inserts it
+[1A[2K[199/287] [mock] › e2e\slash-commands.spec.ts:141:7 › slash commands › Tab selects the highlighted command
+[1A[2K[200/287] [mock] › e2e\slash-commands.spec.ts:155:7 › slash commands › clicking a command selects it
+[1A[2K[201/287] [mock] › e2e\slash-commands.spec.ts:167:7 › slash commands › ArrowDown/ArrowUp navigates the highlighted item
+[1A[2K[202/287] [mock] › e2e\slash-commands.spec.ts:189:7 › slash commands › Escape closes the menu without inserting
+[1A[2K[203/287] [mock] › e2e\slash-commands.spec.ts:205:7 › slash commands › long description is truncated to 100 characters
+[1A[2K[204/287] [mock] › e2e\slash-commands.spec.ts:217:7 › slash commands › case-insensitive filtering
+[1A[2K[205/287] [mock] › e2e\sound-complete.spec.ts:46:7 › sound on complete › plays the completion sound when a turn finishes successfully
+[1A[2K[206/287] [mock] › e2e\sound-complete.spec.ts:56:7 › sound on complete › does not play the sound when the turn is stopped
+[1A[2K[207/287] [mock] › e2e\sound-complete.spec.ts:73:7 › sound on complete › a turn the user did not start finishes silently
+[1A[2K[208/287] [mock] › e2e\sound-complete.spec.ts:88:7 › sound on complete › the last autonomous turn, with nothing left pending, does ring
+[1A[2K[209/287] [mock] › e2e\sound-complete.spec.ts:103:7 › sound on complete › a user-started turn after an autonomous one still plays the sound
+[1A[2K[210/287] [mock] › e2e\sound-complete.spec.ts:116:7 › sound on complete › dev "sound:play" action plays the sound directly
+[1A[2K[211/287] [mock] › e2e\stop-daemon.spec.ts:49:7 › stop daemon button › arms on first click and auto-reverts, without sending a message
+[1A[2K[212/287] [mock] › e2e\stop-daemon.spec.ts:66:7 › stop daemon button › renders the stopped result from a simulated reply
+[1A[2K[213/287] [mock] › e2e\stop-daemon.spec.ts:74:7 › stop daemon button › renders the "not a daemon" result from a simulated reply
+[1A[2K[214/287] [mock] › e2e\stop-daemon.spec.ts:82:7 › stop daemon button › a restart does not render a stop result (different message)
+[1A[2K[215/287] [mock] › e2e\stop-no-error.spec.ts:26:7 › stop does not produce error › stop during streaming shows stopped outcome, no error block
+[1A[2K[216/287] [mock] › e2e\stop-no-error.spec.ts:48:7 › stop does not produce error › stop during thinking (no text yet) shows stopped outcome, no error
+[1A[2K[217/287] [mock] › e2e\stop-no-error.spec.ts:63:7 › stop does not produce error › stop with pending tool calls marks them as errored, no error block
+[1A[2K[218/287] [mock] › e2e\stop-no-error.spec.ts:79:7 › stop does not produce error › can send a new message after stop
+[1A[2K[219/287] [mock] › e2e\stop-no-error.spec.ts:109:7 › stop does not produce error › stop immediately after send (no streaming content) shows no error
+[1A[2K[220/287] [mock] › e2e\stop-no-error.spec.ts:123:7 › stop does not produce error › stop after watchdog retries shows stopped outcome, no error block
+[1A[2K[221/287] [mock] › e2e\stop-no-error.spec.ts:148:7 › stop does not produce error › stop after watchdog timed out shows stopped outcome, no error block
+[1A[2K[222/287] [mock] › e2e\stop-no-error.spec.ts:177:7 › stop does not produce error › stop after watchdog retries does not show Connection interrupted block
+[1A[2K[223/287] [mock] › e2e\synthetic-user-message.spec.ts:83:7 › CLI-authored user messages are not shown as things the user said › live: the image note produces no bubble, a real inject still does
+[1A[2K[224/287] [mock] › e2e\synthetic-user-message.spec.ts:95:7 › CLI-authored user messages are not shown as things the user said › live: a tool result inside a synthetic event is still delivered
+[1A[2K[225/287] [mock] › e2e\synthetic-user-message.spec.ts:110:7 › CLI-authored user messages are not shown as things the user said › replay: the note is gone, real turns and a pasted image survive
+[1A[2K[226/287] [mock] › e2e\synthetic-user-message.spec.ts:181:7 › CLI-authored user messages are not shown as things the user said › live: a background-task notification prompt produces no bubble
+[1A[2K[227/287] [mock] › e2e\synthetic-user-message.spec.ts:203:7 › CLI-authored user messages are not shown as things the user said › live: the system notification is re-emitted as a marker carrying the CLI summary
+[1A[2K[228/287] [mock] › e2e\task-notification-result.spec.ts:105:7 › task-notification result events › the orphan replay does not end the user turn, the real result does
+[1A[2K[229/287] [mock] › e2e\task-notification-result.spec.ts:125:7 › task-notification result events › a background task finishing while idle still ends its own turn
+[1A[2K[230/287] [mock] › e2e\task-notification-result.spec.ts:139:7 › task-notification result events › an ordinary user turn is unaffected
+[1A[2K[231/287] [mock] › e2e\task-notification-result.spec.ts:146:7 › task-notification result events › an errored result still reports, whoever owns the turn
+[1A[2K[232/287] [mock] › e2e\thinking-block.spec.ts:23:7 › ThinkingBlock › header shows token estimate and body is visible by default
+[1A[2K[233/287] [mock] › e2e\thinking-block.spec.ts:45:7 › ThinkingBlock › click collapses the body
+[1A[2K[234/287] [mock] › e2e\thinking-block.spec.ts:66:7 › ThinkingBlock › second click re-expands the body
+[1A[2K[235/287] [mock] › e2e\thinking-block.spec.ts:78:7 › ThinkingBlock › token count updates live as more thinking text arrives
+[1A[2K[236/287] (retries) [mock] › e2e\synthetic-user-message.spec.ts:203:7 › CLI-authored user messages are not shown as things the user said › live: the system notification is re-emitted as a marker carrying the CLI summary (retry #1)
+[1A[2K[237/287] [mock] › e2e\thinking-block.spec.ts:90:7 › ThinkingBlock › token count persists in completed message after turn ends
+[1A[2K  1) [mock] › e2e\synthetic-user-message.spec.ts:203:7 › CLI-authored user messages are not shown as things the user said › live: the system notification is re-emitted as a marker carrying the CLI summary 
+
+    Error: one marker per notification
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoHaveLength[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected length: [32m1[39m
+    Received length: [31m0[39m
+    Received array:  [31m[][39m
+
+      216 |
+      217 |     const notices = s.sent.filter(m => m.type === 'bg_notice');
+    > 218 |     expect(notices, 'one marker per notification').toHaveLength(1);
+          |                                                    ^
+      219 |     expect(notices[0].notice).toMatchObject({
+      220 |       taskId: 'baqv0e8j5',
+      221 |       toolUseId: 'toolu_01T9G2G2uSzk1M1xcAnyMYVz',
+        at D:\_Projects\scub111g\argus\e2e\synthetic-user-message.spec.ts:218:52
+
+    Error Context: test-results\synthetic-user-message-CLI-e2b10-er-carrying-the-CLI-summary-mock\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: one marker per notification
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoHaveLength[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected length: [32m1[39m
+    Received length: [31m0[39m
+    Received array:  [31m[][39m
+
+      216 |
+      217 |     const notices = s.sent.filter(m => m.type === 'bg_notice');
+    > 218 |     expect(notices, 'one marker per notification').toHaveLength(1);
+          |                                                    ^
+      219 |     expect(notices[0].notice).toMatchObject({
+      220 |       taskId: 'baqv0e8j5',
+      221 |       toolUseId: 'toolu_01T9G2G2uSzk1M1xcAnyMYVz',
+        at D:\_Projects\scub111g\argus\e2e\synthetic-user-message.spec.ts:218:52
+
+    Error Context: test-results\synthetic-user-message-CLI-e2b10-er-carrying-the-CLI-summary-mock-retry1\error-context.md
+
+
+[1A[2K[238/287] [mock] › e2e\tool-image-preview.spec.ts:75:7 › tool image preview › an image Read fetches the tool image by id, never re-reads the file
+[1A[2K[239/287] [mock] › e2e\tool-image-preview.spec.ts:101:7 › tool image preview › the modal opens on the click and spins inside until the image arrives
+[1A[2K[240/287] [mock] › e2e\tool-image-preview.spec.ts:119:7 › tool image preview › a text Read still opens from the result it already has
+[1A[2K[241/287] [mock] › e2e\synthetic-user-message.spec.ts:232:7 › CLI-authored user messages are not shown as things the user said › replay: notification prompts are not user bubbles
+[1A[2K[242/287] [mock] › e2e\url-not-file-path.spec.ts:43:7 › URLs open as URLs, not as file paths › a URL in a fenced code block is an external link, the path is a file link
+[1A[2K[243/287] [mock] › e2e\url-not-file-path.spec.ts:63:7 › URLs open as URLs, not as file paths › clicking the URL opens it externally and never opens a file preview
+[1A[2K[244/287] [mock] › e2e\url-not-file-path.spec.ts:76:7 › URLs open as URLs, not as file paths › a URL in inline code is not broken up mid-host
+[1A[2K[245/287] [mock] › e2e\url-not-file-path.spec.ts:94:7 › URLs open as URLs, not as file paths › a URL in prose stays one link and opens through the host
+[1A[2K[246/287] [mock] › e2e\url-not-file-path.spec.ts:111:7 › URLs open as URLs, not as file paths › a URL in a user message is an external link
+[1A[2K[247/287] [mock] › e2e\url-not-file-path.spec.ts:127:7 › URLs open as URLs, not as file paths › trailing sentence punctuation stays outside the link
+[1A[2K[248/287] [mock] › e2e\usage-indicator.spec.ts:42:7 › header usage indicator › with no usage yet it falls back to the account icon and still opens the modal
+[1A[2K[249/287] [mock] › e2e\usage-indicator.spec.ts:53:7 › header usage indicator › the fallback names the reason the server gave
+[1A[2K[250/287] [mock] › e2e\usage-indicator.spec.ts:61:7 › header usage indicator › a push replaces the fallback icon with bars
+[1A[2K[251/287] [mock] › e2e\usage-indicator.spec.ts:68:7 › header usage indicator › the old separate Account & usage button is gone from the header
+[1A[2K[252/287] [mock] › e2e\usage-indicator.spec.ts:75:7 › header usage indicator › a push renders one bar per window in display order
+[1A[2K[253/287] [mock] › e2e\usage-indicator.spec.ts:86:7 › header usage indicator › fill width and colour tier follow the percentage
+[1A[2K[254/287] [mock] › e2e\usage-indicator.spec.ts:107:7 › header usage indicator › at most three bars, dropping the lowest-priority window
+[1A[2K[255/287] [mock] › e2e\usage-indicator.spec.ts:118:7 › header usage indicator › the tooltip names each window with its percent and reset
+[1A[2K[256/287] [mock] › e2e\usage-indicator.spec.ts:131:7 › header usage indicator › a later push updates the bars in place
+[1A[2K[257/287] [mock] › e2e\usage-indicator.spec.ts:149:7 › header usage indicator › the unfilled part of a bar is visible against its surface
+[1A[2K[258/287] [mock] › e2e\usage-indicator.spec.ts:186:7 › header usage indicator › opening the modal syncs the header indicator to what the modal shows
+[1A[2K[259/287] [mock] › e2e\usage-indicator.spec.ts:207:7 › header usage indicator › a push while the modal is open updates the modal as well as the header
+[1A[2K[260/287] [mock] › e2e\usage-indicator.spec.ts:232:7 › header usage indicator › an empty push does not blank bars that are already showing
+[1A[2K[261/287] [mock] › e2e\usage-indicator.spec.ts:251:7 › header usage indicator › clicking it opens Account & usage
+[1A[2K[262/287] [mock] › e2e\usage-indicator.spec.ts:286:7 › usage poll gate › one poll a minute, one hour of activity keeps it awake
+[1A[2K[263/287] [mock] › e2e\usage-indicator.spec.ts:291:7 › usage poll gate › a process that has seen no activity never polls
+[1A[2K[264/287] [mock] › e2e\usage-indicator.spec.ts:297:7 › usage poll gate › activity keeps polling alive for the whole hour
+[1A[2K[265/287] [mock] › e2e\usage-indicator.spec.ts:312:7 › usage poll gate › a refresh inside the floor is answered without calling the API
+[1A[2K[266/287] [mock] › e2e\usage-indicator.spec.ts:302:7 › usage poll gate › polling pauses once the hour of silence passes
+[1A[2K[267/287] [mock] › e2e\usage-indicator.spec.ts:344:7 › usage poll gate › published windows become the snapshot, and an empty publish is ignored
+[1A[2K[268/287] [mock] › e2e\usage-indicator.spec.ts:332:7 › usage poll gate › the floor is measured from the last attempt, not the last success
+[1A[2K[269/287] [mock] › e2e\usage-insights.spec.ts:88:7 › usage insights › renders header, disclaimers, and behaviors at or above the 10% floor with official copy
+[1A[2K[270/287] [mock] › e2e\usage-insights.spec.ts:110:7 › usage insights › Day/Week toggle switches the report and the range note
+[1A[2K[271/287] [mock] › e2e\usage-insights.spec.ts:133:7 › usage insights › attribution tables render skills with a / prefix and MCP servers plain
+[1A[2K[272/287] [mock] › e2e\usage-insights.spec.ts:151:7 › usage insights › tables cap at 8 rows with an overflow line
+[1A[2K[273/287] [mock] › e2e\usage-insights.spec.ts:166:7 › usage insights › shows the no-attribution empty state when all tables are empty
+[1A[2K[274/287] [mock] › e2e\usage-insights.spec.ts:181:7 › usage insights › surfaces a collection error in the hint
+[1A[2K[275/287] [mock] › e2e\usage-insights.spec.ts:193:7 › usage insights › empty reports render disclaimers plus the empty attribution state
+[1A[2K[276/287] [mock] › e2e\version-skew.spec.ts:59:7 › Client/Server version skew direction › flags the Client row when the daemon is newer, not the Server row
+[1A[2K[277/287] [mock] › e2e\version-skew.spec.ts:69:7 › Client/Server version skew direction › flags the Server row when the daemon is older, not the Client row
+[1A[2K[278/287] [mock] › e2e\version-skew.spec.ts:79:7 › Client/Server version skew direction › compares version segments numerically, not lexicographically
+[1A[2K[279/287] [mock] › e2e\version-skew.spec.ts:91:7 › Client/Server version skew direction › matching versions are never flagged on either side
+[1A[2K[280/287] [mock] › e2e\ws-reconnect.spec.ts:15:7 › WebSocket reconnect › connected indicator is green on initial load
+[1A[2K[281/287] [mock] › e2e\ws-reconnect.spec.ts:21:7 › WebSocket reconnect › disconnect shows red pulsing indicator
+[1A[2K[282/287] [mock] › e2e\ws-reconnect.spec.ts:32:7 › WebSocket reconnect › reconnect restores green indicator
+[1A[2K[283/287] [mock] › e2e\ws-reconnect.spec.ts:42:7 › WebSocket reconnect › disconnect during idle preserves messages
+[1A[2K[284/287] [mock] › e2e\ws-reconnect.spec.ts:55:7 › WebSocket reconnect › disconnect during streaming commits message with error outcome
+[1A[2K[285/287] [mock] › e2e\ws-reconnect.spec.ts:71:7 › WebSocket reconnect › disconnect during streaming marks pending tools as errored
+[1A[2K[286/287] [mock] › e2e\ws-reconnect.spec.ts:88:7 › WebSocket reconnect › disconnect during thinking (no text) commits empty message with error outcome
+[1A[2K[287/287] [mock] › e2e\ws-reconnect.spec.ts:102:7 › WebSocket reconnect › can send new message after reconnect
+[1A[2K[288/287] [mock] › e2e\ws-reconnect.spec.ts:125:7 › WebSocket reconnect › multiple disconnect/reconnect cycles work correctly
+[1A[2K  1 failed
+    [mock] › e2e\synthetic-user-message.spec.ts:203:7 › CLI-authored user messages are not shown as things the user said › live: the system notification is re-emitted as a marker carrying the CLI summary 
+  286 passed (59.0s)
+exit=1
