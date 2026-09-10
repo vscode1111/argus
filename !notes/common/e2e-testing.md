@@ -442,6 +442,12 @@ Some features (e.g. `killAllClaude`, see [../tasks/stop-all-claude-button/notes.
 - Verify the underlying OS command's mechanics (parsing, counting, success/failure paths) against a **decoy target** (e.g. a throwaway `notepad++.exe`), not the real one, before trusting it in the shipped code.
 - If a feature like this ever needs a true integration test, it must not run against this dev machine's ambient processes - spawn and target a disposable child process created by the test itself.
 
+**Both directions are testable without ever aiming at a real target** (added 2026-09-11, the per-pid `killCliProcess`):
+
+- **Negative path: aim the guard at the test runner's own pid.** `killCliProcess(process.pid)` must be refused, because the runner is a `node.exe` and not the target image. A build that dropped the check would try to terminate the process running the suite - impossible to miss, and it needs no decoy at all.
+- **Positive path: manufacture a decoy that genuinely matches.** Copy `node.exe` into a temp dir **under the target name** (`claude.exe`) and run it: the listing accepts it as a CLI and the real button really kills it, while every genuine session is untouched. This is what makes the success path verifiable at all - a decoy of a *different* name only ever exercises the refusal.
+- **Suppression is the third lever, and it is worth adding for safety even though the list exists for a different reason.** `killCliProcess` was added to `MOCK_SUPPRESSED` so a mock spec can click the real button and assert the optimistic row removal without the message ever reaching the backend. That is strictly safer *and* better tested than the `killAllClaude` approach above, which cannot click at all.
+
 ## Asserting inside a sandboxed iframe, and what the fixture has to prove
 
 Added 2026-09-02 (`html-preview` task). The previewer renders `.html` in
@@ -559,3 +565,40 @@ exists, not that it passed N times.
 Same shape wherever a raw `ws` client is used against a live entry:
 `resume-live-session-integration.spec.ts`, `shared-channel-integration.spec.ts`,
 `usage-indicator-integration.spec.ts` still use the unbuffered ordering.
+
+## The list reporter marks failures with `x`, never `not ok`
+
+Grepping a piped run log for `not ok` reports **zero failures no matter how many there
+were**. Playwright's `list` reporter uses `ok` / `x` / `-` (passed / failed / skipped or did
+not run). Observed 2026-09-11: a full-suite run was reported as clean four times in a row
+while a failure was already on screen; the giveaway was that the `ok` count had fallen
+behind the test number.
+
+```bash
+echo "passed: $(grep -cE '^  ok ' run.log) | FAILED: $(grep -cE '^  x ' run.log) | skipped: $(grep -cE '^  - ' run.log)"
+```
+
+A `serial` file turns one failure into a pile of `-` "did not run" - so a sudden jump in the
+skipped count is itself a failure signal, not a sign that specs are being skipped by design.
+
+## Two flakes seen under full-suite load, both green in isolation
+
+Recorded 2026-09-11 so the next full run does not re-diagnose them from scratch. Both failed
+in one run, passed alone (17/17), then passed again **in place** in a second full run
+(458 passed, 0 failed):
+
+- **`stop-then-send-integration.spec.ts:41`** failed with `a new CLI should be spawned; saw: []`
+  - an **empty** log array while the turn itself streamed and was not swallowed. That is the
+  documented raw-`ws` recorder-attach race (a replay sent during the upgrade can share a TCP
+  read with the handshake and be emitted before `record()` attaches), which is load-sensitive
+  by construction.
+- **`effort-thinking-integration.spec.ts:185`** (thinking toggle persists across reload).
+  Serial file, so its failure also produced the run's ten "did not run".
+
+**"Passes on a re-run" is not by itself evidence of a flake** - this repo has two failure
+shapes that mislead exactly that way. What settled it was adding evidence a re-run cannot
+give: neither spec touches the code that changed, and the session's one plausible mechanism
+(a newly added reaper timer that kills idle CLIs) was **proved inert** for the whole run -
+`e2e/argus.json` carries `cliIdleTimeoutSec: 0` and `readConfig` merges `DEFAULT_CONFIG`, so
+every sweep hit `!(0 > 0)` and returned. Find the mechanism by which your change *could*
+have caused it and kill that, rather than re-running until it is green.

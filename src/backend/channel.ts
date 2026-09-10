@@ -168,6 +168,79 @@ export function listActiveSessions(): ActiveSession[] {
   return out;
 }
 
+export interface OwnedProc {
+  /** Empty until the CLI names the session. */
+  sessionId: string;
+  /** The entry is mid-turn right now - same test listActiveSessions uses. */
+  running: boolean;
+}
+
+// Every CLI process this server currently holds, across all workspaces, mapped to the
+// session it is serving and whether that session is mid-turn. On Windows these are the
+// cmd.exe shells the CLI is spawned through (`shell: IS_WIN`), not the claude.exe
+// itself - a caller matching them against a process listing has to accept a child of
+// one of these too. The session comes from here rather than from the process's own
+// --resume argument because a brand-new session has no such argument at all, and
+// `running` can ONLY come from here: a process listing cannot tell a CLI waiting for
+// input from one working, and the transcript's mtime cannot either (it is written at
+// message boundaries, not continuously).
+export function listOwnedProcs(): Map<number, OwnedProc> {
+  const owned = new Map<number, OwnedProc>();
+  for (const cd of registry.values()) {
+    for (const entry of cd.entries.values()) {
+      const st = entry.state;
+      const pid = st.currentProc?.pid;
+      if (pid) owned.set(pid, { sessionId: st.sessionId ?? '', running: !!st.currentProc && !st.cliDone });
+    }
+  }
+  return owned;
+}
+
+export interface ReapedProc {
+  pid: number;
+  sessionId: string;
+  workspacePath: string;
+  /** How long it had been idle when it was reaped, in ms. */
+  idleMs: number;
+}
+
+// Terminates CLI processes THIS server is holding that have sat idle past `idleMs`.
+// A finished turn deliberately keeps its process so the next send can reuse it, which
+// costs ~250MB of resident memory per abandoned panel for as long as the server lives;
+// this reclaims it. The session id is kept, so the next send simply respawns with
+// `--resume` and the conversation continues - the only cost is a slower first turn.
+//
+// It never touches a process that is mid-turn (`!cliDone`), and that is not merely
+// politeness: killing a CLI whose transcript ends on an unanswered user message makes
+// the next `--resume` splice a synthetic "No response requested." assistant turn into
+// the conversation, which the model then sees forever (see
+// !notes/tasks/no-response-requested/notes.md). An idle process has already answered,
+// so its transcript ends on an assistant record and no repair is triggered.
+export function reapIdleCliProcs(idleMs: number, now: number = Date.now()): ReapedProc[] {
+  const reaped: ReapedProc[] = [];
+  if (!(idleMs > 0)) return reaped;
+
+  for (const cd of registry.values()) {
+    for (const entry of cd.entries.values()) {
+      const st = entry.state;
+      // No process to reclaim, or one that is still working.
+      if (!st.currentProc || !st.cliDone) continue;
+      const idle = now - entry.lastActivityAt;
+      if (idle < idleMs) continue;
+
+      const proc = st.currentProc;
+      // Detach before kill, as everywhere else here: the close event lands a beat later
+      // and must not mutate an entry that no longer owns this process.
+      st.currentProc = undefined;
+      st.currentProcKey = undefined;
+      killProc(proc);
+      st.sendLog?.('info', `Reaped idle CLI (pid ${proc.pid}, idle ${Math.round(idle / 1000)}s) - the next message starts a fresh one`);
+      reaped.push({ pid: proc.pid ?? 0, sessionId: st.sessionId ?? '', workspacePath: cd.dir, idleMs: idle });
+    }
+  }
+  return reaped;
+}
+
 // Broadcast types that can flip a session between running and idle.
 const ACTIVITY_EVENTS = new Set(['thinking_start', 'done', 'error', 'sessionId', 'clear']);
 

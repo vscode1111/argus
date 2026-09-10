@@ -136,3 +136,34 @@ confirm the colour test fails, otherwise it is only asserting that two strings d
 
 Live in `e2e/usage-indicator.spec.ts`; full context in
 [../tasks/usage-limits-indicator/notes.md](../tasks/usage-limits-indicator/notes.md).
+
+## Two adjacent numbers that measure different things
+
+The Settings Info tab showed `CLI launches: 0` and, one click away, a list of ten running
+CLIs. Both were correct: the tally counts spawns by **this server** (a dev server that had
+run nothing), the list shows **the whole machine** (the daemon's). It was reported as a bug
+within a minute of shipping.
+
+Three fixes were needed, and each was only obvious after the previous one failed:
+
+1. **Put the other number on screen.** A second row, `CLI processes`, carrying the live
+   machine-wide count directly beneath the launch count, fed by *the same reply the list
+   renders* so the two can never disagree.
+2. **Adjacency shows *that* they differ, never *how*.** The next question asked was
+   literally "what is the difference between launches and processes?". Tooltips already said
+   it and nobody hovers. Each label got a permanent qualifier line - `this server, total` /
+   `whole machine, now` - naming **both** axes: scope (this server vs the machine) *and*
+   kind (a lifetime tally of *events*, which only rises, vs a live count of *processes*,
+   which rises and falls).
+3. **State the derived fact too.** The same counter then misled in the opposite direction:
+   `CLI launches 2` beside a list holding none of ours, because both had since exited. The
+   missing fact was **how many are still alive**, so the qualifier became
+   `this server, total · 0 still alive` and the list's summary gained
+   `· none from this server` - **stated even at zero**, because otherwise the answer has to
+   be inferred from the *absence* of a group header, which is precisely what a confused
+   reader cannot do.
+
+The general rule: **when two numbers on one screen have different scope or different kind,
+both must be visible together and both axes named.** One click apart with prose bridging
+them is not enough, and a number that disagrees with what clicking it opens reads as a
+broken counter no matter how correct it is.

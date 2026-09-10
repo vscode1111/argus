@@ -135,3 +135,25 @@ A browser tab left open from a previous `yarn dev` process can get stuck on the 
 Fix: hard refresh the stuck tab (`Ctrl+Shift+R` / `Ctrl+F5`), not a plain reload - confirmed to resolve it. If that doesn't help, try a private/incognito window to rule out extensions or other cached state.
 
 Not confirmed as the cause here, but worth checking first if hard refresh doesn't help: this machine also runs VPN/proxy software (OpenVPN, Hiddify). If the affected browser routes local traffic through one, that can interfere with `localhost`/LAN requests in that browser specifically while an unaffected browser loads the same URL fine.
+
+## `src/backend/` is not typechecked by anything you run day to day
+
+The webview gap above has a backend twin, and it is quieter. `yarn dev` runs the server
+through **tsx, which does not typecheck at all**, and `yarn compile` (`tsc -p ./`) **emits
+despite type errors** - so a genuine error can sit in `src/backend/` while the dev server
+runs the code perfectly and `out/` is populated from the last good compile.
+
+Observed 2026-09-11: a `(msg as { pid: number })` cast that does not overlap the message
+union sat unnoticed through a full feature because only `webview/tsconfig.json` was being
+checked by hand. It surfaced only when an unrelated test run happened to print the compiler
+output.
+
+After touching `src/backend/`, run **both**:
+
+```bash
+npx tsc -p ./ --noEmit
+npx tsc -p webview/tsconfig.json --noEmit
+```
+
+Note the existing handlers cast to an **optional** field (`(msg as { pid?: number }).pid`)
+precisely because the message union does not overlap a required one.

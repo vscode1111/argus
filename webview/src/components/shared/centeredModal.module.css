@@ -30,6 +30,17 @@
   overflow: hidden;
 }
 
+/* For a modal opened from inside another modal (the CLI process list, opened from
+   Settings). Without it the two share one layer, and since an overlay sits below its
+   own modal, the modal underneath stays clickable through the new one's overlay - a
+   stray click could reach a destructive button the user cannot even see. */
+.overlayElevated {
+  z-index: 101;
+}
+.modalElevated {
+  z-index: 102;
+}
+
 .header {
   display: flex;
   align-items: center;

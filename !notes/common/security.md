@@ -39,3 +39,28 @@ its static text instead.
 If an "open in a real browser" action is ever added for those documents, that is a
 different decision with a different threat model - the file then runs in the browser's
 origin, not in Argus.
+
+## Process termination - one pid, supplied by the client (killCliProcess)
+
+The per-row terminate button in the CLI process modal sends a **pid chosen by the webview**.
+Anything that can open a WebSocket to Argus (nonce + Origin, which is the whole
+authorisation) could otherwise have the server kill **any process on the machine** - a clear
+escalation from "can use Argus" to "can kill anything".
+
+Two independent guards, and they were verified independently:
+
+1. **The pid must appear in the current listing as a Claude CLI.** `killCliProcess` re-reads
+   the process list and refuses a pid that is not there.
+2. **The kill itself is filtered**: on Windows `taskkill /T /F /PID <pid> /FI "IMAGENAME eq claude.exe"`,
+   so even in the sub-second window where a pid could die and be recycled, the OS declines to
+   kill the stranger that inherited it. Verified against a `node.exe` decoy, which survived.
+
+Removing guard 1 in a test left the runner alive because guard 2 caught it, which is how we
+know they are genuinely independent rather than one check written twice.
+
+**Success is decided by re-probing the pid**, never by the command's output: `taskkill`
+prints "no matching process" in the OS display language *and still exits 0*. See
+[../../../!notes/common/windows-process-introspection.md](../../../!notes/common/windows-process-introspection.md).
+
+A refusal must reach the UI. The row is removed optimistically, so a silently-dropped
+failure reads as a successful kill until the next poll quietly restores the process.
