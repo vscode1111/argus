@@ -157,6 +157,43 @@ export function sessionFilePath(sessionId: string, workspaceDir: string): string
   return dir ? path.join(dir, `${sessionId}.jsonl`) : null;
 }
 
+// Where a session's transcript lives, for a session whose workspace is not known -
+// the CLI process list sees ids from `--resume` arguments belonging to other servers.
+// The answer never changes for a live session, so it is cached: the probe walks every
+// project folder, and doing that per session on every 3s poll would not be free.
+// A miss is cached too, but only briefly, since a brand-new session has no file for its
+// first few seconds and would otherwise be remembered as missing forever.
+const sessionPathCache = new Map<string, { path: string | null; at: number }>();
+const MISS_RETRY_MS = 30_000;
+
+function locateSessionFile(sessionId: string): string | null {
+  const hit = sessionPathCache.get(sessionId);
+  if (hit && (hit.path !== null || Date.now() - hit.at < MISS_RETRY_MS)) return hit.path;
+
+  let found: string | null = null;
+  const root = projectsRoot();
+  let names: string[];
+  try { names = fs.readdirSync(root); } catch { names = []; }
+  for (const name of names) {
+    const full = path.join(root, name, sessionId + '.jsonl');
+    try { if (fs.statSync(full).isFile()) { found = full; break; } } catch { /* not here */ }
+  }
+  sessionPathCache.set(sessionId, { path: found, at: Date.now() });
+  return found;
+}
+
+// When the session last had anything written to it, from its transcript's mtime.
+// Note this is NOT a "busy now" signal: the CLI writes at message boundaries, so a
+// session that is mid-turn can sit unwritten for tens of seconds (measured: 0 writes in
+// 10s on a session that was actively working). It answers "when did this last do
+// something", which is all it claims.
+export function sessionLastActivity(sessionId: string): number | null {
+  if (!UUID_RE.test(sessionId)) return null;
+  const file = locateSessionFile(sessionId);
+  if (!file) return null;
+  try { return fs.statSync(file).mtimeMs; } catch { return null; }
+}
+
 export function listSessions(workspaceDir: string): SessionSummary[] {
   const dir = resolveProjectDir(workspaceDir);
   if (!dir) return [];

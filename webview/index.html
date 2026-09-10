@@ -54,7 +54,10 @@
       // ?mock=1 isolates e2e mock tests: do not forward these data-query messages to
       // the live dev backend (their async replies would clobber injected mock data).
       var mock = params.get('mock') === '1';
-      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1, listAllSessions: 1, getActiveSessions: 1, getModels: 1, getUsageInsights: 1, getUsageLimits: 1, readToolImage: 1, getBgTasks: 1 };
+      // killCliProcess is here for a second reason beyond clobbering: unsuppressed, a mock
+      // test that clicks the terminate button would reach the live backend and really kill
+      // a Claude CLI on whoever's machine runs the suite.
+      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1, listAllSessions: 1, getActiveSessions: 1, getModels: 1, getUsageInsights: 1, getUsageLimits: 1, readToolImage: 1, getBgTasks: 1, listCliProcesses: 1, killCliProcess: 1 };
       // Derive host from the page so a LAN device reaches the dev machine, not its own localhost.
       var host = window.location.hostname || 'localhost';
 

@@ -15,7 +15,8 @@ import { getUsageSnapshot, noteUsageActivity, requestUsageRefresh } from './usag
 import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
-import { type Channel, broadcastToAllChannels, listActiveSessions } from './channel';
+import { type Channel, broadcastToAllChannels, listActiveSessions, listOwnedProcs } from './channel';
+import { listCliProcesses, killCliProcess, cpuCoreCount } from './processes';
 import { describeModel } from './modelData';
 import { attachProcHandlers, broadcastBgTasks } from './cliHandler';
 import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage } from './sessions';
@@ -259,6 +260,25 @@ export function attachClientHandlers(
       // "CLI launches" visibly reflects the action instead of looking like a no-op.
       if (result.count > 0) cliLaunchCount = 0;
       ws.send(JSON.stringify({ type: 'killAllClaudeResult', ...result }));
+    } else if (msg.type === 'listCliProcesses') {
+      // Runs where the server runs, like killAllClaude: the processes worth listing are
+      // the ones on the machine the CLI is spawned on, which over a remote connection is
+      // not the machine the panel is on.
+      listCliProcesses({ owned: listOwnedProcs(), current: s.currentProc?.pid }).then(({ processes, error }) => {
+        ws.send(JSON.stringify({ type: 'cliProcessList', processes, error, cores: cpuCoreCount() }));
+      }).catch((err) => {
+        ws.send(JSON.stringify({ type: 'cliProcessList', processes: [], error: (err as Error)?.message ?? String(err), cores: cpuCoreCount() }));
+      });
+    } else if (msg.type === 'killCliProcess') {
+      // The pid is validated against the live listing inside killCliProcess - a client
+      // must not be able to name an arbitrary process for the server to terminate.
+      const raw = (msg as { pid?: number }).pid;
+      const pid = typeof raw === 'number' ? raw : -1;
+      killCliProcess(pid).then((result) => {
+        ws.send(JSON.stringify({ type: 'cliProcessKilled', ...result }));
+      }).catch((err) => {
+        ws.send(JSON.stringify({ type: 'cliProcessKilled', pid, killed: false, error: (err as Error)?.message ?? String(err) }));
+      });
     } else if (msg.type === 'getClientCount') {
       ws.send(JSON.stringify({ type: 'clientCount', count: hooks.getClientCount?.() ?? 0 }));
     } else if (msg.type === 'getServerInfo') {

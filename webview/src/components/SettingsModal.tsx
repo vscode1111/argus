@@ -5,6 +5,7 @@ import { clearDialogState } from '../utils/dialogState';
 import { useSettings } from '../contexts/SettingsContext';
 import { postMessage, isVsCode } from '../vscode';
 import { plural } from '../utils/text';
+import { CliProcessesModal } from './CliProcessesModal';
 import styles from './SettingsModal.module.css';
 
 interface ToggleProps {
@@ -158,10 +159,17 @@ interface Props {
 type Tab = 'general' | 'watchdog' | 'network' | 'info';
 
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
-  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setAllowNetworkAccess, setAllowedOrigins, daemonPort, setDaemonPort, daemonIdleMs, setDaemonIdleMs } = useSettings();
+  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, cliIdleTimeoutSec, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setCliIdleTimeoutSec, setAllowNetworkAccess, setAllowedOrigins, daemonPort, setDaemonPort, daemonIdleMs, setDaemonIdleMs } = useSettings();
   const [activeClients, setActiveClients] = useState<number | null>(null);
   const [serverPort, setServerPort] = useState<number | null>(null);
   const [cliLaunchCount, setCliLaunchCount] = useState<number | null>(null);
+  // Claude CLIs alive on the machine right now - a different scope from cliLaunchCount,
+  // which counts only what THIS server spawned. Shown next to it because the two
+  // disagreeing (0 launches, 10 running) reads as a broken counter otherwise.
+  const [liveProcesses, setLiveProcesses] = useState<number | null>(null);
+  // How many of those are still this server's. Without it the launch tally reads as a
+  // broken counter the moment its processes exit ("2 launched, so where are they?").
+  const [ownedProcesses, setOwnedProcesses] = useState<number | null>(null);
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionPath, setSessionPath] = useState<string | null>(null);
@@ -187,6 +195,9 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const [stopping, setStopping] = useState(false);
   const [stopResult, setStopResult] = useState<boolean | null>(null);
   const stopArmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The process list opens on top of this modal (both are portals), so Settings must
+  // not also close on the Escape that dismisses it.
+  const [showProcesses, setShowProcesses] = useState(false);
   useEffect(() => () => {
     if (killArmTimer.current) clearTimeout(killArmTimer.current);
     if (stopArmTimer.current) clearTimeout(stopArmTimer.current);
@@ -195,12 +206,18 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     postMessage({ type: 'getSettings' });
     postMessage({ type: 'getClientCount' });
     postMessage({ type: 'getServerInfo' });
+    postMessage({ type: 'listCliProcesses' });
     // The server also pushes clientCount whenever a connection opens or closes,
     // so this stays live while the modal is open.
     const onMessage = (e: MessageEvent) => {
       const msg = e.data;
       if (msg && msg.type === 'clientCount' && typeof msg.count === 'number') {
         setActiveClients(msg.count);
+      } else if (msg && msg.type === 'cliProcessList' && Array.isArray(msg.processes)) {
+        // Also arrives on every poll while the process modal is open, so the row and the
+        // list it opens can never show two different totals.
+        setLiveProcesses(msg.error ? null : msg.processes.length);
+        setOwnedProcesses(msg.error ? null : msg.processes.filter((p: { ours?: boolean }) => p.ours).length);
       } else if (msg && msg.type === 'serverInfo' && typeof msg.port === 'number') {
         // A fresh connection (incl. after a restart) reports the live port; clear the
         // restart spinner and any "moved" notice once we're talking to the new daemon.
@@ -309,7 +326,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const setTab = (t: Tab) => {
     setTabState(t);
     localStorage.setItem('argus.settingsTab', t);
-    if (t === 'info') postMessage({ type: 'getServerInfo' });
+    if (t === 'info') { postMessage({ type: 'getServerInfo' }); postMessage({ type: 'listCliProcesses' }); }
   };
   const [layoutCleared, setLayoutCleared] = useState(false);
   const hasDevHarness = !!document.getElementById('dev-harness');
@@ -326,7 +343,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     });
   }
 
-  useEscapeKey(onClose);
+  useEscapeKey(() => { if (!showProcesses) onClose(); });
 
   const modalRef = useRef<HTMLDivElement>(null);
   const drag = useDialogGeometry(modalRef, { persistKey: 'settings', defaultWidth: 340 });
@@ -428,6 +445,13 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-delay-factor">
               <span className={styles.settingLabel} title="Multiplier applied each retry: delay = base * factor^attempt. Set to 1 for fixed delay">Delay factor</span>
               <NumberInput id="input-delay-factor" value={watchdogDelayFactor} onChange={setWatchdogDelayFactor} min={1} step={0.5} disabled={!watchdogEnabled} />
+            </label>
+            <label className={styles.settingRow} htmlFor="input-cli-idle">
+              <span className={styles.settingLabel} title="Terminate a CLI process this server owns once its session has been idle this long, to reclaim its memory (each one holds ~250MB). 0 disables it. A process that is mid-turn is never touched, and the conversation survives - the next message respawns the CLI with --resume.">
+                Idle CLI timeout (s)
+                <span className={styles.infoScope}>this server only · 0 = off</span>
+              </span>
+              <NumberInput id="input-cli-idle" value={cliIdleTimeoutSec} onChange={setCliIdleTimeoutSec} min={0} />
             </label>
           </div>
         )}
@@ -541,8 +565,34 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 : <span className={styles.infoValue} data-testid="workspace-path">(no workspace)</span>}
             </div>
             <div className={styles.infoRow}>
-              <span className={styles.infoLabel} title="Number of Claude CLI processes spawned since the server started (or since the last 'Stop all Claude CLI processes')">CLI launches</span>
-              <span className={styles.infoValue} data-testid="cli-launches">{cliLaunchCount ?? '-'}</span>
+              <span className={styles.infoLabel} title="How many times THIS server has started a Claude CLI since it booted - a running tally of events, not of live processes, so it only goes up (except when 'Stop all Claude CLI processes' resets it). A server that has run no turns shows 0 even while other CLIs run on the machine.">CLI launches<span className={styles.infoScope} data-testid="cli-launches-scope">
+                {ownedProcesses == null ? 'this server, total' : `this server, total · ${ownedProcesses} still alive`}
+              </span></span>
+              <span
+                className={[styles.infoValue, styles.addrLink].join(' ')}
+                data-testid="cli-launches"
+                role="button"
+                tabIndex={0}
+                title="Show every Claude CLI process running on the server's machine, with its PID, age, CPU and memory"
+                onClick={() => setShowProcesses(true)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowProcesses(true); } }}
+              >
+                {cliLaunchCount ?? '-'}
+              </span>
+            </div>
+            <div className={styles.infoRow}>
+              <span className={styles.infoLabel} title="How many Claude CLIs are alive on the server's machine right now, whoever started them - a live count that rises and falls, unlike the launch tally above. This is the set the process list shows and the set 'Stop all Claude CLI processes' would kill.">CLI processes<span className={styles.infoScope}>whole machine, now</span></span>
+              <span
+                className={[styles.infoValue, styles.addrLink].join(' ')}
+                data-testid="cli-processes-count"
+                role="button"
+                tabIndex={0}
+                title="Show every Claude CLI process running on the server's machine, with its PID, age, CPU and memory"
+                onClick={() => setShowProcesses(true)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowProcesses(true); } }}
+              >
+                {liveProcesses ?? '-'}
+              </span>
             </div>
             <div className={styles.infoRow}>
               <span className={styles.infoLabel} title="Id of the conversation this panel is in. Empty until the CLI reports one (a new chat has none until its first turn).">Session</span>
@@ -620,6 +670,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
           {layoutCleared ? 'Layout reset' : 'Reset layout'}
         </button>
       </div>
+      {showProcesses && <CliProcessesModal onClose={() => setShowProcesses(false)} />}
     </>
   );
 }

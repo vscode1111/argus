@@ -14,6 +14,19 @@ export function formatTime(ts: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
+// Longest-unit-first duration for a process's age and for the CPU time it has burned:
+// "45s", "3m 20s", "2h 51m". Unlike relativeTime it never rounds a young value to
+// "now" - a process that started four seconds ago has an uptime of 4s, not of nothing.
+export function formatUptime(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 // Compact relative age, e.g. "now", "5m", "3h 12m", "2d 4h".
 export function relativeTime(updatedAt: number): string {
   const diff = Date.now() - updatedAt;

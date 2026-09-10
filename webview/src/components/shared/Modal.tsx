@@ -19,13 +19,16 @@ interface Props {
   // Escape handler override. Defaults to onClose; modals with inline editing
   // pass a guarded version (cancel edit first, then close).
   onEscape?: () => void;
+  // Set when this modal is opened from inside another one, so it takes the whole
+  // stacking layer instead of leaving the modal underneath clickable.
+  elevated?: boolean;
   children: React.ReactNode;
 }
 
 // Centered, draggable portal shell shared by the Account/Session/Workspace
 // modals: overlay, draggable header (title + actions + close) and a flex body.
 // Each modal supplies only its own content below the header.
-export function Modal({ title, ariaLabel, onClose, width, fullHeight, persistKey, headerActions, onEscape, children }: Props) {
+export function Modal({ title, ariaLabel, onClose, width, fullHeight, persistKey, headerActions, onEscape, elevated, children }: Props) {
   const modalRef = useRef<HTMLDivElement>(null);
   // Geometry hook applies width/height imperatively (so CSS resize + persistence
   // work); React's style only carries the drag position.
@@ -37,8 +40,8 @@ export function Modal({ title, ariaLabel, onClose, width, fullHeight, persistKey
 
   return createPortal(
     <>
-      <div className={shell.overlay} onClick={onClose} aria-hidden="true" />
-      <div className={shell.modal} role="dialog" aria-label={ariaLabel} ref={modalRef} style={style}>
+      <div className={[shell.overlay, elevated ? shell.overlayElevated : ''].filter(Boolean).join(' ')} onClick={onClose} aria-hidden="true" />
+      <div className={[shell.modal, elevated ? shell.modalElevated : ''].filter(Boolean).join(' ')} role="dialog" aria-label={ariaLabel} ref={modalRef} style={style}>
         <div className={shell.header} onPointerDown={drag.onPointerDown}>
           <span className={shell.title} title={typeof title === 'string' ? title : undefined}>{title}</span>
           <div className={shell.headerActions}>

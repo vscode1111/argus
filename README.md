@@ -68,6 +68,8 @@ approval routing cleanly separable without growing into a monolith.
 - OS toast notifications on task completion. A turn the CLI started by itself, to report a finished background task, stays silent while more are still running, so a long watch does not ping every few minutes; the one that ends the chain still notifies.
 - A `✻ N` pill beside the context pill counts the background tasks running right now, for as long as they run.
 - A turn the CLI started by itself says so: it opens with the report of the background task that woke it ("Background command "Watch CI until all checks complete" completed (exit code 0)") and a link to that task's output, instead of appearing out of nowhere. Its completion time is shown in a neutral colour rather than the success green while any task is still running.
+- A CLI process panel, opened from the process counts in Settings > Info: every Claude CLI running on the server's machine with its pid, session, uptime, CPU and memory, grouped under the process that started each one (the daemon, a dev server, a terminal). Any single one can be terminated from its row, and a session that is mid-turn is marked as such.
+- Optional idle-CLI timeout (Settings > Watchdog): a finished turn keeps its CLI alive for reuse, which costs ~250MB per abandoned panel, so a limit in seconds reclaims them. Only ever an idle process - one mid-turn is never touched - and the conversation survives, since the next message respawns with `--resume`.
 - Optional "Ask Argus" code lens above functions and classes.
 - Optional inline completions (Haiku model, Copilot-style).
 
