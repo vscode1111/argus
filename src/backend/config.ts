@@ -18,6 +18,11 @@ export interface ArgusConfig {
   watchdogAutoRetries: number;
   watchdogRetryDelay: number;
   watchdogDelayFactor: number;
+  // Seconds a CLI process this server owns may sit idle before it is terminated to
+  // reclaim its memory. 0 disables it. Only ever applies to an IDLE process - one
+  // mid-turn is never touched - and the session id survives, so the next message
+  // respawns with --resume and the conversation continues.
+  cliIdleTimeoutSec: number;
   // Master switch for non-local WS access: when false, only localhost/loopback and
   // the VS Code webview can connect (LAN ranges and allowedOrigins are rejected).
   allowNetworkAccess: boolean;
@@ -75,6 +80,9 @@ export const DEFAULT_CONFIG: ArgusConfig = {
   watchdogAutoRetries: 3,
   watchdogRetryDelay: 5,
   watchdogDelayFactor: 2,
+  // Off by default: terminating a process on a timer is the user's call to make, not
+  // something to start doing to them silently on upgrade.
+  cliIdleTimeoutSec: 0,
   allowNetworkAccess: true,
   allowedOrigins: '',
   daemonPort: 3017,

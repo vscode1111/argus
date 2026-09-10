@@ -4,6 +4,12 @@ import * as path from 'path';
 
 export const IS_WIN = process.platform === 'win32';
 
+// Image/process name of the Claude Code CLI, shared by everything that has to find
+// those processes on the machine (killAllClaude here, the process listing in
+// processes.ts) so the two can never disagree about what they are looking at.
+export const CLAUDE_IMAGE_WIN = 'claude.exe';
+export const CLAUDE_PROC_POSIX = 'claude';
+
 let resolvedClaudeBin: string | null = null;
 export function resolveClaudeBin(): string {
   if (resolvedClaudeBin) return resolvedClaudeBin;
@@ -75,22 +81,22 @@ export function killAllClaude(): KillAllResult {
     // reported count doesn't depend on taskkill's localized text.
     let count = 0;
     try {
-      const csv = execFileSync('tasklist', ['/FI', 'IMAGENAME eq claude.exe', '/FO', 'CSV', '/NH'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
-      count = csv.split(/\r?\n/).filter(line => line.trim().startsWith('"claude.exe"')).length;
+      const csv = execFileSync('tasklist', ['/FI', `IMAGENAME eq ${CLAUDE_IMAGE_WIN}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+      count = csv.split(/\r?\n/).filter(line => line.trim().startsWith(`"${CLAUDE_IMAGE_WIN}"`)).length;
     } catch {}
     if (count === 0) return { count: 0 };
     try {
-      execFileSync('taskkill', ['/F', '/IM', 'claude.exe'], { stdio: 'ignore', windowsHide: true });
+      execFileSync('taskkill', ['/F', '/IM', CLAUDE_IMAGE_WIN], { stdio: 'ignore', windowsHide: true });
       return { count };
     } catch (err) {
       return { count: 0, error: err instanceof Error ? err.message : String(err) };
     }
   }
   try {
-    const listed = execFileSync('pgrep', ['-x', 'claude'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const listed = execFileSync('pgrep', ['-x', CLAUDE_PROC_POSIX], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
     const pids = listed.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (pids.length === 0) return { count: 0 };
-    execFileSync('pkill', ['-x', 'claude'], { stdio: 'ignore' });
+    execFileSync('pkill', ['-x', CLAUDE_PROC_POSIX], { stdio: 'ignore' });
     return { count: pids.length };
   } catch {
     return { count: 0 };

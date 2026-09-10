@@ -6,7 +6,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage } from 'http';
 
 import { attachClientHandlers } from './session';
-import { getOrCreateChannel } from './channel';
+import { getOrCreateChannel, reapIdleCliProcs } from './channel';
 import { findWorkspaceForSession } from './sessions';
 import { readConfig, CONFIG_PATH } from './config';
 import { startUsagePoller } from './usagePoller';
@@ -18,6 +18,12 @@ const DEFAULT_MODEL = process.env.ARGUS_MODEL ?? '';
 // e.g. ARGUS_ALLOWED_ORIGINS="203.0.113.1,dev.example.com" - used for the VLESS
 // reverse-mesh entry IP so a remote phone reaches this dev box over the tunnel.
 const DEFAULT_ALLOWED_ORIGINS = process.env.ARGUS_ALLOWED_ORIGINS ?? '';
+
+// How often idle CLI processes are swept for. Coarse on purpose: the limit it enforces
+// is a housekeeping threshold in minutes, so checking more often would only spend
+// wakeups to make a process die sooner. Note this is also the granularity of the limit -
+// a CLI dies somewhere between `cliIdleTimeoutSec` and that plus a minute.
+const CLI_REAP_SWEEP_MS = 60_000;
 
 export interface StartServerOptions {
   port?: number;
@@ -311,7 +317,18 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       // a transient failure (the usage API rate-limits hard) is retried a minute later
       // instead of leaving the indicator blank until someone reloads the page.
       startUsagePoller((msg) => console.log(`[argus-server] ${msg}`));
-      resolve({ httpServer, port: actualPort, nonce, close: () => { clearIdleTimer(); clearInterval(pingTimer); wss.close(); httpServer.close(); } });
+      // Reap this server's idle CLI processes when the user has set a limit. The config
+      // is read on every sweep, so a change in Settings applies immediately - unlike the
+      // daemon port/idle fields, this one has no reason to wait for a restart.
+      const reapTimer = setInterval(() => {
+        const limitSec = readConfig().cliIdleTimeoutSec;
+        if (!(limitSec > 0)) return;
+        for (const r of reapIdleCliProcs(limitSec * 1000)) {
+          console.log(`[argus-server] reaped idle CLI pid ${r.pid} (idle ${Math.round(r.idleMs / 1000)}s) in ${r.workspacePath}`);
+        }
+      }, CLI_REAP_SWEEP_MS);
+      if (typeof reapTimer.unref === 'function') reapTimer.unref();
+      resolve({ httpServer, port: actualPort, nonce, close: () => { clearIdleTimer(); clearInterval(pingTimer); clearInterval(reapTimer); wss.close(); httpServer.close(); } });
     });
   });
 }
