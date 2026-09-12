@@ -35,6 +35,43 @@ const STOP_INTERRUPT_TIMEOUT_MS = 5_000;
 let cliLaunchCount = 0;
 export function getCliLaunchCount(): number { return cliLaunchCount; }
 
+interface AskQuestionDef {
+  question: string;
+  options?: Array<{ label: string; description?: string }>;
+}
+
+// Builds the follow-up prompt that carries the user's AskUserQuestion answers back to the
+// model, naming each selected option by index and description so it proceeds on the exact
+// choices rather than on whatever it assumed while the dialog was open.
+//
+// Exported and pure because it is the only thing in this path that reads the model's own
+// tool input, which is **not** schema-guaranteed: the CLI can deliver `questions` as a JSON
+// string rather than the declared array, and not rarely - both AskUserQuestion calls
+// recorded on this machine were strings, zero were arrays. The webview has parsed that
+// since ask-dialog-string-input.spec.ts, the
+// server never did, so `questions.find` threw straight out of the WS message handler - and
+// with no uncaughtException net in the daemon that killed the shared server process and
+// every client connected to it, from one Submit click.
+// See !notes/tasks/ask-submit-kills-daemon/notes.md.
+export function buildAskFollowUp(rawQuestions: unknown, answers: Record<string, string>): string {
+  const parsed = typeof rawQuestions === 'string'
+    ? (() => { try { return JSON.parse(rawQuestions); } catch { return []; } })()
+    : rawQuestions;
+  const questions: AskQuestionDef[] = Array.isArray(parsed) ? parsed : [];
+  const answerLines = Object.entries(answers).map(([q, a]) => {
+    const qDef = questions.find(qd => qd?.question === q);
+    // `options` is the same untrusted shape one level down, so it gets the same treatment.
+    const options = Array.isArray(qDef?.options) ? qDef!.options! : [];
+    const optIdx = options.findIndex(o => o?.label === a);
+    const optDesc = options[optIdx]?.description;
+    let line = `Question: "${q}"\nSelected: "${a}"`;
+    if (optIdx >= 0) line += ` (option ${optIdx + 1} of ${options.length})`;
+    if (optDesc) line += `\nDescription: ${optDesc}`;
+    return line;
+  }).join('\n\n');
+  return `The user has now answered your earlier questions. Disregard any assumptions or defaults you adopted while the questions were unanswered (do not act as if "no questionnaire" was the outcome), and proceed using exactly these choices:\n\n${answerLines}`;
+}
+
 export interface ConnectionHooks {
   onSettingsChange?: () => void;
   getClientCount?: () => number;
@@ -92,20 +129,7 @@ function initChannelSession(s: SessionState, model: string): void {
     const { answers, toolId, mode } = s.pendingFollowUp;
     s.pendingFollowUp = undefined;
     const tc = s.toolMap.get(toolId);
-    const questions = (tc?.input as Record<string, unknown>)?.questions as Array<{
-      question: string;
-      options?: Array<{ label: string; description?: string }>;
-    }> | undefined;
-    const answerLines = Object.entries(answers).map(([q, a]) => {
-      const qDef = questions?.find(qd => qd.question === q);
-      const optIdx = qDef?.options?.findIndex(o => o.label === a);
-      const optDesc = qDef?.options?.find(o => o.label === a)?.description;
-      let line = `Question: "${q}"\nSelected: "${a}"`;
-      if (optIdx !== undefined && optIdx >= 0) line += ` (option ${optIdx + 1} of ${qDef!.options!.length})`;
-      if (optDesc) line += `\nDescription: ${optDesc}`;
-      return line;
-    }).join('\n\n');
-    const followUp = `The user has now answered your earlier questions. Disregard any assumptions or defaults you adopted while the questions were unanswered (do not act as if "no questionnaire" was the outcome), and proceed using exactly these choices:\n\n${answerLines}`;
+    const followUp = buildAskFollowUp((tc?.input as Record<string, unknown> | undefined)?.questions, answers);
     setTimeout(() => {
       s.suppressCliOutput = false;
       s.emitSyntheticSend(JSON.stringify({ type: 'send', text: followUp, mode, _silent: true, _askResume: true }));

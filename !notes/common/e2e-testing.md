@@ -52,6 +52,17 @@ Three different budgets can bind, and raising the wrong one changes nothing:
   bare `deadline` when rebudgeting a spec** - raising the project timeout would not have
   touched this one.
 
+A fourth variant is the most misleading of the four, because it silently **destroys** the
+diagnostic rather than merely overstating it: a **helper's own deadline that throws its own
+error message**, capped above the test timeout. `usage-indicator-integration.spec.ts`'s
+`waitForFrame` carried `timeoutMs = 45_000`, so its `no <type> frame within 45000ms` - which
+names the exact frame that never arrived - could never fire; Playwright killed the test at 30s
+first and reported a bare `Test timeout of 30000ms exceeded` instead. An assertion cap that is
+too high leaves a confusing line in the log; a *helper* cap that is too high deletes the one
+line that would have identified the failure. It was lowered to 25s on 2026-09-12. The rule for
+any hand-written wait that throws its own message: it must sit **below** the test timeout, or it
+is not a cap at all.
+
 **Measure the test alone before believing it is slow.** `modal green highlight moves to the
 browsed session` failed twice at the file level, and it runs in **12.4s in isolation** - a 5x
 gap. The cause is inside the file rather than the test: `startStreaming` returns as soon as
@@ -111,6 +122,28 @@ not better, since a green run teaches the habit. Park edits until the run report
 the run from a second checkout. Editing `webview/src/` is safe for the **mock** project only
 in the sense that Vite serves from source (no backend restart); a mid-run HMR update still
 changes the app under an assertion, so the rule is the same.
+
+## Argus's own daemon leaks `ARGUS_DAEMON_FORCE_START` into the suite
+
+The config guard above covers `ARGUS_CONFIG`. There is a second ambient variable, and it arrives by a route that is invisible from the repo: **the Claude CLI answering an Argus conversation is a child of the daemon**, so it inherits the daemon's entire environment, and so does every `Bash` call, every Playwright worker, and every daemon those specs spawn. When that daemon was force-started - which [scripts/restart-daemon-detached.js](scripts/restart-daemon-detached.js) does, and which the documented restart procedure in [backend-restart.md](backend-restart.md) uses - `ARGUS_DAEMON_FORCE_START=1` is in that environment for the daemon's whole life.
+
+`src/backend/daemon.ts` skips its single-instance guard when that flag is set (`if (!FORCE_START)`), by design. So `daemon-lifecycle-integration.spec.ts` "a second launch exits without taking over the running daemon" falls through to `EADDRINUSE` and exits **1** instead of 0, and `describe.configure({mode:'serial'})` then reports the remaining 4 tests of that describe as "did not run".
+
+Measured 2026-09-12 on a full `yarn test:e2e`: **461 passed, 1 failed**, the failure being exactly that test, on a tree whose only backend change was the unrelated crash net. The same spec passed **6/6** with `unset ARGUS_DAEMON_FORCE_START` and nothing else changed.
+
+Two things make this expensive to diagnose rather than merely annoying:
+
+- **The spec spawns the daemon with `stdio: 'ignore'`**, so the one line that names the cause (`[argus-daemon] port 3912 already in use; pid N owns it (discovery file intact). Exiting.`) is discarded. All the runner shows is `Expected: 0 / Received: 1`, which reads as a regression in the guard. Re-run the spawn with pipes before believing that: [../tasks/ask-submit-kills-daemon/scripts/probe-second-launch.js](../tasks/ask-submit-kills-daemon/scripts/probe-second-launch.js) replicates the test byte for byte and prints the child's stderr.
+- **Nothing in the diff, the git history or the repo points at it.** The check is one command: `node -e "console.log(process.env.ARGUS_DAEMON_FORCE_START)"`.
+
+Fixed in two layers, because either one alone leaves a hole:
+
+1. **At the cause, in the product**: `src/backend/daemon.ts` captures the flag into its `FORCE_START` const and then `delete process.env.ARGUS_DAEMON_FORCE_START`. It is a launch-time instruction, not state, and this stops it reaching *any* descendant - not just spawns this repo owns. Verified by modelling the inheritance directly rather than by reasoning about it: [../tasks/ask-submit-kills-daemon/scripts/probe-force-start-inheritance.js](../tasks/ask-submit-kills-daemon/scripts/probe-force-start-inheritance.js) force-starts a real daemon with a `--require` preload that spawns a child once the daemon's top-level has run, and reports what that child saw. Pre-fix build: `1` (FAIL). Fixed build: `undefined` (PASS). Both still bound the port, so force-start itself is intact.
+2. **At the spawn sites, in the suite**: `daemonEnv(extra)` in [e2e/daemonHelpers.ts](../../e2e/daemonHelpers.ts) returns `{...process.env, ...extra}` minus the flag, used by all three daemon spawn sites (`startDaemon`, the inline spawn in the lifecycle spec, `daemon-crash-net-integration.spec.ts`). Still needed after layer 1, since the variable can reach a suite from somewhere other than a daemon - an exported shell variable, CI, a hand-run command.
+
+A test that genuinely wants a force-start sets it explicitly on top. The daemon's *own* `respawn()` already does exactly that on its child rather than relying on inheritance, so the self-restart handoff is untouched - verified by `daemon-restart-integration.spec.ts` still passing, including the same-port case whose whole point is the replacement waiting out `EADDRINUSE`.
+
+Generalisation worth carrying: **anything the daemon has in its environment, a suite driven from inside Argus inherits.** `ARGUS_DAEMON_FORCE_START` was the only `ARGUS_*` var leaking on 2026-09-12, but the mechanism is not specific to it, and a spec that spawns a server should build its env deliberately rather than by spreading `process.env`.
 
 ## Integration concurrency: `workers: 1`
 
@@ -563,8 +596,48 @@ failure is intermittent by nature, so the argument has to be that the window no 
 exists, not that it passed N times.
 
 Same shape wherever a raw `ws` client is used against a live entry:
-`resume-live-session-integration.spec.ts`, `shared-channel-integration.spec.ts`,
-`usage-indicator-integration.spec.ts` still use the unbuffered ordering.
+`resume-live-session-integration.spec.ts` and `shared-channel-integration.spec.ts` still use
+the unbuffered ordering. `usage-indicator-integration.spec.ts` was fixed on 2026-09-12, for
+the reason below.
+
+### The upgrade is not the only place two frames share a read
+
+Reading the section above as "a socket is safe once it is open" is wrong, and it is the natural
+reading, since every example there is a replay racing the handshake. Any **two frames the
+server writes in one tick** coalesce the same way, mid-session, with no replay involved.
+
+`getAccountUsage` is the standing example (`src/backend/session.ts`): both sends hang off the
+same promise - `accountP.then` sends phase 1 (`usagePending`), `Promise.all([accountP, usageP])`
+sends phase 2 - so whenever `usageP` is **already settled** the two are microtask hops apart
+inside one macrotask. That is the *normal* warm state, not an edge case: `requestUsageRefresh()`
+answers from the snapshot inside its 60s floor, while `fetchAccountInfo()` spawns
+`claude auth status` and takes hundreds of ms, so usage settles first almost every time. A cold
+run is what separates them, which is why the spec passed every time it was re-run alone.
+
+Two consequences for the helper:
+
+- **The buffer must be consumed, not searched.** A two-phase reply is two waits for the *same*
+  frame type, so a non-consuming `find` hands phase 1 back twice and the loop never reaches the
+  settled frame. `waitForFrame` splices its hit out of the queue.
+- **A per-call listener is the bug even when nothing is replayed.** Attaching inside the promise
+  leaves no listener at all between one wait resolving and the next being made.
+
+Observed 2026-09-12: `usage-indicator-integration.spec.ts:110` ("a modal fetch becomes the
+snapshot every other client reads") hit a bare `Test timeout of 30000ms exceeded` in a full-suite
+run while its two siblings skipped correctly on "live usage API unavailable" - that asymmetry is
+the tell, since reaching the `test.skip` requires consuming *both* frames, so the hang was about
+delivery and not about the API. Demonstrated against a bare `ws` server (old helper hangs on
+back-to-back frames, new one passes, 50ms-gap control passes on both):
+[!notes/tasks/e2e-full-run-2026-09-12/scripts/probe-frame-coalesce.js](../tasks/e2e-full-run-2026-09-12/scripts/probe-frame-coalesce.js).
+
+**Not established, and worth not overstating:** the end-to-end failure was never reproduced on
+demand - a red control (pre-fix spec, `--repeat-each=3`, warm server) passed every iteration,
+because whether the OS merges the two writes into one read is not controllable from the test.
+The defect is real and sufficient to produce that signature; "this is what killed that run"
+stays a hypothesis. The same caveat retroactively weakens the *previous* diagnosis recorded in
+that helper's own comment - the `no accountUsage frame within 20000ms` it blamed on a slow
+`claude auth status` under load is equally well explained by the dropped frame, so the
+20s -> 45s raise it justified was probably treating the wrong cause.
 
 ## The list reporter marks failures with `x`, never `not ok`
 
@@ -602,3 +675,12 @@ give: neither spec touches the code that changed, and the session's one plausibl
 `e2e/argus.json` carries `cliIdleTimeoutSec: 0` and `readConfig` merges `DEFAULT_CONFIG`, so
 every sweep hit `!(0 > 0)` and returned. Find the mechanism by which your change *could*
 have caused it and kill that, rather than re-running until it is green.
+
+**`effort-thinking-integration.spec.ts:185` recurred on 2026-09-12**, same assertion (the
+toggle flips on screen, then reads as the old value after the reload), same shape: 16/16 green
+when the file is run alone, and again the ten "did not run" behind it. Two sightings a day
+apart make it a standing flake rather than a one-off, so it is worth a mechanism next time it
+appears. One candidate was checked and **killed**: `readConfig`'s mtime cache cannot serve a
+stale value here, because `writeConfig` updates `cachedConfig` without touching `cachedMtime`,
+which errs toward re-reading from disk. Still unexplained; nothing else in that session's diff
+goes near effort/thinking or config writes.

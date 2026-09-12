@@ -6,6 +6,16 @@ import { plural } from '../utils/text';
 import { usePreview, type PreviewRequest } from '../contexts/PreviewContext';
 import styles from './ToolCall.module.css';
 
+// The CLI can deliver AskUserQuestion's `questions` as a JSON string rather than the
+// declared array, so every reader has to parse it - a throw here unmounts the whole React
+// tree, and a silent miss (indexing a string) yields its first character, not a question.
+function parseAskQuestions(raw: unknown): unknown[] {
+  const parsed = typeof raw === 'string'
+    ? (() => { try { return JSON.parse(raw); } catch { return []; } })()
+    : raw;
+  return Array.isArray(parsed) ? parsed : [];
+}
+
 function toolSummary(name: string, input: Record<string, unknown>): string {
   switch (name) {
     case 'Read': {
@@ -35,8 +45,8 @@ function toolSummary(name: string, input: Record<string, unknown>): string {
     case 'Task':
       return (input.description as string) || '';
     case 'AskUserQuestion': {
-      const qs = input.questions as Array<{ header: string }> | undefined;
-      return qs?.[0]?.header || '';
+      const qs = parseAskQuestions(input.questions) as Array<{ header?: string }>;
+      return qs[0]?.header || '';
     }
     default: {
       const first = Object.values(input).find(v => typeof v === 'string' && (v as string).length > 0);
@@ -146,12 +156,7 @@ export function ToolCall({ call, sessionDone }: Props) {
       multiSelect?: boolean;
       options: Array<{ label: string; description?: string }>;
     };
-    // Some transcripts record `questions` as a JSON string instead of an array,
-    // so parse it before use - a throw here unmounts the whole React tree.
-    const rawQuestions = typeof input.questions === 'string'
-      ? (() => { try { return JSON.parse(input.questions as string); } catch { return []; } })()
-      : input.questions;
-    const questions: AskQuestion[] = Array.isArray(rawQuestions) ? rawQuestions : [];
+    const questions = parseAskQuestions(input.questions) as AskQuestion[];
 
     const isPending = !result;
 

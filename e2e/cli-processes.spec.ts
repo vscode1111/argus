@@ -206,6 +206,40 @@ test.describe('CLI process list', () => {
     await expect(groups.first().locator('td')).toHaveAttribute('title', /cmd\.exe \(100\)/);
   });
 
+  test('a group whose CLIs are all this server\'s says so once, on its header', async ({ page }) => {
+    const owner = { pid: 4128, name: 'code.exe', label: 'Argus daemon', chain: 'code.exe (4128)' };
+    const { dialog } = await openProcessList(page, [
+      { ...SAMPLE[0], pid: 100, owner, current: false },
+      { ...SAMPLE[0], pid: 200, owner, current: true },
+    ]);
+    await expect(dialog.getByTestId('cli-process-group-badge')).toHaveText('this server');
+    // The caption the header now carries is gone from every row beneath it - repeating it
+    // per row is what this replaced.
+    await expect(dialog.locator(`${ROW}[data-pid="100"]`)).not.toContainText('this server');
+    await expect(dialog.locator(`${ROW}[data-pid="200"]`)).not.toContainText('this server');
+    // "this panel" names one process out of the group, so it cannot move up and stays put.
+    await expect(dialog.locator(`${ROW}[data-pid="200"]`)).toContainText('this panel');
+
+    // Flat has no group header to carry it, so the per-row badge has to come back - a
+    // build that simply stopped rendering it would pass everything above.
+    await dialog.getByTestId('cli-processes-view').click();
+    await expect(dialog.getByTestId('cli-process-group-badge')).toHaveCount(0);
+    await expect(dialog.locator(`${ROW}[data-pid="100"]`)).toContainText('this server');
+  });
+
+  test('a group holding a CLI this server did not spawn keeps the badge on the rows it fits', async ({ page }) => {
+    const owner = { pid: 4128, name: 'code.exe', label: 'Argus daemon', chain: 'code.exe (4128)' };
+    const { dialog } = await openProcessList(page, [
+      { ...SAMPLE[0], pid: 100, owner, current: false },
+      // A sub-agent shelling out to `claude`: nested inside the group, but not ours. This
+      // is why the header badge is gated on the whole tree rather than on the roots.
+      { ...SAMPLE[1], pid: 200, parentCliPid: 100, owner: { pid: 100, name: 'claude.exe', chain: 'claude.exe (100)' } },
+    ]);
+    await expect(dialog.getByTestId('cli-process-group-badge')).toHaveCount(0);
+    await expect(dialog.locator(`${ROW}[data-pid="100"]`)).toContainText('this server');
+    await expect(dialog.locator(`${ROW}[data-pid="200"]`)).not.toContainText('this server');
+  });
+
   test('nests a CLI under the CLI that started it, and counts it in that group', async ({ page }) => {
     const owner = { pid: 4128, name: 'code.exe', label: 'Argus daemon', chain: 'code.exe (4128)' };
     const { dialog } = await openProcessList(page, [

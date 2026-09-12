@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { startServer } from './index';
+import { broadcastToAllChannels } from './channel';
 import { readConfig } from './config';
 import { scheduleModelDataRefresh } from './modelData';
 import { readServerVersion } from './version';
@@ -29,7 +30,57 @@ const MODEL = process.env.ARGUS_MODEL ?? '';
 // A force-start replacement (spawned by an in-browser "restart daemon" request) must
 // skip the single-instance guard - the old daemon is still alive while it hands off.
 const FORCE_START = process.env.ARGUS_DAEMON_FORCE_START === '1';
+// ...and that is the whole of its job, so it must not outlive this line. It is a
+// launch-time instruction, not state: left in the environment it is inherited by every
+// child for the daemon's entire life, and the daemon's children are the Claude CLIs
+// serving conversations - so anything a CLI spawns (a `yarn test:e2e` run, above all)
+// comes up believing it too. Measured 2026-09-12: a suite driven from inside an Argus
+// session failed `daemon-lifecycle-integration.spec.ts` "a second launch exits without
+// taking over the running daemon", because that second launch inherited the flag and
+// skipped the guard the test exists to measure, exiting 1 on EADDRINUSE instead of 0.
+// The e2e helpers strip it as well (`daemonEnv` in e2e/daemonHelpers.ts), but that only
+// covers spawns this repo owns; deleting it here covers every descendant. Safe because
+// the value is already captured above, and respawn() sets it explicitly on its child
+// rather than relying on inheritance.
+delete process.env.ARGUS_DAEMON_FORCE_START;
 
+
+// One client's bad message must not take the whole machine's Argus down with it. This
+// process serves every VS Code panel and browser tab at once, so an uncaught throw in a
+// WS handler ends *all* of them: measured, one AskUserQuestion Submit click dropped two
+// unrelated clients and exited with code 1
+// (!notes/tasks/ask-submit-kills-daemon/notes.md). server/index.ts has made the same
+// trade since it was written; the daemon simply never got it.
+//
+// Node leaves the process in an undefined state after this, which is the accepted cost:
+// a wedged turn is recoverable by the user, a dead daemon takes every other panel's
+// conversation with it. It is a net, not a licence - anything it catches is a bug to fix
+// at its cause, which is why it is made loud rather than silent.
+//
+// Loud takes some care here: the launcher spawns this process with stdio 'ignore'
+// (ensureDaemon in extension.ts), so console.error reaches nobody in the deployment that
+// matters, and a bare handler would convert a visible crash into an invisible one. The
+// Debug Log of every open panel is where a user would actually look, so send it there
+// too - re-entrancy guarded, since the broadcast is itself capable of being the thing
+// that threw.
+let reportingCrash = false;
+function reportCrash(kind: string, err: unknown): void {
+  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  console.error(`[argus-daemon] ${kind}:`, detail);
+  if (reportingCrash) return;
+  reportingCrash = true;
+  try {
+    broadcastToAllChannels(JSON.stringify({
+      type: 'log',
+      level: 'error',
+      text: `Daemon ${kind} (survived, but this is a bug): ${detail.slice(0, 2000)}`,
+      timestamp: new Date().toISOString(),
+    }));
+  } catch { /* the reporting path itself is broken; console.error above is all there is */ }
+  reportingCrash = false;
+}
+process.on('uncaughtException', (err) => reportCrash('uncaughtException', err));
+process.on('unhandledRejection', (reason) => reportCrash('unhandledRejection', reason));
 
 // Idempotent launch: if a discovery file points at a live daemon process, do not
 // start a second one. A crashed daemon leaves a stale file whose pid is dead, so we

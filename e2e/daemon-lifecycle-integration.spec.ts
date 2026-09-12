@@ -6,7 +6,7 @@ import * as path from 'path';
 import { WebSocket } from 'ws';
 import {
   ensureCompiled, startDaemon, readInfo, isAlive, isPortUp, stopDaemon, waitFor,
-  uniqueConfigFile, writeDaemonConfig,
+  uniqueConfigFile, writeDaemonConfig, daemonEnv,
   type DaemonHandle,
 } from './daemonHelpers';
 
@@ -63,7 +63,9 @@ test.describe('daemon lifecycle (integration)', () => {
     // must exit 0 (idempotent launcher), leaving the original untouched.
     const code = await new Promise<number | null>((resolve) => {
       const p = spawn(process.execPath, [DAEMON_JS], {
-        env: { ...process.env, ARGUS_DAEMON_PORT: String(PORT), ARGUS_DAEMON_FILE: d!.file },
+        // daemonEnv, not process.env: an inherited ARGUS_DAEMON_FORCE_START would skip
+        // the very guard this test measures (see the helper's comment).
+        env: daemonEnv({ ARGUS_DAEMON_PORT: String(PORT), ARGUS_DAEMON_FILE: d!.file }),
         stdio: 'ignore',
       });
       p.on('exit', resolve);

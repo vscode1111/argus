@@ -1,0 +1,4 @@
+2026-09-12T09:09:41.427Z start: registered pid 8816 v0.0.98 port 51852
+2026-09-12T09:09:41.453Z spawned target C:/Users/Admin/.vscode/extensions/local.argus-0.0.98/out/backend/daemon.js (pid 27152, force-start, camping on the port)
+2026-09-12T09:09:42.673Z killed old daemon pid 8816
+2026-09-12T09:09:48.697Z success: daemon now pid 18980 v0.0.97 on port 51852

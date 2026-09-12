@@ -37,6 +37,22 @@ export function uniqueDaemonFile(tag: string): string {
   return path.join(os.tmpdir(), `argus-daemon-${tag}-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
 }
 
+// Base environment for every daemon this suite spawns. The only thing it does beyond
+// inheriting is strip ARGUS_DAEMON_FORCE_START, which must never be ambient: the daemon
+// serving this machine is itself often force-started (the documented restart procedure
+// does exactly that), and the Claude CLI answering an Argus conversation is a child of
+// that daemon - so a suite run from inside Argus inherits the flag all the way down into
+// the daemons these specs spawn. daemon.ts skips its single-instance guard when the flag
+// is set, which is what the guard spec exists to measure, and the spawn there uses
+// stdio 'ignore' so the real reason (EADDRINUSE) is discarded and it reads as a code
+// regression. Same isolation global-setup.ts enforces for ARGUS_CONFIG. A test that
+// wants a force-start sets it explicitly on top of this.
+export function daemonEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+  delete env.ARGUS_DAEMON_FORCE_START;
+  return env;
+}
+
 export interface StartOpts {
   // Sets ARGUS_DAEMON_PORT (an env override). Omit when configPath is given so the
   // daemon takes its port from the config's daemonPort (lets a restart move the port).
@@ -73,8 +89,7 @@ export function isPortUp(port: number): Promise<boolean> {
 export async function startDaemon(opts: StartOpts): Promise<DaemonHandle> {
   const file = opts.file ?? uniqueDaemonFile('test');
   try { fs.unlinkSync(file); } catch { /* not there */ }
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
+  const env: NodeJS.ProcessEnv = daemonEnv({
     ARGUS_DAEMON_FILE: file,
     // The daemon records daemonLastStartAt (and would run the daily model-data
     // refresh, spawning a real CLI turn) against its config on startup - keep test
@@ -84,7 +99,7 @@ export async function startDaemon(opts: StartOpts): Promise<DaemonHandle> {
     // Same reasoning for the usage poller: a test daemon must not call the live
     // usage API on a timer with the user's OAuth token.
     ARGUS_USAGE_POLL: opts.usagePoll ? '1' : '0',
-  };
+  });
   if (opts.port != null) env.ARGUS_DAEMON_PORT = String(opts.port);
   else delete env.ARGUS_DAEMON_PORT; // let config drive the port
   if (opts.idleMs != null) env.ARGUS_DAEMON_IDLE_MS = String(opts.idleMs);

@@ -25,34 +25,59 @@ async function getNonce(): Promise<string> {
   return (await res.text()).trim();
 }
 
+type Frame = Record<string, unknown>;
+
+// Every frame the socket receives, buffered from construction rather than from the moment a
+// caller starts waiting. A listener attached per call loses frames: `ws` emits both frames of
+// one TCP read synchronously, while the `await` continuation that would attach the next
+// listener only runs a microtask later - so when the server writes two frames in the same
+// tick, the second is dropped and the next wait hangs on a frame already delivered.
+// `getAccountUsage` does exactly that whenever phase 2 needs no work (a usage attempt inside
+// the 60s floor answers from the snapshot, so the settled frame follows `usagePending`
+// immediately). Measured 2026-09-12: this timed out `a modal fetch becomes the snapshot...`
+// in a full-suite run and passed alone, where a cold fetch put a network round trip between
+// the two frames; reproduced against a bare `ws` server in
+// !notes/tasks/e2e-full-run-2026-09-12/scripts/probe-frame-coalesce.js.
+const QUEUE = Symbol('frames');
+
+function bufferFrames(ws: WebSocket): void {
+  const q: Frame[] = [];
+  (ws as unknown as Record<symbol, Frame[]>)[QUEUE] = q;
+  ws.on('message', (raw: Buffer) => {
+    try { q.push(JSON.parse(raw.toString()) as Frame); } catch { /* non-JSON */ }
+  });
+}
+
 function openClient(nonce: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:3001/agent?nonce=${nonce}`, { origin: 'http://localhost:5173' });
+    bufferFrames(ws);
     ws.on('open', () => resolve(ws));
     ws.on('unexpected-response', (_req, res) => reject(new Error('upgrade failed: ' + res.statusCode)));
     ws.on('error', reject);
   });
 }
 
-// Wait for the first frame of a given type, or reject on timeout.
-// The default was 20s and produced `no accountUsage frame within 20000ms` in a full-suite
-// run while the machine was carrying ~70 node processes and a dozen CLIs - phase 1 of that
-// reply waits on a `claude auth status` subprocess, which is exactly what a saturated box is
-// slow to spawn. It passed alone. Every call here waits for a frame it expects, so this is a
-// cap rather than a cost: raising it only extends the runs that need it.
-function waitForFrame(ws: WebSocket, type: string, timeoutMs = 45_000): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { ws.off('message', onMsg); reject(new Error(`no ${type} frame within ${timeoutMs}ms`)); }, timeoutMs);
-    function onMsg(raw: Buffer) {
-      let msg: Record<string, unknown>;
-      try { msg = JSON.parse(raw.toString()); } catch { return; }
-      if (msg.type !== type) return;
-      clearTimeout(timer);
-      ws.off('message', onMsg);
-      resolve(msg);
-    }
-    ws.on('message', onMsg);
-  });
+// Takes the first unconsumed frame of a given type off that buffer. Frames are removed, not
+// just read, because the two-phase `accountUsage` reply is answered by two waits for the same
+// type and each must get its own frame - a non-consuming search hands the first one back
+// twice and the loop never reaches the settled reply.
+//
+// The cap must stay BELOW the project's 30s test timeout or it is dead code: it was raised
+// 20s -> 45s to survive a saturated box, which bought nothing (Playwright killed the test at
+// 30s first) and cost the diagnostic, leaving a bare `Test timeout of 30000ms exceeded`. The
+// slow-`claude auth status` reading that motivated that raise is now doubtful anyway - the
+// dropped-frame bug above produces the very same `no accountUsage frame within 20000ms`.
+async function waitForFrame(ws: WebSocket, type: string, timeoutMs = 25_000): Promise<Frame> {
+  const q = (ws as unknown as Record<symbol, Frame[] | undefined>)[QUEUE];
+  if (!q) throw new Error('socket has no frame buffer - open it through openClient/openWs');
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const i = q.findIndex(m => m.type === type);
+    if (i >= 0) return q.splice(i, 1)[0];
+    if (Date.now() >= deadline) throw new Error(`no ${type} frame within ${timeoutMs}ms`);
+    await new Promise(r => setTimeout(r, 25));
+  }
 }
 
 // Whether the live usage API can answer right now, so a test can skip instead of
@@ -188,6 +213,7 @@ test.describe('daemon usage poller (integration)', () => {
 
   function openWs(port: number, nonce: string): Promise<WebSocket> {
     const ws = new WebSocket(`ws://localhost:${port}/agent?nonce=${nonce}`);
+    bufferFrames(ws);
     return new Promise((resolve, reject) => {
       ws.on('open', () => resolve(ws));
       ws.on('error', reject);
