@@ -36,6 +36,9 @@ interface Group {
   key: string;
   owner?: ProcessOwner;
   roots: CliProcessInfo[];
+  // Every CLI under this owner, nested ones included, was spawned by this server - so the
+  // "this server" badge describes the group and moves up to its header.
+  allOurs: boolean;
 }
 
 // Groups the CLIs under the process that started them, and nests a CLI that was itself
@@ -55,12 +58,20 @@ export function groupByOwner(processes: CliProcessInfo[]): { groups: Group[]; ch
       continue;
     }
     const key = p.owner ? String(p.owner.pid) : 'unknown';
-    const group = groups.get(key) ?? { key, owner: p.owner, roots: [] };
+    const group = groups.get(key) ?? { key, owner: p.owner, roots: [], allOurs: false };
     group.roots.push(p);
     groups.set(key, group);
   }
 
+  // Only once childrenOf is complete: a group is ours when its whole tree is, and the
+  // nested CLIs (a sub-agent shelling out to `claude`) are exactly the ones that are not.
+  for (const group of groups.values()) group.allOurs = everyOurs(group.roots, childrenOf);
+
   return { groups: [...groups.values()], childrenOf };
+}
+
+function everyOurs(roots: CliProcessInfo[], kids: Map<number, CliProcessInfo[]>): boolean {
+  return roots.every(p => p.ours && everyOurs(kids.get(p.pid) ?? [], kids));
 }
 
 export function ownerTitle(owner?: ProcessOwner): string {
@@ -166,7 +177,10 @@ export function CliProcessesModal({ onClose }: Props) {
   const ownedCount = processes?.filter(p => p.ours).length ?? 0;
   const { groups, childrenOf } = groupByOwner(processes ?? []);
 
-  function row(p: CliProcessInfo, depth: number): React.ReactElement {
+  // `ownedByGroup` suppresses the per-row "this server" badge because the group header
+  // above already carries it for every row beneath. "this panel" is never suppressed -
+  // it names one process out of the group, which a header badge could not say.
+  function row(p: CliProcessInfo, depth: number, ownedByGroup = false): React.ReactElement {
     return (
       <tr
         key={p.pid}
@@ -184,7 +198,7 @@ export function CliProcessesModal({ onClose }: Props) {
           </span>
           {p.current
             ? <span className={[styles.badge, styles.badgeCurrent].join(' ')} title="The process running this panel's own session">this panel</span>
-            : p.ours
+            : p.ours && !ownedByGroup
               ? <span className={styles.badge} title="Spawned by the server this panel is connected to">this server</span>
               : null}
         </td>
@@ -226,8 +240,8 @@ export function CliProcessesModal({ onClose }: Props) {
     );
   }
 
-  function renderTree(p: CliProcessInfo, kids: Map<number, CliProcessInfo[]>, depth: number): React.ReactElement[] {
-    return [row(p, depth), ...(kids.get(p.pid) ?? []).flatMap(c => renderTree(c, kids, depth + 1))];
+  function renderTree(p: CliProcessInfo, kids: Map<number, CliProcessInfo[]>, depth: number, ownedByGroup = false): React.ReactElement[] {
+    return [row(p, depth, ownedByGroup), ...(kids.get(p.pid) ?? []).flatMap(c => renderTree(c, kids, depth + 1, ownedByGroup))];
   }
 
   return (
@@ -295,10 +309,17 @@ export function CliProcessesModal({ onClose }: Props) {
                         <div className={styles.groupInner}>
                           <span className={styles.groupName}>{ownerTitle(g.owner)}</span>
                           <span className={styles.groupCount}>{plural(countTree(g.roots, childrenOf), 'CLI')}</span>
+                          {g.allOurs && (
+                            <span
+                              className={styles.badge}
+                              data-testid="cli-process-group-badge"
+                              title="Every CLI in this group was spawned by the server this panel is connected to"
+                            >this server</span>
+                          )}
                         </div>
                       </td>
                     </tr>
-                    {g.roots.flatMap(p => renderTree(p, childrenOf, 0))}
+                    {g.roots.flatMap(p => renderTree(p, childrenOf, 0, g.allOurs))}
                   </React.Fragment>
                 ))
                 : processes.map(p => row(p, 0))}
