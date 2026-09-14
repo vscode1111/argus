@@ -28,6 +28,6 @@ Analyze that project in details
 What is 100 + 200? Reply with just the number.
 Add integration tests for that
 
-
+ckeck yarn test:e2e
 http://192.168.100.4:5173/
 

@@ -8,7 +8,7 @@ Initial audit: 2026-05-13. Updated: 2026-06-01.
 |---|----------|-------|--------|
 | 1 | Critical | Arbitrary file read via readFilePreview | Fixed (path validation added) |
 | 2 | Critical | WebSocket server on 0.0.0.0 | Intentional (remote access planned) |
-| 3 | High | No authentication on WebSocket | Open, see [Remote Access Auth](#remote-access-auth) |
+| 3 | High | No authentication on WebSocket | **Fixed 2026-09-14** - address-gated login, see [tasks/remote-access-auth](tasks/remote-access-auth/notes.md) |
 | 4 | High | Unsanitized `dir` parameter | Open |
 | 5 | Medium | CSP allows ws://localhost:* | Open |
 | 6 | Medium | No try-catch on WS JSON.parse | Fixed |
@@ -38,9 +38,22 @@ The server binds to all interfaces to support remote access over the internet. T
 
 ## Open Issues
 
-### 3. No Authentication on WebSocket
+### 3. No Authentication on WebSocket - FIXED 2026-09-14
 
-Currently any client that can reach the port can connect and send commands. This is the primary remaining vulnerability, especially with the server on 0.0.0.0.
+A peer that is not on this machine must now sign in (`POST /login` -> token -> `?auth=` on
+`/nonce` and the WS upgrade). Implemented as a **password**, not the pre-shared token
+drafted below: a token has to be transcribed onto a phone and cannot be rotated without
+editing files. The rate limiting and constant-time compare from that draft were kept.
+
+The audit understated the problem. The gate was decided on the **Origin header**, which
+the upgrade handler never cross-checked against the peer address, so with
+`allowNetworkAccess: false` - the setting whose whole promise is "only this machine" - a
+LAN browser was refused 403 while any client that simply omitted the header connected
+from anywhere, and `GET /nonce` was served to whoever asked. Both measured; the probe is
+in `tasks/remote-access-auth/scripts/probe-origin-gate.js`. The fix keys off
+`req.socket.remoteAddress`, which closes that by construction.
+
+Still true: without TLS the password and token cross the network in the clear.
 
 ### 4. Unsanitized `dir` Parameter
 

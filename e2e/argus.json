@@ -12,6 +12,7 @@
   "watchdogAutoRetries": 3,
   "watchdogRetryDelay": 5,
   "watchdogDelayFactor": 2,
+  "cliIdleTimeoutSec": 0,
   "allowNetworkAccess": true,
   "allowedOrigins": "",
   "daemonPort": 3001,

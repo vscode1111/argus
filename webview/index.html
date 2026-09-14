@@ -54,10 +54,11 @@
       // ?mock=1 isolates e2e mock tests: do not forward these data-query messages to
       // the live dev backend (their async replies would clobber injected mock data).
       var mock = params.get('mock') === '1';
-      // killCliProcess is here for a second reason beyond clobbering: unsuppressed, a mock
-      // test that clicks the terminate button would reach the live backend and really kill
-      // a Claude CLI on whoever's machine runs the suite.
-      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1, listAllSessions: 1, getActiveSessions: 1, getModels: 1, getUsageInsights: 1, getUsageLimits: 1, readToolImage: 1, getBgTasks: 1, listCliProcesses: 1, killCliProcess: 1 };
+      // killCliProcess and closeClient are here for a second reason beyond clobbering:
+      // unsuppressed, a mock test that clicks the terminate/disconnect button would reach
+      // the live backend and really kill a Claude CLI - or drop another worker's page -
+      // on whoever's machine runs the suite.
+      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1, listAllSessions: 1, getActiveSessions: 1, getModels: 1, getUsageInsights: 1, getUsageLimits: 1, readToolImage: 1, getBgTasks: 1, listCliProcesses: 1, killCliProcess: 1, listClients: 1, closeClient: 1 };
       // Derive host from the page so a LAN device reaches the dev machine, not its own localhost.
       var host = window.location.hostname || 'localhost';
 
@@ -71,25 +72,39 @@
           window.history.replaceState(null, '', newUrl);
         }
       }
+      var auth = window.createArgusAuth('http://' + host + ':3001');
+      // Returns false when there is nothing to connect with. A 401 means this peer is
+      // remote and not logged in; a thrown request means the server is simply down,
+      // which must NOT be reported as an auth problem.
       function refreshNonce() {
         try {
           var xhr = new XMLHttpRequest();
-          xhr.open('GET', 'http://' + host + ':3001/nonce', false);
+          var t = auth.token();
+          xhr.open('GET', 'http://' + host + ':3001/nonce' + (t ? '?auth=' + encodeURIComponent(t) : ''), false);
           xhr.send();
-          if (xhr.status === 200 && xhr.responseText) nonce = xhr.responseText;
+          if (xhr.status === 200 && xhr.responseText) { nonce = xhr.responseText; auth.setRequired(false); return true; }
+          if (xhr.status === 401) { auth.setRequired(true); return false; }
         } catch (e) {}
+        return !!nonce;
       }
       function nextUrl() {
-        refreshNonce();
+        if (!refreshNonce()) return null;
         var p = new URLSearchParams();
         if (nonce) p.set('nonce', nonce);
         if (dir) p.set('dir', dir);
         if (session) p.set('session', session);
+        if (auth.token()) p.set('auth', auth.token());
         p.set('client', 'browser');
         return 'ws://' + host + ':3001/agent?' + p.toString();
       }
 
       var bridge = window.createArgusBridge({ nextUrl: nextUrl });
+      window.argusLogin = function (user, password) {
+        return auth.login(user, password).then(function (r) {
+          if (r.ok) bridge.reconnectNow();
+          return r;
+        });
+      };
       // The CLI assigns the id for a brand-new chat, so it arrives from the server
       // rather than from anything the user clicked - reflect it in the address bar
       // too, otherwise a new conversation cannot be shared or reloaded back into.

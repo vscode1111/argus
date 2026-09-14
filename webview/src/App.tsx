@@ -7,6 +7,7 @@ import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
 import { UsageIndicator } from './components/UsageIndicator';
 import { AutoFileViewer } from './components/AutoFileViewer';
+import { LoginScreen } from './components/LoginScreen';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { PreviewProvider } from './contexts/PreviewContext';
 import { postMessage, isVsCode } from './vscode';
@@ -133,7 +134,7 @@ function AppInner() {
       'tool_start', 'tool_end', 'done', 'error', 'clear', 'user_inject', 'sessionLoaded',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
       'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'token_update', 'retry_status', 'retry_clean', 'ws_status', 'modelChanged', 'effortChanged', 'thinkingChanged',
-      'bgTasks', 'bg_notice',
+      'bgTasks', 'bg_notice', 'auth_required',
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;
@@ -142,6 +143,10 @@ function AppInner() {
       }
     }
     window.addEventListener('message', handleMessage);
+    // The shim's first connect attempt happens while this bundle is still evaluating, so
+    // an `auth_required` raised then was dispatched to nobody. Read the state directly
+    // once, now that the listener above is in place.
+    if (window.argusAuthRequired?.()) dispatch({ type: 'auth_required', required: true });
     postMessage({ type: 'webviewReady' });
     postMessage({ type: 'getInfo' });
     return () => window.removeEventListener('message', handleMessage);
@@ -511,6 +516,10 @@ function AppInner() {
     </div>
   );
 
+  // Nothing behind this screen is usable - there is no connection at all - so it
+  // replaces the app rather than covering it.
+  if (state.authRequired) return <LoginScreen />;
+
   return (
     <div className="app">
       {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} activeIds={activeIds} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
@@ -526,7 +535,7 @@ function AppInner() {
         <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
           {topRightActions}
           <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
-          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
+          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsClosedByPeer={state.wsClosedByPeer} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
           {loadingSession && (
             <div className="sessionLoader" role="status" aria-live="polite" aria-busy="true" aria-label="Loading session">
               <div className="sessionSpinner" />

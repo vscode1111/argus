@@ -194,3 +194,27 @@ outside the repo.
 The daemon's own lifecycle (discovery file, single-instance guard, idle self-exit, in-process
 self-restart) is documented in the root `CLAUDE.md` under "Single daemon server", and the
 design notes are in [../tasks/single-daemon-server/](../tasks/single-daemon-server/).
+
+## A rebuilt bundle does not reach an already-open browser client
+
+Same family as the install-origin trap above, different mechanism: the daemon's static allowlist
+served `/`, `/webview.js`, `/webview.css` and `/ws-bridge.js` with **no cache headers at all** -
+no `Cache-Control`, no `ETag`, no `Last-Modified`. The URLs never change between builds, so a
+device that loaded the page once can keep its copy indefinitely and silently miss every later
+`yarn build`.
+
+It surfaced as a UI fix that "did not work": a layout bug was fixed, verified in a fresh browser
+on this machine, and still reproduced on the phone - because the phone was rendering an older
+bundle. The server was serving the new one the whole time, which is what makes this expensive to
+diagnose: both halves look correct in isolation.
+
+`Cache-Control: no-cache` is now sent with those responses ("store it, but revalidate before
+reuse"), so a reload picks up a new build. Verify on the wire rather than by reloading and
+squinting:
+
+```bash
+curl -s -D - -o /dev/null http://127.0.0.1:<port>/webview.js | grep -i cache-control
+```
+
+When a device disagrees with this machine about what the UI looks like, check that header before
+re-reading the diff.

@@ -17,6 +17,8 @@ import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
 import { type Channel, broadcastToAllChannels, listActiveSessions, listOwnedProcs } from './channel';
 import { listCliProcesses, killCliProcess, cpuCoreCount } from './processes';
+import { type ClientInfo, type CloseClientResult } from './clients';
+import { readAuth, setPassword, clearPassword, dropAllSessions, sessionCount, MIN_PASSWORD_LENGTH } from './auth';
 import { describeModel } from './modelData';
 import { attachProcHandlers, broadcastBgTasks } from './cliHandler';
 import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage } from './sessions';
@@ -75,6 +77,12 @@ export function buildAskFollowUp(rawQuestions: unknown, answers: Record<string, 
 export interface ConnectionHooks {
   onSettingsChange?: () => void;
   getClientCount?: () => number;
+  /** One row per connection the count above describes - see clients.ts. */
+  getClients?: () => ClientInfo[];
+  /** Disconnect one of those connections, this one included. */
+  closeClient?: (id: number) => CloseClientResult;
+  /** Credentials changed: drop remote sockets whose session no longer exists. */
+  onAuthChange?: () => void;
   getServerPort?: () => number;
   onRestartRequest?: () => void;
   /** Shut the server down for good (daemon only); absent on a server that can't exit itself. */
@@ -305,6 +313,47 @@ export function attachClientHandlers(
       });
     } else if (msg.type === 'getClientCount') {
       ws.send(JSON.stringify({ type: 'clientCount', count: hooks.getClientCount?.() ?? 0 }));
+    } else if (msg.type === 'getAuthStatus') {
+      const record = readAuth();
+      ws.send(JSON.stringify({
+        type: 'authStatus',
+        configured: !!record,
+        user: record?.user ?? '',
+        sessions: sessionCount(),
+        minLength: MIN_PASSWORD_LENGTH,
+      }));
+    } else if (msg.type === 'setAuthPassword') {
+      // The current password is required whenever one exists (enforced inside
+      // setPassword), so a hijacked session cannot lock the owner out.
+      const m = msg as { user?: string; password?: string; currentPassword?: string };
+      const result = setPassword(String(m.user ?? ''), String(m.password ?? ''), m.currentPassword);
+      // Every issued token was minted against the old password; drop the sockets that
+      // are still riding one, exactly as a settings change drops disallowed origins.
+      if (result.ok) hooks.onAuthChange?.();
+      ws.send(JSON.stringify({ type: 'authResult', action: 'set', ...result }));
+    } else if (msg.type === 'clearAuthPassword') {
+      const result = clearPassword(String((msg as { currentPassword?: string }).currentPassword ?? ''));
+      if (result.ok) hooks.onAuthChange?.();
+      ws.send(JSON.stringify({ type: 'authResult', action: 'clear', ...result }));
+    } else if (msg.type === 'signOutAll') {
+      const dropped = dropAllSessions();
+      hooks.onAuthChange?.();
+      ws.send(JSON.stringify({ type: 'authResult', action: 'signOut', ok: true, dropped }));
+    } else if (msg.type === 'listClients') {
+      // Answers even when the hook is absent, with the reason: an empty list would
+      // claim zero connections while this very request proves there is at least one.
+      ws.send(hooks.getClients
+        ? JSON.stringify({ type: 'clientList', clients: hooks.getClients() })
+        : JSON.stringify({ type: 'clientList', clients: [], error: 'this server cannot list its connections' }));
+    } else if (msg.type === 'closeClient') {
+      // The id is validated against the live socket set inside closeClient - a client
+      // must not be able to name an arbitrary connection for the server to drop.
+      const raw = (msg as { id?: number }).id;
+      const id = typeof raw === 'number' ? raw : -1;
+      const result = hooks.closeClient?.(id) ?? { id, closed: false, error: 'this server cannot close connections' };
+      // Answered before the socket dies, so the requester learns the outcome even when
+      // it just disconnected itself.
+      ws.send(JSON.stringify({ type: 'clientClosed', ...result }));
     } else if (msg.type === 'getServerInfo') {
       // sessionId is undefined until the CLI reports one (a brand-new chat before its
       // first turn); sessionPath is null until the transcript folder exists on disk.

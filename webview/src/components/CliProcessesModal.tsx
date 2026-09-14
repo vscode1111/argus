@@ -5,6 +5,7 @@ import { RefreshButton } from './shared/RefreshButton';
 import { formatSize } from './shared/FolderList';
 import { formatTime, formatUptime, relativeTime } from '../utils/time';
 import { plural } from '../utils/text';
+import table from './shared/dataTable.module.css';
 import styles from './CliProcessesModal.module.css';
 
 export interface ProcessOwner {
@@ -184,47 +185,47 @@ export function CliProcessesModal({ onClose }: Props) {
     return (
       <tr
         key={p.pid}
-        className={p.current ? styles.rowCurrent : undefined}
+        className={p.current ? table.rowCurrent : undefined}
         data-testid="cli-process-row"
         data-pid={p.pid}
         data-depth={depth}
         title={[p.command, p.owner && `Started by ${p.owner.chain}`].filter(Boolean).join('\n\n') || undefined}
       >
-        <td className={styles.num}>{p.pid}</td>
+        <td className={table.num}>{p.pid}</td>
         <td className={styles.session} style={depth ? { paddingLeft: 8 + depth * 14 } : undefined}>
           {depth > 0 && <span className={styles.branch} aria-hidden="true">└</span>}
           <span className={styles.sessionId} title={p.sessionId ? `${p.sessionId}${p.model ? ` · ${p.model}` : ''}` : p.model}>
             {p.sessionId ? p.sessionId.slice(0, 8) : '-'}
           </span>
           {p.current
-            ? <span className={[styles.badge, styles.badgeCurrent].join(' ')} title="The process running this panel's own session">this panel</span>
+            ? <span className={[table.badge, table.badgeCurrent].join(' ')} title="The process running this panel's own session">this panel</span>
             : p.ours && !ownedByGroup
-              ? <span className={styles.badge} title="Spawned by the server this panel is connected to">this server</span>
+              ? <span className={table.badge} title="Spawned by the server this panel is connected to">this server</span>
               : null}
         </td>
-        <td className={styles.run} data-testid="cli-process-running" data-running={String(p.sessionRunning)}>
+        <td className={table.run} data-testid="cli-process-running" data-running={String(p.sessionRunning)}>
           {p.sessionRunning === null
-            ? <span className={styles.unknown} title="Started by another server or a terminal, so this server cannot tell">-</span>
+            ? <span className={table.unknown} title="Started by another server or a terminal, so this server cannot tell">-</span>
             : p.sessionRunning
-              ? <span className={styles.runYes}><span className={styles.runDot} aria-hidden="true" />yes</span>
-              : <span className={styles.unknown}>no</span>}
+              ? <span className={table.runYes}><span className={table.runDot} aria-hidden="true" />yes</span>
+              : <span className={table.unknown}>no</span>}
         </td>
         <td className={styles.started} title={new Date(p.startedAt).toLocaleString()}>{formatTime(p.startedAt)}</td>
-        <td className={styles.num} title={p.lastActivityAt ? new Date(p.lastActivityAt).toLocaleString() : 'No transcript on disk for this session yet'}>
+        <td className={table.num} title={p.lastActivityAt ? new Date(p.lastActivityAt).toLocaleString() : 'No transcript on disk for this session yet'}>
           {p.lastActivityAt ? relativeTime(p.lastActivityAt) : '-'}
         </td>
-        <td className={styles.num}>{formatUptime(now - p.startedAt)}</td>
-        <td className={styles.num}>{formatUptime(p.cpuSeconds * 1000)}</td>
+        <td className={table.num}>{formatUptime(now - p.startedAt)}</td>
+        <td className={table.num}>{formatUptime(p.cpuSeconds * 1000)}</td>
         <td
-          className={[styles.num, p.cpuPercent != null && p.cpuPercent >= CPU_BUSY_PCT ? styles.busy : ''].filter(Boolean).join(' ')}
+          className={[table.num, p.cpuPercent != null && p.cpuPercent >= CPU_BUSY_PCT ? styles.busy : ''].filter(Boolean).join(' ')}
           data-testid="cli-process-cpu"
         >
           {p.cpuPercent == null ? '-' : `${p.cpuPercent.toFixed(p.cpuPercent < 10 ? 1 : 0)}%`}
         </td>
-        <td className={styles.num}>{formatSize(p.memBytes)}</td>
-        <td className={styles.actions}>
+        <td className={table.num}>{formatSize(p.memBytes)}</td>
+        <td className={table.actions}>
           <button
-            className={styles.killBtn}
+            className={table.rowBtn}
             onClick={() => kill(p.pid)}
             disabled={killing.has(p.pid)}
             data-testid="cli-process-kill"
@@ -266,38 +267,38 @@ export function CliProcessesModal({ onClose }: Props) {
         </>
       }
     >
-      <div className={styles.body} data-testid="cli-processes-body">
+      <div className={table.body} data-testid="cli-processes-body">
         {timedOut && (
-          <div className={styles.error} data-testid="cli-processes-error">
+          <div className={table.error} data-testid="cli-processes-error">
             No answer from the server. The daemon serving this panel may be older than this feature - restart it and try again.
           </div>
         )}
-        {error && <div className={styles.error} data-testid="cli-processes-error">Could not list processes: {error}</div>}
-        {killError && <div className={styles.error} data-testid="cli-process-kill-error">{killError}</div>}
-        {processes === null && !timedOut && !error && <div className={styles.placeholder}>Loading...</div>}
+        {error && <div className={table.error} data-testid="cli-processes-error">Could not list processes: {error}</div>}
+        {killError && <div className={table.error} data-testid="cli-process-kill-error">{killError}</div>}
+        {processes === null && !timedOut && !error && <div className={table.placeholder}>Loading...</div>}
         {processes !== null && processes.length === 0 && !error && (
-          <div className={styles.placeholder}>No Claude CLI processes are running.</div>
+          <div className={table.placeholder}>No Claude CLI processes are running.</div>
         )}
         {processes !== null && processes.length > 0 && (
-          <table className={styles.table}>
+          <table className={table.table}>
             <thead>
               <tr>
-                <th className={styles.num}>PID</th>
+                <th className={table.num}>PID</th>
                 <th>Session</th>
                 <th
-                  className={styles.run}
+                  className={table.run}
                   title="Whether that session is mid-turn right now. Only the server this panel talks to can tell - a process started by another server or a terminal shows '-', because nothing observable from outside separates a CLI waiting for input from one working."
                 >Running</th>
                 <th>Started</th>
                 <th
-                  className={styles.num}
+                  className={table.num}
                   title="When this session's transcript was last written. Not a liveness signal: the CLI writes at message boundaries, so a session that is busy can sit unwritten for tens of seconds."
                 >Last activity</th>
-                <th className={styles.num}>Uptime</th>
-                <th className={styles.num} title="Total CPU time this process has consumed since it started">CPU time</th>
-                <th className={styles.num} title={`Share of one CPU core since the previous refresh - 100% is one core fully busy${cores ? ` (this machine has ${cores})` : ''}. Empty until two samples exist.`}>CPU %</th>
-                <th className={styles.num} title="Resident memory (working set)">Memory</th>
-                <th className={styles.actions} aria-label="Actions" />
+                <th className={table.num}>Uptime</th>
+                <th className={table.num} title="Total CPU time this process has consumed since it started">CPU time</th>
+                <th className={table.num} title={`Share of one CPU core since the previous refresh - 100% is one core fully busy${cores ? ` (this machine has ${cores})` : ''}. Empty until two samples exist.`}>CPU %</th>
+                <th className={table.num} title="Resident memory (working set)">Memory</th>
+                <th className={table.actions} aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -311,7 +312,7 @@ export function CliProcessesModal({ onClose }: Props) {
                           <span className={styles.groupCount}>{plural(countTree(g.roots, childrenOf), 'CLI')}</span>
                           {g.allOurs && (
                             <span
-                              className={styles.badge}
+                              className={table.badge}
                               data-testid="cli-process-group-badge"
                               title="Every CLI in this group was spawned by the server this panel is connected to"
                             >this server</span>
@@ -327,7 +328,7 @@ export function CliProcessesModal({ onClose }: Props) {
           </table>
         )}
       </div>
-      <div className={styles.footer}>
+      <div className={table.footer}>
         {processes && processes.length > 0 && (
           <span data-testid="cli-processes-summary">
             {plural(processes.length, 'process', 'processes')} · {formatSize(totalMem)} total ·{' '}

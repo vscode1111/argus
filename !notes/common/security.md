@@ -64,3 +64,48 @@ prints "no matching process" in the OS display language *and still exits 0*. See
 
 A refusal must reach the UI. The row is removed optimistically, so a silently-dropped
 failure reads as a successful kill until the next poll quietly restores the process.
+
+## Remote-access authentication (2026-09-14)
+
+Closes audit issue #3. A peer whose **address is not on this machine** must sign in before it can
+obtain a nonce or open a WebSocket; loopback and the VS Code webview are exempt and unchanged.
+
+The gate is `isLocalAddress(req.socket.remoteAddress)` and deliberately **not** the Origin header -
+see the Superseded block below for why. Flow: `POST /login` -> a 32-byte in-memory session token ->
+`?auth=<token>` on `GET /nonce` and on the WS upgrade. Credentials live in their own
+`~/.claude/argus-auth.json` at mode 600, **never in `argus.json`**, because that config is written
+by `updateSettings`, a bulk merge filtered only by the `DEFAULT_CONFIG` allowlist - a password must
+not be reachable by the path that writes a checkbox. scrypt + 16-byte salt, `timingSafeEqual`,
+re-read from disk on every check so a password change binds on the next request. Five failures per
+address then 30s doubling to 15 min; `enforceAuth()` closes live remote sockets on a password
+change, mirroring `enforceOrigins()`.
+
+**No password configured means remote access is refused, not open.** The strict default is the
+point: the hole stays closed for anyone who never sets one.
+
+Not solved: without TLS the password and the token cross the network in the clear, and so does the
+whole conversation. This raises the bar against casual access on a shared network; it is not
+confidentiality against someone capturing traffic. The login screen says so.
+
+## Superseded: "empty Origin means same-origin or a non-browser client"
+
+**Was:** the WebSocket origin validation section above treats an absent `Origin` header as local
+and harmless, alongside `vscode-webview:` and `localhost`.
+
+**Actually:** the upgrade handler never looked at the peer address, so *any* client that simply
+omits the header was treated as local **from anywhere**. Measured with `allowNetworkAccess: false`,
+the setting whose whole promise is "only this machine can connect":
+
+```
+LAN browser  (Origin: http://192.168.0.136:5173) -> refused 403
+script       (no Origin header)                  -> CONNECTED
+GET /nonce   (no credentials)                    -> 200 <nonce>
+```
+
+**Why it was wrong:** Origin is supplied by the client. It stops a *browser* on another site
+(which cannot forge it), which is the CSWSH threat the check was written for - but it was being
+read as if it also answered "is this machine local", which no header can answer.
+
+**Corrected by:** the address-based auth gate above, which closes it by construction. The Origin
+check remains as defence-in-depth against CSWSH. Probe:
+[../tasks/remote-access-auth/scripts/probe-origin-gate.js](../tasks/remote-access-auth/scripts/probe-origin-gate.js)

@@ -441,6 +441,20 @@ This applies to the child-process idiom generally: backend functions that read `
 be exercised in a child (`config.ts` resolves the path once at import time, and Playwright reuses
 workers), so any spec doing that inherits this gotcha.
 
+**That child process is the price of import-time capture, not the right way - do not copy the
+pattern into new code.** A module that resolves its env override **per call** needs none of it, and
+the difference is not cosmetic: `auth.ts` originally did `const AUTH_FILE = process.env.X || <default>`
+at module scope, and because Playwright reuses workers, a worker that had already loaded the module
+kept the **default** - the developer's real `~/.claude/argus-auth.json`. The spec found a genuine
+record there, `setPassword` correctly refused to overwrite it without the current password, and the
+test failed with a message about hashing. It passed on retry (a different worker), so it surfaced
+as *flakiness*, which is the worst possible disguise for "reading the user's live credentials".
+
+Fix both ends: resolve per call (`authFilePath()`), and pin the override for **every worker** in
+`playwright.config.ts` (`process.env['ARGUS_AUTH_FILE'] = ...`, beside the existing `ARGUS_CONFIG`
+line) so no spec can reach the real file even by accident. `config.ts` still carries the
+import-time wart, which is why the paragraph above stands; new modules should not add to it.
+
 ## Chromium revision drift breaks every browser test at once
 
 `package.json` pins `"@playwright/test": "^1.59.0"`, so a `yarn install` can move the runner to a
@@ -684,3 +698,32 @@ appears. One candidate was checked and **killed**: `readConfig`'s mtime cache ca
 stale value here, because `writeConfig` updates `cachedConfig` without touching `cachedMtime`,
 which errs toward re-reading from disk. Still unexplained; nothing else in that session's diff
 goes near effort/thinking or config writes.
+
+
+## Workspace size is a hidden test variable
+
+`session-browse-during-stream-integration.spec.ts:147` failed three times in a row on
+2026-09-14 and passed on a clean checkout, which looks exactly like a regression and is
+not one. **It is intermittent, not deterministic**: a fourth run in the same big workspace
+passed (34.5s), which is the observation that killed the first, stronger version of this
+note - predicted as a certain failure, it went green. Tally: **3 fails / 1 pass** in the
+1949-transcript workspace, **5 passes / 0 fails** in a 30-transcript one. So workspace size
+is a measured contributor to a race, not a switch that turns the test off. The **same code** passes in a git worktree and fails in the main tree, so the
+variable is the directory, not the diff:
+
+| Workspace | Transcripts | `listSessions()` |
+|---|---|---|
+| `d:/_Projects/scub111g/argus` | 1949 | **775ms** |
+| a temp worktree | 30 | 2ms |
+
+`listSessions` reads and parses every `.jsonl` in the workspace folder, so a spec that
+opens Session History and then asserts on the header title within 10s is racing a reply
+whose cost grows with how long you have used Argus in that repo. The tell is that the
+failing assertion **moves between runs** (`toBeVisible` one run, `toHaveText` the next)
+and the saved page snapshot shows a healthy, connected app - a logic regression fails in
+the same place every time.
+
+Before blaming a diff for a slow-ish integration failure, run the spec in a worktree
+(`git worktree add`, junction `node_modules` with `cmd /c mklink /J` - no admin needed)
+and compare. And note the **suite itself inflates this**: every probe, daemon and
+integration run creates sessions in that same folder, so the number only goes up.

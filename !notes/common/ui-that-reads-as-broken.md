@@ -1,8 +1,10 @@
 # UI that renders correctly and still reads as broken
 
-Two failures from the same family, both reported by the user as bugs, both produced by code that
-was doing exactly what it was told. Neither is caught by any assertion about layout, logic or
-state, which is why they survive a green suite and are found by eye.
+Failures from one family, every one reported by the user as a bug, every one produced by code
+doing exactly what it was told. None is caught by any assertion about layout, logic or state,
+which is why they survive a green suite and are found by eye - and why the fix is usually to
+assert an *invariant* (a colour against its surface, a wrapper against its content) rather than
+the value that happened to be correct on the machine that wrote the test.
 
 ## A colour that equals its surface
 
@@ -167,3 +169,40 @@ The general rule: **when two numbers on one screen have different scope or diffe
 both must be visible together and both axes named.** One click apart with prose bridging
 them is not enough, and a number that disagrees with what clicking it opens reads as a
 broken counter no matter how correct it is.
+
+## A `display: flex` cell drops out of table layout
+
+The Connected clients rows rendered every value in the right cell and still looked wrong: the
+Client and Address cells each broke onto a line of their own and every later column slid out
+from under its header.
+
+`display: flex` on a `<td>` **blockifies it**, so it stops being a table cell: it no longer
+feeds the column-width algorithm and gets wrapped in an anonymous row. The flex was there for
+the ordinary reason - a value with a badge beside it needs `align-items: center`.
+
+Fix: put the flex on an **inner `<span>`**, never on the cell. `CliProcessesModal.module.css`
+already carried this warning for its group header (a `colSpan` cell whose flex made the table
+overflow its modal); the clients panel proved it is a general rule, not a quirk of that one row.
+
+**No assertion can see it.** The e2e suite checked text, badges and counts - all present, all in
+the correct cells - and passed against a visibly broken table. It was found by looking at a
+screenshot.
+
+## A block wrapper around an inline input carries the font's strut
+
+The password reveal ("eye") button measured *exactly* centred on the desktop (`489 = 489`) and
+was reported from a phone as sitting too low.
+
+A block wrapper around an inline `<input>` establishes an inline formatting context, so its line
+box carries the font's **strut** and leaves descender space below the field. The wrapper is
+therefore taller than the input by an amount that depends on **the device's font metrics**, and
+a button centred on the wrapper (`top: 50%`) drifts by half of it. Measured by forcing a tall
+font: **+30px of wrapper height under `display: block`, 0 under `display: flex`.**
+
+Fix: make the wrapper `display: flex` - a flex container has no strut, so its height is exactly
+the input's - and let the host carry any bottom margin, because a margin left on the input
+inflates the wrapper the same way (that was a separate 6px of drift).
+
+The general rule for this family: **assert the invariant, not the pixel.** The e2e check is
+`wrapper height == input height`, which holds on any device; a pixel offset passes on the machine
+that wrote it and says nothing about the phone that reported the bug.

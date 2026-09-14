@@ -442,3 +442,17 @@
   align-items: center;
   justify-content: flex-end;
 }
+
+/* Quiet in-flow cancel for the password form. Deliberately NOT .resetCorner, which
+   is absolutely positioned in the footer - reusing it put this button on top of
+   "Reset layout". */
+.cancelBtn {
+  align-self: flex-start;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--thinking-fg);
+  font-size: 0.82em;
+  cursor: pointer;
+}
+.cancelBtn:hover { color: var(--fg); text-decoration: underline; }
