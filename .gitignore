@@ -15,3 +15,6 @@ bash.exe.stackdump
 .dev-nonce
 \!notes/common/scripts/*.log
 \!notes/tasks/usage-insights/scripts/*.js.txt
+
+# Throwaway remote-access credential used by the e2e suite (never a real one).
+e2e/argus-auth.e2e.json

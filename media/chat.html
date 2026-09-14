@@ -108,8 +108,12 @@
 
       var bridge = window.createArgusBridge({
         nextUrl: function () { return WS_URL || null; },
-        onStatus: function (connected) {
+        onStatus: function (connected, closedByPeer) {
           if (connected) { showDaemonDown(false); return; }
+          // Disconnected on purpose from another panel's client list. The daemon is
+          // fine, so no overlay - and above all no requestWsUrl, which reconnects (and
+          // can even spawn a daemon) and would undo the very thing that was asked for.
+          if (closedByPeer) { showDaemonDown(false); return; }
           if (userStopped) { showDaemonDown(true); return; }
           // Disconnected: ask the extension for a fresh URL (covers daemon restart /
           // first boot with no URL). Show the overlay only when we have nothing.

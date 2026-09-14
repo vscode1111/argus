@@ -20,6 +20,13 @@ export type AppState = {
    *  yet; thinking_start picks it up a moment later. */
   pendingNotice: TaskNotice | null;
   wsConnected: boolean;
+  /** Disconnected on purpose from another panel's client list. The bridge will NOT come
+   *  back on its own, so the status dot has to offer the way back instead of claiming
+   *  to be retrying. */
+  wsClosedByPeer: boolean;
+  /** This peer is remote and not logged in: the server refused to hand out a nonce, so
+   *  there is nothing to connect with until a password is entered. */
+  authRequired: boolean;
   currentModel: string;
   currentEffort: string;
   thinkingEnabled: boolean;
@@ -55,7 +62,8 @@ export type AppAction =
   | { type: 'modelChanged'; model: string }
   | { type: 'effortChanged'; effort: string }
   | { type: 'thinkingChanged'; thinking: boolean }
-  | { type: 'ws_status'; connected: boolean }
+  | { type: 'ws_status'; connected: boolean; closedByPeer?: boolean }
+  | { type: 'auth_required'; required: boolean }
   | { type: 'token_update'; inputTokens?: number; outputTokens?: number };
 
 let nextMsgId = 0;
@@ -405,9 +413,13 @@ export function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'auth_required':
+      return { ...state, authRequired: action.required };
+
     case 'ws_status': {
-      if (action.connected) return { ...state, wsConnected: true };
-      if (!state.streaming) return { ...state, wsConnected: false };
+      // Connecting proves we are authorised, so a stale login screen cannot survive it.
+      if (action.connected) return { ...state, wsConnected: true, wsClosedByPeer: false, authRequired: false };
+      if (!state.streaming) return { ...state, wsConnected: false, wsClosedByPeer: !!action.closedByPeer };
       const responseTime = Date.now() - state.streaming.startTime;
       const finalBlocks = finalizeBlocks(state.streaming.blocks);
       const content = extractText(finalBlocks);
@@ -424,6 +436,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         wsConnected: false,
+        wsClosedByPeer: !!action.closedByPeer,
         messages: [...state.messages, msg],
         streaming: null,
         isStreaming: false,
@@ -448,6 +461,8 @@ export const initialState: AppState = {
   bgTasks: 0,
   pendingNotice: null,
   wsConnected: true,
+  wsClosedByPeer: false,
+  authRequired: false,
   currentModel: '',
   currentEffort: 'high',
   thinkingEnabled: true,

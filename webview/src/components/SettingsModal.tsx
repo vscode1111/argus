@@ -6,6 +6,8 @@ import { useSettings } from '../contexts/SettingsContext';
 import { postMessage, isVsCode } from '../vscode';
 import { plural } from '../utils/text';
 import { CliProcessesModal } from './CliProcessesModal';
+import { ClientsModal } from './ClientsModal';
+import { PasswordInput } from './shared/PasswordInput';
 import styles from './SettingsModal.module.css';
 
 interface ToggleProps {
@@ -100,6 +102,115 @@ interface TextInputProps {
   onChange: (v: string) => void;
   placeholder?: string;
   disabled?: boolean;
+}
+
+/**
+ * Remote-access password. Lives in the Network tab because it gates exactly what that
+ * tab turns on: with network access enabled and no password, remote clients are refused
+ * outright, so the status line has to say which of those two states the server is in.
+ *
+ * The password is never read back - the server only ever reports whether one exists -
+ * so the fields are always blank on open, and changing one requires the current one.
+ */
+function AuthSection() {
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [savedUser, setSavedUser] = useState('');
+  const [sessions, setSessions] = useState(0);
+  const [minLength, setMinLength] = useState(8);
+  const [open, setOpen] = useState(false);
+  const [user, setUser] = useState('');
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg?.type === 'authStatus') {
+        setConfigured(!!msg.configured);
+        setSavedUser(String(msg.user ?? ''));
+        setSessions(Number(msg.sessions) || 0);
+        if (typeof msg.minLength === 'number') setMinLength(msg.minLength);
+        return;
+      }
+      if (msg?.type !== 'authResult') return;
+      if (msg.action === 'signOut') {
+        setResult({ ok: true, text: msg.dropped ? `Signed out ${msg.dropped} device(s).` : 'No devices were signed in.' });
+      } else if (msg.ok) {
+        setResult({ ok: true, text: msg.action === 'clear' ? 'Password removed - remote access is now refused.' : 'Password saved. Every device must sign in again.' });
+        setOpen(false);
+        setCurrent(''); setNext(''); setConfirm('');
+      } else {
+        setResult({ ok: false, text: String(msg.error ?? 'Could not save the password.') });
+      }
+      postMessage({ type: 'getAuthStatus' });
+    };
+    window.addEventListener('message', onMessage);
+    postMessage({ type: 'getAuthStatus' });
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  function save(): void {
+    if (next !== confirm) { setResult({ ok: false, text: 'The two passwords do not match.' }); return; }
+    if (next.length < minLength) { setResult({ ok: false, text: `Password must be at least ${minLength} characters.` }); return; }
+    setResult(null);
+    postMessage({ type: 'setAuthPassword', user, password: next, currentPassword: current });
+  }
+
+  return (
+    <div className={styles.settingColumn}>
+      <div className={styles.clientCount} title="Clients from another device must sign in with this password. Loopback and the VS Code panel never do.">
+        <span className={styles.settingLabel}>Remote password</span>
+        <span className={styles.clientCountValue} data-testid="auth-status">
+          {configured === null ? '-' : configured ? (savedUser ? `set (${savedUser})` : 'set') : 'not set'}
+        </span>
+      </div>
+      <span className={configured === false ? styles.fieldHintError : styles.fieldHint} data-testid="auth-hint">
+        {configured === false
+          ? 'No password: clients from other devices are refused.'
+          : `Remote clients sign in with this. ${sessions} device(s) signed in.`}
+      </span>
+
+      {!open && (
+        <button className={styles.restartBtn} onClick={() => { setOpen(true); setResult(null); setUser(savedUser); }} data-testid="auth-edit">
+          {configured ? 'Change password' : 'Set a password'}
+        </button>
+      )}
+
+      {open && (
+        <>
+          <label className={styles.settingLabel} htmlFor="auth-user">User (optional)</label>
+          <TextInput id="auth-user" value={user} onChange={setUser} placeholder="scub" />
+          {configured && (
+            <>
+              <label className={styles.settingLabel} htmlFor="auth-current">Current password</label>
+              <PasswordInput id="auth-current" className={styles.textInput} value={current} onChange={setCurrent} autoComplete="current-password" />
+            </>
+          )}
+          <label className={styles.settingLabel} htmlFor="auth-new">New password</label>
+          <PasswordInput id="auth-new" className={styles.textInput} value={next} onChange={setNext} autoComplete="new-password" />
+          <label className={styles.settingLabel} htmlFor="auth-confirm">Confirm</label>
+          <PasswordInput id="auth-confirm" className={styles.textInput} value={confirm} onChange={setConfirm} autoComplete="new-password" />
+          <button className={styles.restartBtn} onClick={save} data-testid="auth-save">Save password</button>
+          <button
+            className={styles.cancelBtn}
+            onClick={() => { setOpen(false); setResult(null); setCurrent(''); setNext(''); setConfirm(''); }}
+          >Cancel</button>
+        </>
+      )}
+
+      {configured && !open && (
+        <button className={styles.dangerBtn} onClick={() => postMessage({ type: 'signOutAll' })} data-testid="auth-signout">
+          Sign out all devices
+        </button>
+      )}
+
+      {result && (
+        <span className={result.ok ? styles.fieldHint : styles.fieldHintError} data-testid="auth-result">{result.text}</span>
+      )}
+    </div>
+  );
 }
 
 function TextInput({ id, value, onChange, placeholder, disabled }: TextInputProps) {
@@ -198,6 +309,8 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   // The process list opens on top of this modal (both are portals), so Settings must
   // not also close on the Escape that dismisses it.
   const [showProcesses, setShowProcesses] = useState(false);
+  // Same arrangement for the connection list opened from the Network tab's count.
+  const [showClients, setShowClients] = useState(false);
   useEffect(() => () => {
     if (killArmTimer.current) clearTimeout(killArmTimer.current);
     if (stopArmTimer.current) clearTimeout(stopArmTimer.current);
@@ -343,7 +456,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     });
   }
 
-  useEscapeKey(() => { if (!showProcesses) onClose(); });
+  useEscapeKey(() => { if (!showProcesses && !showClients) onClose(); });
 
   const modalRef = useRef<HTMLDivElement>(null);
   const drag = useDialogGeometry(modalRef, { persistKey: 'settings', defaultWidth: 340 });
@@ -470,6 +583,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 that aren't on the local LAN.
               </span>
             </div>
+            <AuthSection />
             <div className={styles.clientCount} title="HTTP endpoint this server is listening on - click to open in a browser">
               <span className={styles.settingLabel}>HTTP address</span>
               {httpUrl
@@ -482,9 +596,19 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 ? <CopyableValue value={wsUrl} copied={copiedKey === 'ws'} onCopy={() => copyText(wsUrl, 'ws')} className={[styles.clientCountValue, styles.addrLink].join(' ')} testId="ws-address" />
                 : <span className={styles.clientCountValue} data-testid="ws-address">-</span>}
             </div>
-            <div className={styles.clientCount} title="WebSocket clients currently connected to this server (this window counts as one)">
+            <div className={styles.clientCount} title="WebSocket clients currently connected to this server (this window counts as one) - click to list them">
               <span className={styles.settingLabel}>Active connections</span>
-              <span className={styles.clientCountValue} data-testid="active-connections">{activeClients ?? '-'}</span>
+              <span
+                className={[styles.clientCountValue, styles.addrLink].join(' ')}
+                data-testid="active-connections"
+                role="button"
+                tabIndex={0}
+                title="Show every client connected to this server, with where it connected from and what it is working on"
+                onClick={() => setShowClients(true)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowClients(true); } }}
+              >
+                {activeClients ?? '-'}
+              </span>
             </div>
             <label className={styles.settingRow} htmlFor="input-daemon-port">
               <span className={styles.settingLabel} title="Fixed port the always-on daemon listens on (default 3017). The extension and the browser UI read the actual port from the discovery file, so they adapt automatically. Applies to the daemon after a restart (yarn daemon:stop).">Daemon port</span>
@@ -671,6 +795,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
         </button>
       </div>
       {showProcesses && <CliProcessesModal onClose={() => setShowProcesses(false)} />}
+      {showClients && <ClientsModal onClose={() => setShowClients(false)} />}
     </>
   );
 }
