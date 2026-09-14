@@ -196,6 +196,34 @@ export function listOwnedProcs(): Map<number, OwnedProc> {
   return owned;
 }
 
+export interface ClientChannelInfo {
+  workspacePath: string;
+  /** Empty until the CLI names the session. */
+  sessionId?: string;
+  /** A different transcript this client navigated to (Session History browse). */
+  viewingSessionId?: string;
+  /** The entry this client sits in is mid-turn - same test listOwnedProcs uses. */
+  running: boolean;
+}
+
+// Where one connection sits: which workspace channel and session entry it joined, what
+// it has on screen if it navigated away, and whether that entry is working right now.
+// The registry is keyed by workspace, so this is a scan over a handful of channels.
+export function clientChannelInfo(ws: WebSocket): ClientChannelInfo | undefined {
+  for (const cd of registry.values()) {
+    const entry = cd.clientEntry.get(ws);
+    if (!entry) continue;
+    const st = entry.state;
+    return {
+      workspacePath: cd.dir,
+      sessionId: st.sessionId || undefined,
+      viewingSessionId: cd.clientViewing.get(ws),
+      running: !!st.currentProc && !st.cliDone,
+    };
+  }
+  return undefined;
+}
+
 export interface ReapedProc {
   pid: number;
   sessionId: string;

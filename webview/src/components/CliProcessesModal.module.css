@@ -1,57 +1,6 @@
-.body {
-  padding: 4px 16px 8px;
-  overflow: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.88em;
-}
-
-.table th {
-  text-align: left;
-  font-weight: 600;
-  color: var(--thinking-fg);
-  padding: 4px 8px 6px;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  /* The body scrolls under this row, so the header needs a solid backdrop of its own. */
-  background: var(--assistant-bg);
-}
-
-.table td {
-  padding: 5px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
-  white-space: nowrap;
-}
-
-.table tbody tr:hover {
-  background: rgba(128, 128, 128, 0.12);
-}
-
-.rowCurrent {
-  background: var(--user-msg-bg, #2ea04370);
-}
-.rowCurrent:hover {
-  background: var(--user-msg-bg, #2ea04370);
-}
-
-/* Digits that are read as a column (pid, durations, percentages, sizes) line up on
-   the right and share one glyph width, so a growing value does not shuffle them. */
-.num {
-  text-align: right;
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-variant-numeric: tabular-nums;
-}
-
-.table th.num {
-  text-align: right;
-}
+/* The table frame, numeric columns, badges, running dot, footer and placeholders come
+   from shared/dataTable.module.css (this modal and Connected clients render the same
+   look); only what is specific to a CLI process row lives here. */
 
 .session {
   display: flex;
@@ -69,54 +18,8 @@
   color: var(--thinking-fg);
 }
 
-.badge {
-  font-size: 0.85em;
-  padding: 1px 6px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  color: var(--thinking-fg);
-}
-
-.badgeCurrent {
-  border-color: var(--vscode-focusBorder, var(--btn-bg));
-  color: var(--fg);
-}
-
 .busy {
   color: var(--vscode-editorWarning-foreground, #cca700);
-}
-
-.run {
-  text-align: center;
-  white-space: nowrap;
-}
-
-.runYes {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--vscode-charts-green, #89d185);
-}
-
-/* Same pulsing green dot Session History uses for a session that is mid-turn, so the
-   two panels say "working right now" the same way. */
-.runDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--vscode-charts-green, #89d185);
-  animation: cliRunPulse 1.5s ease-in-out infinite;
-}
-
-@keyframes cliRunPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-/* "no" and "-" are both non-answers next to a green "yes"; dimming them keeps the eye
-   on the rows that are actually doing something. */
-.unknown {
-  opacity: 0.55;
 }
 
 /* Owner header above each group of CLIs. Reads as a band rather than a data row so the
@@ -153,45 +56,6 @@
   white-space: nowrap;
 }
 
-/* Terminate button, hover-revealed like Session History's delete. It keeps its own
-   column instead of being absolutely positioned over the row: a <tr> is not a reliable
-   containing block, and an overlay would sit on top of the Memory figure. */
-.actions {
-  width: 26px;
-  padding: 0 4px !important;
-  text-align: center;
-}
-
-.killBtn {
-  background: transparent;
-  border: none;
-  color: var(--thinking-fg);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px;
-  border-radius: 4px;
-  opacity: 0;
-}
-.table tbody tr:hover .killBtn {
-  opacity: 0.7;
-}
-.killBtn:hover:not(:disabled) {
-  opacity: 1 !important;
-  background: rgba(128, 128, 128, 0.18);
-  color: var(--vscode-errorForeground, #f48771);
-}
-.killBtn:disabled {
-  cursor: default;
-}
-/* Keyboard users never trigger :hover, so the button would be permanently invisible
-   to them without this. */
-.killBtn:focus-visible {
-  opacity: 1;
-  outline: 1px solid var(--vscode-focusBorder, var(--btn-bg));
-}
-
 /* Marks a CLI that another CLI started (an agent shelling out to `claude`). */
 .branch {
   opacity: 0.5;
@@ -211,27 +75,4 @@
 .viewToggle:hover {
   color: var(--fg);
   background: rgba(128, 128, 128, 0.15);
-}
-
-.footer {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 16px 12px;
-  border-top: 1px solid var(--border);
-  font-size: 0.85em;
-  color: var(--thinking-fg);
-}
-
-.placeholder {
-  padding: 24px 0;
-  text-align: center;
-  color: var(--thinking-fg);
-  font-size: 0.92em;
-}
-
-.error {
-  padding: 10px 0;
-  color: var(--error-fg, var(--vscode-errorForeground));
-  font-size: 0.9em;
 }

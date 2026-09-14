@@ -499,6 +499,28 @@
   height: 12px;
   border-radius: 50%;
 }
+/* Replaces the dot after a deliberate disconnect. It sits where the dot sat, but it is
+   labelled: the state is rare and arrives from another window, so the panel has to say
+   what happened and offer the way back rather than leave a 12px dot to explain itself
+   through a tooltip nobody will hover. */
+.wsReconnect {
+  /* Positioned against .inputArea, not the input box - see the note in InputArea.tsx. */
+  position: absolute;
+  top: 2px;
+  left: 6px;
+  padding: 1px 8px;
+  border: none;
+  border-radius: 10px;
+  background: var(--vscode-errorForeground, #f14c4c);
+  color: var(--vscode-editor-background, #1e1e1e);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 1;
+}
+.wsReconnect:hover { filter: brightness(1.15); }
+.wsReconnect:focus-visible { outline: 1px solid var(--vscode-focusBorder, var(--btn-bg)); }
+
 .wsDotOn { background: var(--vscode-testing-iconPassed, #388a34); }
 .wsDotOff { background: var(--vscode-errorForeground, #f14c4c); animation: wsPulse 1.5s ease-in-out infinite; }
 @keyframes wsPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }

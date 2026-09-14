@@ -3,10 +3,12 @@ import { randomBytes } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { resolve, isAbsolute, join } from 'path';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { IncomingMessage } from 'http';
+import type { IncomingMessage, ServerResponse } from 'http';
 
 import { attachClientHandlers } from './session';
 import { getOrCreateChannel, reapIdleCliProcs } from './channel';
+import { closeClient, isLocalAddress, listClients, normalizeAddress, noteClientConnect } from './clients';
+import { checkRateLimit, createSession, hasPassword, isValidSession, noteLoginFailure, noteLoginSuccess, verifyPassword } from './auth';
 import { findWorkspaceForSession } from './sessions';
 import { readConfig, CONFIG_PATH } from './config';
 import { startUsagePoller } from './usagePoller';
@@ -77,12 +79,26 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
   };
 
   const httpServer = createServer((req, res) => {
-    if (req.url === '/nonce') {
-      res.writeHead(200, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+    const urlPath = (req.url ?? '').split('?')[0];
+    const query = new URL(req.url ?? '/', 'http://localhost').searchParams;
+    // Peer address, not the Origin header: Origin is client-supplied, and a request that
+    // omits it was treated as local from anywhere (measured - see auth.ts).
+    const local = isLocalAddress(req.socket.remoteAddress ?? '');
+
+    if (urlPath === '/login') { handleLogin(req, res); return; }
+
+    if (urlPath === '/nonce') {
+      // The nonce is what a client needs to open a WebSocket, so for a remote peer this
+      // is the gate. Local peers are exempt and unchanged.
+      if (!local && !isValidSession(query.get('auth'))) {
+        res.writeHead(401, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
+        res.end('authentication required');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
       res.end(nonce);
       return;
     }
-    const urlPath = (req.url ?? '').split('?')[0];
     // Which settings file this process is actually reading. The e2e global setup
     // uses it to detect a reused dev server that was started without ARGUS_CONFIG -
     // such a server writes the user's real ~/.claude/argus.json and reads settings
@@ -99,7 +115,12 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     if (asset) {
       try {
         const buf = readFileSync(join(MEDIA_DIR, asset[0]));
-        res.writeHead(200, { 'Content-Type': asset[1] });
+        // `no-cache` means "store it, but check with me before reusing it". These files
+        // are rebuilt by `yarn build` under URLs that never change, so without this a
+        // phone that loaded the page once keeps its copy and silently misses every later
+        // build - which is exactly how a fixed UI kept rendering the old layout on a
+        // device while the server was serving the new one.
+        res.writeHead(200, { 'Content-Type': asset[1], 'Cache-Control': 'no-cache' });
         res.end(buf);
       } catch {
         res.writeHead(asset[0] === 'browser.html' ? 503 : 404);
@@ -111,11 +132,95 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     res.end();
   });
 
+  // The dev path serves its page from Vite (:5173) and talks to this server on another
+  // port, so the login POST and the nonce read are cross-origin. Reflect the origin only
+  // when it would be allowed to connect anyway; `*` cannot be combined with credentials
+  // and would be a wider grant than the WS gate itself.
+  function corsHeaders(req: IncomingMessage): Record<string, string> {
+    const origin = req.headers.origin ?? '';
+    if (!origin) return { 'Access-Control-Allow-Origin': '*' };
+    if (!originAllowed(origin)) return {};
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Headers': 'content-type',
+      'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+      Vary: 'Origin',
+    };
+  }
+
+  // Body cap: the only field worth sending here is a password, and an unbounded read on
+  // an unauthenticated endpoint is a free memory DoS.
+  const MAX_LOGIN_BODY = 4096;
+
+  function readBody(req: IncomingMessage): Promise<string> {
+    return new Promise((resolve, reject) => {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+        if (body.length > MAX_LOGIN_BODY) { reject(new Error('body too large')); req.destroy(); }
+      });
+      req.on('end', () => resolve(body));
+      req.on('error', reject);
+    });
+  }
+
+  function handleLogin(req: IncomingMessage, res: ServerResponse): void {
+    const cors = corsHeaders(req);
+    if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return; }
+    if (req.method !== 'POST') { res.writeHead(405, cors); res.end(); return; }
+
+    const address = normalizeAddress(req.socket.remoteAddress ?? '');
+    const json = (status: number, payload: object) => {
+      res.writeHead(status, { 'Content-Type': 'application/json', ...cors });
+      res.end(JSON.stringify(payload));
+    };
+
+    const limit = checkRateLimit(address);
+    if (!limit.allowed) {
+      json(429, { ok: false, error: 'too many attempts', retryAfterMs: limit.retryAfterMs });
+      return;
+    }
+    // Requiring JSON forces a preflight for a cross-origin POST, so a page on another
+    // site cannot silently submit this form; the token is returned in the body rather
+    // than set as a cookie, so it could not read the answer either.
+    if (!String(req.headers['content-type'] ?? '').includes('application/json')) {
+      json(415, { ok: false, error: 'expected application/json' });
+      return;
+    }
+
+    readBody(req).then((body) => {
+      let creds: { user?: string; password?: string } = {};
+      try { creds = JSON.parse(body || '{}'); } catch { json(400, { ok: false, error: 'malformed request' }); return; }
+
+      if (!hasPassword()) {
+        // Distinct from a wrong password on purpose: "nobody can get in until you set
+        // one" is a configuration state, not a failed attempt, and must not be counted
+        // against the rate limiter.
+        json(403, { ok: false, error: 'remote access is not configured on this server' });
+        return;
+      }
+      if (!verifyPassword(creds.user ?? '', creds.password ?? '')) {
+        const rec = noteLoginFailure(address);
+        console.log(`[argus-server] remote login failed from ${address} (${rec.fails} failed)`);
+        json(401, { ok: false, error: 'invalid credentials' });
+        return;
+      }
+      noteLoginSuccess(address);
+      const token = createSession(address);
+      console.log(`[argus-server] remote login succeeded from ${address}`);
+      json(200, { ok: true, token });
+    }).catch(() => json(413, { ok: false, error: 'request too large' }));
+  }
+
   const wss = new WebSocketServer({ noServer: true });
 
   // Remembers each live connection's Origin so it can be re-checked when the
   // Network settings change (not only at upgrade time).
   const wsOrigin = new WeakMap<WebSocket, string>();
+  // The token and address a connection was accepted with, so a later credential change
+  // can re-check it without the upgrade request, which is long gone by then.
+  const wsToken = new WeakMap<WebSocket, string>();
+  const wsAddress = new WeakMap<WebSocket, string>();
 
   // Whether an Origin may connect, given the current config. Local origins (no
   // Origin, the VS Code webview, localhost/loopback) are always allowed; non-local
@@ -142,6 +247,20 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     for (const client of wss.clients) {
       if (!originAllowed(wsOrigin.get(client) ?? '')) {
         try { client.close(4403, 'Network access revoked'); } catch { /* already closing */ }
+      }
+    }
+  }
+
+  // Drop every remote connection whose session token no longer exists. Called after a
+  // password change or a "sign out all", the same shape as enforceOrigins above: a
+  // credential change that left live sockets running would revoke nothing that matters.
+  // Local peers are never touched - they were never asked to log in.
+  function enforceAuth(): void {
+    for (const client of wss.clients) {
+      const token = wsToken.get(client);
+      if (isLocalAddress(wsAddress.get(client) ?? '127.0.0.1')) continue;
+      if (!isValidSession(token)) {
+        try { client.close(4401, 'Authentication revoked'); } catch { /* already closing */ }
       }
     }
   }
@@ -243,6 +362,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     wsAlive.set(ws, true);
     wsOrigin.set(ws, req.headers.origin ?? '');
+    wsAddress.set(ws, req.socket.remoteAddress ?? '');
+    wsToken.set(ws, new URL(req.url ?? '/', 'http://localhost').searchParams.get('auth') ?? '');
     clearIdleTimer();
     ws.on('pong', () => { wsAlive.set(ws, true); });
     ws.on('close', () => { broadcastClientCount(); scheduleIdleShutdown(); });
@@ -280,7 +401,10 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     // entry (without it they all share the channel default and see each other's turns),
     // while a reconnect of the same panel rejoins the entry it already owns.
     const panelId = reqUrl.searchParams.get('panel')?.slice(0, 64) || undefined;
-    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, onStopRequest: options.onIdleShutdown ? doStop : undefined, fresh: isBrowserClient, sessionId, panelId });
+    // The upgrade headers (Origin, User-Agent, peer address) are gone once this handler
+    // returns, so what the connection list shows about a client is captured here.
+    noteClientConnect(ws, req, { browser: isBrowserClient });
+    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getClients: () => listClients(wss.clients, ws), closeClient: (id) => closeClient(wss.clients, id, ws), onAuthChange: enforceAuth, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, onStopRequest: options.onIdleShutdown ? doStop : undefined, fresh: isBrowserClient, sessionId, panelId });
     broadcastClientCount();
   });
 
@@ -292,6 +416,15 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       return;
     }
     const reqUrl = new URL(req.url, 'http://localhost');
+    // Remote peers must carry a session token as well as the nonce. Checked before the
+    // nonce so that "not logged in" and "wrong nonce" cannot be told apart by timing,
+    // and because the nonce is only obtainable with a token in the first place.
+    if (!isLocalAddress(req.socket.remoteAddress ?? '') && !isValidSession(reqUrl.searchParams.get('auth'))) {
+      console.log(`[argus-server] refused unauthenticated remote client ${normalizeAddress(req.socket.remoteAddress ?? '')}`);
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return;
+    }
     if (reqUrl.searchParams.get('nonce') !== nonce) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();

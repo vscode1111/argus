@@ -1,0 +1,38 @@
+/* Rows, badges and the table frame come from shared/dataTable.module.css; only what is
+   specific to a connection row lives here. */
+
+/* A cell that holds a value plus badges. The flex lives on an inner span, never on the
+   <td>: `display: flex` takes a cell out of table layout, so it stops feeding the
+   column-width algorithm and gets wrapped into an anonymous row of its own - observed
+   as the Client and Address cells each breaking onto their own line, with the remaining
+   columns sliding out from under their headers. */
+.cellInner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Platform read off the User-Agent. Secondary to the host it sits beside ("Browser
+   iPhone"), so it is dimmed rather than given a column of its own. */
+.device {
+  color: var(--thinking-fg);
+  opacity: 0.75;
+  font-size: 0.9em;
+}
+
+.addr {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+/* The address is the evidence, but only a reader who knows this machine's own address
+   can tell 192.168.0.12 from a local one - so the conclusion is stated too. */
+.remote {
+  border-color: var(--vscode-charts-blue, #3794ff);
+  color: var(--vscode-charts-blue, #3794ff);
+}
+
+.workspace {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
