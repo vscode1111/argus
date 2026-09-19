@@ -535,7 +535,7 @@ function AppInner() {
         <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
           {topRightActions}
           <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
-          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsClosedByPeer={state.wsClosedByPeer} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
+          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
           {loadingSession && (
             <div className="sessionLoader" role="status" aria-live="polite" aria-busy="true" aria-label="Loading session">
               <div className="sessionSpinner" />

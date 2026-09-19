@@ -108,12 +108,15 @@
 
       var bridge = window.createArgusBridge({
         nextUrl: function () { return WS_URL || null; },
-        onStatus: function (connected, closedByPeer) {
+        onStatus: function (connected, closeReason) {
           if (connected) { showDaemonDown(false); return; }
-          // Disconnected on purpose from another panel's client list. The daemon is
+          // Closed on purpose - either another panel's client list disconnected this
+          // one, or the server closed it for sitting idle. Either way the daemon is
           // fine, so no overlay - and above all no requestWsUrl, which reconnects (and
           // can even spawn a daemon) and would undo the very thing that was asked for.
-          if (closedByPeer) { showDaemonDown(false); return; }
+          // An idle close still comes back on its own via panelVisible below; a peer
+          // close waits for the manual Reconnect click.
+          if (closeReason) { showDaemonDown(false); return; }
           if (userStopped) { showDaemonDown(true); return; }
           // Disconnected: ask the extension for a fresh URL (covers daemon restart /
           // first boot with no URL). Show the overlay only when we have nothing.
@@ -140,6 +143,15 @@
           // daemon is going down on purpose, so keep it down. A restart is a different
           // message (daemonRestarting) and must still auto-reconnect.
           userStopped = true;
+        } else if (data.type === 'panelVisible') {
+          // Posted by ChatPanel.ts's onDidChangeViewState when this panel becomes
+          // visible again. A VS Code webview has no reliable document.hidden of its own
+          // (retainContextWhenHidden keeps the script running regardless of tab
+          // visibility), so this is the only signal this host has for "someone is
+          // looking at this panel now" - the browser hosts get the equivalent for free
+          // via ws-bridge.js's own visibilitychange listener. No-ops unless the
+          // connection is currently down for being idle.
+          bridge.reconnectIfIdle();
         }
       });
 

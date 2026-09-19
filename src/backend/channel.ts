@@ -79,6 +79,17 @@ interface ChannelData {
   // that client can be routed to the session it belongs to instead of injected into
   // the turn it walked away from.
   clientViewing: Map<WebSocket, string>;
+  // The last sessionId a given panel's entry held, kept across full entry eviction.
+  // A panel-owned entry is normally the ONLY reconnect target for that panel (addClient
+  // rejoins by owner), so once it is evicted (idle-closed connection, or a manual
+  // disconnect nobody clicked Reconnect on within the 30s grace window) a later
+  // reconnect would otherwise create a brand-new entry with an empty sessionId - the
+  // user's next message would silently start a fresh CLI conversation instead of
+  // resuming, even though their old transcript is still sitting on screen (the webview
+  // never clears it on disconnect). This is what reapIdleCliProcs already guarantees
+  // one layer down (killing the process but keeping sessionId); here it has to survive
+  // the whole entry going away, not just the process.
+  ownerLastSession: Map<string, string>;
 }
 
 // Public interface used by session.ts and index.ts.
@@ -204,6 +215,8 @@ export interface ClientChannelInfo {
   viewingSessionId?: string;
   /** The entry this client sits in is mid-turn - same test listOwnedProcs uses. */
   running: boolean;
+  /** Unix ms this entry last did anything - the same clock reapIdleClients reads. */
+  lastActivityAt: number;
 }
 
 // Where one connection sits: which workspace channel and session entry it joined, what
@@ -219,6 +232,7 @@ export function clientChannelInfo(ws: WebSocket): ClientChannelInfo | undefined 
       sessionId: st.sessionId || undefined,
       viewingSessionId: cd.clientViewing.get(ws),
       running: !!st.currentProc && !st.cliDone,
+      lastActivityAt: entry.lastActivityAt,
     };
   }
   return undefined;
@@ -264,6 +278,65 @@ export function reapIdleCliProcs(idleMs: number, now: number = Date.now()): Reap
       killProc(proc);
       st.sendLog?.('info', `Reaped idle CLI (pid ${proc.pid}, idle ${Math.round(idle / 1000)}s) - the next message starts a fresh one`);
       reaped.push({ pid: proc.pid ?? 0, sessionId: st.sessionId ?? '', workspacePath: cd.dir, idleMs: idle });
+    }
+  }
+  return reaped;
+}
+
+// Close code for a connection this server closed on its own because it sat idle too
+// long - distinct from CLOSE_CODE_DISCONNECTED (clients.ts, 4001), which is a deliberate
+// "another panel logged you out" action. Both are terminal (the bridge must not silently
+// reconnect a socket the server just closed on purpose), but only this one is meant to
+// come back on its own once the panel is looked at again; a peer disconnect stays down
+// until a manual click. Kept as its own code (not reused) so server logs and tests can
+// tell the two reasons apart even though the client treats them similarly.
+export const CLOSE_CODE_IDLE = 4002;
+
+export interface ReapedClient {
+  workspacePath: string;
+  sessionId: string;
+  clientsClosed: number;
+  /** How long the entry had been idle when it was reaped, in ms. */
+  idleMs: number;
+}
+
+// Closes every client of a session entry THIS server holds that has sat idle past
+// `idleMs` - the same clock and the same "never touch a mid-turn entry" rule as
+// reapIdleCliProcs above, one layer up: that one reclaims a finished process's memory,
+// this one reclaims the connection (and, once the existing 30s grace timer runs out with
+// no reconnect, the entry itself - history, snapshot, any lingering process).
+//
+// The closed socket does not silently reconnect (see CLOSE_CODE_IDLE) - if it did, the
+// very next sweep would see the same still-idle entry and close it again, since simply
+// rejoining does not touch lastActivityAt. It comes back only when the client decides to
+// (panel/tab looked at again, or a manual Reconnect), at which point the ownerLastSession
+// map (below, in scheduleEntryCleanup and addClient) is what keeps the conversation
+// resumable even if the entry itself already evicted by then.
+export function reapIdleClients(idleMs: number, now: number = Date.now()): ReapedClient[] {
+  const reaped: ReapedClient[] = [];
+  if (!(idleMs > 0)) return reaped;
+
+  for (const cd of registry.values()) {
+    for (const entry of cd.entries.values()) {
+      // No clients to close - already on its way out via the ordinary grace timer.
+      if (entry.clients.size === 0) continue;
+      const st = entry.state;
+      if (st.currentProc && !st.cliDone) continue; // mid-turn, never touch
+      const idle = now - entry.lastActivityAt;
+      if (idle < idleMs) continue;
+
+      let closed = 0;
+      for (const ws of entry.clients) {
+        if (ws.readyState !== 1) continue;
+        try {
+          ws.close(CLOSE_CODE_IDLE, 'Idle connection closed to save resources');
+          closed++;
+        } catch { /* already closing */ }
+      }
+      if (closed > 0) {
+        st.sendLog?.('info', `Closed ${closed} idle connection(s) (idle ${Math.round(idle / 1000)}s)`);
+        reaped.push({ workspacePath: cd.dir, sessionId: st.sessionId ?? '', clientsClosed: closed, idleMs: idle });
+      }
     }
   }
   return reaped;
@@ -511,6 +584,16 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
   entry.state.resetStaleTimer?.();
   const t = setTimeout(() => {
     if (entry.clients.size === 0) {
+      // Remember what this panel was last on before the entry (and its sessionId)
+      // disappears, so a reconnect long after the grace window still resumes instead of
+      // silently starting a blank conversation. Synced rather than only-set-if-present:
+      // an entry with no sessionId (e.g. "New chat" clicked, then abandoned before
+      // anything was sent) must clear a stale mapping too, or a much-later reconnect
+      // would resurrect a conversation the user explicitly moved on from.
+      if (entry.owner) {
+        if (entry.state.sessionId) cd.ownerLastSession.set(entry.owner, entry.state.sessionId);
+        else cd.ownerLastSession.delete(entry.owner);
+      }
       cd.entries.delete(entry.key);
       // Once evicted the entry is unreachable - no client can rejoin it - so its CLI
       // process would linger with nobody to receive its output. Reclaim it here, or
@@ -522,9 +605,12 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
         // An evicted entry can be mid-turn, so its row must stop showing as running.
         notifyActiveSessions();
       }
-      if (cd.entries.size === 0) registry.delete(cd.dir);
+      if (cd.entries.size === 0 && cd.ownerLastSession.size === 0) registry.delete(cd.dir);
     }
-  }, 30_000);
+    // Read per call, not captured at import: a reused test worker that set the env
+    // override for one spec must not leak a shortened grace period into every other
+    // spec that happens to load this module afterward in the same process.
+  }, Number(process.env.ARGUS_ENTRY_GRACE_MS) || 30_000);
   if (typeof (t as unknown as { unref?(): void }).unref === 'function') {
     (t as unknown as { unref(): void }).unref();
   }
@@ -533,7 +619,7 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
 export function getOrCreateChannel(dir: string): Channel {
   let cd = registry.get(dir);
   if (!cd) {
-    cd = { dir, entries: new Map(), clientEntry: new Map(), clientViewing: new Map() };
+    cd = { dir, entries: new Map(), clientEntry: new Map(), clientViewing: new Map(), ownerLastSession: new Map() };
     registry.set(dir, cd);
   }
   const _cd = cd;
@@ -561,8 +647,18 @@ export function getOrCreateChannel(dir: string): Channel {
             return true;
           }
         }
-        // First connect of this panel: its own entry, never the channel default.
-        joinEntry(_cd, ws, createEntry(_cd, panelId));
+        // First connect of this panel, or a reconnect that arrived after its old entry
+        // was already evicted (idle-closed, or a disconnect nobody clicked Reconnect on
+        // within the grace window): either way there is no live entry to rejoin, so a
+        // fresh one is created - but if this panel had a real session before, seed it
+        // here rather than leaving it blank, so the next send still resumes with
+        // --resume instead of silently starting over. No history to replay (a fresh
+        // entry has none), which is fine: the client's own view of the old transcript
+        // is still on screen from before the disconnect.
+        const fresh = createEntry(_cd, panelId);
+        const lastSession = _cd.ownerLastSession.get(panelId);
+        if (lastSession) fresh.state.sessionId = lastSession;
+        joinEntry(_cd, ws, fresh);
         return false;
       }
       joinEntry(_cd, ws, fresh ? createEntry(_cd) : defaultEntry(_cd));

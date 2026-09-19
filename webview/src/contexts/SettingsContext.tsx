@@ -17,6 +17,7 @@ const DEFAULTS: ArgusSettings = {
   watchdogRetryDelay: 5,
   watchdogDelayFactor: 2,
   cliIdleTimeoutSec: 0,
+  connectionIdleTimeoutSec: 0,
   allowNetworkAccess: true,
   allowedOrigins: '',
   daemonPort: 3017,
@@ -39,6 +40,7 @@ interface SettingsContextValue extends ArgusSettings {
   setWatchdogRetryDelay: (v: number) => void;
   setWatchdogDelayFactor: (v: number) => void;
   setCliIdleTimeoutSec: (v: number) => void;
+  setConnectionIdleTimeoutSec: (v: number) => void;
   setAllowNetworkAccess: (v: boolean) => void;
   setAllowedOrigins: (v: string) => void;
   setDaemonPort: (v: number) => void;
@@ -62,6 +64,7 @@ const SettingsContext = createContext<SettingsContextValue>({
   setWatchdogRetryDelay: () => {},
   setWatchdogDelayFactor: () => {},
   setCliIdleTimeoutSec: () => {},
+  setConnectionIdleTimeoutSec: () => {},
   setAllowNetworkAccess: () => {},
   setAllowedOrigins: () => {},
   setDaemonPort: () => {},
@@ -106,6 +109,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const setWatchdogRetryDelay = useCallback((v: number) => update({ watchdogRetryDelay: v }), [update]);
   const setWatchdogDelayFactor = useCallback((v: number) => update({ watchdogDelayFactor: v }), [update]);
   const setCliIdleTimeoutSec = useCallback((v: number) => update({ cliIdleTimeoutSec: v }), [update]);
+  const setConnectionIdleTimeoutSec = useCallback((v: number) => update({ connectionIdleTimeoutSec: v }), [update]);
   const setAllowNetworkAccess = useCallback((v: boolean) => update({ allowNetworkAccess: v }), [update]);
   const setAllowedOrigins = useCallback((v: string) => update({ allowedOrigins: v }), [update]);
   const setDaemonPort = useCallback((v: number) => update({ daemonPort: v }), [update]);
@@ -124,7 +128,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       update,
       setVerboseTools, setShowTimer, setShowOutput, setShowLogs,
       setShowLogTime, setShowLogType, setSoundOnComplete, setNotifyOnComplete,
-      setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setCliIdleTimeoutSec,
+      setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setCliIdleTimeoutSec, setConnectionIdleTimeoutSec,
       setAllowNetworkAccess, setAllowedOrigins, setDaemonPort, setDaemonIdleMs,
     }}>
       {children}

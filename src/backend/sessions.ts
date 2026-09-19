@@ -460,13 +460,43 @@ export function readToolImage(sessionId: string, workspaceDir: string, toolUseId
   if (!TOOL_USE_ID_RE.test(toolUseId)) return null;
   const file = resolveSessionFile(sessionId, workspaceDir);
   if (!file || !fs.existsSync(file)) return null;
-  let content: string;
-  try { content = fs.readFileSync(file, 'utf8'); } catch { return null; }
+  return scanTranscriptForImage(file, toolUseId);
+}
 
-  for (const line of content.split(/\r?\n/)) {
-    // Cheap prefilter before JSON.parse: transcripts run to tens of MB and exactly
-    // one line mentions any given tool_use_id.
-    if (!line || !line.includes(toolUseId)) continue;
+// The scan itself, decoupled from resolving which file to scan (exported so a test
+// can drive it against an arbitrary file, without needing a real ~/.claude/projects
+// entry). Reads the transcript as a raw Buffer rather than decoding it to a UTF-8
+// string up front: measured on a real 336 MB transcript (heavy CDP screenshot use -
+// each screenshot is a base64 tool_result line), fs.readFileSync(file, 'utf8')
+// alone cost ~1.1s of that file's ~1.36s total, decoding bytes the scan almost never
+// needs - the id is searched for at the byte level (Buffer.indexOf, itself ASCII per
+// TOOL_USE_ID_RE so no multi-byte concerns for the needle) and only the matched
+// line's bytes are decoded to a string before JSON.parse. A naive line-by-line
+// streaming read (readline over a UTF-8-decoded stream) was tried first and measured
+// SLOWER (~1.65s on the same file) - it still decodes the whole file, in smaller
+// chunks, and pays extra per-line event overhead on top; the actual bottleneck is
+// the decode, not "reading before we need to". Scanning for 0x0A (newline) at the
+// byte level is safe in UTF-8: bytes < 0x80 never appear as part of a multi-byte
+// sequence, so a raw newline byte can only ever be a genuine line break, and slicing
+// on those offsets can never split a multi-byte character.
+export function scanTranscriptForImage(file: string, toolUseId: string): ToolImage | null {
+  let buf: Buffer;
+  try { buf = fs.readFileSync(file); } catch { return null; }
+
+  const needle = Buffer.from(toolUseId, 'utf8');
+  let from = 0;
+  for (;;) {
+    // Cheap prefilter before JSON.parse: transcripts run to hundreds of MB and only
+    // a couple of lines (the tool_use call and its tool_result) mention a given id.
+    const at = buf.indexOf(needle, from);
+    if (at === -1) return null;
+    let start = buf.lastIndexOf(0x0a, at);
+    start = start === -1 ? 0 : start + 1;
+    let end = buf.indexOf(0x0a, at);
+    if (end === -1) end = buf.length;
+    from = end + 1;
+    if (start === end) continue;
+    const line = buf.toString('utf8', start, end);
     let o: { message?: { content?: unknown } };
     try { o = JSON.parse(line); } catch { continue; }
     const blocks = o.message?.content;
@@ -480,7 +510,6 @@ export function readToolImage(sessionId: string, workspaceDir: string, toolUseId
       }
     }
   }
-  return null;
 }
 
 // Validate that a sessionId maps to a transcript file directly inside the project

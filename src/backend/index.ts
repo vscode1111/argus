@@ -6,7 +6,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 import { attachClientHandlers } from './session';
-import { getOrCreateChannel, reapIdleCliProcs } from './channel';
+import { getOrCreateChannel, reapIdleCliProcs, reapIdleClients } from './channel';
 import { closeClient, isLocalAddress, listClients, normalizeAddress, noteClientConnect } from './clients';
 import { checkRateLimit, createSession, hasPassword, isValidSession, noteLoginFailure, noteLoginSuccess, verifyPassword } from './auth';
 import { findWorkspaceForSession } from './sessions';
@@ -21,11 +21,17 @@ const DEFAULT_MODEL = process.env.ARGUS_MODEL ?? '';
 // reverse-mesh entry IP so a remote phone reaches this dev box over the tunnel.
 const DEFAULT_ALLOWED_ORIGINS = process.env.ARGUS_ALLOWED_ORIGINS ?? '';
 
-// How often idle CLI processes are swept for. Coarse on purpose: the limit it enforces
-// is a housekeeping threshold in minutes, so checking more often would only spend
-// wakeups to make a process die sooner. Note this is also the granularity of the limit -
-// a CLI dies somewhere between `cliIdleTimeoutSec` and that plus a minute.
-const CLI_REAP_SWEEP_MS = 60_000;
+// How often idle CLI processes AND idle client connections are swept for. Coarse on
+// purpose: both limits are housekeeping thresholds in minutes, so checking more often
+// would only spend wakeups to make something die sooner. Note this is also the
+// granularity of both limits - something dies somewhere between its configured timeout
+// and that plus one sweep. Overridable for tests, which would otherwise wait a real
+// minute to see a reap happen - read inside startServer() (per call, not at import),
+// so a test worker that reuses this module across spec files with different overrides
+// cannot have an earlier one silently stick.
+function reapSweepMs(): number {
+  return Number(process.env.ARGUS_REAP_SWEEP_MS) || 60_000;
+}
 
 export interface StartServerOptions {
   port?: number;
@@ -450,16 +456,23 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       // a transient failure (the usage API rate-limits hard) is retried a minute later
       // instead of leaving the indicator blank until someone reloads the page.
       startUsagePoller((msg) => console.log(`[argus-server] ${msg}`));
-      // Reap this server's idle CLI processes when the user has set a limit. The config
-      // is read on every sweep, so a change in Settings applies immediately - unlike the
-      // daemon port/idle fields, this one has no reason to wait for a restart.
+      // Reap this server's idle CLI processes and idle client connections when the user
+      // has set a limit for either. Config is read on every sweep, so a change in
+      // Settings applies immediately - unlike the daemon port/idle fields, neither of
+      // these has a reason to wait for a restart.
       const reapTimer = setInterval(() => {
-        const limitSec = readConfig().cliIdleTimeoutSec;
-        if (!(limitSec > 0)) return;
-        for (const r of reapIdleCliProcs(limitSec * 1000)) {
-          console.log(`[argus-server] reaped idle CLI pid ${r.pid} (idle ${Math.round(r.idleMs / 1000)}s) in ${r.workspacePath}`);
+        const cfg = readConfig();
+        if (cfg.cliIdleTimeoutSec > 0) {
+          for (const r of reapIdleCliProcs(cfg.cliIdleTimeoutSec * 1000)) {
+            console.log(`[argus-server] reaped idle CLI pid ${r.pid} (idle ${Math.round(r.idleMs / 1000)}s) in ${r.workspacePath}`);
+          }
         }
-      }, CLI_REAP_SWEEP_MS);
+        if (cfg.connectionIdleTimeoutSec > 0) {
+          for (const r of reapIdleClients(cfg.connectionIdleTimeoutSec * 1000)) {
+            console.log(`[argus-server] closed ${r.clientsClosed} idle connection(s) (idle ${Math.round(r.idleMs / 1000)}s) in ${r.workspacePath}`);
+          }
+        }
+      }, reapSweepMs());
       if (typeof reapTimer.unref === 'function') reapTimer.unref();
       resolve({ httpServer, port: actualPort, nonce, close: () => { clearIdleTimer(); clearInterval(pingTimer); clearInterval(reapTimer); wss.close(); httpServer.close(); } });
     });

@@ -26,6 +26,9 @@ export interface ClientInfo {
   viewingSessionId?: string;
   /** That entry is mid-turn right now - the connection driving a live turn. */
   running: boolean;
+  /** Unix ms the entry last did anything - the same clock the idle reaper reads.
+   *  Absent only if the client left its channel entry between the two reads. */
+  lastActivityAt?: number;
 }
 
 export interface CloseClientResult {
@@ -141,6 +144,7 @@ export function listClients(sockets: Iterable<WebSocket>, self?: WebSocket): Cli
       sessionId: where?.sessionId,
       viewingSessionId: where?.viewingSessionId,
       running: where?.running ?? false,
+      lastActivityAt: where?.lastActivityAt,
     });
   }
   // Oldest first, so a list re-read every few seconds does not reshuffle under the eye.
