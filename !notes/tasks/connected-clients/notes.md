@@ -122,3 +122,14 @@ bridge does not retry that one.**
   to a different daemon is invisible, and nothing here can see one.
 - `viewingSessionId` (the `browsing` badge) is covered by the mock spec only; producing it
   live needs a client that navigates away mid-turn.
+
+## Follow-up: idle connection timeout
+
+See [../connection-idle-timeout/notes.md](../connection-idle-timeout/notes.md). Adds a
+`connectionIdleTimeoutSec` reaper (mirroring the CLI one) that closes a connection once its
+session entry has sat idle too long, using a second close code (4002) alongside this task's 4001
+so the bridge can tell "disconnected on purpose" from "closed for being idle" apart and only
+auto-reconnect the latter. Also retroactively fixes a gap in **this** task's own disconnect
+button: closing a panel's last connection evicts its entry (and `sessionId`) after the 30s grace
+window, which this task never needed to notice because a user acting on this modal reconnects
+fast - `ownerLastSession` now survives that eviction either way.

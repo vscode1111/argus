@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { postMessage } from '../vscode';
 import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
-import { formatTime, formatUptime } from '../utils/time';
+import { formatTime, formatUptime, relativeTime } from '../utils/time';
 import { basename } from '../utils/path';
 import { plural } from '../utils/text';
 import table from './shared/dataTable.module.css';
@@ -22,6 +22,7 @@ export interface ClientInfo {
   sessionId?: string;
   viewingSessionId?: string;
   running: boolean;
+  lastActivityAt?: number;
 }
 
 interface Props {
@@ -181,6 +182,13 @@ export function ClientsModal({ onClose }: Props) {
             ? <span className={table.runYes}><span className={table.runDot} aria-hidden="true" />yes</span>
             : <span className={table.unknown}>no</span>}
         </td>
+        <td
+          className={table.num}
+          data-testid="client-last-activity"
+          title={c.lastActivityAt ? new Date(c.lastActivityAt).toLocaleString() : undefined}
+        >
+          {c.lastActivityAt ? relativeTime(c.lastActivityAt) : '-'}
+        </td>
         <td className={table.mono} title={c.connectedAt ? new Date(c.connectedAt).toLocaleString() : undefined}>
           {c.connectedAt ? formatTime(c.connectedAt) : '-'}
         </td>
@@ -210,8 +218,9 @@ export function ClientsModal({ onClose }: Props) {
       onClose={onClose}
       /* Wide enough for the row this panel exists to explain: an address from another
          device carries a "remote" badge beside it, and at 640 that pushed the last
-         column out of the modal behind a horizontal scrollbar (measured, LAN client). */
-      width={740}
+         column out of the modal behind a horizontal scrollbar (measured, LAN client).
+         Widened again (740 -> 820) when the Last activity column was added. */
+      width={820}
       persistKey="clients"
       elevated
       headerActions={<RefreshButton spinning={refreshing} onClick={refresh} label="Refresh client list" title="Re-read the connection list" />}
@@ -237,6 +246,7 @@ export function ClientsModal({ onClose }: Props) {
                 <th title="Workspace folder this connection is working in">Workspace</th>
                 <th title="Conversation the connection is attached to. A client reading a past transcript is marked 'browsing' - its send would go to the one it is reading.">Session</th>
                 <th className={table.run} title="Whether that session is mid-turn right now">Running</th>
+                <th className={table.num} title="When this connection's session last did anything - a turn, a control event. The clock the Network tab's connection idle timeout reads to decide when to close it.">Last activity</th>
                 <th>Connected</th>
                 <th className={table.num}>For</th>
                 <th className={table.actions} aria-label="Actions" />

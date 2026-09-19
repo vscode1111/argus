@@ -270,7 +270,7 @@ interface Props {
 type Tab = 'general' | 'watchdog' | 'network' | 'info';
 
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
-  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, cliIdleTimeoutSec, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setCliIdleTimeoutSec, setAllowNetworkAccess, setAllowedOrigins, daemonPort, setDaemonPort, daemonIdleMs, setDaemonIdleMs } = useSettings();
+  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, cliIdleTimeoutSec, connectionIdleTimeoutSec, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setCliIdleTimeoutSec, setConnectionIdleTimeoutSec, setAllowNetworkAccess, setAllowedOrigins, daemonPort, setDaemonPort, daemonIdleMs, setDaemonIdleMs } = useSettings();
   const [activeClients, setActiveClients] = useState<number | null>(null);
   const [serverPort, setServerPort] = useState<number | null>(null);
   const [cliLaunchCount, setCliLaunchCount] = useState<number | null>(null);
@@ -610,6 +610,13 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 {activeClients ?? '-'}
               </span>
             </div>
+            <label className={styles.settingRow} htmlFor="input-connection-idle">
+              <span className={styles.settingLabel} title="Close a client connection once it has sat idle (no turns, no activity) this long, to free the session entry it holds. 0 disables it. A connection mid-turn is never touched, and nothing is lost - the panel reconnects on its own once it is looked at again (or via a manual Reconnect), and the conversation still resumes with --resume.">
+                Connection idle timeout (min)
+                <span className={styles.infoScope}>this server only · 0 = off</span>
+              </span>
+              <NumberInput id="input-connection-idle" value={Math.round(connectionIdleTimeoutSec / 60)} onChange={(m) => setConnectionIdleTimeoutSec(Math.max(0, m) * 60)} min={0} />
+            </label>
             <label className={styles.settingRow} htmlFor="input-daemon-port">
               <span className={styles.settingLabel} title="Fixed port the always-on daemon listens on (default 3017). The extension and the browser UI read the actual port from the discovery file, so they adapt automatically. Applies to the daemon after a restart (yarn daemon:stop).">Daemon port</span>
               <span className={styles.portControls}>

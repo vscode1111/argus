@@ -62,7 +62,7 @@ import { CopyIcon, CheckIcon, BackIcon } from './shared/icons';
 import { BrowseRow, FileTypeIcon, FolderIcon, UpRow, formatSize } from './shared/FolderList';
 import { useCopyFeedback } from '../hooks/useCopyFeedback';
 import { PreviewEntry } from '../types';
-import { matchesRequestedPath } from '../utils/path';
+import { matchesRequestedPath, vscodeFileUri } from '../utils/path';
 import { plural } from '../utils/text';
 import modal from './shared/modal.module.css';
 import styles from './FileViewerModal.module.css';
@@ -109,6 +109,11 @@ interface Props {
 const isDataUrl = (s: string) => s.startsWith('data:image/');
 
 const HTML_RE = /\.html?$/i;
+
+// A `vscode://file/` link only makes sense when the page and VS Code share a
+// filesystem - a path shown to a remote client names a file on the *server*,
+// which a `vscode://` handoff on the viewer's own machine cannot reach.
+const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
 
 /**
  * A stylesheet that repaints a previewed document in the panel's own colours.
@@ -313,7 +318,15 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
 
   function openInEditor(e: React.MouseEvent) {
     e.stopPropagation();
-    postMessage({ type: 'openFile', path: current.path, line: current.line });
+    if (isVsCode) {
+      postMessage({ type: 'openFile', path: current.path, line: current.line });
+    } else {
+      // '_self': a custom-protocol handoff never actually leaves the page (the
+      // browser hands it to the OS and the SPA keeps running), so this needs no
+      // new tab - matching how the login link and Account & Usage footer already
+      // open an external target.
+      window.open(vscodeFileUri(current.path, current.line), '_self');
+    }
   }
 
   function goBack(e: React.MouseEvent) {
@@ -368,9 +381,10 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
               </button>
             )}
             {!isImage && !renderHtml && !isDir && !loading && <EncodingSelect value={encoding} onChange={setEncoding} />}
-            {/* No editor to open in outside VS Code - the button was a silent no-op there.
-                A folder is not something showTextDocument can open either. */}
-            {isVsCode && !isDir && (
+            {/* Outside VS Code this needs a `vscode://` handoff to a local install,
+                which only makes sense when the page itself is being viewed on that
+                same machine. A folder is not something an editor can open either. */}
+            {(isVsCode || isLocalHost) && !isDir && (
               <button className={modal.btnOpen} onClick={openInEditor} title="Open in VS Code editor">
                 Open in editor
               </button>

@@ -9,16 +9,28 @@
 // and the daemon's HTTP server can load the very same file. Classic (non-module)
 // script so it runs before the React bundle, which calls acquireVsCodeApi on mount.
 (function () {
-  // createArgusBridge(opts) -> { post(msg), reconnectNow(), isReady() }
-  //   opts.nextUrl()            -> string|null : URL for the next connection attempt
-  //                                              (null = nothing to connect to yet)
-  //   opts.onStatus(connected)  -> void         : optional, fired on connect/disconnect
-  // Close code the server uses when a panel disconnects this client on purpose (the
-  // Settings "Connected clients" list). Reconnecting would hand the connection straight
-  // back and make that button look like a no-op, so this one close is terminal until
-  // the user asks for it back - the same bargain chat.html already strikes for
-  // "Stop daemon" via its own userStopped flag.
+  // createArgusBridge(opts) -> { post(msg), reconnectNow(), reconnectIfIdle(), isReady() }
+  //   opts.nextUrl()                    -> string|null : URL for the next connection
+  //                                                       attempt (null = nothing yet)
+  //   opts.onStatus(connected, reason)  -> void         : optional, fired on
+  //                                                        connect/disconnect; reason is
+  //                                                        'peer' | 'idle' | undefined
+  // Close codes the server uses for a close it does NOT want the bridge to silently
+  // retry (an ordinary drop - network blip, daemon restart - keeps the normal backoff
+  // loop). Both stay down until something explicit brings them back, but they differ in
+  // what counts as "explicit":
+  //  - CLOSED_BY_PEER (4001): another panel's Connected Clients list disconnected this
+  //    one on purpose. Reconnecting on its own would hand the connection straight back
+  //    and make that button look like a no-op, so only a manual Reconnect click (or the
+  //    same bargain chat.html strikes for "Stop daemon" via its own userStopped flag)
+  //    brings it back.
+  //  - CLOSED_IDLE (4002): the server closed it for sitting unused too long. Retrying it
+  //    blindly on the usual timer would just get it closed again next sweep (rejoining
+  //    does not touch the server's idle clock), so it still needs to stay down while
+  //    nobody is looking - but unlike a peer close, "the panel/tab is looked at again" is
+  //    itself a legitimate, automatic way back, on top of the same manual click.
   var CLOSED_BY_PEER = 4001;
+  var CLOSED_IDLE = 4002;
 
   // Remote-access auth: token storage, the login POST, and the `auth_required` signal
   // the React app renders its login screen from. It lives here, beside the bridge, for
@@ -69,15 +81,20 @@
 
   window.createArgusBridge = function createArgusBridge(opts) {
     var DELAYS = [1000, 2000, 4000, 8000, 10000];
-    var ws, queue = [], ready = false, attempt = 0, reconnectTimer, stopped = false;
+    // stoppedReason is null for an ordinary drop the backoff loop is already retrying,
+    // and 'peer' | 'idle' for the two closes above - kept separate from the dispatched
+    // status so callers that only care "is this a close that needs a way back" can still
+    // treat it as a boolean while reconnectIfIdle and the visibility listener need to
+    // know which one it was.
+    var ws, queue = [], ready = false, attempt = 0, reconnectTimer, stoppedReason = null;
 
     function dispatch(data) {
       window.dispatchEvent(new MessageEvent('message', { data: data }));
     }
 
-    function setStatus(connected, closedByPeer) {
-      dispatch({ type: 'ws_status', connected: connected, closedByPeer: !!closedByPeer });
-      if (opts.onStatus) opts.onStatus(connected, !!closedByPeer);
+    function setStatus(connected, closeReason) {
+      dispatch({ type: 'ws_status', connected: connected, closeReason: closeReason || undefined });
+      if (opts.onStatus) opts.onStatus(connected, closeReason);
     }
 
     function scheduleReconnect() {
@@ -108,13 +125,14 @@
       ws.onerror = function (e) { console.error('[argus-ws] error', e); };
       ws.onclose = function (ev) {
         ready = false;
-        if (ev && ev.code === CLOSED_BY_PEER) {
-          console.warn('[argus-ws] disconnected from another panel - staying down until Reconnect');
-          stopped = true;
-          setStatus(false, true);
+        var code = ev && ev.code;
+        if (code === CLOSED_BY_PEER || code === CLOSED_IDLE) {
+          stoppedReason = code === CLOSED_IDLE ? 'idle' : 'peer';
+          console.warn('[argus-ws] ' + (stoppedReason === 'idle' ? 'closed for being idle' : 'disconnected from another panel') + ' - staying down until ' + (stoppedReason === 'idle' ? 'viewed again or Reconnect' : 'Reconnect'));
+          setStatus(false, stoppedReason);
           return;
         }
-        setStatus(false, false);
+        setStatus(false, null);
         scheduleReconnect();
       };
     }
@@ -127,21 +145,33 @@
     function reconnectNow() {
       clearTimeout(reconnectTimer);
       attempt = 0;
-      stopped = false;   // an explicit reconnect is the way back from a peer close
+      stoppedReason = null;   // an explicit reconnect is the way back from either close
       connect();
     }
 
-    // Reconnect when the tab becomes visible again (catches sleep/resume) - but not
-    // after a peer close, or merely switching tabs would undo it.
+    // The automatic way back from an idle close only: a peer close stays down until the
+    // explicit manual click, since silently resurrecting a deliberate disconnect just
+    // because the panel came back into view would undo the very thing that was asked for.
+    function reconnectIfIdle() {
+      if (stoppedReason === 'idle') reconnectNow();
+    }
+
+    // Reconnect when the tab becomes visible again (catches sleep/resume, and now also
+    // an idle close) - but not after a peer close, or merely switching tabs would undo it.
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden && !ready && !stopped) reconnectNow();
+      if (document.hidden || ready) return;
+      if (!stoppedReason || stoppedReason === 'idle') reconnectNow();
     });
 
     connect();
     // The React app offers the way back (the connection dot turns into a Reconnect
     // button), and it is the same bridge in all three hosts, so it is published here
-    // rather than routed through each host's own message shim.
+    // rather than routed through each host's own message shim. reconnectIfIdle is NOT
+    // published globally - it is only ever triggered by a host's own visibility signal
+    // (chat.html's panelVisible message, or the visibilitychange listener above for the
+    // two browser-tab hosts), never by the React app, which always wants the
+    // unconditional manual override.
     window.argusReconnect = reconnectNow;
-    return { post: post, reconnectNow: reconnectNow, isReady: function () { return ready; } };
+    return { post: post, reconnectNow: reconnectNow, reconnectIfIdle: reconnectIfIdle, isReady: function () { return ready; } };
   };
 })();

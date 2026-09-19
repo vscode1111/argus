@@ -727,3 +727,25 @@ Before blaming a diff for a slow-ish integration failure, run the spec in a work
 (`git worktree add`, junction `node_modules` with `cmd /c mklink /J` - no admin needed)
 and compare. And note the **suite itself inflates this**: every probe, daemon and
 integration run creates sessions in that same folder, so the number only goes up.
+
+## An env var set at top-level and deleted in `afterAll` silently reverts under `--repeat-each`
+
+`connection-idle-reaper.spec.ts` sped up the default 30s entry-eviction grace timer for
+its tests with `process.env.ARGUS_ENTRY_GRACE_MS = '150'` at file top-level, paired with
+`delete process.env.ARGUS_ENTRY_GRACE_MS` in `afterAll`. It passed alone and failed
+intermittently under `--repeat-each` - the asymmetry is the bug: `beforeAll`/`afterAll`
+re-fire on **every** repeat, but top-level module code runs exactly **once**, at import.
+So repeat 1 sees the var set (from import time), `afterAll` deletes it, and every repeat
+after that starts with it already gone - `console.log(process.env.ARGUS_ENTRY_GRACE_MS)`
+inside the test read `undefined` from the second repeat onward. Fix: move the `set` into
+`beforeAll`, so it is re-armed every repeat, matching the `afterAll` that already tears it
+down every repeat. Verified stable at `--repeat-each=20` (140/140).
+
+The general rule: any `process.env` mutation scoped to a spec's lifetime must be set and
+unset from the **same** hook pair (`beforeAll`/`afterAll` or `beforeEach`/`afterEach`),
+never a top-level set matched with a hook-based teardown - module top-level is import-time
+and runs once per process, hooks run once per repeat/worker. The same class of bug bit the
+product code in this repo too: a module-level `const` capturing an env override
+(`CLI_REAP_SWEEP_MS`) only ever reads it once, so a second in-process `startServer()` call
+in a reused test worker silently ignores a later override - fixed by turning it into a
+function read per call (`reapSweepMs()`) instead of a captured constant.
