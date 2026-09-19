@@ -20,3 +20,17 @@ export function matchesRequestedPath(got: string, wanted: string): boolean {
   const w = stripTrailingSep(wanted);
   return g === w || g.endsWith(w) || g.endsWith(w.replace(/\//g, '\\'));
 }
+
+/**
+ * `vscode://file/<path>:<line>:<col>` - the URI VS Code registers to open a local
+ * file from outside the editor (the same scheme Vite's own error overlay links to).
+ * `encodeURI` (not `encodeURIComponent`) is the right encoder here: it leaves `:`
+ * and `/` literal, which a drive letter and the path separators both need, and only
+ * escapes what actually breaks a URI - spaces and non-ASCII segments.
+ */
+export function vscodeFileUri(p: string, line?: number): string {
+  const normalized = p.replace(/\\/g, '/');
+  const withSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  const encoded = encodeURI(withSlash);
+  return line ? `vscode://file${encoded}:${line}:1` : `vscode://file${encoded}`;
+}

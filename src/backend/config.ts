@@ -23,6 +23,13 @@ export interface ArgusConfig {
   // mid-turn is never touched - and the session id survives, so the next message
   // respawns with --resume and the conversation continues.
   cliIdleTimeoutSec: number;
+  // Seconds a client connection's session entry may sit idle (no turns, no control
+  // events) before that connection is closed to free its entry. 0 disables it. Never
+  // touches an entry that is mid-turn. The closed client does not silently reconnect -
+  // it comes back on its own once its panel/tab is looked at again, or via a manual
+  // "Reconnect" click - and its session id survives the close, so the next message
+  // still resumes with --resume.
+  connectionIdleTimeoutSec: number;
   // Master switch for non-local WS access: when false, only localhost/loopback and
   // the VS Code webview can connect (LAN ranges and allowedOrigins are rejected).
   allowNetworkAccess: boolean;
@@ -83,6 +90,7 @@ export const DEFAULT_CONFIG: ArgusConfig = {
   // Off by default: terminating a process on a timer is the user's call to make, not
   // something to start doing to them silently on upgrade.
   cliIdleTimeoutSec: 0,
+  connectionIdleTimeoutSec: 0,
   allowNetworkAccess: true,
   allowedOrigins: '',
   daemonPort: 3017,

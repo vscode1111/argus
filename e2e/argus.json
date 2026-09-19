@@ -13,6 +13,7 @@
   "watchdogRetryDelay": 5,
   "watchdogDelayFactor": 2,
   "cliIdleTimeoutSec": 0,
+  "connectionIdleTimeoutSec": 0,
   "allowNetworkAccess": true,
   "allowedOrigins": "",
   "daemonPort": 3001,

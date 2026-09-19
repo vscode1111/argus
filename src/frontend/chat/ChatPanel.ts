@@ -50,6 +50,14 @@ export class ChatPanel {
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.onDidChangeViewState((e) => {
       if (e.webviewPanel.active) ChatPanel.lastFocused = this;
+      // The only "someone is looking at this panel" signal chat.html can get: a VS Code
+      // webview keeps running when hidden (retainContextWhenHidden), so its own
+      // document.hidden/visibilitychange do not reflect the panel's real visibility the
+      // way they do for an ordinary browser tab. `visible` (not `active`) on purpose - a
+      // panel showing in a split view the user is not focused on is still worth
+      // reconnecting, unlike one hidden behind another tab entirely. No-ops in chat.html
+      // unless the connection is currently down for being idle.
+      if (e.webviewPanel.visible) this.post({ type: 'panelVisible' });
     }, null, this.disposables);
     captureForegroundWindow();
   }

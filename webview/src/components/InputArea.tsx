@@ -82,7 +82,7 @@ interface Props {
   contextUsage: { percent: number; inputTokens: number; outputTokens: number; contextWindow?: number } | null;
   bgTasks?: number;
   wsConnected?: boolean;
-  wsClosedByPeer?: boolean;
+  wsCloseReason?: 'peer' | 'idle' | null;
   currentModel?: string;
   currentEffort?: string;
   thinkingEnabled?: boolean;
@@ -93,7 +93,7 @@ interface Props {
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'max'] as const;
 type EffortLevel = typeof EFFORT_LEVELS[number];
 
-export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, wsClosedByPeer = false, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop }: Props) {
+export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, wsCloseReason = null, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -864,7 +864,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
             <button className={styles.imageClearAll} aria-label="Remove all attachments" onClick={() => setImages([])} title="Remove all attachments">×</button>
           </div>
         )}
-        {!wsClosedByPeer && (
+        {!wsCloseReason && (
           <span
             className={[styles.wsDot, wsConnected ? styles.wsDotOn : styles.wsDotOff].join(' ')}
             data-testid="ws-dot"
@@ -872,18 +872,24 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
           />
         )}
       </div>
-      {/* A connection closed from another panel's client list never comes back by itself,
-          so the pulsing "reconnecting" dot would be a standing lie - it is replaced by the
+      {/* A connection closed from another panel's client list, or closed by the server
+          for sitting idle, never comes back on its own via the ordinary retry loop - so
+          the pulsing "reconnecting" dot would be a standing lie - it is replaced by the
           button that brings it back, published by the bridge (one file, all three hosts).
+          An idle close DOES still come back on its own (once the panel/tab is looked at
+          again), so this button there is a fallback, not the only way back - the wording
+          says so rather than implying a click is required.
           It sits OUTSIDE .inputWrapper on purpose: that box is `overflow: hidden`, which
           clips anything at a negative offset - the dot survives as a visible sliver, but a
           button clipped that way has its clickable centre outside itself, and the click
           lands on .inputArea instead (caught by the integration spec, not by the eye). */}
-      {wsClosedByPeer && (
+      {wsCloseReason && (
         <button
           className={styles.wsReconnect}
           data-testid="ws-reconnect"
-          title="Disconnected from another panel. Click to reconnect."
+          title={wsCloseReason === 'idle'
+            ? 'Disconnected due to inactivity. Reconnects automatically once this panel is viewed again, or click to reconnect now.'
+            : 'Disconnected from another panel. Click to reconnect.'}
           onClick={() => window.argusReconnect?.()}
         >
           Reconnect

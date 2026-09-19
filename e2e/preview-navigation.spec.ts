@@ -8,6 +8,22 @@ function send(page: Page, data: object) {
   }, data);
 }
 
+// Record what the app tried to open externally. Must be installed before the app
+// loads, since the click handler calls window.open directly. Mirrors the spy in
+// url-not-file-path.spec.ts.
+async function spyOnOpen(page: Page) {
+  await page.addInitScript(() => {
+    (window as unknown as { __opened: string[] }).__opened = [];
+    window.open = ((url?: string | URL) => {
+      (window as unknown as { __opened: string[] }).__opened.push(String(url));
+      return null;
+    }) as typeof window.open;
+  });
+}
+
+const opened = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
+
 const ROOT_DOC = path.resolve(__dirname, 'fixtures', 'preview-root.md');
 
 // The modal overlay is aria-hidden, so role-based locators cannot see inside it.
@@ -32,6 +48,7 @@ async function openRoot(page: Page) {
 
 test.describe('file previewer navigation', () => {
   test.beforeEach(async ({ page }) => {
+    await spyOnOpen(page);
     await waitForApp(page);
   });
 
@@ -80,9 +97,18 @@ test.describe('file previewer navigation', () => {
     await expect(heading(page, 'scub preview root')).toBeVisible();
   });
 
-  test('no "Open in editor" button in browser mode', async ({ page }) => {
+  test('"Open in editor" hands off to a local VS Code via vscode://file in browser mode', async ({ page }) => {
     await openRoot(page);
 
-    await expect(dialog(page).locator('button', { hasText: 'Open in editor' })).toHaveCount(0);
+    const button = dialog(page).locator('button', { hasText: 'Open in editor' });
+    await expect(button).toHaveCount(1);
+    await button.click();
+
+    const [url] = await opened(page);
+    expect(url.startsWith('vscode://file/')).toBe(true);
+    expect(url).toContain('preview-root.md');
+    // The page itself must still be showing the previewer, not something the
+    // custom-protocol handoff navigated away from.
+    await expect(heading(page, 'scub preview root')).toBeVisible();
   });
 });

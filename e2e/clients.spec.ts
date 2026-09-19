@@ -25,6 +25,7 @@ const SAMPLE = [
     userAgent: 'Mozilla/5.0 (Windows NT 10.0) Code/1.99',
     workspacePath: 'd:\\_Projects\\scub111g\\argus',
     sessionId: 'aaaaaaaa-1111-2222-3333-444444444444', running: true,
+    lastActivityAt: Date.now() - 120_000,
   },
   {
     id: 2, current: false, connectedAt: Date.now() - 90_000, address: '192.168.0.12', local: false,
@@ -32,6 +33,7 @@ const SAMPLE = [
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/605.1',
     workspacePath: '/home/scub/notes',
     sessionId: 'bbbbbbbb-5555-6666-7777-888888888888', running: false,
+    lastActivityAt: Date.now() - 7_200_000,
   },
 ];
 
@@ -90,12 +92,16 @@ test.describe('connected client list', () => {
     await expect(mine).toContainText('argus');      // workspace, shown as its folder name
     await expect(mine).toContainText('aaaaaaaa');   // session, truncated to its first block
     await expect(mine).toContainText('1h 0m');      // connected-for, ticked from connectedAt
+    await expect(mine.getByTestId('client-last-activity')).toHaveText('2m');
 
     const phone = dialog.locator(`${ROW}[data-client-id="2"]`);
     await expect(phone).toContainText('Browser');
     await expect(phone).toContainText('iPhone');
     await expect(phone).toContainText('192.168.0.12');
     await expect(phone).toContainText('notes');
+    // The control: a build reading the wrong field (or the same clock for both rows)
+    // fails this pair, since the two values differ by two hours.
+    await expect(phone.getByTestId('client-last-activity')).toHaveText('2h');
   });
 
   test('marks the connection this panel is using, and only that one', async ({ page }) => {
@@ -147,6 +153,11 @@ test.describe('connected client list', () => {
     // A brand-new chat has no id until its first turn; printing an empty block, or
     // borrowing another row's id, would invent one.
     expect(cells).toContain('-');
+  });
+
+  test('shows a dash for last activity when the client left its entry between the two reads', async ({ page }) => {
+    const { dialog } = await openClientList(page, [{ ...SAMPLE[0], lastActivityAt: undefined }]);
+    await expect(dialog.locator(ROW).getByTestId('client-last-activity')).toHaveText('-');
   });
 
   test('reports why a listing failed instead of showing an empty server', async ({ page }) => {
@@ -233,39 +244,55 @@ test.describe('connected client list', () => {
   });
 });
 
-// The other half of the disconnect button, on the client that was disconnected. The
-// bridge does not retry that one close, so the usual pulsing "reconnecting" dot would be
-// a standing lie - it has to become the way back instead.
-test.describe('disconnected-by-peer status', () => {
+// The other half of the disconnect button, on the client that was disconnected - and the
+// same UI for a connection the server closed for sitting idle. Neither is retried by the
+// bridge's ordinary backoff loop, so the usual pulsing "reconnecting" dot would be a
+// standing lie in both cases - it becomes the way back instead. What differs between the
+// two is the wording (an idle close says it will come back on its own; a peer close does
+// not, because the whole point of that button is that it does NOT silently reconnect).
+test.describe('disconnected status (peer vs idle)', () => {
   test.beforeEach(async ({ page }) => {
     await waitForApp(page);
   });
 
-  async function setStatus(page: import('@playwright/test').Page, connected: boolean, closedByPeer?: boolean) {
-    await page.evaluate(([c, p]) => {
-      window.dispatchEvent(new MessageEvent('message', { data: { type: 'ws_status', connected: c, closedByPeer: p } }));
-    }, [connected, closedByPeer] as [boolean, boolean | undefined]);
+  async function setStatus(page: import('@playwright/test').Page, connected: boolean, closeReason?: 'peer' | 'idle') {
+    await page.evaluate(([c, r]) => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'ws_status', connected: c, closeReason: r } }));
+    }, [connected, closeReason] as [boolean, 'peer' | 'idle' | undefined]);
   }
 
   test('offers a Reconnect button after a deliberate disconnect, and only then', async ({ page }) => {
-    await setStatus(page, false, true);
+    await setStatus(page, false, 'peer');
     await expect(page.getByTestId('ws-reconnect')).toBeVisible();
     await expect(page.getByTestId('ws-dot')).toHaveCount(0);
 
     // The control: an ordinary drop (daemon restart, network blip) IS retried by the
     // bridge, so it keeps the pulsing dot and must not offer a manual button - without
     // this, replacing the dot unconditionally would pass the assertion above.
-    await setStatus(page, false, false);
+    await setStatus(page, false);
     await expect(page.getByTestId('ws-reconnect')).toHaveCount(0);
     await expect(page.getByTestId('ws-dot')).toHaveAttribute('title', /reconnecting/);
   });
 
   test('goes back to the connected dot once the connection returns', async ({ page }) => {
-    await setStatus(page, false, true);
+    await setStatus(page, false, 'peer');
     await expect(page.getByTestId('ws-reconnect')).toBeVisible();
     await setStatus(page, true);
     await expect(page.getByTestId('ws-reconnect')).toHaveCount(0);
     await expect(page.getByTestId('ws-dot')).toHaveAttribute('title', 'Connected');
+  });
+
+  test('an idle close also offers Reconnect, worded as a fallback rather than the only way back', async ({ page }) => {
+    await setStatus(page, false, 'idle');
+    const btn = page.getByTestId('ws-reconnect');
+    await expect(btn).toBeVisible();
+    await expect(btn).toHaveAttribute('title', /reconnects automatically/i);
+
+    // The control: a peer close's button must NOT claim to come back on its own - the
+    // two reasons need genuinely different wording, not just a shared testid.
+    await setStatus(page, false, 'peer');
+    await expect(btn).not.toHaveAttribute('title', /reconnects automatically/i);
+    await expect(btn).toHaveAttribute('title', /Click to reconnect/);
   });
 });
 

@@ -260,8 +260,9 @@ test.describe('image file preview', () => {
 
     const dialog = modalDialog(page);
     await expect(dialog.locator('select')).toHaveCount(0);
-    // "Open in editor" is VS Code only - in the browser there is no editor to open in.
-    await expect(dialog.locator('button', { hasText: 'Open in editor' })).toHaveCount(0);
+    // "Open in editor" is not VS-Code-only: on localhost it hands off to a local
+    // install via vscode://file, same as it always did for a text file.
+    await expect(dialog.locator('button', { hasText: 'Open in editor' })).toHaveCount(1);
   });
 
   test('Escape closes the image modal', async ({ page }) => {
