@@ -7,6 +7,7 @@ import { IS_WIN, resolveClaudeBin, killProc, interruptProc, killAllClaude, plura
 import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
 import { getSkills } from './skills';
 import { readFilePreview } from './filePreview';
+import { grantMedia } from './media';
 // No fetchUsage here on purpose: usagePoller.ts is the only caller of the usage API,
 // so the per-process rate floor cannot be bypassed by a client-triggered handler.
 import { fetchAccountInfo, fetchModels } from './accountUsage';
@@ -422,6 +423,27 @@ export function attachClientHandlers(
     } else if (msg.type === 'readFilePreview' && msg.path) {
       const result = readFilePreview(msg.path, s.workspaceDir);
       ws.send(JSON.stringify({ type: 'filePreview', ...result }));
+    } else if (msg.type === 'mediaUrl' && msg.path) {
+      // Exchange a path for a playback token. The path is validated by the very same
+      // call a preview makes - same resolution, same containment rule - so /media can
+      // never serve a file that could not already have been previewed. This is the only
+      // place a media path is accepted, which is what keeps the HTTP route path-free.
+      //
+      // Unlike readFilePreview this is NOT routed to the extension host: the process
+      // that mints the token has to be the one that serves it, and in the extension the
+      // preview is read locally while the media endpoint lives on the daemon.
+      const result = readFilePreview(String(msg.path), s.workspaceDir);
+      const reply = result.media
+        ? {
+            path: result.path,
+            ...result.media,
+            token: grantMedia(result.path, result.media.kind, result.media.mediaType, result.media.size),
+            // The client builds the origin (only it knows the host it reached us on -
+            // `localhost` would be wrong for every remote viewer), so it needs the port.
+            port: hooks.getServerPort?.() ?? 0,
+          }
+        : { path: result.path, error: result.content || 'not a playable media file' };
+      ws.send(JSON.stringify({ type: 'mediaGrant', ...reply }));
     } else if (msg.type === 'readToolImage' && msg.toolUseId) {
       // The image a tool returned, on demand. Preferring the transcript over the file
       // is the point: it holds the bytes the model actually saw, so a preview still

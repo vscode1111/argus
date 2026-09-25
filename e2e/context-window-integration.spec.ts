@@ -111,7 +111,12 @@ test('the pill reports a percentage of the seeded model window, not a fixed 200k
   await page.getByRole('button', { name: 'Send' }).click();
 
   const pill = page.locator('[class*="contextPill"]');
-  await expect(pill).toBeVisible({ timeout: 25_000 });
+  // The pill appears on the first `assistant` event (the one carrying message.usage), so
+  // this waits out a whole turn's first token - ~17s in this workspace, since a fresh
+  // session re-reads the 251KB CLAUDE.md. An assertion cap is one budget no config
+  // setting reaches, so it is raised here by hand: 25s left only ~7s of headroom and was
+  // the line that actually timed out (measured: the full test ran 23.0s against it).
+  await expect(pill).toBeVisible({ timeout: 45_000 });
 
   const parsed = parseTitle((await pill.getAttribute('title')) ?? '');
   expect(parsed.window).toBe(SEEDED_WINDOW);

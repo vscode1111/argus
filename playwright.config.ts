@@ -24,9 +24,12 @@ const chromiumOptions = {
 
 export default defineConfig({
   testDir: './e2e',
-  // One global per-test timeout for every project, mock and integration alike.
-  // A real CLI turn in these tests takes a few seconds, so 30s is a generous cap
-  // that still fails a hang fast instead of burning 90s on it.
+  // Per-test timeout floor for the mock project; the integration project raises its own
+  // below. A fresh session in this workspace starts at ~64k input tokens (CLAUDE.md is
+  // 251KB and is re-read on every CLI spawn), so a real turn costs 5-20s - the three
+  // integration specs that had no per-test override were the ones sitting right on this
+  // 30s cap, failing under full-suite load a different one each run. Mock tests never
+  // spawn a CLI, so 30s stays a generous cap there.
   timeout: 30_000,
   globalSetup: require.resolve('./e2e/global-setup'),
   outputDir: './test-results',
@@ -40,13 +43,19 @@ export default defineConfig({
       use: chromiumOptions,
     },
     {
-      // Integration tests inherit the global 30s timeout (no per-project and no
-      // per-test overrides). Retries off so a hang isn't paid twice.
+      // A real CLI turn is 5-20s here, so 30s left the specs with no per-test override
+      // one spike away from a false timeout - a different one failed each full-suite run
+      // while passing alone. 60s gives that headroom; specs that need even more keep
+      // their own test.setTimeout (90s/120s), which still wins over this. Retries on:
+      // every failure in the 2026-09 run passed on the first retry, and Playwright still
+      // marks the test `flaky`, so a real regression is not hidden by the retry - it
+      // fails twice. The cost is a genuine hang now paid at most twice (60s + retry).
       name: 'integration',
       testMatch: /-integration\.spec/,
       use: chromiumOptions,
       dependencies: ['mock'],
-      retries: 0,
+      timeout: 60_000,
+      retries: 1,
       // Each integration test drives a real Claude CLI plus a Chromium instance against
       // the one shared :3001 backend. At the global 4 workers that exhausts memory/CPU:
       // the backend stops responding mid-run and every later test sees a mounted page
