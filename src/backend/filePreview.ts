@@ -7,12 +7,56 @@ const IMAGE_EXTS: Record<string, string> = {
   '.ico': 'image/x-icon', '.tiff': 'image/tiff', '.tif': 'image/tiff',
 };
 
+// Playable media. The mapping is by extension rather than by sniffing the container,
+// because it decides which element the client renders, and `<video>` vs `<audio>` is a
+// layout question the file's magic bytes do not answer (an .m4a and an .m4v share one).
+// Formats the browser may not decode (.mkv, .avi) are listed on purpose: the player
+// reports that itself, and refusing here would show a worse error than the real one.
+export const VIDEO_EXTS: Record<string, string> = {
+  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm',
+  '.ogv': 'video/ogg', '.mov': 'video/quicktime', '.mkv': 'video/x-matroska',
+  '.avi': 'video/x-msvideo', '.mpeg': 'video/mpeg', '.mpg': 'video/mpeg',
+};
+
+export const AUDIO_EXTS: Record<string, string> = {
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/opus',
+  '.flac': 'audio/flac', '.aac': 'audio/aac', '.weba': 'audio/webm',
+};
+
+/** How much of a file is sniffed to decide whether it is text at all. */
+const BINARY_SNIFF_BYTES = 8192;
+
+/**
+ * Whether a file is binary, by the same rule git uses: a NUL byte in the first few KB.
+ *
+ * This exists because everything that was not a directory or an image used to be read
+ * with `readFileSync(path, 'utf-8')`, so a .mp4 (and equally a .zip, .exe or .pdf) was
+ * decoded as text and shipped whole: the 21.5MB video that prompted this became a 51MB
+ * WebSocket frame holding 87,580 "lines" of replacement characters. Cheap to detect and
+ * the cost of being wrong is small in both directions - a text file misread as binary
+ * shows its size instead of its contents, which is recoverable, while the reverse hangs
+ * the panel.
+ */
+function looksBinary(fd: number): boolean {
+  const buf = Buffer.alloc(BINARY_SNIFF_BYTES);
+  const read = fs.readSync(fd, buf, 0, BINARY_SNIFF_BYTES, 0);
+  return buf.subarray(0, read).includes(0);
+}
+
 /** One row of a directory preview. `size` is bytes, files only. */
 export interface PreviewEntry {
   name: string;
   path: string;
   isDir: boolean;
   size?: number;
+}
+
+/** A file the client plays rather than renders. Bytes never travel with this. */
+export interface MediaInfo {
+  kind: 'video' | 'audio';
+  mediaType: string;
+  size: number;
 }
 
 export interface FilePreviewResult {
@@ -24,6 +68,10 @@ export interface FilePreviewResult {
   parent?: string;
   /** Entries dropped past the cap, so the listing can say what it is not showing. */
   truncated?: number;
+  /** Present for audio/video: the client asks for a media grant and streams it. */
+  media?: MediaInfo;
+  /** Present for a non-media binary: its size, since there is nothing to render. */
+  binary?: { size: number };
 }
 
 // A directory can hold tens of thousands of entries (node_modules, a download
@@ -101,6 +149,38 @@ export function readFilePreview(
       const base64 = fs.readFileSync(filePath).toString('base64');
       return { path: filePath, content: `data:${mime};base64,${base64}` };
     }
+    // Media is described, never sent: the client exchanges this for a grant and streams
+    // it over HTTP. The webview also recognises these extensions itself and normally
+    // skips straight to that, so this branch is the guard for every other way a path can
+    // arrive here - a directory listing, an older client, a link inside a preview.
+    const videoType = VIDEO_EXTS[ext];
+    const audioType = AUDIO_EXTS[ext];
+    if (videoType || audioType) {
+      return {
+        path: filePath,
+        content: '',
+        media: {
+          kind: videoType ? 'video' : 'audio',
+          mediaType: videoType || audioType,
+          size: fs.statSync(filePath).size,
+        },
+      };
+    }
+    // Sniff before reading. Decoding a binary as UTF-8 is what produced the 51MB frame,
+    // and it is not specific to video: a .zip or .exe does exactly the same thing.
+    const fd = fs.openSync(filePath, 'r');
+    let binary: boolean;
+    let size: number;
+    try {
+      binary = looksBinary(fd);
+      size = fs.fstatSync(fd).size;
+    } finally {
+      fs.closeSync(fd);
+    }
+    if (binary) return { path: filePath, content: '', binary: { size } };
+    // By path, not by the descriptor above: readFileSync(fd) reads from the current file
+    // position, which is a detail of how the sniff happened to be done and not something
+    // this line should depend on.
     return { path: filePath, content: fs.readFileSync(filePath, 'utf-8') };
   } catch (err) {
     return { path: filePath, content: `Error reading file: ${(err as Error).message}` };

@@ -136,6 +136,8 @@ Fix: hard refresh the stuck tab (`Ctrl+Shift+R` / `Ctrl+F5`), not a plain reload
 
 Not confirmed as the cause here, but worth checking first if hard refresh doesn't help: this machine also runs VPN/proxy software (OpenVPN, Hiddify). If the affected browser routes local traffic through one, that can interfere with `localhost`/LAN requests in that browser specifically while an unaffected browser loads the same URL fine.
 
+A separate, measured Hiddify effect: with its TUN active, the Claude CLI (2.1.277 and newer) cannot reach the API at all, so every live or integration turn fails with `Connection error`. That has nothing to do with this loading-spinner case; see [claude-code-network-path.md](claude-code-network-path.md).
+
 ## `src/backend/` is not typechecked by anything you run day to day
 
 The webview gap above has a backend twin, and it is quieter. `yarn dev` runs the server

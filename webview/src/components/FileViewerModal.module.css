@@ -41,6 +41,70 @@
   color: var(--thinking-fg);
   font-size: 0.82em;
 }
+/* The player fills the modal and keeps the video's own aspect ratio. Black behind it
+   rather than the panel background: letterbox bars either side of a portrait phone clip
+   read as part of the video, and every player the viewer knows paints them black. */
+.videoBody {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  background: #000;
+}
+.videoEl {
+  max-width: 100%;
+  max-height: 100%;
+  /* Without an explicit min-height a zero-height flex child collapses before metadata
+     loads, so the controls appear as a sliver until the first frame decodes. */
+  min-height: 200px;
+  outline: none;
+}
+.audioBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 1;
+  padding: 24px;
+}
+.audioEl {
+  width: 100%;
+  max-width: 420px;
+}
+.mediaMeta {
+  color: var(--thinking-fg);
+  font-size: 0.85em;
+}
+/* Nothing to render: a binary, or media with no decoder. Centred and quiet - this is an
+   explanation, not an error, and it replaces a spinner that used to never resolve. */
+.infoBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  min-height: 160px;
+  padding: 24px;
+  text-align: center;
+}
+.infoTitle {
+  font-size: 1.05em;
+  color: var(--fg);
+}
+.infoDetail {
+  color: var(--thinking-fg);
+  font-size: 0.9em;
+}
+.infoHint {
+  color: var(--thinking-fg);
+  font-size: 0.85em;
+  max-width: 360px;
+  line-height: 1.5;
+}
 .imageBody {
   display: flex;
   align-items: center;
