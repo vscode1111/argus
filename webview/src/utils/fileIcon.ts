@@ -25,7 +25,7 @@ export const ICON_COLORS = {
 export type IconColor = keyof typeof ICON_COLORS;
 
 /** Glyph shapes. Deliberately few: at 15px a detailed glyph turns to mush. */
-export type IconKind = 'doc' | 'code' | 'braces' | 'image' | 'archive' | 'config' | 'shell' | 'db';
+export type IconKind = 'doc' | 'code' | 'braces' | 'image' | 'video' | 'audio' | 'archive' | 'config' | 'shell' | 'db';
 
 export interface FileIconSpec {
   kind: IconKind;
@@ -85,6 +85,15 @@ const BY_EXT: Record<string, Spec> = {
   gif: ['image', 'purple'], bmp: ['image', 'purple'], webp: ['image', 'purple'],
   ico: ['image', 'purple'], tif: ['image', 'purple'], tiff: ['image', 'purple'],
   avif: ['image', 'purple'], svg: ['image', 'orange'],
+  // Playable media, with its own glyphs and colours rather than sharing the image
+  // purple: a stories folder is wall-to-wall .mp4 next to a frames/ folder of .jpg, and
+  // on one colour those two are told apart only by a 15px glyph.
+  mp4: ['video', 'red'], m4v: ['video', 'red'], webm: ['video', 'red'],
+  ogv: ['video', 'red'], mov: ['video', 'red'], mkv: ['video', 'red'],
+  avi: ['video', 'red'], mpeg: ['video', 'red'], mpg: ['video', 'red'],
+  mp3: ['audio', 'green'], wav: ['audio', 'green'], m4a: ['audio', 'green'],
+  ogg: ['audio', 'green'], oga: ['audio', 'green'], opus: ['audio', 'green'],
+  flac: ['audio', 'green'], aac: ['audio', 'green'], weba: ['audio', 'green'],
 
   // Archives and binaries
   zip: ['archive', 'orange'], tar: ['archive', 'orange'], gz: ['archive', 'orange'],

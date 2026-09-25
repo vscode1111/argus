@@ -10,6 +10,7 @@ import { getOrCreateChannel, reapIdleCliProcs, reapIdleClients } from './channel
 import { closeClient, isLocalAddress, listClients, normalizeAddress, noteClientConnect } from './clients';
 import { checkRateLimit, createSession, hasPassword, isValidSession, noteLoginFailure, noteLoginSuccess, verifyPassword } from './auth';
 import { findWorkspaceForSession } from './sessions';
+import { lookupGrant, serveMedia } from './media';
 import { readConfig, CONFIG_PATH } from './config';
 import { startUsagePoller } from './usagePoller';
 
@@ -117,6 +118,39 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       res.end(local ? JSON.stringify({ configPath: CONFIG_PATH, pid: process.pid }) : '');
       return;
     }
+    // Media playback. The token is the capability - it carries the path, so this route
+    // takes none and the "no arbitrary path serving" property of STATIC below survives.
+    // A remote peer must still hold a session on top of it, matching /nonce: the token
+    // travels in a URL, and a URL leaks in ways a WebSocket frame does not.
+    if (urlPath.startsWith('/media/')) {
+      // CORS on HEAD only. The player never needs it (a media element loads
+      // cross-origin without CORS), but the failure card asks the server what went
+      // wrong with a HEAD probe, and under Vite the page is on :5173 while this is on
+      // :3001 - so that probe was blocked and every failure came back as "the server
+      // could not be reached", including a file the server had just served happily.
+      // It applies to the 401 and 404 below as well: a status a script cannot read is
+      // no better than no status. Headers only, so script learns the status, never the
+      // bytes.
+      const mediaCors = req.method === 'HEAD' ? corsHeaders(req) : {};
+      if (!local && !isValidSession(query.get('auth'))) {
+        res.writeHead(401, { 'Content-Type': 'text/plain', ...mediaCors });
+        res.end('authentication required');
+        return;
+      }
+      const grant = lookupGrant(urlPath.slice('/media/'.length));
+      if (!grant) {
+        // The common failure, not an exotic one: grants live in this process's memory,
+        // so a daemon that idle-exits invalidates every preview link still on screen.
+        // The card says "expired" rather than blaming the codec only because it can
+        // read THIS status, which cross-origin means only with the header above.
+        res.writeHead(404, { 'Content-Type': 'text/plain', ...mediaCors });
+        res.end('unknown or expired media token');
+        return;
+      }
+      serveMedia(req, res, grant, mediaCors);
+      return;
+    }
+
     const asset = STATIC[urlPath];
     if (asset) {
       try {

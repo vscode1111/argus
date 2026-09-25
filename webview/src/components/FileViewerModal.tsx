@@ -63,6 +63,7 @@ import { BrowseRow, FileTypeIcon, FolderIcon, UpRow, formatSize } from './shared
 import { useCopyFeedback } from '../hooks/useCopyFeedback';
 import { PreviewEntry } from '../types';
 import { matchesRequestedPath, vscodeFileUri } from '../utils/path';
+import { diagnoseMediaFailure, formatBytes, mediaKindFor, mediaSrc, type MediaKind } from '../utils/media';
 import { plural } from '../utils/text';
 import modal from './shared/modal.module.css';
 import styles from './FileViewerModal.module.css';
@@ -90,6 +91,20 @@ function stripLineNumbers(content: string): string {
     .replace(/^\s*\d+[→\t]/gm, '');       // strip "     N→" or "     N\t"
 }
 
+/** A granted media stream: what to play and where from. Never the bytes themselves. */
+export interface MediaFrame {
+  media: MediaKind;
+  mediaType: string;
+  src: string;
+  size: number;
+}
+
+/** A file with nothing to render - a binary, or media that could not be granted. */
+export interface InfoFrame {
+  title: string;
+  detail: string;
+}
+
 interface Props {
   path: string;
   content: string;
@@ -101,6 +116,10 @@ interface Props {
   dirParent?: string;
   /** Entries the host dropped past its cap. */
   truncated?: number;
+  /** Set for audio/video: render a player streaming from the media endpoint. */
+  media?: MediaFrame;
+  /** Set when there is nothing to render: say what the file is instead. */
+  info?: InfoFrame;
   /** Opened before its content exists: hold a spinner until the host answers. */
   loading?: boolean;
   onClose: () => void;
@@ -173,6 +192,90 @@ interface Frame {
   entries?: PreviewEntry[];
   dirParent?: string;
   truncated?: number;
+  media?: MediaFrame;
+  info?: InfoFrame;
+}
+
+/**
+ * The player. Native controls on purpose: play/pause, scrub, volume, fullscreen,
+ * picture-in-picture and speed all come free and behave the way the viewer already
+ * expects, where a hand-rolled control strip would be a lot of surface to get wrong.
+ *
+ * `preload="metadata"` is what makes the timeline appear without pulling the file -
+ * the browser fetches the header, learns the duration, and then fetches only what is
+ * played.
+ *
+ * It autoplays. Opening the preview is itself a deliberate click, which is also what
+ * makes it *work*: Chrome permits unmuted autoplay while the document has user
+ * activation, so a video opened from a link in the transcript starts with sound. A
+ * preview opened with no gesture at all (the `?file=` launch param on a cold page) is
+ * blocked by that same policy and simply sits paused behind its controls - deliberately
+ * not worked around by muting, since a silent concert clip is a worse answer than a
+ * visible play button.
+ */
+function MediaBody({ frame, filename }: { frame: MediaFrame; filename: string }) {
+  // Anything that stops playback surfaces here rather than at grant time - a codec the
+  // browser lacks, but equally an expired link or a dropped connection. Which of those
+  // it was cannot be read off the element, so the card waits for the diagnosis.
+  const [failure, setFailure] = useState<{ title: string; hint: string } | null>(null);
+  useEffect(() => { setFailure(null); }, [frame.src]);
+
+  const onError = useCallback(() => {
+    let live = true;
+    diagnoseMediaFailure(frame.src, frame.media).then((f) => { if (live) setFailure(f); });
+    return () => { live = false; };
+  }, [frame.src, frame.media]);
+
+  if (failure) {
+    return (
+      <div className={styles.infoBody} data-testid="media-unsupported">
+        <div className={styles.infoTitle}>{failure.title}</div>
+        <div className={styles.infoDetail}>{formatBytes(frame.size)} · {frame.mediaType || 'unknown format'}</div>
+        <div className={styles.infoHint}>{failure.hint}</div>
+      </div>
+    );
+  }
+
+  if (frame.media === 'audio') {
+    return (
+      <div className={styles.audioBody} data-testid="media-player">
+        <audio
+          className={styles.audioEl}
+          src={frame.src}
+          controls
+          autoPlay
+          preload="metadata"
+          onError={onError}
+        />
+        <div className={styles.mediaMeta}>{formatBytes(frame.size)} · {frame.mediaType}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.videoBody} data-testid="media-player">
+      <video
+        className={styles.videoEl}
+        src={frame.src}
+        controls
+        autoPlay
+        playsInline
+        preload="metadata"
+        aria-label={`Video: ${filename}`}
+        onError={onError}
+      />
+    </div>
+  );
+}
+
+/** Nothing to render: a binary file, or media the host refused to grant. */
+function InfoBody({ title, detail }: InfoFrame) {
+  return (
+    <div className={styles.infoBody} data-testid="preview-info">
+      <div className={styles.infoTitle}>{title}</div>
+      <div className={styles.infoDetail}>{detail}</div>
+    </div>
+  );
 }
 
 /**
@@ -214,7 +317,7 @@ function DirListingBody({ entries, parent, truncated, onOpen }: {
   );
 }
 
-export function FileViewerModal({ path, content, line, copyText, entries, dirParent, truncated, loading, onClose }: Props) {
+export function FileViewerModal({ path, content, line, copyText, entries, dirParent, truncated, media, info, loading, onClose }: Props) {
   // Default to dark unless VS Code explicitly marks the theme as light.
   const isDark = !document.body.classList.contains('vscode-light');
   const { copied, copy } = useCopyFeedback();
@@ -226,7 +329,7 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
 
   const current: Frame = stack.length
     ? stack[stack.length - 1]
-    : { path, content, line, entries, dirParent, truncated };
+    : { path, content, line, entries, dirParent, truncated, media, info };
 
   useEscapeKey(onClose);
 
@@ -240,7 +343,9 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
   // a file, or another directory listing. Back walks the trail either way.
   const openPath = useCallback((target: string) => {
     setPendingPath(target);
-    postMessage({ type: 'readFilePreview', path: target });
+    postMessage(mediaKindFor(target)
+      ? { type: 'mediaUrl', path: target }
+      : { type: 'readFilePreview', path: target });
   }, []);
 
   const navigate = useCallback(
@@ -251,17 +356,48 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
   useEffect(() => {
     if (!pendingPath) return;
     function onMessage(e: MessageEvent) {
-      if (e.data?.type !== 'filePreview') return;
+      const type = e.data?.type;
+      if (type !== 'filePreview' && type !== 'mediaGrant') return;
       const got: string = e.data.path ?? '';
       if (!matchesRequestedPath(got, pendingPath!)) return;
-      setStack(prev => [...prev, {
+      const push = (frame: Frame) => {
+        setStack(prev => [...prev, frame]);
+        setPendingPath(null);
+      };
+      if (type === 'mediaGrant') {
+        push(e.data.token
+          ? {
+              path: got || pendingPath!,
+              content: '',
+              media: {
+                media: e.data.kind === 'audio' ? 'audio' : 'video',
+                mediaType: String(e.data.mediaType || ''),
+                size: Number(e.data.size) || 0,
+                src: mediaSrc(String(e.data.token), Number(e.data.port) || 0),
+              },
+            }
+          : { path: got || pendingPath!, content: `Cannot play this file: ${e.data.error ?? 'no media grant'}` });
+        return;
+      }
+      if (e.data.binary || e.data.media) {
+        const size = Number(e.data.binary?.size ?? e.data.media?.size) || 0;
+        push({
+          path: got || pendingPath!,
+          content: '',
+          info: {
+            title: e.data.media ? `${e.data.media.kind === 'audio' ? 'Audio' : 'Video'} file` : 'Binary file',
+            detail: `${formatBytes(size)} · nothing to display as text`,
+          },
+        });
+        return;
+      }
+      push({
         path: got || pendingPath!,
         content: e.data.content,
         entries: Array.isArray(e.data.entries) ? e.data.entries : undefined,
         dirParent: typeof e.data.parent === 'string' ? e.data.parent : undefined,
         truncated: typeof e.data.truncated === 'number' ? e.data.truncated : undefined,
-      }]);
-      setPendingPath(null);
+      });
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -269,6 +405,9 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
 
   const dirEntries = current.entries;
   const isDir = dirEntries !== undefined;
+  const currentMedia = current.media;
+  const currentInfo = current.info;
+  const isPlain = currentMedia === undefined && currentInfo === undefined;
   const isImage = isDataUrl(current.content);
   const language = isImage ? 'text' : detectLanguage(current.path);
   const rawCode = isImage ? '' : stripLineNumbers(current.content);
@@ -280,7 +419,7 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
   // user clicks is usually a slice (`file.html:359-499`), a browser renders a fragment
   // perfectly well, and defaulting those to source meant the whole feature looked like
   // it had not shipped. The line is still reachable - Source scrolls to it.
-  const isHtml = HTML_RE.test(current.path) && !isImage && !isDir;
+  const isHtml = HTML_RE.test(current.path) && !isImage && !isDir && isPlain;
   const [showSource, setShowSource] = useState(false);
   useEffect(() => { setShowSource(false); }, [current.path]);
   const renderHtml = isHtml && !showSource;
@@ -380,7 +519,7 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
                 {showSource ? 'Preview' : 'Source'}
               </button>
             )}
-            {!isImage && !renderHtml && !isDir && !loading && <EncodingSelect value={encoding} onChange={setEncoding} />}
+            {!isImage && !renderHtml && !isDir && !loading && isPlain && <EncodingSelect value={encoding} onChange={setEncoding} />}
             {/* Outside VS Code this needs a `vscode://` handoff to a local install,
                 which only makes sense when the page itself is being viewed on that
                 same machine. A folder is not something an editor can open either. */}
@@ -404,6 +543,10 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
             >
               <div className="previewSpinner" />
             </div>
+          ) : currentMedia ? (
+            <MediaBody frame={currentMedia} filename={filename} />
+          ) : currentInfo ? (
+            <InfoBody title={currentInfo.title} detail={currentInfo.detail} />
           ) : dirEntries ? (
             <DirListingBody
               entries={dirEntries}

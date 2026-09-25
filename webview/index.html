@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self' 'unsafe-inline'; connect-src ws: wss: http: https:; img-src data: 'self';" />
+    content="default-src 'self' 'unsafe-inline'; connect-src ws: wss: http: https:; img-src data: 'self'; media-src 'self' http: https:;" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="/argus-icon.ico" type="image/x-icon" />
   <title>Argus - Dev</title>
@@ -58,7 +58,7 @@
       // unsuppressed, a mock test that clicks the terminate/disconnect button would reach
       // the live backend and really kill a Claude CLI - or drop another worker's page -
       // on whoever's machine runs the suite.
-      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1, listAllSessions: 1, getActiveSessions: 1, getModels: 1, getUsageInsights: 1, getUsageLimits: 1, readToolImage: 1, getBgTasks: 1, listCliProcesses: 1, killCliProcess: 1, listClients: 1, closeClient: 1 };
+      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1, listAllSessions: 1, getActiveSessions: 1, getModels: 1, getUsageInsights: 1, getUsageLimits: 1, readToolImage: 1, getBgTasks: 1, listCliProcesses: 1, killCliProcess: 1, listClients: 1, closeClient: 1, mediaUrl: 1 };
       // Derive host from the page so a LAN device reaches the dev machine, not its own localhost.
       var host = window.location.hostname || 'localhost';
 

@@ -42,6 +42,17 @@ const GLYPHS: Record<IconKind, React.ReactNode> = {
     <circle cx="8.5" cy="8.5" r="1.5" />
     <polyline points="21 15 16 10 5 21" />
   </>,
+  video: <>
+    <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+    <line x1="7" y1="4" x2="7" y2="20" />
+    <line x1="17" y1="4" x2="17" y2="20" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+  </>,
+  audio: <>
+    <path d="M9 18V5l12-2v13" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="18" cy="16" r="3" />
+  </>,
   archive: <>
     <polyline points="21 8 21 21 3 21 3 8" />
     <rect x="1" y="3" width="22" height="5" rx="1" />

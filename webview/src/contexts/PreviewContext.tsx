@@ -4,6 +4,7 @@ import { FileViewerModal } from '../components/FileViewerModal';
 import { DiffViewerModal } from '../components/DiffViewerModal';
 import { PreviewEntry } from '../types';
 import { matchesRequestedPath } from '../utils/path';
+import { formatBytes, mediaKindFor, mediaSrc, type MediaKind } from '../utils/media';
 
 /**
  * What to preview. `key` (a tool call id) identifies the thing being shown, so a
@@ -17,6 +18,13 @@ export type PreviewRequest =
   | { kind: 'dir'; key?: string; path: string; entries: PreviewEntry[]; parent?: string; truncated?: number }
   /** No content in hand: the host reads the file and opens once it arrives. */
   | { kind: 'path'; key?: string; path: string; line?: number }
+  /** Audio or video, played from the media endpoint. `src` is a granted URL, not bytes:
+   *  the file is streamed with Range requests so a 21MB video starts at once and seeks
+   *  without downloading the rest. A 'path' request settles into this. */
+  | { kind: 'media'; key?: string; path: string; media: MediaKind; mediaType: string; src: string; size: number }
+  /** A file there is nothing to render for - a binary, or media that could not be
+   *  granted. Says what it is and how big rather than showing its bytes as text. */
+  | { kind: 'info'; key?: string; path: string; title: string; detail: string }
   /** The image a tool call returned, fetched from the transcript by tool_use_id. The
    *  bytes are not in the message (they are stripped before it crosses the wire), and
    *  the transcript copy outlives the file, which may have moved since. */
@@ -104,26 +112,43 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     if (!pending) return;
     const { req, loadId } = pending;
     const wanted = req.path;
-    const settle = (path: string, content: string, dir?: MessageEvent['data']) => {
-      // A closed modal leaves no frame with this id, so this is simply a no-op then.
-      setStack(prev => prev.map(f => {
-        if (f.loadId !== loadId) return f;
-        // The host answered with a listing: this is a folder, not a file. The frame
-        // changes kind - it was opened optimistically as a file, before anyone knew.
-        if (dir) {
-          return {
-            kind: 'dir', key: f.key, path, entries: dir.entries, loadId,
-            parent: typeof dir.parent === 'string' ? dir.parent : undefined,
-            truncated: typeof dir.truncated === 'number' ? dir.truncated : undefined,
-          };
-        }
-        return { ...f, path, content, loading: false };
-      }));
+    // Media never goes through readFilePreview: the bytes would have to cross the
+    // WebSocket to get here, which is exactly what made a 21MB video unplayable. Ask
+    // for a streaming grant instead, and let the browser's own player fetch it.
+    const wantsMedia = req.kind === 'path' && mediaKindFor(req.path) !== null;
+
+    // Replace the frame this request opened. A closed modal leaves no frame with this
+    // id, so it is simply a no-op then.
+    const settle = (patch: (f: Frame) => Frame) => {
+      setStack(prev => prev.map(f => (f.loadId === loadId ? patch(f) : f)));
       setPending(null);
     };
+    const settleText = (path: string, content: string) =>
+      settle(f => ({ ...f, kind: 'file', path, content, loading: false } as Frame));
+
     function onMessage(e: MessageEvent) {
+      const got: string = e.data?.path ?? '';
+      if (wantsMedia) {
+        if (e.data?.type !== 'mediaGrant' || !matchesRequestedPath(got, wanted)) return;
+        if (!e.data.token) {
+          // The host answers either way, so this is a real refusal (gone, unreadable,
+          // outside the workspace), not silence - say which, rather than spinning.
+          settleText(got || wanted, `Cannot play this file: ${e.data.error ?? 'no media grant'}`);
+          return;
+        }
+        settle(f => ({
+          kind: 'media',
+          key: f.key,
+          loadId,
+          path: got || wanted,
+          media: e.data.kind === 'audio' ? 'audio' : 'video',
+          mediaType: String(e.data.mediaType || ''),
+          size: Number(e.data.size) || 0,
+          src: mediaSrc(String(e.data.token), Number(e.data.port) || 0),
+        }));
+        return;
+      }
       if (typeof e.data?.content !== 'string') return;
-      const got: string = e.data.path ?? '';
       if (req.kind === 'toolImage') {
         // Matched on the tool call id, which is exact - the path is only a caption
         // here, and the answer may even be the disk fallback for a different one.
@@ -135,18 +160,43 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         if (e.data.type !== 'filePreview') return;
         if (!matchesRequestedPath(got, wanted)) return;
       }
-      settle(got || wanted, e.data.content, Array.isArray(e.data.entries) ? e.data : undefined);
+      // A listing: this is a folder, not a file. The frame changes kind - it was opened
+      // optimistically as a file, before anyone knew which it was.
+      if (Array.isArray(e.data.entries)) {
+        const dir = e.data;
+        settle(f => ({
+          kind: 'dir', key: f.key, path: got || wanted, entries: dir.entries, loadId,
+          parent: typeof dir.parent === 'string' ? dir.parent : undefined,
+          truncated: typeof dir.truncated === 'number' ? dir.truncated : undefined,
+        }));
+        return;
+      }
+      // Nothing renderable as text. Reachable when this client's media list and the
+      // host's have drifted (an older daemon), and for every other binary: a .zip read
+      // as UTF-8 is the same defect that made the video unplayable.
+      if (e.data.binary || e.data.media) {
+        const size = Number(e.data.binary?.size ?? e.data.media?.size) || 0;
+        settle(f => ({
+          kind: 'info', key: f.key, loadId, path: got || wanted,
+          title: e.data.media ? `${e.data.media.kind === 'audio' ? 'Audio' : 'Video'} file` : 'Binary file',
+          detail: `${formatBytes(size)} · nothing to display as text`,
+        }));
+        return;
+      }
+      settleText(got || wanted, e.data.content);
     }
     window.addEventListener('message', onMessage);
-    postMessage(req.kind === 'toolImage'
-      ? { type: 'readToolImage', toolUseId: req.toolUseId, path: wanted }
-      : { type: 'readFilePreview', path: wanted });
+    postMessage(wantsMedia
+      ? { type: 'mediaUrl', path: wanted }
+      : req.kind === 'toolImage'
+        ? { type: 'readToolImage', toolUseId: req.toolUseId, path: wanted }
+        : { type: 'readFilePreview', path: wanted });
 
     // The host answers even when the read failed (the error arrives as the content), so
     // silence means the message or the reply was lost - a dropped socket, most likely.
     // Say so instead of spinning forever, which reads as a hang rather than a failure.
     const giveUp = window.setTimeout(
-      () => settle(wanted, 'Timed out waiting for this preview. The connection may have dropped - close this and click again.'),
+      () => settleText(wanted, 'Timed out waiting for this preview. The connection may have dropped - close this and click again.'),
       PREVIEW_TIMEOUT_MS,
     );
 
@@ -176,6 +226,8 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         }
         const dir = req.kind === 'dir' ? req : undefined;
         const file = req.kind === 'file' ? req : undefined;
+        const media = req.kind === 'media' ? req : undefined;
+        const info = req.kind === 'info' ? req : undefined;
         return (
           <FileViewerModal
             key={i}
@@ -186,6 +238,8 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
             entries={dir?.entries}
             dirParent={dir?.parent}
             truncated={dir?.truncated}
+            media={media}
+            info={info}
             loading={req.loading}
             onClose={() => closeFrom(i)}
           />
