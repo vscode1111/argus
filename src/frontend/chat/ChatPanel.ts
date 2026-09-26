@@ -151,7 +151,7 @@ export class ChatPanel {
     } else if (msg.type === 'restartDaemon') {
       // Settings "Apply": restart the daemon so a new port/idle config takes effect.
       // The webview's reconnect loop then picks up the new port from the discovery file.
-      restartDaemon(this.extensionUri.fsPath);
+      void restartDaemon(this.extensionUri.fsPath);
     } else if (msg.type === 'needWsUrl') {
       // The webview lost (or never had) its connection and is asking for a fresh
       // daemon URL. The webview CSP blocks HTTP, so it cannot re-resolve the nonce
@@ -240,10 +240,18 @@ export class ChatPanel {
   // Re-read on every call so a daemon restart (new port/nonce) is picked up.
   private buildWsUrl(): string {
     const info = readDaemon();
+    // Verify in the background on every call, not only when the file is missing.
+    // A discovery file can point at a daemon that is gone (its pid recycled onto an
+    // unrelated process, so the cheap pid check in readDaemon still passes), and then
+    // the URL below is a dead one. Checking only in the `!info` branch meant nothing
+    // ever revisited that conclusion: each reconnect rebuilt the same dead URL. The
+    // probe clears the stale file and spawns a replacement, so the next needWsUrl
+    // cycle gets a working URL. Fire-and-forget - this call must stay synchronous,
+    // and the webview retries on its own.
+    void ensureDaemon(this.extensionUri.fsPath);
     if (!info) {
-      // Daemon not running - launch it. It writes its discovery file once listening;
-      // the webview's overlay retry loop (needWsUrl) then re-reads it and connects.
-      ensureDaemon(this.extensionUri.fsPath);
+      // Daemon not running - the call above launches it. It writes its discovery file
+      // once listening; the webview's overlay retry loop (needWsUrl) then re-reads it.
       return '';
     }
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
