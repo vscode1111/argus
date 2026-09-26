@@ -9,7 +9,7 @@ import {
   readDaemonInfo,
   writeDaemonInfo,
   clearDaemonInfo,
-  isProcessAlive,
+  isDaemonUp,
 } from './daemonInfo';
 
 // Always-on daemon: a single shared server on a fixed port that stays alive while
@@ -82,15 +82,27 @@ function reportCrash(kind: string, err: unknown): void {
 process.on('uncaughtException', (err) => reportCrash('uncaughtException', err));
 process.on('unhandledRejection', (reason) => reportCrash('unhandledRejection', reason));
 
-// Idempotent launch: if a discovery file points at a live daemon process, do not
-// start a second one. A crashed daemon leaves a stale file whose pid is dead, so we
-// fall through and start fresh. A force-start replacement skips this entirely.
-if (!FORCE_START) {
+// Idempotent launch: if a discovery file points at a daemon that is really there, do
+// not start a second one. A crashed daemon leaves a stale file, so we fall through and
+// start fresh. A force-start replacement skips this entirely.
+//
+// "Really there" is decided by probing the recorded port, not by the pid. A dead
+// daemon's pid gets recycled - on Windows quickly, and onto `Code.exe` often enough
+// to matter, which isProcessAlive has to accept because the extension launches the
+// daemon as Electron-as-node. Trusting the pid meant a stale file made this exit 0
+// forever: every manual `yarn daemon` and every launcher .bat run silently declined
+// to start, so the user could not even work around a stranded extension by hand.
+// The port answering /health cannot be faked by an unrelated process.
+async function guardSingleInstance(): Promise<void> {
+  if (FORCE_START) return;
   const existing = readDaemonInfo();
-  if (existing && isProcessAlive(existing.pid) && existing.pid !== process.pid) {
-    console.log(`[argus-daemon] already running (pid ${existing.pid}, port ${existing.port}); exiting`);
-    process.exit(0);
+  if (!existing || existing.pid === process.pid) return;
+  if (!(await isDaemonUp(existing))) {
+    console.log(`[argus-daemon] discovery file is stale (pid ${existing.pid}, port ${existing.port} unreachable); starting fresh`);
+    return;
   }
+  console.log(`[argus-daemon] already running (pid ${existing.pid}, port ${existing.port}); exiting`);
+  process.exit(0);
 }
 
 // Skip clearing the discovery file when handing off to a replacement (the new daemon
@@ -166,7 +178,7 @@ async function listen(attempt = 0): Promise<void> {
   }
 }
 
-listen();
+void guardSingleInstance().then(() => listen());
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => { cleanup(); process.exit(0); });

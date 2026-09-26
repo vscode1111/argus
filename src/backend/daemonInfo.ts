@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as net from 'net';
+import * as http from 'http';
 import { execFileSync } from 'child_process';
 
 // Discovery file the daemon writes on startup and the extension reads to find it.
@@ -74,20 +74,65 @@ export function isProcessAlive(pid: number): boolean {
   }
 }
 
-// Ground-truth check: is anything actually accepting connections on the daemon's
-// recorded port. A pid can look alive (isProcessAlive) for reasons that have
-// nothing to do with the daemon - Windows recycles pids quickly, and the tasklist
-// disambiguation above is itself a heuristic that could misfire on a differently
-// localized system. A real TCP connect can't be fooled by any of that, so it backs
-// isProcessAlive up as the final word before ensureDaemon decides to trust (or
-// discard) a discovery file.
-export function isPortListening(port: number, timeoutMs = 1500): Promise<boolean> {
+// What a liveness probe concluded about the daemon's recorded port:
+//   'up'    - an Argus server answered /health there
+//   'down'  - nothing is listening, or what answered is not an Argus server
+//   'busy'  - the port accepts connections but /health did not answer in time
+// 'busy' exists because the daemon is single-threaded: a long synchronous stretch
+// (a big transcript read, an execFileSync in the kill path) can stall the HTTP
+// handler well past any sane timeout. Reporting that as 'down' would let a caller
+// discard the discovery file of a daemon that owns the port and is perfectly fine,
+// whose replacement then exits on EADDRINUSE - stranding the extension with no file
+// and no nonce, which is a worse failure than the one this probe exists to fix.
+// So a timeout is deliberately NOT evidence of death; only a refused connection, or
+// an answer that isn't ours, is.
+export type DaemonProbe = 'up' | 'down' | 'busy';
+
+// Ask the recorded port whether an Argus daemon is really there. /health is
+// loopback-only and returns {configPath, pid}, so a valid answer proves three
+// things a pid check cannot: something is listening, it is an Argus server, and
+// which process it is. Used instead of isProcessAlive wherever the decision is
+// "may I discard this discovery file / start a daemon", because the pid alone
+// routinely says yes to a process that has nothing to do with Argus (measured:
+// a discovery file's pid recycled onto a `Code.exe` VS Code utility process 15h
+// after the daemon died, which the name heuristic above cannot reject - the
+// extension launches the daemon as Code.exe, so Code.exe must stay allowed).
+export function probeDaemon(port: number, timeoutMs = 3000): Promise<DaemonProbe> {
   return new Promise((resolve) => {
-    const socket = net.connect({ port, host: '127.0.0.1' });
-    const done = (ok: boolean): void => { socket.destroy(); resolve(ok); };
-    socket.setTimeout(timeoutMs);
-    socket.once('connect', () => done(true));
-    socket.once('timeout', () => done(false));
-    socket.once('error', () => done(false));
+    let settled = false;
+    const done = (r: DaemonProbe): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      req.destroy();
+      resolve(r);
+    };
+    // Tracks whether we ever got a socket: a timeout before connecting means
+    // nothing is there ('down'), a timeout after means it is busy.
+    let connected = false;
+    const timer = setTimeout(() => done(connected ? 'busy' : 'down'), timeoutMs);
+    const req = http.get({ host: '127.0.0.1', port, path: '/health', timeout: timeoutMs }, (res) => {
+      let body = '';
+      res.setEncoding('utf-8');
+      res.on('data', (c: string) => { if (body.length < 4096) body += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(body) as { pid?: unknown };
+          done(res.statusCode === 200 && typeof parsed.pid === 'number' ? 'up' : 'down');
+        } catch {
+          done('down'); // answered, but not with our JSON - someone else owns this port
+        }
+      });
+    });
+    req.once('socket', (s) => { s.once('connect', () => { connected = true; }); });
+    req.once('error', () => done('down'));
   });
+}
+
+// Is the daemon recorded in `info` actually reachable. The pid is checked first
+// only as a cheap negative (a dead pid is conclusive); the port probe is what
+// decides, and an ambiguous 'busy' counts as alive on purpose - see DaemonProbe.
+export async function isDaemonUp(info: DaemonInfo): Promise<boolean> {
+  if (!isProcessAlive(info.pid)) return false;
+  return (await probeDaemon(info.port)) !== 'down';
 }
