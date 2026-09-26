@@ -7,7 +7,7 @@ import { ArgusCodeLensProvider } from './providers/CodeLensProvider';
 import { InlineSuggestProvider } from './providers/InlineSuggestProvider';
 import { getSelection } from './utils/workspace';
 import { isInlineCompletionsEnabled, isCodeLensEnabled } from './utils/config';
-import { readDaemonInfo, clearDaemonInfo, isProcessAlive, isPortListening, type DaemonInfo } from '../backend/daemonInfo';
+import { readDaemonInfo, clearDaemonInfo, isProcessAlive, isDaemonUp, type DaemonInfo } from '../backend/daemonInfo';
 
 let extensionId = 'local.argus';
 
@@ -111,7 +111,7 @@ function spawnDaemon(extensionPath: string, force: boolean): void {
 
 async function verifyDaemonUp(extensionPath: string): Promise<void> {
   const info = readDaemonInfo();
-  const up = !!info && isProcessAlive(info.pid) && await isPortListening(info.port);
+  const up = !!info && await isDaemonUp(info);
   if (!up && info) {
     // A discovery file that fails verification is worse than none: it blocks every
     // future respawn attempt (both ours and the daemon's own single-instance guard
@@ -146,12 +146,39 @@ function onSpawnOutcome(extensionPath: string, success: boolean): void {
   });
 }
 
-export function ensureDaemon(extensionPath: string): void {
-  const info = readDaemonInfo();
-  if (info && isProcessAlive(info.pid)) return; // already running
-  if (Date.now() - lastDaemonSpawn < 5000) return; // a spawn is likely still starting
-  lastDaemonSpawn = Date.now();
-  spawnDaemon(extensionPath, false);
+// Make sure a daemon is actually reachable, starting one if it is not. Called on
+// every buildWsUrl (panel open and each needWsUrl reconnect), which is exactly when
+// the answer matters and nothing else is going on.
+//
+// The liveness test is the port, not the pid. `isProcessAlive(info.pid)` used to be
+// the whole check, and because it must accept `Code.exe` (the extension launches the
+// daemon as Electron-as-node) any recycled pid landing on one of VS Code's many
+// utility processes reads as "already running" - so this returned early, buildWsUrl
+// handed the webview a URL to a dead port, and the reconnect loop retried that same
+// dead URL forever with no way out: the post-spawn verifyDaemonUp that would have
+// discarded the file only runs after a spawn, and the spawn never happened.
+// Observed with a pid recycled 15h after the daemon died; the panel showed Server "-"
+// and never recovered, including across VS Code restarts.
+let healthCheckInFlight = false;
+export async function ensureDaemon(extensionPath: string): Promise<void> {
+  if (healthCheckInFlight) return;
+  healthCheckInFlight = true;
+  try {
+    const info = readDaemonInfo();
+    if (info) {
+      if (await isDaemonUp(info)) return; // really there, and answering
+      // The file points at nothing reachable. Discard it before spawning: both our
+      // own check above and the daemon's single-instance guard trust it at face
+      // value, so leaving it in place is what makes the failure permanent.
+      logDaemon(`discovery file points at an unreachable daemon (pid ${info.pid}, port ${info.port}); discarding`);
+      clearDaemonInfo(info.pid);
+    }
+    if (Date.now() - lastDaemonSpawn < 5000) return; // a spawn is likely still starting
+    lastDaemonSpawn = Date.now();
+    spawnDaemon(extensionPath, false);
+  } finally {
+    healthCheckInFlight = false;
+  }
 }
 
 // Explicit restart (Settings "Apply" button in the VS Code panel): hard-kill the
@@ -161,12 +188,19 @@ export function ensureDaemon(extensionPath: string): void {
 // falsely fail when Windows hasn't released the port yet and silently overwrite
 // the configured port with a default. The webview's reconnect loop picks up the
 // new port from the rewritten discovery file.
-export function restartDaemon(extensionPath: string): void {
+export async function restartDaemon(extensionPath: string): Promise<void> {
   const info = readDaemonInfo();
+  // Confirm the recorded pid is really our daemon before force-killing it. A pid
+  // alone is not evidence: a recycled one belonging to a VS Code utility process
+  // passes isProcessAlive, and `taskkill /F /T` on that would take down part of the
+  // user's editor to "restart the daemon" (the tree flag makes it worse). The port
+  // probe is what tells the two apart, so a file that answers nothing is simply
+  // cleared and replaced rather than killed.
+  const ours = !!info && await isDaemonUp(info);
   clearDaemonInfo();
   lastDaemonSpawn = Date.now();
   const afterKill = () => { setTimeout(() => { spawnDaemon(extensionPath, true); }, 300); };
-  if (info && isProcessAlive(info.pid)) {
+  if (info && ours) {
     if (process.platform === 'win32') {
       execFile('taskkill', ['/F', '/T', '/PID', String(info.pid)], afterKill);
     } else {

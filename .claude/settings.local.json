@@ -17,7 +17,12 @@
       "Skill(update-config)",
       "Skill(update-config:*)",
       "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId = 5724\")",
-      "Bash(rm -f \"C:\\\\Users\\\\Admin\\\\.claude\\\\argus-daemon.json\" && echo \"removed stale discovery file\")"
+      "Bash(rm -f \"C:\\\\Users\\\\Admin\\\\.claude\\\\argus-daemon.json\" && echo \"removed stale discovery file\")",
+      "PowerShell($p = Get-Process -Id 14356 -ErrorAction SilentlyContinue; if \\($p\\) { \"ALIVE: $\\($p.ProcessName\\)\" } else { \"PID 14356 DEAD\" }; Get-NetTCPConnection -LocalPort 37071 -State Listen -ErrorAction SilentlyContinue | Select-Object LocalAddress,LocalPort,OwningProcess | Format-List; \"---\"; Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Select-Object ProcessId, @{n='CL';e={$_.CommandLine}} | Format-List)",
+      "Bash(cp ~/.claude/argus-daemon.json __TRACKED_VAR__/argus-daemon.stale.json)",
+      "Bash(cp ~/.claude/argus-daemon.json /c/Users/Admin/AppData/Local/Temp/argus-daemon.stale.json)",
+      "Bash(rm ~/.claude/argus-daemon.json)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId=18188\" | Select-Object ProcessId,@{n='CL';e={$_.CommandLine}} | Format-List)"
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
