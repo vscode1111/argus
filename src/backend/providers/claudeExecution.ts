@@ -71,6 +71,8 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
   if (cfg.appendSystemPrompt) baseArgs.push('--append-system-prompt', cfg.appendSystemPrompt);
   if (isPlan) {
     baseArgs.push('--permission-mode', 'plan', '--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
+  } else if (msg.mode === 'full-access') {
+    baseArgs.push('--permission-mode', 'bypassPermissions');
   }
   const procKey = baseArgs.join(' ');
   const args = [...baseArgs];

@@ -60,6 +60,29 @@
 }
 .toolFileLink:hover { text-decoration: underline; }
 
+.fileChanges {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0 0 8px;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.fileChangeRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fileChangePath {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .toolOutLink {
   color: var(--vscode-textLink-foreground);
   font-family: var(--font-mono);

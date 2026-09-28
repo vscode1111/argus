@@ -12,7 +12,7 @@ import { formatBytes, mediaKindFor, mediaSrc, type MediaKind } from '../utils/me
  */
 export type PreviewRequest =
   | { kind: 'file'; key?: string; path: string; content: string; line?: number; copyText?: string }
-  | { kind: 'diff'; key?: string; path: string; oldString: string; newString: string }
+  | { kind: 'diff'; key?: string; path: string; oldString?: string; newString?: string; unifiedDiff?: string }
   /** The clicked path turned out to be a folder; only the host can tell, so this
    *  kind is never opened directly - a 'path' request settles into it. */
   | { kind: 'dir'; key?: string; path: string; entries: PreviewEntry[]; parent?: string; truncated?: number }
@@ -220,6 +220,7 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
               path={req.path}
               oldString={req.oldString}
               newString={req.newString}
+              unifiedDiff={req.unifiedDiff}
               onClose={() => closeFrom(i)}
             />
           );

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { tryDecode } from '../utils/encoding';
+import { parseUnifiedDiff, type UnifiedDiffRow } from '../utils/unifiedDiff';
 import { EncodingSelect } from './shared/EncodingSelect';
 import modal from './shared/modal.module.css';
 import styles from './DiffViewerModal.module.css';
@@ -9,15 +10,13 @@ import tc from './ToolCall.module.css';
 
 interface Props {
   path: string;
-  oldString: string;
-  newString: string;
+  oldString?: string;
+  newString?: string;
+  unifiedDiff?: string;
   onClose: () => void;
 }
 
-type DiffRow =
-  | { type: 'equal'; old: string; new: string }
-  | { type: 'remove'; old: string }
-  | { type: 'add'; new: string };
+type DiffRow = UnifiedDiffRow;
 
 const MAX_LCS_LINES = 2000;
 
@@ -77,6 +76,7 @@ function computeSimpleDiff(oldLines: string[], newLines: string[]): DiffRow[] {
 
 type PairedRow =
   | { type: 'equal'; old: string; new: string }
+  | { type: 'hunk'; label: string }
   | { type: 'change'; old?: string; new?: string };
 
 function pairRows(rows: DiffRow[]): PairedRow[] {
@@ -86,6 +86,11 @@ function pairRows(rows: DiffRow[]): PairedRow[] {
     const row = rows[i];
     if (row.type === 'equal') {
       paired.push({ type: 'equal', old: row.old, new: row.new });
+      i++;
+      continue;
+    }
+    if (row.type === 'hunk') {
+      paired.push(row);
       i++;
       continue;
     }
@@ -112,26 +117,28 @@ function pairRows(rows: DiffRow[]): PairedRow[] {
   return paired;
 }
 
-export function DiffViewerModal({ path, oldString, newString, onClose }: Props) {
+export function DiffViewerModal({ path, oldString = '', newString = '', unifiedDiff, onClose }: Props) {
   useEscapeKey(onClose);
 
   const [encoding, setEncoding] = useState('');
   const decodedOld = useMemo(() => tryDecode(oldString, encoding), [oldString, encoding]);
   const decodedNew = useMemo(() => tryDecode(newString, encoding), [newString, encoding]);
+  const decodedDiff = useMemo(() => unifiedDiff === undefined ? undefined : tryDecode(unifiedDiff, encoding), [unifiedDiff, encoding]);
 
   const oldLines = decodedOld.split('\n');
   const newLines = decodedNew.split('\n');
-  const rawRows = useMemo(() => computeDiff(oldLines, newLines), [decodedOld, decodedNew]);
+  const rawRows = useMemo(() => decodedDiff === undefined ? computeDiff(oldLines, newLines) : parseUnifiedDiff(decodedDiff), [decodedOld, decodedNew, decodedDiff]);
   const rows = useMemo(() => pairRows(rawRows), [rawRows]);
 
   const addedCount = rawRows.filter(r => r.type === 'add').length;
   const removedCount = rawRows.filter(r => r.type === 'remove').length;
 
   return createPortal(
-    <div className={modal.overlay} onClick={onClose} aria-hidden="true">
+    <div className={modal.overlay} onClick={onClose}>
       <div
         className={modal.modal}
         role="dialog"
+        aria-modal="true"
         aria-label={`Diff: ${path}`}
         onClick={e => e.stopPropagation()}
       >
@@ -153,6 +160,9 @@ export function DiffViewerModal({ path, oldString, newString, onClose }: Props) 
           <div className={styles.table}>
             {rows.map((row, i) => (
               <React.Fragment key={i}>
+                {row.type === 'hunk' && (
+                  <div className={styles.hunk}>{row.label}</div>
+                )}
                 {row.type === 'equal' && (
                   <>
                     <div className={[styles.line, styles.lineUnchangedOld].join(' ')}>{row.old}</div>

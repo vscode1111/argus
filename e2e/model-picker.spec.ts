@@ -89,7 +89,8 @@ test.describe('model picker', () => {
       { id: 'claude-opus-5', displayName: 'Claude Opus 5' },
     ]);
 
-    // No override yet: the Default (CLI) row is the active one.
+    await sendModelChanged(page, '');
+    // An empty override highlights the Default (CLI) row.
     await expect(modelRow(page, 'Default (CLI)').locator('[class*="modelCheck"]')).toHaveText('✓');
 
     await sendModelChanged(page, 'claude-fable-5');

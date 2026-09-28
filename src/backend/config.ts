@@ -76,7 +76,7 @@ export interface ArgusConfig {
 }
 
 export const DEFAULT_CONFIG: ArgusConfig = {
-  defaultProvider: 'claude',
+  defaultProvider: 'codex',
   providerDefaults: {},
   verboseTools: false,
   showTimer: true,
