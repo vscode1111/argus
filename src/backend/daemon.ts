@@ -10,6 +10,8 @@ import {
   writeDaemonInfo,
   clearDaemonInfo,
   isDaemonUp,
+  probeDaemon,
+  type DaemonInfo,
 } from './daemonInfo';
 
 // Always-on daemon: a single shared server on a fixed port that stays alive while
@@ -117,6 +119,33 @@ function cleanup(): void {
   if (!handingOff) clearDaemonInfo(process.pid);
 }
 
+// The discovery file is the only way anything finds this daemon, and it used to be
+// written exactly once, at startup. That made losing it permanent rather than awkward:
+// the file can go while this process is alive and still holding the port (every caller
+// of clearDaemonInfo can do it, and so can a hand deletion or a virus scanner), and
+// from that moment the extension reads no file, spawns a replacement, and the
+// replacement dies on EADDRINUSE against *us* - forever, because the nonce it would
+// need to reach us exists only in this process's memory. Observed 2026-09-27: a
+// healthy daemon (pid 17368, port 37071, answering /health) sat beside a panel stuck
+// on "Starting Argus daemon..." that could never connect, across VS Code restarts.
+//
+// So the registration is re-asserted on a timer. This process is the only one that
+// can do it, being the only one that knows the nonce.
+const REGISTRATION_HEAL_MS = Number(process.env.ARGUS_DAEMON_HEAL_MS) || 10_000;
+let registration: DaemonInfo | undefined;
+
+// Deliberately only when the file is MISSING (or unreadable, which is as useless as
+// missing). A file naming a different pid means some other daemon registered itself,
+// and overwriting that would strand *it* in exactly the way described above - in that
+// case we are the redundant process, not the authority. A handoff is excluded for the
+// same reason: respawn()'s replacement owns the file from the moment it writes one.
+function healRegistration(): void {
+  if (!registration || handingOff || shuttingDown) return;
+  if (readDaemonInfo()) return;
+  writeDaemonInfo(registration);
+  console.log(`[argus-daemon] discovery file was missing; re-registered (pid ${registration.pid}, port ${registration.port})`);
+}
+
 // Spawn a replacement daemon that takes over (used to apply a new port/idle from the
 // browser-served UI, where there is no extension to respawn us). The replacement
 // force-starts and retries binding until we release the port, then writes the
@@ -147,13 +176,17 @@ async function listen(attempt = 0): Promise<void> {
       onIdleShutdown: () => { cleanup(); process.exit(0); },
       onRespawn: respawn,
     });
-    writeDaemonInfo({
+    registration = {
       port: server.port,
       nonce: server.nonce,
       pid: process.pid,
       version: readServerVersion(),
       startedAt: Date.now(),
-    });
+    };
+    writeDaemonInfo(registration);
+    // unref: re-asserting our registration is housekeeping, never a reason to keep the
+    // process alive past its idle shutdown.
+    setInterval(healRegistration, REGISTRATION_HEAL_MS).unref();
     console.log(`[argus-daemon] listening on ws://localhost:${server.port}/agent (pid ${process.pid}); idle-exit in ${IDLE_TIMEOUT_MS / 60000}m with no clients`);
     // Record this launch in the global config and refresh the model data (default
     // model, family descriptions, model list cache) when it is older than a day.
@@ -167,9 +200,21 @@ async function listen(attempt = 0): Promise<void> {
     }
     if (e.code === 'EADDRINUSE') {
       const owner = readDaemonInfo();
-      const hint = owner
-        ? `pid ${owner.pid} owns it (discovery file intact).`
-        : 'no discovery file registers it - the holder is unreachable (its nonce is memory-only), kill that process or change daemonPort.';
+      let hint: string;
+      if (owner) {
+        hint = `pid ${owner.pid} owns it (discovery file intact).`;
+      } else {
+        // No file, yet something holds the port. Whether that is recoverable turns on
+        // who the holder is, and the old message assumed the worst for both: it told
+        // the user to kill the process, which for one of our own daemons means killing
+        // a healthy server whose registration merely went missing and which now
+        // re-writes it within REGISTRATION_HEAL_MS. Ask the port which case this is.
+        const held = await probeDaemon(PORT);
+        hint = held === 'down'
+          ? 'no discovery file registers it and nothing of ours answers there - another program holds this port; change daemonPort.'
+          : 'an Argus daemon holds it with no discovery file; it re-registers within '
+            + `${Math.round(REGISTRATION_HEAL_MS / 1000)}s, so retry shortly rather than killing it.`;
+      }
       console.error(`[argus-daemon] port ${PORT} already in use; ${hint} Exiting.`);
     } else {
       console.error('[argus-daemon] failed to start:', e);
