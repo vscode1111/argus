@@ -66,6 +66,9 @@ export interface StartOpts {
   // calls the live usage API on a timer). Only the spec that asserts the daemon
   // polls on its own sets this, and it skips when the API is unavailable.
   usagePoll?: boolean;
+  // Sets ARGUS_DAEMON_HEAL_MS - how often the daemon re-asserts a missing discovery
+  // file. The 10s default is far too slow to wait out in a test.
+  healMs?: number;
 }
 
 export function uniqueConfigFile(tag: string): string {
@@ -104,6 +107,10 @@ export async function startDaemon(opts: StartOpts): Promise<DaemonHandle> {
   else delete env.ARGUS_DAEMON_PORT; // let config drive the port
   if (opts.idleMs != null) env.ARGUS_DAEMON_IDLE_MS = String(opts.idleMs);
   else delete env.ARGUS_DAEMON_IDLE_MS;
+  // Deleted rather than merely left unset, for the same reason as FORCE_START above:
+  // a suite run from inside an Argus session inherits the serving daemon's environment.
+  if (opts.healMs != null) env.ARGUS_DAEMON_HEAL_MS = String(opts.healMs);
+  else delete env.ARGUS_DAEMON_HEAL_MS;
   const proc = spawn(process.execPath, [DAEMON_JS], { cwd: ROOT, env, stdio: 'ignore' });
   const ok = await waitFor(() => fs.existsSync(file), 10_000);
   if (!ok) { try { proc.kill(); } catch { /* */ } throw new Error('daemon did not write its discovery file'); }
