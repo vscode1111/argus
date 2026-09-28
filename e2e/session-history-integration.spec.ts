@@ -21,9 +21,9 @@ test.describe('session history (integration)', () => {
   });
 
   test('creates a session, lists it, resumes it, and continues context', { tag: ["@shared"] }, async ({ page }) => {
-    // 1. Establish a fact in a fresh session. The unique token lets us prove later
+    // 1. Establish a fact in a fresh session. The unique city name lets us prove later
     //    that the resumed session still carries the earlier context.
-    await sendAndWait(page, 'Remember this token for later: scub-7731. Reply with just "OK".');
+    await sendAndWait(page, 'Remember this fictional city name for later: scub-harbor-7731. Reply with just "OK".');
 
     // 2. Open the history modal; the dev server (cwd = repo root) lists the real
     //    transcripts for this project, including the session we just created.
@@ -41,20 +41,20 @@ test.describe('session history (integration)', () => {
     await dialog.locator('[class*="rowCurrent"]').click();
     await expect(dialog).toHaveCount(0);
     // Scope to the replayed message bubbles: the resumed session's title also
-    // renders the token in the header rename button, which would otherwise make
+    // renders the city name in the header rename button, which would otherwise make
     // a bare getByText match two elements (strict-mode violation).
     await expect(
-      page.locator('[class*="messageContent"]').filter({ hasText: 'scub-7731' }).first()
+      page.locator('[class*="messageContent"]').filter({ hasText: 'scub-harbor-7731' }).first()
     ).toBeVisible({ timeout: 10_000 });
 
     // 4. Continue the conversation. Because resume spawns the CLI with
-    //    `--resume <sessionId>`, the model must still know the earlier token.
-    await sendAndWait(page, 'What token did I ask you to remember? Reply with just the token.');
+    //    `--resume <sessionId>`, the model must still know the earlier city name.
+    await sendAndWait(page, 'What fictional city name did I ask you to remember? Reply with just the name.');
 
-    // The latest assistant message recalls the token from the resumed context.
-    await expect(page.getByText('scub-7731').last()).toBeVisible({ timeout: 10_000 });
+    // The latest assistant message recalls the city name from the resumed context.
+    await expect(page.getByText('scub-harbor-7731').last()).toBeVisible({ timeout: 10_000 });
     const messages = page.locator('[class*="assistant"]');
-    await expect(messages.last()).toContainText('scub-7731', { timeout: 10_000 });
+    await expect(messages.last()).toContainText('scub-harbor-7731', { timeout: 10_000 });
   });
 
   test('renames a session and the new title survives a backend re-list', { tag: ["@shared"] }, async ({ page }) => {

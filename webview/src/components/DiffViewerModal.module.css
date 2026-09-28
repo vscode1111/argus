@@ -69,3 +69,12 @@
   );
   min-height: 1.5em;
 }
+
+.hunk {
+  grid-column: 1 / -1;
+  padding: 4px 8px;
+  color: var(--fg-dim);
+  background: var(--tool-bg);
+  border-top: 1px solid var(--border);
+  white-space: pre-wrap;
+}

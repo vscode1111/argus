@@ -1,0 +1,16 @@
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  vertical-align: middle;
+}
+
+.icon svg { width: 18px; height: 18px; }
+.bash { color: #3d5f38; }
+.cmd { color: #34445b; }
+.zsh { color: #315d67; }
+.fish { color: #277d8b; }
+.sh { color: #555; }

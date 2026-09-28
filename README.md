@@ -8,8 +8,9 @@ and custom skill support. Built in TypeScript, active in 2026.
 Argus runs Claude Code or Codex conversations in a VS Code webview or browser.
 The provider button beside the composer opens the account and model picker.
 Switching provider starts a new conversation; existing conversations retain their
-provider and can be resumed from history. Models and reasoning options apply to the
-current conversation. Use **Use for new conversations** to save a default.
+provider and can be resumed from history. Provider and model changes are saved
+automatically for new conversations. Fresh settings start with Codex and GPT-6-Luna.
+The permission picker remembers each provider's level separately and defaults to Full.
 
 ## Architecture
 
@@ -68,7 +69,8 @@ specs for the browser workflow.
 - Slash commands: built-in and custom skills from `~/.claude/skills/`.
 - Model picker with live model list and per-family descriptions; model data (list, descriptions, detected CLI default) auto-refreshes daily via the daemon (`yarn update-models` to force).
 - Image paste via `Ctrl+V`.
-- Inline diff and file viewers next to tool calls. An `.html` file opens as the rendered document, painted in the panel's own theme, with its source one click away.
+- Inline diff and file viewers next to tool calls. Codex file changes show added and removed line counts; click a path for the current file text or Diff for the saved patch. An `.html` file opens as the rendered document, painted in the panel's own theme, with its source one click away.
+- Command rows use shell-specific icons and show the inner command instead of repeated PowerShell, Bash, or cmd executable paths. Hover to see the full invocation.
 - Images a tool read open from the conversation itself, so a file the agent has since renamed, packaged or deleted still previews; the bytes are fetched per click instead of travelling inside the message.
 - Clickable paths and URLs everywhere in messages, including code blocks: a file path opens an in-app preview (dotted underline), a URL opens in the browser.
 - A path pointing at a **folder** opens a browsable listing with file-type icons and sizes, sorted folders-first like an explorer: click a sub-folder to walk in, a file to preview it, Back to walk out.

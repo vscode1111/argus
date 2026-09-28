@@ -16,7 +16,6 @@ export function ProviderSelector({ providerId }: { providerId: string }) {
       </select>
       <svg className={styles.chevron} viewBox="0 0 12 12" aria-hidden="true"><path d="m2 4 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
     </span></label>
-    <span className={styles.hint}>Switching provider opens a new conversation.</span>
-    <button type="button" onClick={() => postMessage({ type: 'saveProviderDefault' })}>Use for new conversations</button>
+    <span className={styles.hint}>Switching provider opens a new conversation. Your selection is saved for future conversations.</span>
   </div>;
 }
