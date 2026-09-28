@@ -15,6 +15,7 @@
   //   opts.onStatus(connected, reason)  -> void         : optional, fired on
   //                                                        connect/disconnect; reason is
   //                                                        'peer' | 'idle' | undefined
+  //   opts.acceptMessage(data)         -> boolean      : optional server-frame filter
   // Close codes the server uses for a close it does NOT want the bridge to silently
   // retry (an ordinary drop - network blip, daemon restart - keeps the normal backoff
   // loop). Both stay down until something explicit brings them back, but they differ in
@@ -121,7 +122,10 @@
         setStatus(true);
         queue.splice(0).forEach(function (m) { ws.send(JSON.stringify(m)); });
       };
-      ws.onmessage = function (event) { dispatch(JSON.parse(event.data)); };
+      ws.onmessage = function (event) {
+        var data = JSON.parse(event.data);
+        if (!opts.acceptMessage || opts.acceptMessage(data)) dispatch(data);
+      };
       ws.onerror = function (e) { console.error('[argus-ws] error', e); };
       ws.onclose = function (ev) {
         ready = false;

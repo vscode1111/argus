@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 test.describe('send while streaming', () => {
@@ -22,11 +22,11 @@ test.describe('send while streaming', () => {
     await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('second message sent during streaming appears as inline inject', async ({ page }) => {
+  test('second message sent during streaming appears as inline inject', { tag: ["@shared"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
 
     // Send a task long enough to leave room for a mid-turn inject.
-    await textarea.fill('Read package.json, then read CLAUDE.md, then summarize both.');
+    await textarea.fill('Write the numbers 1 through 200, one per line. Do not use tools.');
     await page.getByRole('button', { name: 'Send' }).click();
 
     // Gate on the Stop button, not on a tool call: whether the model actually calls a
@@ -54,11 +54,11 @@ test.describe('send while streaming', () => {
     await expect(errorBlock).toHaveCount(0);
   });
 
-  test('can send normally after mid-turn inject completes', async ({ page }) => {
+  test('can send normally after mid-turn inject completes', { tag: ["@shared"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
 
     // First: a task with tool calls
-    await textarea.fill('Read package.json and tell me the version number.');
+    await textarea.fill('Write the numbers 1 through 200, one per line. Do not use tools.');
     await page.getByRole('button', { name: 'Send' }).click();
 
     // Gate on the Stop button rather than a tool call - see the note in the test above:

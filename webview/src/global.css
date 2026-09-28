@@ -129,6 +129,32 @@ body {
   opacity: 1;
   background: rgba(128, 128, 128, 0.15);
 }
+.topRightActions .headerModelButton {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(180px, 25vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.12);
+  color: var(--fg);
+  opacity: 0.85;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.topRightActions .headerModelButton:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.2);
+}
+.topRightActions .headerModelButton:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
 .topRightActions .sessionName {
   align-self: center;
   max-width: 320px;

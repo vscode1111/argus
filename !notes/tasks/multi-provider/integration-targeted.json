@@ -1,0 +1,1530 @@
+{
+  "config": {
+    "configFile": "D:\\_Projects\\scub111g\\argus\\playwright.config.ts",
+    "rootDir": "D:/_Projects/scub111g/argus/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": "D:\\_Projects\\scub111g\\argus\\e2e\\global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/_Projects/scub111g/argus/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "mock",
+        "name": "mock",
+        "testDir": "D:/_Projects/scub111g/argus/e2e",
+        "testIgnore": [
+          "/-integration\\.spec/"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "D:/_Projects/scub111g/argus/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "D:/_Projects/scub111g/argus/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "/-integration\\.spec/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 1,
+    "webServer": {
+      "command": "yarn dev",
+      "url": "http://localhost:5173",
+      "reuseExistingServer": true,
+      "timeout": 15000,
+      "env": {
+        "ARGUS_CONFIG": "D:\\_Projects\\scub111g\\argus\\e2e\\argus.json",
+        "ARGUS_USAGE_POLL": "0",
+        "ARGUS_AUTH_FILE": "D:\\_Projects\\scub111g\\argus\\e2e\\argus-auth.e2e.json"
+      }
+    }
+  },
+  "suites": [
+    {
+      "title": "clear-integration.spec.ts",
+      "file": "clear-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "/clear command",
+          "file": "clear-integration.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "clears conversation without error block",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1482,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:49:52.656Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3eb42c24557f71094249-bf21da34c5db083e8a20",
+              "file": "clear-integration.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "can send a message after /clear",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1762,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:49:54.232Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3eb42c24557f71094249-5cbefc8996d4c111f9f2",
+              "file": "clear-integration.spec.ts",
+              "line": 35,
+              "column": 7
+            },
+            {
+              "title": "stop then /clear does not produce error",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3579,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:49:56.007Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3eb42c24557f71094249-7beb36488ea7e5111652",
+              "file": "clear-integration.spec.ts",
+              "line": 62,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "clients-integration.spec.ts",
+      "file": "clients-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "connected client list (integration)",
+          "file": "clients-integration.spec.ts",
+          "line": 108,
+          "column": 6,
+          "specs": [
+            {
+              "title": "lists the sockets this server is really serving and marks the one that asked",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 52,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:49:59.614Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "e5f058394b33495ccf76-222894663468c78db39e",
+              "file": "clients-integration.spec.ts",
+              "line": 109,
+              "column": 7
+            },
+            {
+              "title": "disconnects a raw client with the terminal close code, and refuses an id nobody owns",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 17,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:49:59.676Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "e5f058394b33495ccf76-ec81cf1698f638574515",
+              "file": "clients-integration.spec.ts",
+              "line": 141,
+              "column": 7
+            },
+            {
+              "title": "a real page that is disconnected stays down and comes back only when asked",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3572,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:49:59.704Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "e5f058394b33495ccf76-2103e29a528495300e17",
+              "file": "clients-integration.spec.ts",
+              "line": 170,
+              "column": 7
+            },
+            {
+              "title": "marks the connection whose session is mid-turn, and only that one",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6353,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:03.288Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "e5f058394b33495ccf76-9542369c0f08029a078e",
+              "file": "clients-integration.spec.ts",
+              "line": 206,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "codex-runtime-integration.spec.ts",
+      "file": "codex-runtime-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "native model capabilities, effort changes and account usage work without another provider",
+          "ok": true,
+          "tags": [
+            "codex"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1332,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-28T07:50:09.653Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5863fa92f7370f7409d2-a828634df4bff39a4f6f",
+          "file": "codex-runtime-integration.spec.ts",
+          "line": 21,
+          "column": 5
+        },
+        {
+          "title": "unsupported attachment keeps the draft and does not start a turn",
+          "ok": true,
+          "tags": [
+            "codex"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 475,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-28T07:50:10.995Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5863fa92f7370f7409d2-4b271c65648c291fb2cf",
+          "file": "codex-runtime-integration.spec.ts",
+          "line": 59,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "effort-thinking-integration.spec.ts",
+      "file": "effort-thinking-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "effort and thinking (integration)",
+          "file": "effort-thinking-integration.spec.ts",
+          "line": 81,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Models tab shows Effort and Thinking controls",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1272,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:11.488Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-8fa5fd3fa92c2e08fe5d",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 105,
+              "column": 7
+            },
+            {
+              "title": "slash menu shows Effort dots and Thinking toggle",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 436,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:12.775Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-cd5f1c82f9fd73466c9d",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 121,
+              "column": 7
+            },
+            {
+              "title": "clicking effort dot in modal updates label and can be saved as the default",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1091,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:13.221Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-cee48e4443a29abf041b",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 138,
+              "column": 7
+            },
+            {
+              "title": "clicking effort dot in slash menu can be saved as the default",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1041,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:14.322Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-b0f3ee49e96455cf4144",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 158,
+              "column": 7
+            },
+            {
+              "title": "clicking thinking toggle in modal flips its state and can be saved as the default",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1157,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:15.371Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-1f399e81460a95e3d832",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 181,
+              "column": 7
+            },
+            {
+              "title": "clicking thinking toggle in slash menu can be saved as the default",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1043,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:16.538Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-be9559e72ae02b2fd954",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 209,
+              "column": 7
+            },
+            {
+              "title": "effort and thinking are restored from config on reconnect",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 489,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:17.591Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-60fd628faeecc20db715",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 242,
+              "column": 7
+            },
+            {
+              "title": "modal shows restored effort after reconnect",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 640,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:18.090Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-78ecc0c7f8f91bc67911",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 260,
+              "column": 7
+            },
+            {
+              "title": "thinking=false forces --effort low in the CLI spawn log",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1075,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:18.739Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-9c1ff881de0c563438e2",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 278,
+              "column": 7
+            },
+            {
+              "title": "selected effort level is forwarded to the CLI spawn log",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1046,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:19.823Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-79c2720487f3d719be08",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 296,
+              "column": 7
+            },
+            {
+              "title": "clicking a model row in the modal can be saved as the default",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1135,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:20.879Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-279cabbc8e3d512970b4",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 315,
+              "column": 7
+            },
+            {
+              "title": "selecting Default (CLI) in the modal clears the stored model",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1221,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:22.025Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-47d831a32fbdfef6f4d8",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 340,
+              "column": 7
+            },
+            {
+              "title": "selecting a model in the slash menu can be saved as the default",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1090,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:23.256Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-8b1da4afe9020f942174",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 363,
+              "column": 7
+            },
+            {
+              "title": "model persists across reconnect - slash menu hint shows model name",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 489,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:24.356Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-83dcca59b077696a584a",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 386,
+              "column": 7
+            },
+            {
+              "title": "model search in the modal filters the list",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 608,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:24.854Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-e4fe053a77a13a0c04d9",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 396,
+              "column": 7
+            },
+            {
+              "title": "selected model is forwarded to the CLI spawn log",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1331,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:25.470Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "428e4cd99ee567054c3c-0cd3c723c30f0b2c3aad",
+              "file": "effort-thinking-integration.spec.ts",
+              "line": 406,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "log-autoscroll-integration.spec.ts",
+      "file": "log-autoscroll-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "debug log auto-scrolls to the bottom throughout a stream",
+          "ok": true,
+          "tags": [
+            "shared"
+          ],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11800,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-28T07:50:26.813Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c56ee2263ca31f8f6d85-957715639ca2bddda03d",
+          "file": "log-autoscroll-integration.spec.ts",
+          "line": 22,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "resume-live-session-integration.spec.ts",
+      "file": "resume-live-session-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "resuming a session that is streaming elsewhere (integration)",
+          "file": "resume-live-session-integration.spec.ts",
+          "line": 82,
+          "column": 6,
+          "specs": [
+            {
+              "title": "the resumed client gets the live indicator and keeps receiving output",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5945,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:38.625Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "caa6c41a3ec45c012ce3-fd6935c87790fd88b7f6",
+              "file": "resume-live-session-integration.spec.ts",
+              "line": 86,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "session-browse-during-stream-integration.spec.ts",
+      "file": "session-browse-during-stream-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "browse past session during active streaming (integration)",
+          "file": "session-browse-during-stream-integration.spec.ts",
+          "line": 68,
+          "column": 6,
+          "specs": [
+            {
+              "title": "header title updates to the browsed session",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11865,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:44.588Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "30acead474bb289c0ca2-b9341ac1496daf98922d",
+              "file": "session-browse-during-stream-integration.spec.ts",
+              "line": 76,
+              "column": 7
+            },
+            {
+              "title": "modal green highlight moves to the browsed session",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8888,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:50:56.466Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "30acead474bb289c0ca2-0d737a970058e0f345d3",
+              "file": "session-browse-during-stream-integration.spec.ts",
+              "line": 107,
+              "column": 7
+            },
+            {
+              "title": "token counts are non-zero after returning to a live session",
+              "ok": false,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 44336,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[class*=\"responseTime\"]').last()\nExpected pattern: \u001b[32m/\\d\\s+in\\s*\\/\\s*[\\d,\\s]+out/\u001b[39m\nReceived string:  \u001b[31m\"29s (16s)\"\u001b[39m\nTimeout: 30000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 30000ms\u001b[22m\n\u001b[2m  - waiting for locator('[class*=\"responseTime\"]').last()\u001b[22m\n\u001b[2m    5 × locator resolved to <div class=\"_responseTime_17l41_151\">0s</div>\u001b[22m\n\u001b[2m      - unexpected value \"0s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">1s</div>\u001b[22m\n\u001b[2m    - unexpected value \"1s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">2s</div>\u001b[22m\n\u001b[2m    - unexpected value \"2s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">4s</div>\u001b[22m\n\u001b[2m    - unexpected value \"4s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">5s</div>\u001b[22m\n\u001b[2m    - unexpected value \"5s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">6s</div>\u001b[22m\n\u001b[2m    - unexpected value \"6s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">7s</div>\u001b[22m\n\u001b[2m    - unexpected value \"7s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">8s</div>\u001b[22m\n\u001b[2m    - unexpected value \"8s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">9s</div>\u001b[22m\n\u001b[2m    - unexpected value \"9s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">10s</div>\u001b[22m\n\u001b[2m    - unexpected value \"10s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">11s</div>\u001b[22m\n\u001b[2m    - unexpected value \"11s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">12s</div>\u001b[22m\n\u001b[2m    - unexpected value \"12s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">13s</div>\u001b[22m\n\u001b[2m    - unexpected value \"13s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">14s (1s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"14s (1s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">15s (2s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"15s (2s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">16s (3s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"16s (3s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">17s (4s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"17s (4s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">18s (5s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"18s (5s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">19s (6s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"19s (6s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">20s (7s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"20s (7s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">21s (8s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"21s (8s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">22s (9s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"22s (9s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">23s (10s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"23s (10s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">24s (11s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"24s (11s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">25s (12s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"25s (12s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">26s (13s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"26s (13s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">27s (14s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"27s (14s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">28s (15s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"28s (15s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">29s (16s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"29s (16s)\"\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[class*=\"responseTime\"]').last()\nExpected pattern: \u001b[32m/\\d\\s+in\\s*\\/\\s*[\\d,\\s]+out/\u001b[39m\nReceived string:  \u001b[31m\"29s (16s)\"\u001b[39m\nTimeout: 30000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 30000ms\u001b[22m\n\u001b[2m  - waiting for locator('[class*=\"responseTime\"]').last()\u001b[22m\n\u001b[2m    5 × locator resolved to <div class=\"_responseTime_17l41_151\">0s</div>\u001b[22m\n\u001b[2m      - unexpected value \"0s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">1s</div>\u001b[22m\n\u001b[2m    - unexpected value \"1s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">2s</div>\u001b[22m\n\u001b[2m    - unexpected value \"2s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">4s</div>\u001b[22m\n\u001b[2m    - unexpected value \"4s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">5s</div>\u001b[22m\n\u001b[2m    - unexpected value \"5s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">6s</div>\u001b[22m\n\u001b[2m    - unexpected value \"6s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">7s</div>\u001b[22m\n\u001b[2m    - unexpected value \"7s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">8s</div>\u001b[22m\n\u001b[2m    - unexpected value \"8s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">9s</div>\u001b[22m\n\u001b[2m    - unexpected value \"9s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">10s</div>\u001b[22m\n\u001b[2m    - unexpected value \"10s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">11s</div>\u001b[22m\n\u001b[2m    - unexpected value \"11s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">12s</div>\u001b[22m\n\u001b[2m    - unexpected value \"12s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">13s</div>\u001b[22m\n\u001b[2m    - unexpected value \"13s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">14s (1s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"14s (1s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">15s (2s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"15s (2s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">16s (3s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"16s (3s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">17s (4s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"17s (4s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">18s (5s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"18s (5s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">19s (6s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"19s (6s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">20s (7s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"20s (7s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">21s (8s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"21s (8s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">22s (9s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"22s (9s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">23s (10s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"23s (10s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">24s (11s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"24s (11s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">25s (12s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"25s (12s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">26s (13s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"26s (13s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">27s (14s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"27s (14s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">28s (15s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"28s (15s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">29s (16s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"29s (16s)\"\u001b[22m\n\n    at D:\\_Projects\\scub111g\\argus\\e2e\\session-browse-during-stream-integration.spec.ts:188:29",
+                        "location": {
+                          "file": "D:\\_Projects\\scub111g\\argus\\e2e\\session-browse-during-stream-integration.spec.ts",
+                          "column": 29,
+                          "line": 188
+                        },
+                        "snippet": "  186 |     //    text at all is its choice, so the block sometimes never appeared.)\n  187 |     const liveTimer = page.locator('[class*=\"responseTime\"]').last();\n> 188 |     await expect(liveTimer).toContainText(/\\d\\s+in\\s*\\/\\s*[\\d,\\s]+out/, { timeout: 30_000 });\n      |                             ^\n  189 |\n  190 |     // 5. Browse to session A while session B is still streaming.\n  191 |     const hist1 = await openHistoryModal(page);"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "D:\\_Projects\\scub111g\\argus\\e2e\\session-browse-during-stream-integration.spec.ts",
+                            "column": 29,
+                            "line": 188
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[class*=\"responseTime\"]').last()\nExpected pattern: \u001b[32m/\\d\\s+in\\s*\\/\\s*[\\d,\\s]+out/\u001b[39m\nReceived string:  \u001b[31m\"29s (16s)\"\u001b[39m\nTimeout: 30000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 30000ms\u001b[22m\n\u001b[2m  - waiting for locator('[class*=\"responseTime\"]').last()\u001b[22m\n\u001b[2m    5 × locator resolved to <div class=\"_responseTime_17l41_151\">0s</div>\u001b[22m\n\u001b[2m      - unexpected value \"0s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">1s</div>\u001b[22m\n\u001b[2m    - unexpected value \"1s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">2s</div>\u001b[22m\n\u001b[2m    - unexpected value \"2s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">4s</div>\u001b[22m\n\u001b[2m    - unexpected value \"4s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">5s</div>\u001b[22m\n\u001b[2m    - unexpected value \"5s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">6s</div>\u001b[22m\n\u001b[2m    - unexpected value \"6s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">7s</div>\u001b[22m\n\u001b[2m    - unexpected value \"7s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">8s</div>\u001b[22m\n\u001b[2m    - unexpected value \"8s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">9s</div>\u001b[22m\n\u001b[2m    - unexpected value \"9s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">10s</div>\u001b[22m\n\u001b[2m    - unexpected value \"10s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">11s</div>\u001b[22m\n\u001b[2m    - unexpected value \"11s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">12s</div>\u001b[22m\n\u001b[2m    - unexpected value \"12s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">13s</div>\u001b[22m\n\u001b[2m    - unexpected value \"13s\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">14s (1s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"14s (1s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">15s (2s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"15s (2s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">16s (3s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"16s (3s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">17s (4s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"17s (4s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">18s (5s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"18s (5s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">19s (6s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"19s (6s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">20s (7s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"20s (7s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">21s (8s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"21s (8s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">22s (9s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"22s (9s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">23s (10s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"23s (10s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">24s (11s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"24s (11s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">25s (12s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"25s (12s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">26s (13s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"26s (13s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">27s (14s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"27s (14s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">28s (15s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"28s (15s)\"\u001b[22m\n\u001b[2m    - locator resolved to <div class=\"_responseTime_17l41_151\">29s (16s)</div>\u001b[22m\n\u001b[2m    - unexpected value \"29s (16s)\"\u001b[22m\n\n\n  186 |     //    text at all is its choice, so the block sometimes never appeared.)\n  187 |     const liveTimer = page.locator('[class*=\"responseTime\"]').last();\n> 188 |     await expect(liveTimer).toContainText(/\\d\\s+in\\s*\\/\\s*[\\d,\\s]+out/, { timeout: 30_000 });\n      |                             ^\n  189 |\n  190 |     // 5. Browse to session A while session B is still streaming.\n  191 |     const hist1 = await openHistoryModal(page);\n    at D:\\_Projects\\scub111g\\argus\\e2e\\session-browse-during-stream-integration.spec.ts:188:29"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:51:05.364Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "D:\\_Projects\\scub111g\\argus\\test-results\\session-browse-during-stre-06640-returning-to-a-live-session-integration\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "D:\\_Projects\\scub111g\\argus\\test-results\\session-browse-during-stre-06640-returning-to-a-live-session-integration\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "D:\\_Projects\\scub111g\\argus\\e2e\\session-browse-during-stream-integration.spec.ts",
+                        "column": 29,
+                        "line": 188
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "30acead474bb289c0ca2-545e9f4c98e9c504ad4d",
+              "file": "session-browse-during-stream-integration.spec.ts",
+              "line": 147,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "stop-then-send-integration.spec.ts",
+      "file": "stop-then-send-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a send right after a manual stop starts a real turn instead of being swallowed",
+          "ok": true,
+          "tags": [
+            "shared"
+          ],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8122,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-28T07:51:50.454Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8f69ae5c64d24d5062a7-9a12694e566d6b865b45",
+          "file": "stop-then-send-integration.spec.ts",
+          "line": 41,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "workspace-info-config-integration.spec.ts",
+      "file": "workspace-info-config-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "workspaceInfo config restore",
+          "file": "workspace-info-config-integration.spec.ts",
+          "line": 77,
+          "column": 6,
+          "specs": [
+            {
+              "title": "buildWorkspaceInfo reads model/effort/thinking from the config file",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 103,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [
+                        {
+                          "buffer": ""
+                        }
+                      ],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:51:58.600Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "12186760ad23f8dd39fb-0de203eaba8447544533",
+              "file": "workspace-info-config-integration.spec.ts",
+              "line": 78,
+              "column": 7
+            },
+            {
+              "title": "empty configured model uses the fallback; a set model wins; no fallback stays empty",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 292,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [
+                        {
+                          "buffer": ""
+                        },
+                        {
+                          "buffer": ""
+                        },
+                        {
+                          "buffer": ""
+                        }
+                      ],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:51:58.731Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "12186760ad23f8dd39fb-b31d338c40d2842bc949",
+              "file": "workspace-info-config-integration.spec.ts",
+              "line": 91,
+              "column": 7
+            },
+            {
+              "title": "a fresh page load restores the configured model, effort and thinking into the picker",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1408,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:51:59.035Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "12186760ad23f8dd39fb-e9dd86113c531c9812c1",
+              "file": "workspace-info-config-integration.spec.ts",
+              "line": 99,
+              "column": 7
+            },
+            {
+              "title": "an empty configured model highlights the Default (CLI) row",
+              "ok": true,
+              "tags": [
+                "claude"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1329,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T07:52:00.559Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "12186760ad23f8dd39fb-4bd70c6ad285e7c045c7",
+              "file": "workspace-info-config-integration.spec.ts",
+              "line": 112,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-28T07:49:50.472Z",
+    "duration": 131753.4,
+    "expected": 34,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

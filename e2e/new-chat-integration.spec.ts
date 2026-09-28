@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Sends a prompt and waits for the turn to complete (Stop appears, then clears).
@@ -12,7 +12,7 @@ async function sendAndWait(page: Page, text: string) {
 }
 
 test.describe('new chat (integration)', () => {
-  test('New chat resets the session so earlier context is gone', async ({ page }) => {
+  test('New chat resets the session so earlier context is gone', { tag: ["@shared"] }, async ({ page }) => {
     // Two whole real turns (establish the token, then ask for it back after the reset)
     // plus the page load do not fit the flat 30s. A turn in this workspace is not "a few
     // seconds": a fresh session starts at ~77k input tokens (this repo's CLAUDE.md plus the

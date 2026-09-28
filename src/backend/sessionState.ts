@@ -1,14 +1,18 @@
 import type { spawn } from 'child_process';
 import type { WatchdogState } from './watchdog';
 import type { RateLimitInfo } from './accountUsage';
+import type { AgentSession } from './providers/types';
+import type { ProviderSelection, ProviderInteraction } from '../shared/provider';
+import { defaultSelection } from './providers/store';
 
 export interface SessionState {
+  selection: ProviderSelection;
+  runtime?: AgentSession;
+  interaction?: ProviderInteraction | null;
   broadcast: (msg: string) => void;
   workspaceDir: string;
-  // Server-level fallback model (ARGUS_MODEL / startServer option). The active
-  // model/effort/thinking are always derived fresh from readConfig() at use time
-  // (getInfo, CLI spawn) so a config change in any workspace or process is never
-  // shadowed by per-entry cached state.
+  // Server fallback only. Provider/model/effort/thinking belong to this entry's
+  // selection; global config seeds new conversations rather than changing live ones.
   serverDefaultModel: string;
   sessionId: string | undefined;
   currentProc: ReturnType<typeof spawn> | undefined;
@@ -60,6 +64,7 @@ export interface SessionState {
 
 export function createSessionState(workspaceDir: string): SessionState {
   const state: SessionState = {
+    selection: defaultSelection(),
     broadcast: undefined!,
     workspaceDir,
     serverDefaultModel: '',

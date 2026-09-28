@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, writeTestConfig, type Page } from './provider-fixtures';
 import { execFileSync, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -26,14 +26,14 @@ test.beforeAll(() => {
   originalConfig = fs.readFileSync(CONFIG_PATH, 'utf-8');
 });
 
-test.afterAll(() => {
-  fs.writeFileSync(CONFIG_PATH, originalConfig);
+test.afterAll(async () => {
+  await writeTestConfig(CONFIG_PATH, originalConfig);
   for (const f of tmpConfigs) { try { fs.unlinkSync(f); } catch {} }
 });
 
-function patchConfig(patch: Record<string, unknown>): void {
+async function patchConfig(patch: Record<string, unknown>): Promise<void> {
   const cfg = { ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')), ...patch };
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n');
+  await writeTestConfig(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n');
 }
 
 // daemonHelpers.ensureCompiled only checks for daemon.js; this spec needs the builder.
@@ -75,7 +75,7 @@ async function openModelsTab(page: Page): Promise<void> {
 }
 
 test.describe('workspaceInfo config restore', () => {
-  test('buildWorkspaceInfo reads model/effort/thinking from the config file', () => {
+  test('buildWorkspaceInfo reads model/effort/thinking from the config file', { tag: ["@claude"] }, () => {
     ensureBuilderCompiled();
     const msg = runBuilder(tmpConfig({ model: 'scub-model-1', effort: 'max', thinking: false }), 'scub-ws-path', '1.2.3');
     expect(msg).toEqual({
@@ -88,7 +88,7 @@ test.describe('workspaceInfo config restore', () => {
     });
   });
 
-  test('empty configured model uses the fallback; a set model wins; no fallback stays empty', () => {
+  test('empty configured model uses the fallback; a set model wins; no fallback stays empty', { tag: ["@claude"] }, () => {
     ensureBuilderCompiled();
     expect(runBuilder(tmpConfig({ model: '' }), 'p', 'v', 'scub-fallback-model').model).toBe('scub-fallback-model');
     expect(runBuilder(tmpConfig({ model: 'scub-model-1' }), 'p', 'v', 'scub-fallback-model').model).toBe('scub-model-1');
@@ -96,10 +96,10 @@ test.describe('workspaceInfo config restore', () => {
     expect(runBuilder(tmpConfig({ model: '' }), 'p', 'v').model).toBe('');
   });
 
-  test('a fresh page load restores the configured model, effort and thinking into the picker', async ({ page }) => {
+  test('a fresh page load restores the configured model, effort and thinking into the picker', { tag: ["@claude"] }, async ({ page }) => {
     // claude-opus-4-8 is in the webview's FALLBACK_MODELS trio and in the live
     // /v1/models list, so its row renders whichever way the model fetch goes.
-    patchConfig({ model: 'claude-opus-4-8', effort: 'max', thinking: false });
+    await patchConfig({ model: 'claude-opus-4-8', effort: 'max', thinking: false });
     await waitForApp(page);
     await openModelsTab(page);
 
@@ -109,8 +109,8 @@ test.describe('workspaceInfo config restore', () => {
     await expect(page.locator('[class*="toggleTrackOn"]')).toHaveCount(0);
   });
 
-  test('an empty configured model highlights the Default (CLI) row', async ({ page }) => {
-    patchConfig({ model: '', effort: 'low', thinking: true });
+  test('an empty configured model highlights the Default (CLI) row', { tag: ["@claude"] }, async ({ page }) => {
+    await patchConfig({ model: '', effort: 'low', thinking: true });
     await waitForApp(page);
     await openModelsTab(page);
 

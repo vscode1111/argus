@@ -1,3 +1,5 @@
+import { useProvider } from '../hooks/useProvider';
+import { ProviderSelector } from './ProviderSelector';
 import React, { useState, useRef, useEffect } from 'react';
 import { postMessage } from '../vscode';
 import { getDialogState, patchDialogState } from '../utils/dialogState';
@@ -52,6 +54,7 @@ const EFFORT_LEVELS = ['low', 'medium', 'high', 'max'] as const;
 type EffortLevel = typeof EFFORT_LEVELS[number];
 
 interface Props {
+  providerId?: string;
   onClose: () => void;
   currentModel?: string;
   currentEffort?: string;
@@ -102,7 +105,8 @@ const BEHAVIOR_META: Record<string, { headline: (pct: number) => string; body: s
 const MIN_BEHAVIOR_PCT = 10;
 const TABLE_ROW_CAP = 8;
 
-export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 'high', thinkingEnabled = true }: Props) {
+export function AccountUsageModal({ providerId = 'claude', onClose, currentModel = '', currentEffort = 'high', thinkingEnabled = true }: Props) {
+  const provider = useProvider(providerId);
   const [tab, setTabState] = useState<Tab>(() => (getDialogState('accountUsage')?.tab as Tab) || 'usage');
   const setTab = (t: Tab) => { setTabState(t); patchDialogState('accountUsage', { tab: t }); };
   const [account, setAccount] = useState<AccountInfo | null>(null);
@@ -141,6 +145,7 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
 
   useWebviewMessage(
     (e: MessageEvent) => {
+      if (['accountUsage', 'usageLimits', 'usageInsights', 'modelList'].includes(e.data?.type) && (e.data.providerId || 'claude') !== providerId) return;
       if (e.data?.type === 'accountUsage') {
         const d = e.data;
         setAccount(d.account ?? null);
@@ -200,7 +205,7 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
   }
 
   function pickModel(id: string) {
-    postMessage({ type: 'switchModel', model: id });
+    postMessage({ type: 'switchModel', model: id, providerId });
   }
 
   const sortedLimits = sortWindows(rateLimits);
@@ -209,9 +214,11 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
   const hasAttribution = !!report &&
     (report.skills.length > 0 || report.agents.length > 0 || report.plugins.length > 0 || report.mcpServers.length > 0);
 
+  const selectedModel = fetchedModels?.find(m => m.id === (currentModel || runtimeDefaultModel));
+  const efforts = selectedModel?.efforts ?? provider?.efforts ?? (providerId === 'claude' ? [...EFFORT_LEVELS] : []);
   const allModels = [
-    makeDefaultEntry(runtimeDefaultModel),
-    ...(fetchedModels ?? FALLBACK_MODELS),
+    makeDefaultEntry(runtimeDefaultModel, providerId),
+    ...(fetchedModels ?? (providerId === 'claude' ? FALLBACK_MODELS : [])),
   ];
   const modelSearchLower = modelSearch.toLowerCase();
   const displayModels = modelSearchLower
@@ -223,6 +230,7 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
 
   return (
     <Modal title="Account" ariaLabel="Account" onClose={onClose} width={380} persistKey="accountUsage">
+      <ProviderSelector providerId={providerId} />
       <div className={shell.tabs}>
         <button
           className={[shell.tab, tab === 'usage' ? shell.tabActive : ''].filter(Boolean).join(' ')}
@@ -239,7 +247,7 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
           <div className={styles.body}>
             {accountLoading && <div className={styles.placeholder}>Loading...</div>}
             {!accountLoading && account && !account.loggedIn && (
-              <div className={styles.placeholder}>Not logged in</div>
+              <div className={styles.placeholder}>Not logged in{providerId === 'codex' ? '. Run codex login on the server, then reopen this dialog.' : ''}</div>
             )}
             {!accountLoading && account?.loggedIn && (
               <>
@@ -250,7 +258,7 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
                 {account.email && <Row label="Email" value={account.email} />}
                 {account.orgName && <Row label="Organization" value={account.orgName} />}
                 {account.subscriptionType && (
-                  <Row label="Plan" value={PLAN_LABELS[account.subscriptionType] ?? account.subscriptionType} />
+                  <Row label="Plan" value={(providerId === 'claude' ? PLAN_LABELS[account.subscriptionType] : undefined) ?? account.subscriptionType} />
                 )}
 
                 <div className={styles.usageTitleRow}>
@@ -286,7 +294,11 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
                     </div>
                   );
                 })}
+              </>
+            )}
 
+            {providerId === 'claude' && (
+              <>
                 <div className={styles.insightsHeader}>What's contributing to your limits usage?</div>
                 {insightsLoading && !report && <div className={styles.usageHint}>Analyzing local sessions...</div>}
                 {!insightsLoading && !report && (
@@ -395,24 +407,26 @@ export function AccountUsageModal({ onClose, currentModel = '', currentEffort = 
           </div>
           <div className={styles.optionsSection}>
             <div className={styles.optionRow}>
-              <span className={styles.optionLabel}>Effort ({currentEffort.charAt(0).toUpperCase() + currentEffort.slice(1)})</span>
+              <span className={styles.optionLabel}>Effort ({currentEffort ? currentEffort.charAt(0).toUpperCase() + currentEffort.slice(1) : 'Default'})</span>
               <div className={styles.effortDots}>
-                {EFFORT_LEVELS.map(level => (
-                  <span
+                <button type="button" title="Use default effort" aria-label="Default effort" onClick={() => postMessage({ type: 'switchEffort', effort: '', providerId })}>Auto</button>
+                {efforts.map(level => (
+                  <button type="button"
+                    aria-label={`Effort ${level}`}
                     key={level}
                     title={level.charAt(0).toUpperCase() + level.slice(1)}
-                    className={[styles.effortDot, level === (EFFORT_LEVELS.includes(currentEffort as EffortLevel) ? currentEffort : 'high') ? styles.effortDotActive : ''].filter(Boolean).join(' ')}
-                    onClick={() => postMessage({ type: 'switchEffort', effort: level })}
+                    className={[styles.effortDot, level === currentEffort ? styles.effortDotActive : ''].filter(Boolean).join(' ')}
+                    onClick={() => postMessage({ type: 'switchEffort', effort: level, providerId })}
                   />
                 ))}
               </div>
             </div>
-            <div className={styles.optionRow} onClick={() => postMessage({ type: 'switchThinking', thinking: !thinkingEnabled })} style={{ cursor: 'pointer' }}>
+            {(provider?.thinkingToggle ?? providerId === 'claude') && <div className={styles.optionRow} onClick={() => postMessage({ type: 'switchThinking', thinking: !thinkingEnabled })} style={{ cursor: 'pointer' }}>
               <span className={styles.optionLabel}>Thinking</span>
               <div className={[styles.toggleTrack, thinkingEnabled ? styles.toggleTrackOn : ''].filter(Boolean).join(' ')}>
                 <div className={[styles.toggleThumb, thinkingEnabled ? styles.toggleThumbOn : ''].filter(Boolean).join(' ')} />
               </div>
-            </div>
+            </div>}
           </div>
         </>
       )}

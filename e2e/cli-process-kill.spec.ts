@@ -36,7 +36,7 @@ test.describe('terminating one CLI process', () => {
     const result = await mod.killCliProcess(process.pid);
 
     expect(result.killed).toBe(false);
-    expect(result.error).toMatch(/not a running Claude CLI process/);
+    expect(result.error).toMatch(/not an allowed running CLI process/);
     // Reached at all, so the runner survived; asserted anyway to say what the test means.
     expect(process.pid).toBe(before);
   });

@@ -1,8 +1,11 @@
+import type { ProviderInteraction } from '../../src/shared/provider';
 import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState, RetryStatus, TaskNotice } from './types';
 
 export type ContextUsage = { percent: number; inputTokens: number; outputTokens: number; contextWindow?: number };
 
 export type AppState = {
+  providerId: string;
+  interaction: ProviderInteraction | null;
   messages: UIMessage[];
   streaming: StreamingState | null;
   isStreaming: boolean;
@@ -37,13 +40,15 @@ export type AppState = {
 };
 
 export type AppAction =
+  | { type: 'providerSelection'; providerId: string; model: string; effort: string; thinking: boolean }
+  | { type: 'interaction'; request: ProviderInteraction | null }
   | { type: 'message'; message: UIMessage }
   | { type: 'thinking_start'; reused?: boolean; startedAt?: number }
   | { type: 'thinking_chunk'; text: string }
   | { type: 'text_chunk'; text: string }
   | { type: 'tool_start'; call: ToolCallData }
   | { type: 'tool_end'; call: ToolCallData }
-  | { type: 'done'; pendingBackgroundTasks?: number; backgroundTasksSince?: number; autonomous?: boolean }
+  | { type: 'done'; interrupted?: boolean; pendingBackgroundTasks?: number; backgroundTasksSince?: number; autonomous?: boolean }
   | { type: 'bgTasks'; count: number }
   | { type: 'bg_notice'; notice: TaskNotice }
   | { type: 'stop' }
@@ -193,7 +198,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'done': {
       if (!state.streaming) return { ...state, isStreaming: false };
       const responseTime = Date.now() - state.streaming.startTime;
-      const { blocks, stopped, watchdogRetries } = state.streaming;
+      const { blocks, watchdogRetries } = state.streaming;
+      const stopped = state.streaming.stopped || action.interrupted;
       const finalBlocks = finalizeBlocks(blocks);
       const content = extractText(finalBlocks);
       const hasPendingBg = action.pendingBackgroundTasks != null && action.pendingBackgroundTasks > 0;
@@ -296,7 +302,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'clear':
-      return { ...state, messages: [], streaming: null, isStreaming: false, logs: [], contextUsage: null, bgTasks: 0, pendingNotice: null };
+      return { ...state, messages: [], interaction: null, streaming: null, isStreaming: false, logs: [], contextUsage: null, bgTasks: 0, pendingNotice: null };
 
     case 'bgTasks':
       return { ...state, bgTasks: action.count };
@@ -304,11 +310,15 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'sessionLoaded':
       // Replace the conversation with the replayed transcript and drop any
       // in-flight streaming/usage state from the previous session.
-      return { ...state, messages: action.messages, streaming: null, isStreaming: false, contextUsage: null, bgTasks: 0, pendingNotice: null };
+      return { ...state, interaction: null, messages: action.messages, streaming: null, isStreaming: false, contextUsage: null, bgTasks: 0, pendingNotice: null };
 
     case 'prefill':
       return { ...state, prefill: action.text + '\x00' + Date.now() };
 
+    case 'providerSelection':
+      return { ...state, providerId: action.providerId, currentModel: action.model, currentEffort: action.effort, thinkingEnabled: action.thinking };
+    case 'interaction':
+      return { ...state, interaction: action.request };
     case 'workspaceInfo':
       return {
         ...state,
@@ -452,6 +462,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
 }
 
 export const initialState: AppState = {
+  providerId: 'claude',
+  interaction: null,
   messages: [],
   streaming: null,
   isStreaming: false,

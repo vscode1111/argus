@@ -749,3 +749,14 @@ product code in this repo too: a module-level `const` capturing an env override
 (`CLI_REAP_SWEEP_MS`) only ever reads it once, so a second in-process `startServer()` call
 in a reused test worker silently ignores a later override - fixed by turning it into a
 function read per call (`reapSweepMs()`) instead of a captured constant.
+
+## Generated CSS-module names are not element contracts
+
+`dialog-state-integration.spec.ts` used `[class*="header"]` to locate a modal's drag
+handle. A full run produced `no handle box` while the failure snapshot showed the Account
+dialog open and visible; isolated repeats passed. A CSS-module fragment describes styling,
+not identity, and a direct `boundingBox()` does not express that the descendant must remain
+visible through a modal remount. Shared modals and Settings now expose
+`data-dialog-drag-handle`; the helper locates that exact marker and waits for it to be
+visible before measuring. Prefer roles and labels for user-facing controls, and an explicit
+`data-*` contract for non-semantic interaction surfaces such as resize or drag handles.

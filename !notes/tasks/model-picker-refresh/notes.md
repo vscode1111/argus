@@ -2,6 +2,12 @@
 
 **Task:** ad-hoc (no tracker ticket). Requested 2026-08-04 in chat; work happens directly on `main` (repo convention: no feature branches for personal work).
 
+## Superseded
+
+Was: model, effort and thinking were intentionally config-global.
+Actually: the multi-provider implementation now binds these choices to a conversation and saves defaults only on explicit request. The old global fix was correct for its original design, but would now alter unrelated provider sessions.
+Corrected by: [multiple providers](../multi-provider/notes.md). Model metadata refresh and family descriptions remain applicable.
+
 ## Problem
 
 Classification: **bug + feature** in one request.

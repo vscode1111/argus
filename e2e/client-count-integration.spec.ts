@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import { waitForApp } from './helpers';
 
@@ -46,7 +46,7 @@ const readCount = (page: Page) =>
   countLocator(page).textContent().then((t) => parseInt((t ?? '').trim(), 10) || 0);
 
 test.describe('active connection count (integration)', () => {
-  test('the Network tab shows a live client count that tracks connects and disconnects', async ({ page }) => {
+  test('the Network tab shows a live client count that tracks connects and disconnects', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
     await openNetworkTab(page);
 

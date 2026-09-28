@@ -42,7 +42,7 @@ export function Modal({ title, ariaLabel, onClose, width, fullHeight, persistKey
     <>
       <div className={[shell.overlay, elevated ? shell.overlayElevated : ''].filter(Boolean).join(' ')} onClick={onClose} aria-hidden="true" />
       <div className={[shell.modal, elevated ? shell.modalElevated : ''].filter(Boolean).join(' ')} role="dialog" aria-label={ariaLabel} ref={modalRef} style={style}>
-        <div className={shell.header} onPointerDown={drag.onPointerDown}>
+        <div className={shell.header} data-dialog-drag-handle onPointerDown={drag.onPointerDown}>
           <span className={shell.title} title={typeof title === 'string' ? title : undefined}>{title}</span>
           <div className={shell.headerActions}>
             {headerActions}

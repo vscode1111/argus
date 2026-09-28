@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import {
   ensureCompiled, ensureBuilt, startDaemon, stopDaemon, readInfo, isPortUp, waitFor,
@@ -31,7 +31,7 @@ test.describe('daemon restart (integration)', () => {
     if (cfg) { try { fs.unlinkSync(cfg); } catch { /* gone */ } cfg = undefined; }
   });
 
-  test('restartDaemon moves the daemon to the new configured port and broadcasts the new URL', async () => {
+  test('restartDaemon moves the daemon to the new configured port and broadcasts the new URL', { tag: ["@shared"] }, async () => {
     cfg = uniqueConfigFile('move');
     const file = uniqueDaemonFile('move');
     writeDaemonConfig(cfg, { daemonPort: 4040, daemonIdleMs: 600_000 });
@@ -64,7 +64,7 @@ test.describe('daemon restart (integration)', () => {
     ws.close();
   });
 
-  test('restartDaemon on the same port hands off to a fresh process', async () => {
+  test('restartDaemon on the same port hands off to a fresh process', { tag: ["@shared"] }, async () => {
     cfg = uniqueConfigFile('same');
     const file = uniqueDaemonFile('same');
     writeDaemonConfig(cfg, { daemonPort: 4042, daemonIdleMs: 600_000 });
@@ -103,7 +103,7 @@ test.describe('daemon restart - browser UI (integration)', () => {
     await expect(page.getByText('Daemon port', { exact: true })).toBeVisible();
   }
 
-  test('changing the port and clicking Apply restarts the daemon and shows the new URL', async ({ page }) => {
+  test('changing the port and clicking Apply restarts the daemon and shows the new URL', { tag: ["@shared"] }, async ({ page }) => {
     cfg = uniqueConfigFile('ui');
     const file = uniqueDaemonFile('ui');
     writeDaemonConfig(cfg, { daemonPort: 4044, daemonIdleMs: 600_000 });

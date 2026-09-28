@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -83,7 +83,7 @@ test.describe('resuming a session that is streaming elsewhere (integration)', ()
   // Two real CLI turns plus a live resume do not fit the flat 30s budget.
   test.setTimeout(90_000);
 
-  test('the resumed client gets the live indicator and keeps receiving output', async () => {
+  test('the resumed client gets the live indicator and keeps receiving output', { tag: ["@shared"] }, async () => {
     const nonce = await getNonce();
     const dir = makeTempDir('attach');
     const streamer = await openClient(nonce, dir);

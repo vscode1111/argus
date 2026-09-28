@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 test.describe('slash commands (integration)', () => {
@@ -6,7 +6,7 @@ test.describe('slash commands (integration)', () => {
     await waitForApp(page);
   });
 
-  test('typing "/" loads real skills from server', async ({ page }) => {
+  test('typing "/" loads real skills from server', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/');
@@ -24,7 +24,7 @@ test.describe('slash commands (integration)', () => {
     }).toPass({ timeout: 5_000 });
   });
 
-  test('builtin commands are present with descriptions', async ({ page }) => {
+  test('builtin commands are present with descriptions', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/clear');
@@ -39,7 +39,7 @@ test.describe('slash commands (integration)', () => {
     await expect(item.locator('[class*="slashMenuScope"]')).toHaveCount(0);
   });
 
-  test('project commands show description from frontmatter', async ({ page }) => {
+  test('project commands show description from frontmatter', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/bump');
@@ -53,7 +53,7 @@ test.describe('slash commands (integration)', () => {
     await expect(item.locator('[class*="slashMenuScope"]')).toHaveText('project');
   });
 
-  test('project skill shows description and "project" badge', async ({ page }) => {
+  test('project skill shows description and "project" badge', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/frontend');
@@ -67,7 +67,7 @@ test.describe('slash commands (integration)', () => {
     await expect(item.locator('[class*="slashMenuScope"]')).toHaveText('project');
   });
 
-  test('global command shows "global" badge', async ({ page }) => {
+  test('global command shows "global" badge', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/company');
@@ -83,7 +83,7 @@ test.describe('slash commands (integration)', () => {
     await expect(item.locator('[class*="slashMenuScope"]')).toHaveText('global');
   });
 
-  test('global skills show "global" badge', async ({ page }) => {
+  test('global skills show "global" badge', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/git-commit');
@@ -99,7 +99,7 @@ test.describe('slash commands (integration)', () => {
     await expect(item.locator('[class*="slashMenuScope"]')).toHaveText('global');
   });
 
-  test('selecting a real command inserts it into textarea', async ({ page }) => {
+  test('selecting a real command inserts it into textarea', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/e2');
@@ -115,7 +115,7 @@ test.describe('slash commands (integration)', () => {
     await expect(textarea).toHaveValue('/e2e ');
   });
 
-  test('command names are yellow, skill names are white', async ({ page }) => {
+  test('command names are yellow, skill names are white', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/');
@@ -135,7 +135,7 @@ test.describe('slash commands (integration)', () => {
     await expect(frontendName).not.toHaveClass(/slashMenuNameCustom/);
   });
 
-  test('command stays yellow when highlighted via keyboard', async ({ page }) => {
+  test('command stays yellow when highlighted via keyboard', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/bu');
@@ -153,7 +153,7 @@ test.describe('slash commands (integration)', () => {
     await expect(items.first()).toHaveClass(/slashMenuItemActive/);
   });
 
-  test('all three project commands appear when filtering by "d"', async ({ page }) => {
+  test('all three project commands appear when filtering by "d"', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
     await textarea.pressSequentially('/');

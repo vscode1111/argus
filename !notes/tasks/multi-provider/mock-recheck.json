@@ -1,0 +1,2881 @@
+{
+  "config": {
+    "configFile": "D:\\_Projects\\scub111g\\argus\\playwright.config.ts",
+    "rootDir": "D:/_Projects/scub111g/argus/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": "D:\\_Projects\\scub111g\\argus\\e2e\\global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 4
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/_Projects/scub111g/argus/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 4
+        },
+        "id": "mock",
+        "name": "mock",
+        "testDir": "D:/_Projects/scub111g/argus/e2e",
+        "testIgnore": [
+          "/-integration\\.spec/"
+        ],
+        "testMatch": [
+          "/\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "D:/_Projects/scub111g/argus/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 4
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "D:/_Projects/scub111g/argus/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "/-integration\\.spec/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 4,
+    "webServer": {
+      "command": "yarn dev",
+      "url": "http://localhost:5173",
+      "reuseExistingServer": true,
+      "timeout": 15000,
+      "env": {
+        "ARGUS_CONFIG": "D:\\_Projects\\scub111g\\argus\\e2e\\argus.json",
+        "ARGUS_USAGE_POLL": "0",
+        "ARGUS_AUTH_FILE": "D:\\_Projects\\scub111g\\argus\\e2e\\argus-auth.e2e.json"
+      }
+    }
+  },
+  "suites": [
+    {
+      "title": "account-usage.spec.ts",
+      "file": "account-usage.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "account & usage",
+          "file": "account-usage.spec.ts",
+          "line": 44,
+          "column": 6,
+          "specs": [
+            {
+              "title": "\"Account & usage...\" action appears under a Model header when typing /usage",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 574,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:11.063Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-b2d2ae14f7ec4547a4d3",
+              "file": "account-usage.spec.ts",
+              "line": 49,
+              "column": 7
+            },
+            {
+              "title": "Enter selects the highlighted account action and opens the modal",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 578,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:11.067Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-ee06529aeee7be4bb4f7",
+              "file": "account-usage.spec.ts",
+              "line": 64,
+              "column": 7
+            },
+            {
+              "title": "renders account rows from the accountUsage message",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 626,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:11.066Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-f00bdd43041d56dce930",
+              "file": "account-usage.spec.ts",
+              "line": 78,
+              "column": 7
+            },
+            {
+              "title": "renders usage bars sorted, with percent, color tier, and reset labels",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 668,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:11.060Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-02d367846d654731c17c",
+              "file": "account-usage.spec.ts",
+              "line": 92,
+              "column": 7
+            },
+            {
+              "title": "model-scoped weekly windows render their label in sort order (Weekly Fable)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 521,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:11.734Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-b3b6e409428e70f22f27",
+              "file": "account-usage.spec.ts",
+              "line": 121,
+              "column": 7
+            },
+            {
+              "title": "high utilization uses the high (red) color tier",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 489,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:11.735Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-07843ad71849ae5b0f6a",
+              "file": "account-usage.spec.ts",
+              "line": 145,
+              "column": 7
+            },
+            {
+              "title": "refresh button re-requests usage and updates the bars",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 661,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:11.787Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-7165e77f71b8597bdb26",
+              "file": "account-usage.spec.ts",
+              "line": 157,
+              "column": 7
+            },
+            {
+              "title": "shows a hint when no usage windows are available",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 467,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:11.825Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-810cba19c75f1ee52688",
+              "file": "account-usage.spec.ts",
+              "line": 178,
+              "column": 7
+            },
+            {
+              "title": "surfaces the fetch failure reason (e.g. HTTP 429) in the hint",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 423,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:12.235Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-dec26f058e2a73728285",
+              "file": "account-usage.spec.ts",
+              "line": 187,
+              "column": 7
+            },
+            {
+              "title": "shows \"Not logged in\" when the account is logged out",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 425,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:12.266Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-3588152c279fab7f0c1e",
+              "file": "account-usage.spec.ts",
+              "line": 201,
+              "column": 7
+            },
+            {
+              "title": "Escape closes the modal",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 416,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:12.309Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-544f95ea99602b0cfd83",
+              "file": "account-usage.spec.ts",
+              "line": 210,
+              "column": 7
+            },
+            {
+              "title": "footer link is present",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 397,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:12.463Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8ddfa70883af224ca847-1220089f1463f6cd37e9",
+              "file": "account-usage.spec.ts",
+              "line": 216,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "file-path-links.spec.ts",
+      "file": "file-path-links.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "file path links",
+          "file": "file-path-links.spec.ts",
+          "line": 62,
+          "column": 6,
+          "specs": [
+            {
+              "title": "renders file paths as clickable links in various markdown contexts",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 872,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:12.669Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-fa7fb0d7d579e233b1ae",
+              "file": "file-path-links.spec.ts",
+              "line": 73,
+              "column": 7
+            },
+            {
+              "title": "clicking a file path link opens FileViewerModal with file content",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 1084,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:12.702Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-07de6df4106db6d05a37",
+              "file": "file-path-links.spec.ts",
+              "line": 95,
+              "column": 7
+            },
+            {
+              "title": "clicking a table cell file path opens FileViewerModal",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 928,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:12.736Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-af4d6aedef8ca093b1b1",
+              "file": "file-path-links.spec.ts",
+              "line": 108,
+              "column": 7
+            },
+            {
+              "title": "file path with line number opens and scrolls to that line",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 986,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:12.876Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-e1551572b5f1a03060ec",
+              "file": "file-path-links.spec.ts",
+              "line": 118,
+              "column": 7
+            },
+            {
+              "title": "file path with line range highlights the start line of the range",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 898,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:13.548Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-d191826166515c660ab6",
+              "file": "file-path-links.spec.ts",
+              "line": 129,
+              "column": 7
+            },
+            {
+              "title": "clicking a bold-wrapped file path opens FileViewerModal",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 956,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:13.675Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-de0d7b352219f011addf",
+              "file": "file-path-links.spec.ts",
+              "line": 142,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "relative file path links",
+          "file": "file-path-links.spec.ts",
+          "line": 163,
+          "column": 6,
+          "specs": [
+            {
+              "title": "renders relative paths as clickable links",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 319,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:13.794Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-e491ad885fe043be5295",
+              "file": "file-path-links.spec.ts",
+              "line": 171,
+              "column": 7
+            },
+            {
+              "title": "clicking a relative path opens FileViewerModal with resolved content",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 668,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:13.874Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-996395ddb479f75ca89a",
+              "file": "file-path-links.spec.ts",
+              "line": 181,
+              "column": 7
+            },
+            {
+              "title": "relative path with line number opens at correct line",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 505,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:14.122Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-72561d7bbcebc550d183",
+              "file": "file-path-links.spec.ts",
+              "line": 195,
+              "column": 7
+            },
+            {
+              "title": "URLs are not broken by relative path detection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 376,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:14.458Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-55e15bd59de8b4a4467b",
+              "file": "file-path-links.spec.ts",
+              "line": 207,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "image file preview",
+          "file": "file-path-links.spec.ts",
+          "line": 225,
+          "column": 6,
+          "specs": [
+            {
+              "title": "clicking an image path opens FileViewerModal with <img> instead of code",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 796,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:14.552Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-8ec9a47f9c52e68092bf",
+              "file": "file-path-links.spec.ts",
+              "line": 243,
+              "column": 7
+            },
+            {
+              "title": "image modal has no encoding dropdown",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 869,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:14.637Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-9a2f651d3836521a4d0b",
+              "file": "file-path-links.spec.ts",
+              "line": 258,
+              "column": 7
+            },
+            {
+              "title": "Escape closes the image modal",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 871,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:14.641Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-14555557abeaa905b680",
+              "file": "file-path-links.spec.ts",
+              "line": 272,
+              "column": 7
+            },
+            {
+              "title": "relative image path opens as image preview",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 453,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:14.847Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-5ec8ff63e7df7a2751db",
+              "file": "file-path-links.spec.ts",
+              "line": 285,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "tool result count pluralization",
+          "file": "file-path-links.spec.ts",
+          "line": 299,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Glob with 1 result shows inline result",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 382,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:15.311Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-9281372ea45cb144de5e",
+              "file": "file-path-links.spec.ts",
+              "line": 310,
+              "column": 7
+            },
+            {
+              "title": "Glob with 3 results shows \"3 files\"",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 383,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:15.356Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-7d1caf6f5c123b94958f",
+              "file": "file-path-links.spec.ts",
+              "line": 321,
+              "column": 7
+            },
+            {
+              "title": "Grep with 1 result shows inline result",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 401,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:15.520Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-0fe7bd866ae6350613e2",
+              "file": "file-path-links.spec.ts",
+              "line": 332,
+              "column": 7
+            },
+            {
+              "title": "Grep with multiple results shows \"N lines of output\"",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 404,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:15.522Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "346df7cafb1ad2a32e0d-6d49ebef08094cdc6c65",
+              "file": "file-path-links.spec.ts",
+              "line": 343,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "model-picker.spec.ts",
+      "file": "model-picker.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "model picker",
+          "file": "model-picker.spec.ts",
+          "line": 56,
+          "column": 6,
+          "specs": [
+            {
+              "title": "models without an explicit description fall back to their family wording",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 616,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:15.706Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "98c294248980ab6deef4-54add2dd9dc97d59a302",
+              "file": "model-picker.spec.ts",
+              "line": 61,
+              "column": 7
+            },
+            {
+              "title": "a server-provided description wins; an unknown family without one renders none",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 623,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:15.751Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "98c294248980ab6deef4-a3bc700a46ae6f7f4cb7",
+              "file": "model-picker.spec.ts",
+              "line": 74,
+              "column": 7
+            },
+            {
+              "title": "a dated list id highlights when the active model is the dateless alias",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 455,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:15.940Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "98c294248980ab6deef4-957255967778e39c578a",
+              "file": "model-picker.spec.ts",
+              "line": 85,
+              "column": 7
+            },
+            {
+              "title": "a dateless list id highlights when the active model is a dated snapshot",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 437,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:15.938Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "98c294248980ab6deef4-54b2ea3e3beae269a8a1",
+              "file": "model-picker.spec.ts",
+              "line": 101,
+              "column": 7
+            },
+            {
+              "title": "quick picker in the slash menu checks the active model across date suffixes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 547,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:16.331Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "98c294248980ab6deef4-c9da21707069d9aba440",
+              "file": "model-picker.spec.ts",
+              "line": 111,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "slash-commands.spec.ts",
+      "file": "slash-commands.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "slash commands",
+          "file": "slash-commands.spec.ts",
+          "line": 22,
+          "column": 6,
+          "specs": [
+            {
+              "title": "typing \"/\" opens the slash menu",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 422,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:16.385Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-f822cecaa37050406057",
+              "file": "slash-commands.spec.ts",
+              "line": 27,
+              "column": 7
+            },
+            {
+              "title": "skills message populates the menu with names and descriptions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 419,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:16.387Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-34fd76a29a5c59edc882",
+              "file": "slash-commands.spec.ts",
+              "line": 37,
+              "column": 7
+            },
+            {
+              "title": "builtin commands have no scope badge",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 416,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:16.408Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-6aa84879d12082aa8b7c",
+              "file": "slash-commands.spec.ts",
+              "line": 53,
+              "column": 7
+            },
+            {
+              "title": "project commands show \"project\" scope badge",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 442,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:16.814Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-14cf7afc51ea6de42f62",
+              "file": "slash-commands.spec.ts",
+              "line": 64,
+              "column": 7
+            },
+            {
+              "title": "global commands show \"global\" scope badge",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 547,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:16.815Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-25cc695407b9bb1a7be8",
+              "file": "slash-commands.spec.ts",
+              "line": 76,
+              "column": 7
+            },
+            {
+              "title": "commands without description show name only",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 549,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:16.831Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-31bc2629b3b278774e8b",
+              "file": "slash-commands.spec.ts",
+              "line": 87,
+              "column": 7
+            },
+            {
+              "title": "filtering narrows the list by query",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 439,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:16.890Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-049671f6ba2129b63850",
+              "file": "slash-commands.spec.ts",
+              "line": 99,
+              "column": 7
+            },
+            {
+              "title": "no match shows \"No matching commands\"",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 395,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:17.264Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-69f4ba22ae32662b4437",
+              "file": "slash-commands.spec.ts",
+              "line": 114,
+              "column": 7
+            },
+            {
+              "title": "Enter selects the highlighted command and inserts it",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 561,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:17.341Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-f378e89428e977a2e733",
+              "file": "slash-commands.spec.ts",
+              "line": 124,
+              "column": 7
+            },
+            {
+              "title": "Tab selects the highlighted command",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 452,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:17.370Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-f2527ea03e6ed28609f4",
+              "file": "slash-commands.spec.ts",
+              "line": 141,
+              "column": 7
+            },
+            {
+              "title": "clicking a command selects it",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 489,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:17.388Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-7ba0e5e633b20c5071f2",
+              "file": "slash-commands.spec.ts",
+              "line": 155,
+              "column": 7
+            },
+            {
+              "title": "ArrowDown/ArrowUp navigates the highlighted item",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 411,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:17.667Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-f4cfc22629133ff6fa70",
+              "file": "slash-commands.spec.ts",
+              "line": 167,
+              "column": 7
+            },
+            {
+              "title": "Escape closes the menu without inserting",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 559,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:17.829Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-dc7aa0f1b213f9bb4324",
+              "file": "slash-commands.spec.ts",
+              "line": 189,
+              "column": 7
+            },
+            {
+              "title": "long description is truncated to 100 characters",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 486,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:17.886Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-10ae61c30ec42110adb2",
+              "file": "slash-commands.spec.ts",
+              "line": 205,
+              "column": 7
+            },
+            {
+              "title": "case-insensitive filtering",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 565,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:17.915Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "822ce195e9833424f2c1-dbab11a850109ecfd9e0",
+              "file": "slash-commands.spec.ts",
+              "line": 217,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "usage-indicator.spec.ts",
+      "file": "usage-indicator.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "header usage indicator",
+          "file": "usage-indicator.spec.ts",
+          "line": 34,
+          "column": 6,
+          "specs": [
+            {
+              "title": "with no usage yet it falls back to the account icon and still opens the modal",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 336,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:18.092Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-5631b8727fc0de98e547",
+              "file": "usage-indicator.spec.ts",
+              "line": 42,
+              "column": 7
+            },
+            {
+              "title": "the fallback names the reason the server gave",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 470,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:18.385Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-09f3f1dd826b152941a6",
+              "file": "usage-indicator.spec.ts",
+              "line": 53,
+              "column": 7
+            },
+            {
+              "title": "a push replaces the fallback icon with bars",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 490,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:18.398Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-f32975930815ae078ca9",
+              "file": "usage-indicator.spec.ts",
+              "line": 61,
+              "column": 7
+            },
+            {
+              "title": "the old separate Account & usage button is gone from the header",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 445,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:18.438Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-679c69d99d1f599becfd",
+              "file": "usage-indicator.spec.ts",
+              "line": 68,
+              "column": 7
+            },
+            {
+              "title": "a push renders one bar per window in display order",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 419,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:18.505Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-0d6ad76b364ace34766e",
+              "file": "usage-indicator.spec.ts",
+              "line": 75,
+              "column": 7
+            },
+            {
+              "title": "fill width and colour tier follow the percentage",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 444,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:18.861Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-50e5d4002c57a2757fe5",
+              "file": "usage-indicator.spec.ts",
+              "line": 86,
+              "column": 7
+            },
+            {
+              "title": "at most three bars, dropping the lowest-priority window",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 427,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:18.896Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-3f8d8dc913dcef501a70",
+              "file": "usage-indicator.spec.ts",
+              "line": 107,
+              "column": 7
+            },
+            {
+              "title": "the tooltip names each window with its percent and reset",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 427,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:18.896Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-d7a3f464bbe247a906a1",
+              "file": "usage-indicator.spec.ts",
+              "line": 118,
+              "column": 7
+            },
+            {
+              "title": "a later push updates the bars in place",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 419,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:18.936Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-f88fe23fc45d80004a3b",
+              "file": "usage-indicator.spec.ts",
+              "line": 131,
+              "column": 7
+            },
+            {
+              "title": "the unfilled part of a bar is visible against its surface",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 534,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:19.312Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-20ff6670a7312e675e9b",
+              "file": "usage-indicator.spec.ts",
+              "line": 149,
+              "column": 7
+            },
+            {
+              "title": "opening the modal syncs the header indicator to what the modal shows",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 536,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:19.330Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-00816dd9f6ea3ccea677",
+              "file": "usage-indicator.spec.ts",
+              "line": 186,
+              "column": 7
+            },
+            {
+              "title": "a push while the modal is open updates the modal as well as the header",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 534,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:19.332Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-08085f89c0ece4ab8109",
+              "file": "usage-indicator.spec.ts",
+              "line": 207,
+              "column": 7
+            },
+            {
+              "title": "an empty push does not blank bars that are already showing",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 527,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:19.364Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-07b5c80218c7e36b1d9c",
+              "file": "usage-indicator.spec.ts",
+              "line": 232,
+              "column": 7
+            },
+            {
+              "title": "clicking it opens Account & usage",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 377,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:19.855Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-ceeb1f48e08799fb478d",
+              "file": "usage-indicator.spec.ts",
+              "line": 251,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "usage poll gate",
+          "file": "usage-indicator.spec.ts",
+          "line": 278,
+          "column": 6,
+          "specs": [
+            {
+              "title": "one poll a minute, one hour of activity keeps it awake",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 1,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:19.875Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-63c19b93687f8a150c76",
+              "file": "usage-indicator.spec.ts",
+              "line": 286,
+              "column": 7
+            },
+            {
+              "title": "a process that has seen no activity never polls",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.062Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-64d87183675c82312157",
+              "file": "usage-indicator.spec.ts",
+              "line": 291,
+              "column": 7
+            },
+            {
+              "title": "activity keeps polling alive for the whole hour",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 1,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:19.873Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-54a5ef225cbcd8aa6192",
+              "file": "usage-indicator.spec.ts",
+              "line": 297,
+              "column": 7
+            },
+            {
+              "title": "polling pauses once the hour of silence passes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 1,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.060Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-3b541cef7b21c1c1cf8c",
+              "file": "usage-indicator.spec.ts",
+              "line": 302,
+              "column": 7
+            },
+            {
+              "title": "a refresh inside the floor is answered without calling the API",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:19.899Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-2bde8eebd16456ad3f03",
+              "file": "usage-indicator.spec.ts",
+              "line": 312,
+              "column": 7
+            },
+            {
+              "title": "the floor is measured from the last attempt, not the last success",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.098Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-d9af3b266f68cfb926ef",
+              "file": "usage-indicator.spec.ts",
+              "line": 332,
+              "column": 7
+            },
+            {
+              "title": "published windows become the snapshot, and an empty publish is ignored",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 2,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.067Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3f9b29d4273588427f02-b1078f3e616648a70b44",
+              "file": "usage-indicator.spec.ts",
+              "line": 344,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "usage-insights.spec.ts",
+      "file": "usage-insights.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "usage insights",
+          "file": "usage-insights.spec.ts",
+          "line": 83,
+          "column": 6,
+          "specs": [
+            {
+              "title": "renders header, disclaimers, and behaviors at or above the 10% floor with official copy",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 526,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.074Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0ed81054c32bd31f9daf-0cc077a9466794aaaf96",
+              "file": "usage-insights.spec.ts",
+              "line": 88,
+              "column": 7
+            },
+            {
+              "title": "Day/Week toggle switches the report and the range note",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 577,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.086Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0ed81054c32bd31f9daf-cd31a6d3fe600748e66a",
+              "file": "usage-insights.spec.ts",
+              "line": 110,
+              "column": 7
+            },
+            {
+              "title": "attribution tables render skills with a / prefix and MCP servers plain",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 503,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.106Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0ed81054c32bd31f9daf-db08e2ca8fcd28754e61",
+              "file": "usage-insights.spec.ts",
+              "line": 133,
+              "column": 7
+            },
+            {
+              "title": "tables cap at 8 rows with an overflow line",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 438,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.252Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0ed81054c32bd31f9daf-4a16c55cca5bedadcda4",
+              "file": "usage-insights.spec.ts",
+              "line": 151,
+              "column": 7
+            },
+            {
+              "title": "shows the no-attribution empty state when all tables are empty",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 420,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.606Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0ed81054c32bd31f9daf-2db859e36541506d7869",
+              "file": "usage-insights.spec.ts",
+              "line": 166,
+              "column": 7
+            },
+            {
+              "title": "surfaces a collection error in the hint",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 414,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.615Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0ed81054c32bd31f9daf-abb2f110a2afd0f87c94",
+              "file": "usage-insights.spec.ts",
+              "line": 181,
+              "column": 7
+            },
+            {
+              "title": "empty reports render disclaimers plus the empty attribution state",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mock",
+                  "projectName": "mock",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 403,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:07:20.671Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0ed81054c32bd31f9daf-34b08c12310fb9eb89a4",
+              "file": "usage-insights.spec.ts",
+              "line": 193,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-28T08:07:09.341Z",
+    "duration": 11955.868999999999,
+    "expected": 78,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

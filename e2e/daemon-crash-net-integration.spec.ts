@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -32,7 +32,7 @@ test.afterAll(() => {
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* best effort */ }
 });
 
-test('an uncaught throw is survived and reported instead of killing every client', async () => {
+test('an uncaught throw is survived and reported instead of killing every client', { tag: ["@shared"] }, async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'scub-crashnet-'));
   const trigger = path.join(tmp, 'boom');
   const preload = path.join(tmp, 'preload.js');

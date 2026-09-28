@@ -1,0 +1,669 @@
+{
+  "config": {
+    "configFile": "D:\\_Projects\\scub111g\\argus\\playwright.config.ts",
+    "rootDir": "D:/_Projects/scub111g/argus/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": "D:\\_Projects\\scub111g\\argus\\e2e\\global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/_Projects/scub111g/argus/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "mock",
+        "name": "mock",
+        "testDir": "D:/_Projects/scub111g/argus/e2e",
+        "testIgnore": [
+          "/-integration\\.spec/"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "D:/_Projects/scub111g/argus/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "D:/_Projects/scub111g/argus/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "/-integration\\.spec/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 1,
+    "webServer": {
+      "command": "yarn dev",
+      "url": "http://localhost:5173",
+      "reuseExistingServer": true,
+      "timeout": 15000,
+      "env": {
+        "ARGUS_CONFIG": "D:\\_Projects\\scub111g\\argus\\e2e\\argus.json",
+        "ARGUS_USAGE_POLL": "0",
+        "ARGUS_AUTH_FILE": "D:\\_Projects\\scub111g\\argus\\e2e\\argus-auth.e2e.json"
+      }
+    }
+  },
+  "suites": [
+    {
+      "title": "clients-integration.spec.ts",
+      "file": "clients-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "connected client list (integration)",
+          "file": "clients-integration.spec.ts",
+          "line": 108,
+          "column": 6,
+          "specs": [
+            {
+              "title": "lists the sockets this server is really serving and marks the one that asked",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 40,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:13.664Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "e5f058394b33495ccf76-222894663468c78db39e",
+              "file": "clients-integration.spec.ts",
+              "line": 109,
+              "column": 7
+            },
+            {
+              "title": "disconnects a raw client with the terminal close code, and refuses an id nobody owns",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 17,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:13.720Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "e5f058394b33495ccf76-ec81cf1698f638574515",
+              "file": "clients-integration.spec.ts",
+              "line": 141,
+              "column": 7
+            },
+            {
+              "title": "a real page that is disconnected stays down and comes back only when asked",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3482,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:13.751Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "e5f058394b33495ccf76-2103e29a528495300e17",
+              "file": "clients-integration.spec.ts",
+              "line": 170,
+              "column": 7
+            },
+            {
+              "title": "marks the connection whose session is mid-turn, and only that one",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5350,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:17.301Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "e5f058394b33495ccf76-9542369c0f08029a078e",
+              "file": "clients-integration.spec.ts",
+              "line": 206,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "shared-channel-integration.spec.ts",
+      "file": "shared-channel-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "shared channel broadcast (integration)",
+          "file": "shared-channel-integration.spec.ts",
+          "line": 94,
+          "column": 6,
+          "specs": [
+            {
+              "title": "newSession creates an isolated session for client A only; B keeps the old session",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1631,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:22.667Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-8057b823504343b8de23",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 107,
+              "column": 7
+            },
+            {
+              "title": "late-joining client B receives sessionLoaded replay after client A sends a user message",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 49,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:24.322Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-0716af83a9e1d90092b4",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 131,
+              "column": 7
+            },
+            {
+              "title": "getSettings from client A does NOT reach client B (per-client response)",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1133,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:24.379Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-6dad9ebc175dfac8ff07",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 163,
+              "column": 7
+            },
+            {
+              "title": "getSkills from client A does NOT reach client B",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1127,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:25.522Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-60a80ed026e43a520611",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 178,
+              "column": 7
+            },
+            {
+              "title": "resumeSession from client A does NOT reach client B (per-client navigation)",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1124,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:26.660Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-7101f8abf7327636b2cb",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 190,
+              "column": 7
+            },
+            {
+              "title": "switchModel broadcast reaches all clients on the channel",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 317,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:27.795Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-ba03f6895080854a80c1",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 205,
+              "column": 7
+            },
+            {
+              "title": "switchModel stays in its conversation and does not change another workspace",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1120,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:28.124Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-9d578a933465c2a31eee",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 226,
+              "column": 7
+            },
+            {
+              "title": "active CLI turn is not killed when client B switches to a different session",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 13125,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:29.255Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-805136b81f515baf1562",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 259,
+              "column": 7
+            },
+            {
+              "title": "browsing client does not receive session-streaming events from active CLI turn",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5217,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:42.392Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-ea5d39ab4d637a9c0044",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 282,
+              "column": 7
+            },
+            {
+              "title": "resumeSession with a different id puts client into browsing mode (no session-stream events)",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1150,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:47.624Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-abf44426b6c596f8ab78",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 318,
+              "column": 7
+            },
+            {
+              "title": "two clients connect to different dirs and do NOT share messages",
+              "ok": true,
+              "tags": [
+                "shared"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "integration",
+                  "projectName": "integration",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1128,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-28T08:00:48.783Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "110e55e3bc1aa389be85-768cb5be049fae706eba",
+              "file": "shared-channel-integration.spec.ts",
+              "line": 350,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-28T08:00:11.924Z",
+    "duration": 38444.963,
+    "expected": 15,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

@@ -1,3 +1,4 @@
+import { saveSession, sessionRecord } from './providers/store';
 import * as fs from 'fs';
 import type { spawn } from 'child_process';
 import { plural, classifyError, API_ERROR_RE, killProc } from './cli';
@@ -141,7 +142,10 @@ function handleSystemEvent(s: SessionState, event: Record<string, unknown>): voi
     // Announce the id the CLI just assigned so the browser shims can put it in the
     // address bar. Until this, a brand-new chat had no id anywhere in the URL and the
     // page could not be shared or reloaded back into the same conversation.
-    if (changed) s.broadcast(JSON.stringify({ type: 'sessionId', id }));
+    if (changed) {
+      saveSession({ id, cwd: s.workspaceDir, selection: { ...s.selection }, title: sessionRecord(id)?.title || s.lastMessage?.text.slice(0, 100) || '', updatedAt: Date.now() });
+      s.broadcast(JSON.stringify({ type: 'sessionId', id }));
+    }
   } else if (event.subtype === 'task_started') {
     // Foreground calls raise this event too; the result-text path adds the ones the CLI
     // backgrounds by itself, whose input says nothing.

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -76,7 +76,7 @@ async function gotoDaemon(page: Page, dir: string): Promise<void> {
   }
 }
 
-test('an idle-closed page stays down while hidden, and reconnects on its own once visible - no click', async ({ page }) => {
+test('an idle-closed page stays down while hidden, and reconnects on its own once visible - no click', { tag: ["@shared"] }, async ({ page }) => {
   const dir = makeTempDir('auto');
   await gotoDaemon(page, dir);
   await expect(page.locator('[title="Connected"]')).toBeVisible({ timeout: 10_000 });
@@ -102,7 +102,7 @@ test('an idle-closed page stays down while hidden, and reconnects on its own onc
   await expect(reconnectBtn).toHaveCount(0);
 });
 
-test('a peer-style disconnect does not auto-reconnect on the same visibility trigger', async ({ page }) => {
+test('a peer-style disconnect does not auto-reconnect on the same visibility trigger', { tag: ["@shared"] }, async ({ page }) => {
   // The control for the test above: without it, a build that resurrected ANY terminal
   // close on visibility (not just an idle one) would pass the primary test too, since
   // both closes look identical from the outside except for their reason.

@@ -1,0 +1,139 @@
+{
+  "config": {
+    "configFile": "D:\\_Projects\\scub111g\\argus\\playwright.config.ts",
+    "rootDir": "D:/_Projects/scub111g/argus/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": "D:\\_Projects\\scub111g\\argus\\e2e\\global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/_Projects/scub111g/argus/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "mock",
+        "name": "mock",
+        "testDir": "D:/_Projects/scub111g/argus/e2e",
+        "testIgnore": [
+          "/-integration\\.spec/"
+        ],
+        "testMatch": [
+          "/\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "D:/_Projects/scub111g/argus/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "D:/_Projects/scub111g/argus/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "/-integration\\.spec/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 4,
+    "webServer": {
+      "command": "yarn dev",
+      "url": "http://localhost:5173",
+      "reuseExistingServer": true,
+      "timeout": 15000,
+      "env": {
+        "ARGUS_CONFIG": "D:\\_Projects\\scub111g\\argus\\e2e\\argus.json",
+        "ARGUS_USAGE_POLL": "0",
+        "ARGUS_AUTH_FILE": "D:\\_Projects\\scub111g\\argus\\e2e\\argus-auth.e2e.json"
+      }
+    }
+  },
+  "suites": [
+    {
+      "title": "provider-switch-integration.spec.ts",
+      "file": "provider-switch-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "provider switch, real reply and reload preserve the conversation",
+          "ok": true,
+          "tags": [
+            "claude"
+          ],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19448,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-28T08:09:00.848Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4a71fee2f892bf946db4-784793af599ca9269b62",
+          "file": "provider-switch-integration.spec.ts",
+          "line": 6,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-28T08:08:59.350Z",
+    "duration": 21262.898999999998,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
