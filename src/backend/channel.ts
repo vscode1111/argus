@@ -1,3 +1,4 @@
+import { selectionFor } from './providers/store';
 import type { WebSocket } from 'ws';
 import { createSessionState, type SessionState } from './sessionState';
 import { killProc } from './cli';
@@ -38,6 +39,7 @@ export interface ChannelMessage {
 // session via resumeSession) do not receive these. Control events (clear, modelChanged,
 // log, etc.) are NOT in this set and reach all clients regardless of browsing state.
 const SESSION_STREAM_EVENTS = new Set([
+  'providerSelection', 'interaction',
   'thinking_start', 'thinking_chunk', 'text_chunk', 'tool_start', 'tool_end',
   'done', 'error', 'message', 'user_inject', 'token_update',
   // 'sessionId' belongs to the live turn: a browsing client is viewing a different
@@ -171,7 +173,7 @@ export function listActiveSessions(): ActiveSession[] {
   for (const cd of registry.values()) {
     for (const entry of cd.entries.values()) {
       const st = entry.state;
-      if (st.sessionId && st.currentProc && !st.cliDone) {
+      if (st.sessionId && (st.runtime?.active || st.currentProc && !st.cliDone)) {
         out.push({ id: st.sessionId, workspacePath: cd.dir, startedAt: entry.snapshotStartedAt ?? entry.lastActivityAt });
       }
     }
@@ -200,8 +202,8 @@ export function listOwnedProcs(): Map<number, OwnedProc> {
   for (const cd of registry.values()) {
     for (const entry of cd.entries.values()) {
       const st = entry.state;
-      const pid = st.currentProc?.pid;
-      if (pid) owned.set(pid, { sessionId: st.sessionId ?? '', running: !!st.currentProc && !st.cliDone });
+      const pid = st.runtime?.pid ?? st.currentProc?.pid;
+      if (pid) owned.set(pid, { sessionId: st.sessionId ?? '', running: !!(st.runtime?.active || st.currentProc && !st.cliDone) });
     }
   }
   return owned;
@@ -231,7 +233,7 @@ export function clientChannelInfo(ws: WebSocket): ClientChannelInfo | undefined 
       workspacePath: cd.dir,
       sessionId: st.sessionId || undefined,
       viewingSessionId: cd.clientViewing.get(ws),
-      running: !!st.currentProc && !st.cliDone,
+      running: !!(st.runtime?.active || st.currentProc && !st.cliDone),
       lastActivityAt: entry.lastActivityAt,
     };
   }
@@ -266,6 +268,10 @@ export function reapIdleCliProcs(idleMs: number, now: number = Date.now()): Reap
     for (const entry of cd.entries.values()) {
       const st = entry.state;
       // No process to reclaim, or one that is still working.
+      if (st.runtime && !st.currentProc) {
+        if (!st.runtime.active && now - entry.lastActivityAt >= idleMs) { st.runtime.dispose(); st.runtime = undefined; }
+        continue;
+      }
       if (!st.currentProc || !st.cliDone) continue;
       const idle = now - entry.lastActivityAt;
       if (idle < idleMs) continue;
@@ -321,7 +327,7 @@ export function reapIdleClients(idleMs: number, now: number = Date.now()): Reape
       // No clients to close - already on its way out via the ordinary grace timer.
       if (entry.clients.size === 0) continue;
       const st = entry.state;
-      if (st.currentProc && !st.cliDone) continue; // mid-turn, never touch
+      if ((st.runtime?.active || st.currentProc && !st.cliDone)) continue; // mid-turn, never touch
       const idle = now - entry.lastActivityAt;
       if (idle < idleMs) continue;
 
@@ -541,8 +547,10 @@ function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
 }
 
 function replayToClient(entry: SessionEntry, ws: WebSocket): void {
+  try { ws.send(JSON.stringify({ type: 'providerSelection', ...entry.state.selection })); } catch { return; }
   try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages: entry.history })); } catch { return; }
   replaySnapshotToClient(entry, ws);
+  if (entry.state.interaction) ws.send(JSON.stringify({ type: 'interaction', request: entry.state.interaction }));
 }
 
 // Pick the most recently active entry, or create a new one if none exist.
@@ -594,7 +602,9 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
         if (entry.state.sessionId) cd.ownerLastSession.set(entry.owner, entry.state.sessionId);
         else cd.ownerLastSession.delete(entry.owner);
       }
+      if (entry.state.runtime?.active || entry.state.currentProc && !entry.state.cliDone) { scheduleEntryCleanup(cd, entry); return; }
       cd.entries.delete(entry.key);
+      entry.state.runtime?.dispose(); entry.state.runtime = undefined;
       // Once evicted the entry is unreachable - no client can rejoin it - so its CLI
       // process would linger with nobody to receive its output. Reclaim it here, or
       // every abandoned session leaks a `claude` process for the life of the server.
@@ -657,7 +667,7 @@ export function getOrCreateChannel(dir: string): Channel {
         // is still on screen from before the disconnect.
         const fresh = createEntry(_cd, panelId);
         const lastSession = _cd.ownerLastSession.get(panelId);
-        if (lastSession) fresh.state.sessionId = lastSession;
+        if (lastSession) { fresh.state.sessionId = lastSession; fresh.state.selection = selectionFor(lastSession, dir); }
         joinEntry(_cd, ws, fresh);
         return false;
       }
@@ -716,6 +726,7 @@ export function getOrCreateChannel(dir: string): Channel {
       // on screen from the sessionLoaded that put it into browsing mode.
       joinEntry(_cd, ws, entry);
       entry.state.sessionId = viewing;
+      entry.state.selection = selectionFor(viewing, dir);
       _cd.clientViewing.delete(ws);
       return entry.state;
     },
@@ -726,7 +737,7 @@ export function getOrCreateChannel(dir: string): Channel {
         // itself. Only a session running in a DIFFERENT entry needs a move.
         if (entry === current) continue;
         const st = entry.state;
-        if (st.sessionId === sessionId && st.currentProc && !st.cliDone) {
+        if (st.sessionId === sessionId && (st.runtime?.active || st.currentProc && !st.cliDone)) {
           // joinEntry replays this entry's history and streaming snapshot, which is what
           // brings the progress indicator back and resumes the flow of output.
           joinEntry(_cd, ws, entry);
@@ -738,7 +749,7 @@ export function getOrCreateChannel(dir: string): Channel {
     },
     replaySnapshot(ws) {
       const entry = _cd.clientEntry.get(ws);
-      if (entry) replaySnapshotToClient(entry, ws);
+      if (entry) { replaySnapshotToClient(entry, ws); if (entry.state.interaction) ws.send(JSON.stringify({ type: 'interaction', request: entry.state.interaction })); }
     },
     replayHistory(ws) {
       const entry = _cd.clientEntry.get(ws);

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
@@ -36,7 +36,7 @@ async function nonceStatus(host: string, port: string | number, token?: string):
 }
 
 test.describe('remote access gate (integration)', () => {
-  test('refuses a remote peer and leaves local untouched when no password is set', async () => {
+  test('refuses a remote peer and leaves local untouched when no password is set', { tag: ["@shared"] }, async () => {
     const localNonce = await nonceStatus('127.0.0.1', PORT);
     expect(localNonce).toBe(200);
     const nonce = await (await fetch(`http://127.0.0.1:${PORT}/nonce`)).text();
@@ -54,10 +54,12 @@ test.describe('remote access gate (integration)', () => {
     expect(await connect(LAN, PORT, `nonce=${nonce}&dir=${dir}&auth=${'f'.repeat(64)}`)).toBe('refused 401');
   });
 
-  test('logs a remote client in, then locks it out, then revokes it', async () => {
+  test('logs a remote client in, then locks it out, then revokes it', { tag: ["@shared"] }, async () => {
     // Its own server and its own credential file: the shared one must stay password-free
     // for the test above, and the real ~/.claude/argus-auth.json is never touched.
     const priorAuthFile = process.env.ARGUS_AUTH_FILE;
+    const priorConfig = process.env.ARGUS_CONFIG;
+    const priorUsagePoll = process.env.ARGUS_USAGE_POLL;
     const authFile = path.join(os.tmpdir(), `argus-e2e-auth-${Date.now()}.json`);
     const cfgFile = path.join(os.tmpdir(), `argus-e2e-authcfg-${Date.now()}.json`);
     fs.writeFileSync(cfgFile, JSON.stringify({ allowNetworkAccess: true }));
@@ -121,6 +123,8 @@ test.describe('remote access gate (integration)', () => {
       // Restore the suite-wide override; leaving this pointed at a deleted temp file
       // would make any later spec in this worker see "no password" for the wrong reason.
       process.env.ARGUS_AUTH_FILE = priorAuthFile;
+      if (priorConfig === undefined) delete process.env.ARGUS_CONFIG; else process.env.ARGUS_CONFIG = priorConfig;
+      if (priorUsagePoll === undefined) delete process.env.ARGUS_USAGE_POLL; else process.env.ARGUS_USAGE_POLL = priorUsagePoll;
       for (const f of [authFile, cfgFile]) { try { fs.unlinkSync(f); } catch { /* gone */ } }
     }
   });

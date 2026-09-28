@@ -27,5 +27,7 @@
   "modelListCache": [],
   "effort": "low",
   "thinking": true,
-  "appendSystemPrompt": ""
+  "appendSystemPrompt": "",
+  "defaultProvider": "codex",
+  "providerDefaults": {}
 }

@@ -13,6 +13,7 @@ export type ImageAttachment = {
 };
 
 export type ToolCallData = {
+  kind?: string;
   id: string;
   name: string;
   input: Record<string, unknown>;

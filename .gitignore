@@ -7,7 +7,7 @@ dist/
 tmp/
 test-results/
 playwright-report/
-yarn-error.log
+*.log
 media/webview.js
 media/webview.css
 media/ws-bridge.js
@@ -18,3 +18,4 @@ bash.exe.stackdump
 
 # Throwaway remote-access credential used by the e2e suite (never a real one).
 e2e/argus-auth.e2e.json
+e2e/argus-provider-sessions.json

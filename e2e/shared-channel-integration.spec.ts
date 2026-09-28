@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -104,7 +104,7 @@ test.describe('shared channel broadcast (integration)', () => {
     await closeClient(clientB).catch(() => {/* ignore */});
   });
 
-  test('newSession creates an isolated session for client A only; B keeps the old session', async () => {
+  test('newSession creates an isolated session for client A only; B keeps the old session', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('newsession');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dir)]);
 
@@ -128,7 +128,7 @@ test.describe('shared channel broadcast (integration)', () => {
     clientB.send(JSON.stringify({ type: 'stop' }));
   });
 
-  test('late-joining client B receives sessionLoaded replay after client A sends a user message', async () => {
+  test('late-joining client B receives sessionLoaded replay after client A sends a user message', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('replay');
     clientA = await openClient(nonce, dir);
 
@@ -160,7 +160,7 @@ test.describe('shared channel broadcast (integration)', () => {
     clientA.send(JSON.stringify({ type: 'stop' }));
   });
 
-  test('getSettings from client A does NOT reach client B (per-client response)', async () => {
+  test('getSettings from client A does NOT reach client B (per-client response)', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('per-client');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dir)]);
 
@@ -175,7 +175,7 @@ test.describe('shared channel broadcast (integration)', () => {
     await check;
   });
 
-  test('getSkills from client A does NOT reach client B', async () => {
+  test('getSkills from client A does NOT reach client B', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('per-client-skills');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dir)]);
 
@@ -187,7 +187,7 @@ test.describe('shared channel broadcast (integration)', () => {
     await check;
   });
 
-  test('resumeSession from client A does NOT reach client B (per-client navigation)', async () => {
+  test('resumeSession from client A does NOT reach client B (per-client navigation)', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('resume-isolation');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dir)]);
 
@@ -202,27 +202,28 @@ test.describe('shared channel broadcast (integration)', () => {
     await check;
   });
 
-  test('switchModel broadcast reaches all clients on the channel', async () => {
+  test('switchModel broadcast reaches all clients on the channel', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('model-broadcast');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dir)]);
 
     // Drain initial replay on B
     await collectMessages(clientB, 300);
 
-    const bGotModel = waitForType(clientB, 'modelChanged', 3000);
-    clientA.send(JSON.stringify({ type: 'switchModel', model: 'claude-haiku-4-5' }));
+    const catalog = waitForType(clientA, 'modelList', 30_000);
+    clientA.send(JSON.stringify({ type: 'getModels' }));
+    const model = ((await catalog) as { models: { id: string }[] }).models[0].id;
+    const bGotModel = waitForType(clientB, 'providerSelection', 3000);
+    clientA.send(JSON.stringify({ type: 'switchModel', model }));
     const msg = await bGotModel as Record<string, unknown>;
-    expect(msg.model).toBe('claude-haiku-4-5');
+    expect(msg.model).toBe(model);
 
     // Restore model to empty (CLI default)
     clientA.send(JSON.stringify({ type: 'switchModel', model: '' }));
-    await waitForType(clientA, 'modelChanged', 3000);
+    await waitForType(clientA, 'providerSelection', 3000);
   });
 
-  // Regression: the model is a config-global setting, but the broadcast (and the
-  // per-entry state update) used to be scoped to the switching client's channel -
-  // a panel in another workspace kept highlighting (and spawning with) the old model.
-  test('switchModel reaches a client in a DIFFERENT workspace dir and its getInfo reflects it', async () => {
+  // Selection belongs to one conversation; other workspaces keep their defaults.
+  test('switchModel stays in its conversation and does not change another workspace', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('model-global-a');
     const dirB = makeTempDir('model-global-b');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dirB)]);
@@ -230,20 +231,21 @@ test.describe('shared channel broadcast (integration)', () => {
     // Drain initial replay on B
     await collectMessages(clientB, 300);
 
-    const bGotModel = waitForType(clientB, 'modelChanged', 3000);
-    clientA.send(JSON.stringify({ type: 'switchModel', model: 'claude-haiku-4-5' }));
-    const msg = await bGotModel as Record<string, unknown>;
-    expect(msg.model).toBe('claude-haiku-4-5');
-
-    // B's getInfo derives the model from the config (single source of truth), not
-    // from per-entry state seeded before the switch.
+    const catalog = waitForType(clientA, 'modelList', 30_000);
+    clientA.send(JSON.stringify({ type: 'getModels' }));
+    const model = ((await catalog) as { models: { id: string }[] }).models[0].id;
+    const unchanged = expectNoType(clientB, 'providerSelection');
+    const selected = waitForType(clientA, 'providerSelection');
+    clientA.send(JSON.stringify({ type: 'switchModel', model }));
+    expect((await selected as Record<string, unknown>).model).toBe(model);
+    await unchanged;
     const bInfo = waitForType(clientB, 'workspaceInfo', 3000);
     clientB.send(JSON.stringify({ type: 'getInfo' }));
-    expect((await bInfo as Record<string, unknown>).model).toBe('claude-haiku-4-5');
+    expect((await bInfo as Record<string, unknown>).model).toBe('');
 
     // Restore model to empty (CLI default)
     clientA.send(JSON.stringify({ type: 'switchModel', model: '' }));
-    await waitForType(clientA, 'modelChanged', 3000);
+    await waitForType(clientA, 'providerSelection', 3000);
   });
 
   // --- Tests covering the two session-switching bugs ---
@@ -254,7 +256,7 @@ test.describe('shared channel broadcast (integration)', () => {
   //        streaming events (text_chunk, tool_start, done, …) kept arriving even though
   //        the client was now viewing a different session's history.
 
-  test('active CLI turn is not killed when client B switches to a different session', async () => {
+  test('active CLI turn is not killed when client B switches to a different session', { tag: ["@shared"] }, async () => {
     // Bug 1 regression: switching session must not call killProc.
     dir = makeTempDir('no-kill-on-resume');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dir)]);
@@ -277,7 +279,7 @@ test.describe('shared channel broadcast (integration)', () => {
     await waitForType(clientA, 'done', 60000);
   });
 
-  test('browsing client does not receive session-streaming events from active CLI turn', async () => {
+  test('browsing client does not receive session-streaming events from active CLI turn', { tag: ["@shared"] }, async () => {
     // Bug 2 regression: after resumeSession the client must enter browsing mode and
     // be excluded from session-streaming broadcasts (text_chunk, tool_start, done, etc.).
     dir = makeTempDir('browsing-no-stream');
@@ -313,7 +315,7 @@ test.describe('shared channel broadcast (integration)', () => {
     expect(bGotStreamEvent).toBe(false);
   });
 
-  test('resumeSession with a different id puts client into browsing mode (no session-stream events)', async () => {
+  test('resumeSession with a different id puts client into browsing mode (no session-stream events)', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('browsing-mode');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dir)]);
     await collectMessages(clientB, 300);
@@ -345,7 +347,7 @@ test.describe('shared channel broadcast (integration)', () => {
     clientA.send(JSON.stringify({ type: 'stop' }));
   });
 
-  test('two clients connect to different dirs and do NOT share messages', async () => {
+  test('two clients connect to different dirs and do NOT share messages', { tag: ["@shared"] }, async () => {
     const dirA = makeTempDir('isolation-a');
     const dirB = makeTempDir('isolation-b');
     clientA = await openClient(nonce, dirA);

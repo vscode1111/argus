@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import * as fs from 'fs';
 import {
   ensureCompiled, ensureBuilt, startDaemon, stopDaemon, readInfo, isAlive, isPortUp, waitFor,
@@ -40,7 +40,7 @@ async function gotoDaemon(page: Page): Promise<void> {
   }
 }
 
-test('the Info tab button stops the real daemon it is connected to', async ({ page }) => {
+test('the Info tab button stops the real daemon it is connected to', { tag: ["@shared"] }, async ({ page }) => {
   const info = readInfo(d!.file);
   await gotoDaemon(page);
   await expect(page.locator('[title="Connected"]')).toBeVisible({ timeout: 15_000 });

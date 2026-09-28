@@ -2,7 +2,7 @@
   "name": "argus",
   "version": "0.0.104",
   "displayName": "Argus",
-  "description": "AI coding assistant powered by Claude",
+  "description": "AI coding assistant with Claude Code and Codex providers",
   "license": "UNLICENSED",
   "publisher": "local",
   "engines": {
@@ -33,6 +33,7 @@
     "dev:stop": "node scripts/dev-stop.js",
     "test:clean": "node scripts/test-clean.js && node scripts/dev-stop.js",
     "test:e2e:install": "node scripts/install-browsers-manual.js",
+    "test:providers": "npm run compile && node --test --test-force-exit e2e/provider-contract.test.cjs",
     "test:e2e": "node node_modules/@playwright/test/cli.js test",
     "test:e2e:mock": "node node_modules/@playwright/test/cli.js test --project=mock",
     "test:e2e:integration": "node node_modules/@playwright/test/cli.js test --project=integration --no-deps",

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Exercises the Workspace History "Browse" tab end to end against the real backend
@@ -22,7 +22,7 @@ async function openBrowse(page: Page) {
 }
 
 test.describe('workspace browse / folder explorer (integration)', () => {
-  test('lists real folders, walks up to This PC (drives), and back down', async ({ page }) => {
+  test('lists real folders, walks up to This PC (drives), and back down', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     const { dialog, breadcrumb } = await openBrowse(page);
@@ -58,7 +58,7 @@ test.describe('workspace browse / folder explorer (integration)', () => {
     await expect(dialog.getByText('Up', { exact: true })).toBeVisible();
   });
 
-  test('opens the browsed folder as the workspace', async ({ page }) => {
+  test('opens the browsed folder as the workspace', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     const { dialog, breadcrumb } = await openBrowse(page);

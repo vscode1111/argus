@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Integration coverage for dialog state persistence (position, size, selected
@@ -29,15 +29,14 @@ async function resizeViaGrabber(
   }, [w, h] as [number, number | undefined]);
 }
 
-// Drag the modal by its handle, then resize it to a fixed 560x480. The handle
-// defaults to the shared modal header; SettingsModal uses a thin drag bar, so it
-// passes its own handle locator.
+// Drag the modal by its stable handle marker, then resize it to a fixed 560x480.
+// Shared modals use their header; SettingsModal marks its thin drag bar.
 async function dragAndResize(
   page: Page,
   dialog: ReturnType<Page['getByRole']>,
-  handle?: ReturnType<Page['getByRole']>,
 ) {
-  const h = handle ?? dialog.locator('[class*="header"]').first();
+  const h = dialog.locator('[data-dialog-drag-handle]');
+  await expect(h).toBeVisible();
   const start = await h.boundingBox();
   if (!start) throw new Error('no handle box');
   const hy = start.y + Math.min(start.height / 2, 12);
@@ -49,7 +48,7 @@ async function dragAndResize(
 }
 
 test.describe('dialog state persistence (integration)', () => {
-  test('Session History: tab + geometry persist across reopen, and the restored lazy tab re-loads from the backend', async ({ page }) => {
+  test('Session History: tab + geometry persist across reopen, and the restored lazy tab re-loads from the backend', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     // Open and switch to the lazy "All workspaces" tab; the real backend scans
@@ -85,7 +84,7 @@ test.describe('dialog state persistence (integration)', () => {
     expect(Math.abs(reopened.height - 480)).toBeLessThan(3);
   });
 
-  test('Session History: tab and size survive a full page refresh, and "Reset layout" clears them', async ({ page }) => {
+  test('Session History: tab and size survive a full page refresh, and "Reset layout" clears them', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     await page.getByRole('button', { name: 'Session history' }).click();
@@ -123,7 +122,7 @@ test.describe('dialog state persistence (integration)', () => {
     expect(Math.abs(box.width - 440)).toBeLessThan(3); // default width restored
   });
 
-  test('Workspace History: the restored "Browse" tab re-opens the real folder explorer on reopen', async ({ page }) => {
+  test('Workspace History: the restored "Browse" tab re-opens the real folder explorer on reopen', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     await page.getByRole('button', { name: 'Switch workspace' }).click();
@@ -146,7 +145,7 @@ test.describe('dialog state persistence (integration)', () => {
     await expect(dialog.getByRole('button', { name: 'Open this folder' })).toBeEnabled({ timeout: 30_000 });
   });
 
-  test('Account & Usage: position and size persist across reopen and across a refresh', async ({ page }) => {
+  test('Account & Usage: position and size persist across reopen and across a refresh', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     async function openAccount() {
@@ -188,7 +187,7 @@ test.describe('dialog state persistence (integration)', () => {
     expect(Math.abs(afterRefresh.width - 560)).toBeLessThan(3);
   });
 
-  test('Settings: tab and geometry both survive a refresh, and "Reset layout" clears them', async ({ page }) => {
+  test('Settings: tab and geometry both survive a refresh, and "Reset layout" clears them', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     async function openSettings() {
@@ -201,7 +200,7 @@ test.describe('dialog state persistence (integration)', () => {
     let dialog = await openSettings();
     await dialog.getByRole('button', { name: 'Network' }).click();
     await expect(dialog.getByRole('button', { name: 'Network' })).toHaveClass(/tabActive/);
-    await dragAndResize(page, dialog, dialog.locator('[class*="dragHandle"]').first());
+    await dragAndResize(page, dialog);
     const moved = await dialog.boundingBox();
     if (!moved) throw new Error('no box');
 
@@ -248,7 +247,7 @@ test.describe('dialog state persistence (integration)', () => {
     expect(cleared.width).toBeLessThan(520);
   });
 
-  test('"Reset layout" clears EVERY dialog at once (cross-dialog), and the wipe survives a refresh', async ({ page }) => {
+  test('"Reset layout" clears EVERY dialog at once (cross-dialog), and the wipe survives a refresh', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     async function openSessionHistory() {

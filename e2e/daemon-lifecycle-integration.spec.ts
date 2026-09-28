@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -39,7 +39,7 @@ test.describe('daemon lifecycle (integration)', () => {
   test.beforeAll(() => ensureCompiled());
   test.afterEach(() => { stopDaemon(d); d = undefined; });
 
-  test('writes a discovery file and gates connections by nonce', async () => {
+  test('writes a discovery file and gates connections by nonce', { tag: ["@shared"] }, async () => {
     const PORT = 3911;
     d = await startDaemon({ port: PORT });
 
@@ -54,7 +54,7 @@ test.describe('daemon lifecycle (integration)', () => {
     await expect(probe(PORT, 'wrong-nonce')).resolves.toBe(401);
   });
 
-  test('a second launch exits without taking over the running daemon', async () => {
+  test('a second launch exits without taking over the running daemon', { tag: ["@shared"] }, async () => {
     const PORT = 3912;
     d = await startDaemon({ port: PORT });
     const first = readInfo(d.file);
@@ -76,7 +76,7 @@ test.describe('daemon lifecycle (integration)', () => {
     expect(readInfo(d.file).pid).toBe(first.pid); // file still points at the original
   });
 
-  test('records daemonLastStartAt in its config on launch', async () => {
+  test('records daemonLastStartAt in its config on launch', { tag: ["@shared"] }, async () => {
     const PORT = 3914;
     const configPath = uniqueConfigFile('last-start');
     writeDaemonConfig(configPath, { daemonPort: PORT });
@@ -100,7 +100,7 @@ test.describe('daemon lifecycle (integration)', () => {
     expect(cfg.modelDataUpdatedAt ?? 0).toBe(0);
   });
 
-  test('stopDaemon shuts the daemon down and cleans its discovery file', async () => {
+  test('stopDaemon shuts the daemon down and cleans its discovery file', { tag: ["@shared"] }, async () => {
     const PORT = 3915;
     d = await startDaemon({ port: PORT, idleMs: 600_000 }); // long idle: only the request may stop it
     const info = readInfo(d.file);
@@ -128,7 +128,7 @@ test.describe('daemon lifecycle (integration)', () => {
     ws.close();
   });
 
-  test('a server that cannot exit itself refuses to stop', async () => {
+  test('a server that cannot exit itself refuses to stop', { tag: ["@shared"] }, async () => {
     // The dev server's exact configuration: startServer with no onIdleShutdown, i.e.
     // no permission to end the process. Run in-process here rather than against the
     // shared :3001 dev server, so a regression in this gate cannot kill the suite.
@@ -170,7 +170,7 @@ test.describe('daemon lifecycle (integration)', () => {
     }
   });
 
-  test('self-exits and cleans the discovery file after the last client disconnects', async () => {
+  test('self-exits and cleans the discovery file after the last client disconnects', { tag: ["@shared"] }, async () => {
     const PORT = 3913;
     d = await startDaemon({ port: PORT, idleMs: 2000 });
     const info = readInfo(d.file);

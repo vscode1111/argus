@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -106,7 +106,7 @@ function waitForType(ws: WebSocket, type: string, timeoutMs = 30_000): Promise<R
 }
 
 test.describe('connected client list (integration)', () => {
-  test('lists the sockets this server is really serving and marks the one that asked', async () => {
+  test('lists the sockets this server is really serving and marks the one that asked', { tag: ["@shared"] }, async () => {
     const nonce = await getNonce();
     const dir = makeTempDir('list');
     const a = await openClient(nonce, dir);
@@ -138,7 +138,7 @@ test.describe('connected client list (integration)', () => {
     }
   });
 
-  test('disconnects a raw client with the terminal close code, and refuses an id nobody owns', async () => {
+  test('disconnects a raw client with the terminal close code, and refuses an id nobody owns', { tag: ["@shared"] }, async () => {
     const nonce = await getNonce();
     const dir = makeTempDir('close');
     const ctl = await openClient(nonce, dir);
@@ -167,7 +167,7 @@ test.describe('connected client list (integration)', () => {
     }
   });
 
-  test('a real page that is disconnected stays down and comes back only when asked', async ({ page }) => {
+  test('a real page that is disconnected stays down and comes back only when asked', { tag: ["@shared"] }, async ({ page }) => {
     // The decisive one: everything else can pass while the bridge quietly reconnects a
     // second later, which is the failure this feature is built to avoid.
     const nonce = await getNonce();
@@ -203,7 +203,7 @@ test.describe('connected client list (integration)', () => {
     }
   });
 
-  test('marks the connection whose session is mid-turn, and only that one', async () => {
+  test('marks the connection whose session is mid-turn, and only that one', { tag: ["@shared"] }, async () => {
     // One real CLI turn. The workspace is a temp dir, so the CLI loads no project
     // context and the turn is a fraction of what one costs in this repo - but a spawn
     // plus a round trip to the model still does not fit the suite's flat 30s budget.
@@ -235,15 +235,16 @@ test.describe('connected client list (integration)', () => {
       await expect.poll(async () => {
         const rows = await listClients(idle);
         return rows.find(r => r.workspacePath && path.resolve(r.workspacePath) === path.resolve(busyDir))?.sessionId;
-      }, { timeout: 20_000 }).toMatch(/^[0-9a-f-]{36}$/i);
+      }, { timeout: 20_000 }).toMatch(/^(?:codex:)?[0-9a-f-]{36}$/i);
 
       // And it stops being marked when the turn ends: "running" is a live reading, not
       // a flag set once at send.
-      await waitForType(busy, 'done');
+      // This also waits for the real response, which can take over 10s. Polling the
+      // state avoids losing a done frame that arrived while we checked the id.
       await expect.poll(async () => {
         const after = await listClients(idle);
         return after.find(r => r.workspacePath && path.resolve(r.workspacePath) === path.resolve(busyDir))?.running;
-      }, { timeout: 10_000 }).toBe(false);
+      }, { timeout: 45_000 }).toBe(false);
     } finally {
       await closeSocket(busy);
       await closeSocket(idle);

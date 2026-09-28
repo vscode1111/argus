@@ -76,13 +76,31 @@ async function openModal(page: Page) {
   await expect(action).toBeVisible();
   await action.click();
   await expect(page.getByRole('dialog', { name: 'Account' })).toBeVisible();
-  await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 15_000 });
   await send(page, { type: 'accountUsage', account: ACCOUNT, rateLimits: [] });
+  await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 15_000 });
 }
 
 test.describe('usage insights', () => {
   test.beforeEach(async ({ page }) => {
     await waitForApp(page);
+    await send(page, {
+      type: 'providerSelection',
+      providerId: 'claude',
+      model: '',
+      effort: 'high',
+      thinking: true,
+    });
+  });
+
+  test('local insights remain available when the Claude account is logged out', async ({ page }) => {
+    await openModal(page);
+    await send(page, { type: 'accountUsage', account: { loggedIn: false }, rateLimits: [] });
+    await send(page, { type: 'usageInsights', day: DAY_REPORT, week: WEEK_REPORT });
+
+    const dialog = page.getByRole('dialog', { name: 'Account' });
+    await expect(dialog).toContainText('Not logged in');
+    await expect(dialog).toContainText("What's contributing to your limits usage?");
+    await expect(dialog.getByRole('tab', { name: 'Week' })).toBeVisible();
   });
 
   test('renders header, disclaimers, and behaviors at or above the 10% floor with official copy', async ({ page }) => {

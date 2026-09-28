@@ -62,7 +62,8 @@ interface Props {
 
 export function ToolCall({ call, sessionDone }: Props) {
   const { verboseTools, showOutput } = useSettings();
-  const { name, input, result, error } = call;
+  const { input, result, error } = call;
+  const name = call.kind === 'command' ? 'Bash' : call.name;
   const isFile = ['Read', 'Write', 'Edit'].includes(name);
   const summary = toolSummary(name, input);
   const limit = name === 'Bash' ? 600 : 200;

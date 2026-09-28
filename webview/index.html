@@ -58,7 +58,7 @@
       // unsuppressed, a mock test that clicks the terminate/disconnect button would reach
       // the live backend and really kill a Claude CLI - or drop another worker's page -
       // on whoever's machine runs the suite.
-      var MOCK_SUPPRESSED = { getSkills: 1, listSessions: 1, listAllSessions: 1, getActiveSessions: 1, getModels: 1, getUsageInsights: 1, getUsageLimits: 1, readToolImage: 1, getBgTasks: 1, listCliProcesses: 1, killCliProcess: 1, listClients: 1, closeClient: 1, mediaUrl: 1 };
+      var MOCK_SUPPRESSED = { getProviders: 1, switchProvider: 1, saveProviderDefault: 1, providerResponse: 1, getSkills: 1, listSessions: 1, listAllSessions: 1, getActiveSessions: 1, getModels: 1, getUsageInsights: 1, getUsageLimits: 1, readToolImage: 1, getBgTasks: 1, listCliProcesses: 1, killCliProcess: 1, listClients: 1, closeClient: 1, mediaUrl: 1 };
       // Derive host from the page so a LAN device reaches the dev machine, not its own localhost.
       var host = window.location.hostname || 'localhost';
 
@@ -98,7 +98,14 @@
         return 'ws://' + host + ':3001/agent?' + p.toString();
       }
 
-      var bridge = window.createArgusBridge({ nextUrl: nextUrl });
+      var bridge = window.createArgusBridge({
+        nextUrl: nextUrl,
+        // getInfo also emits selection; unsolicited provider pushes must not
+        // replace data injected by mock tests. Direct window events still work.
+        acceptMessage: function (msg) {
+          return !mock || ['providerSelection', 'providers', 'accountUsage', 'usageLimits', 'usageInsights', 'modelList'].indexOf(msg.type) === -1;
+        }
+      });
       window.argusLogin = function (user, password) {
         return auth.login(user, password).then(function (r) {
           if (r.ok) bridge.reconnectNow();
@@ -114,6 +121,7 @@
       });
       return {
         postMessage: function (msg) {
+          if (mock && msg && msg.type === 'getAccountUsage') { console.log('[mock] suppressed', msg.type); return; }
           if (msg && msg.type === 'switchWorkspace') { dir = msg.dir; session = null; bridge.reconnectNow(); updateUrl(); return; }
           // Keep the deep-link session param in step with what the user is viewing,
           // so a WS reconnect re-attaches to the right session (or none after a new chat).

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Exercises the Workspace History "Browse" tab editable breadcrumb against the real
@@ -32,7 +32,7 @@ function parentDir(p: string): string {
 }
 
 test.describe('workspace browse / editable path (integration)', () => {
-  test('typing a valid path navigates the explorer there', async ({ page }) => {
+  test('typing a valid path navigates the explorer there', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     const { dialog, breadcrumb } = await openBrowse(page);
@@ -54,7 +54,7 @@ test.describe('workspace browse / editable path (integration)', () => {
     await expect(dialog.locator('[class*="browseName"]').first()).toBeVisible();
   });
 
-  test('typing an invalid path falls back to the nearest existing directory', async ({ page }) => {
+  test('typing an invalid path falls back to the nearest existing directory', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     const { dialog, breadcrumb } = await openBrowse(page);

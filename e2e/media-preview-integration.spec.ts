@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -141,7 +141,7 @@ async function requestGrant(
 }
 
 test.describe('media grant and range streaming', () => {
-  test('a grant carries no bytes, and the endpoint serves real ranges', async () => {
+  test('a grant carries no bytes, and the endpoint serves real ranges', { tag: ["@shared"] }, async () => {
     const nonce = await getNonce();
     const { ws, frames } = await openClient(nonce, workspace);
     try {
@@ -200,7 +200,7 @@ test.describe('media grant and range streaming', () => {
     }
   });
 
-  test('a non-media binary is described, and plain text still renders', async () => {
+  test('a non-media binary is described, and plain text still renders', { tag: ["@shared"] }, async () => {
     const nonce = await getNonce();
     const { ws, frames } = await openClient(nonce, workspace);
     try {
@@ -231,7 +231,7 @@ test.describe('media grant and range streaming', () => {
 });
 
 test.describe('the player in a real browser', () => {
-  test('a real audio file is granted, decoded and played', async ({ page }) => {
+  test('a real audio file is granted, decoded and played', { tag: ["@shared"] }, async ({ page }) => {
     await page.goto(`/?dir=${encodeURIComponent(workspace)}&file=${encodeURIComponent(wavPath)}`, {
       waitUntil: 'domcontentloaded',
     });
@@ -268,7 +268,7 @@ test.describe('the player in a real browser', () => {
     await expect(page.locator('[data-line]')).toHaveCount(0);
   });
 
-  test('media the browser cannot decode falls back to a readable card', async ({ page }) => {
+  test('media the browser cannot decode falls back to a readable card', { tag: ["@shared"] }, async ({ page }) => {
     await page.goto(`/?dir=${encodeURIComponent(workspace)}&file=${encodeURIComponent(mp4Path)}`, {
       waitUntil: 'domcontentloaded',
     });

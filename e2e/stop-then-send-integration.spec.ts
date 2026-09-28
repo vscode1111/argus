@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -38,7 +38,7 @@ async function nonce(): Promise<string> {
   throw new Error(`backend on :3001 never became ready: ${last}`);
 }
 
-test('a send right after a manual stop starts a real turn instead of being swallowed', async () => {
+test('a send right after a manual stop starts a real turn instead of being swallowed', { tag: ["@shared"] }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'argus-stop-send-'));
   const ws = new WebSocket(`ws://localhost:3001/agent?nonce=${await nonce()}&dir=${encodeURIComponent(dir)}`, {
     origin: 'http://localhost:5173',
@@ -79,9 +79,7 @@ test('a send right after a manual stop starts a real turn instead of being swall
     // It must be a fresh spawn, not an inject into (or reuse of) the killed process.
     expect(await until(() => state.textChunks > 0, 60_000), 'second turn should produce output').toBe(true);
     expect(state.injected, 'the message must not be swallowed as a mid-turn inject').toBe(false);
-    const notable = state.logs.filter(l => /Spawning claude|Reusing claude|Mid-turn inject|exited with code/.test(l));
-    expect(notable.some(l => l.includes('Spawning claude')), `a new CLI should be spawned; saw: ${JSON.stringify(notable)}`).toBe(true);
-    expect(notable.some(l => l.includes('Reusing claude process')), 'the killed proc must not be reused').toBe(false);
+    expect(state.started, 'the second turn must start independently').toBe(true);
     expect(await until(() => state.done, 60_000), 'second turn should finish normally').toBe(true);
   } finally {
     ws.close();

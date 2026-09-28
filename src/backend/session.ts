@@ -1,42 +1,35 @@
-import { spawn } from 'child_process';
+import { getCliLaunchCount, resetCliLaunchCount } from './providers/claudeExecution';
+import { runtime, providerForSession, restoreSelection, selectionMessage } from './providers/registry';
+import { selectionFor, records } from './providers/store';
+import { handleProviderRequest } from './providers/requests';
+import { abortPendingStop } from './providers/claudeExecution';
+import type { TurnInput } from './providers/types';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { WebSocket } from 'ws';
 
-import { IS_WIN, resolveClaudeBin, killProc, interruptProc, killAllClaude, plural, classifyError, API_ERROR_RE } from './cli';
+import { killProc, killAllClaude, plural, classifyError, API_ERROR_RE } from './cli';
 import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
-import { getSkills } from './skills';
 import { readFilePreview } from './filePreview';
 import { grantMedia } from './media';
 // No fetchUsage here on purpose: usagePoller.ts is the only caller of the usage API,
 // so the per-process rate floor cannot be bypassed by a client-triggered handler.
-import { fetchAccountInfo, fetchModels } from './accountUsage';
 import { collectUsageInsights } from './usageInsights';
 import { getUsageSnapshot, noteUsageActivity, requestUsageRefresh } from './usagePoller';
 import { createWatchdog } from './watchdog';
 import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
-import { type Channel, broadcastToAllChannels, listActiveSessions, listOwnedProcs } from './channel';
+import { type Channel, listActiveSessions, listOwnedProcs } from './channel';
 import { listCliProcesses, killCliProcess, cpuCoreCount } from './processes';
 import { type ClientInfo, type CloseClientResult } from './clients';
 import { readAuth, setPassword, clearPassword, dropAllSessions, sessionCount, MIN_PASSWORD_LENGTH } from './auth';
-import { describeModel } from './modelData';
-import { attachProcHandlers, broadcastBgTasks } from './cliHandler';
-import { listSessions, loadSession, deleteSession, renameSession, listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage } from './sessions';
+import { broadcastBgTasks } from './cliHandler';
+import { listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage } from './sessions';
 import { readServerVersion } from './version';
 import { buildWorkspaceInfo } from './workspaceInfo';
 import { searchFiles, type FileSearchResult } from './fileSearch';
 
-const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
-const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
-
-// How long a stop waits for the interrupted turn's `result` before killing the CLI instead.
-// Measured against a real CLI the acknowledgement takes single-digit milliseconds; this is
-// sized for a wedged process, not for a slow one.
-const STOP_INTERRUPT_TIMEOUT_MS = 5_000;
-
-let cliLaunchCount = 0;
-export function getCliLaunchCount(): number { return cliLaunchCount; }
+export { getCliLaunchCount } from './providers/claudeExecution';
 
 interface AskQuestionDef {
   question: string;
@@ -148,7 +141,7 @@ function initChannelSession(s: SessionState, model: string): void {
   const watchdog = createWatchdog({
     broadcast: s.broadcast,
     getProc: () => s.currentProc,
-    getCliDone: () => s.cliDone,
+    getCliDone: () => s.selection.providerId !== 'claude' || s.cliDone,
     setCliDone: (v) => { s.cliDone = v; s.resetStaleTimer(); },
     getPendingAskCount: () => s.pendingAskTools.size,
     getLastMessage: () => s.lastMessage,
@@ -182,7 +175,7 @@ export function attachClientHandlers(
   // Deep link to a session that is not live in memory: point this entry at it so
   // the next send spawns with --resume (the transcript replays on webviewReady).
   // Guarded on an idle entry so a mid-turn resume pointer is never clobbered.
-  if (hooks.sessionId && !liveAttach && !s0.currentProc) s0.sessionId = hooks.sessionId;
+  if (hooks.sessionId && !liveAttach && !s0.currentProc) restoreSelection(s0, hooks.sessionId);
 
   // login is per-client: loginUrl/loginResult only go to the requesting client's ws.
   const login = createLoginHandler(ws, s0.sendLog);
@@ -195,7 +188,10 @@ export function attachClientHandlers(
     channel.removeClient(ws);
   });
 
+  let mutations = Promise.resolve();
+  const ordered = new Set(['send', 'stop', 'newSession', 'resumeSession', 'switchProvider', 'switchModel', 'switchEffort', 'switchThinking', 'saveProviderDefault', 'providerResponse', 'toolAnswer']);
   ws.on('message', (data: Buffer) => {
+    const handle = async () => {
     // Resolve the session state fresh on every message so that after moveToNewSession
     // we automatically use the new entry's state without re-registering handlers.
     const s = channel.getClientState(ws);
@@ -204,7 +200,7 @@ export function attachClientHandlers(
       type: string;
       text?: string;
       images?: Array<{ data: string; mediaType: string; name?: string }>;
-      mode?: 'plan' | 'edit';
+      mode?: 'plan' | 'edit' | 'full-access';
       _silent?: boolean;
       _askResume?: boolean;
       path?: string;
@@ -219,7 +215,10 @@ export function attachClientHandlers(
       return;
     }
 
+    if (await handleProviderRequest(ws, channel, msg, st => { if (!st.sendLog) initChannelSession(st, model); })) return;
+
     if (msg.type === 'webviewReady') {
+      ws.send(JSON.stringify(selectionMessage(s)));
       // Deep link (?session=): replay is deferred to here so it is sent after React
       // mounts and registers its message listener. addClient uses skipReplay=true for
       // live-attaches precisely so this handler owns the first replay.
@@ -232,9 +231,9 @@ export function attachClientHandlers(
         // finished session re-attaches to the entry the first load created, whose
         // history was never streamed (it came from disk). replayHistory reports that,
         // and we read the transcript instead of leaving the page blank.
-        const isLive = liveAttach || (!!s.currentProc && !s.cliDone && s.sessionId === hooks.sessionId);
+        const isLive = liveAttach || ((s.runtime?.active || !!s.currentProc && !s.cliDone) && s.sessionId === hooks.sessionId);
         if (!isLive || !channel.replayHistory(ws)) {
-          const messages = loadSession(hooks.sessionId, s.workspaceDir);
+          const messages = await providerForSession(hooks.sessionId).load(hooks.sessionId, s.workspaceDir);
           s.sendLog('info', `Deep link replay of ${hooks.sessionId} (${plural(messages.length, 'message')})`);
           try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: hooks.sessionId, messages })); } catch {}
         }
@@ -244,12 +243,13 @@ export function attachClientHandlers(
         // Same disk fallback as the deep link: the entry may be bound to a session it
         // never streamed itself (it was resumed from history before the reconnect).
         if (!channel.replayHistory(ws) && s.sessionId) {
-          const messages = loadSession(s.sessionId, s.workspaceDir);
+          const messages = await providerForSession(s.sessionId).load(s.sessionId, s.workspaceDir);
           try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: s.sessionId, messages })); } catch {}
         }
       }
     } else if (msg.type === 'send' && msg.text?.trim() === '/clear') {
       channel.setBrowsing(ws, false);
+      s.runtime?.dispose(); s.runtime = undefined;
       s.sessionId = undefined;
       abortPendingStop(s, '/clear during a pending stop: killing the CLI');
       if (s.currentProc) {
@@ -291,13 +291,13 @@ export function attachClientHandlers(
       // The counter only ever increments on spawn, so a kill alone never moves it -
       // reset it here (only when something was actually killed) so the Info tab's
       // "CLI launches" visibly reflects the action instead of looking like a no-op.
-      if (result.count > 0) cliLaunchCount = 0;
+      if (result.count > 0) resetCliLaunchCount();
       ws.send(JSON.stringify({ type: 'killAllClaudeResult', ...result }));
     } else if (msg.type === 'listCliProcesses') {
       // Runs where the server runs, like killAllClaude: the processes worth listing are
       // the ones on the machine the CLI is spawned on, which over a remote connection is
       // not the machine the panel is on.
-      listCliProcesses({ owned: listOwnedProcs(), current: s.currentProc?.pid }).then(({ processes, error }) => {
+      listCliProcesses({ owned: listOwnedProcs(), current: s.runtime?.pid ?? s.currentProc?.pid }).then(({ processes, error }) => {
         ws.send(JSON.stringify({ type: 'cliProcessList', processes, error, cores: cpuCoreCount() }));
       }).catch((err) => {
         ws.send(JSON.stringify({ type: 'cliProcessList', processes: [], error: (err as Error)?.message ?? String(err), cores: cpuCoreCount() }));
@@ -307,7 +307,7 @@ export function attachClientHandlers(
       // must not be able to name an arbitrary process for the server to terminate.
       const raw = (msg as { pid?: number }).pid;
       const pid = typeof raw === 'number' ? raw : -1;
-      killCliProcess(pid).then((result) => {
+      killCliProcess(pid, listOwnedProcs()).then((result) => {
         ws.send(JSON.stringify({ type: 'cliProcessKilled', ...result }));
       }).catch((err) => {
         ws.send(JSON.stringify({ type: 'cliProcessKilled', pid, killed: false, error: (err as Error)?.message ?? String(err) }));
@@ -361,7 +361,7 @@ export function attachClientHandlers(
       ws.send(JSON.stringify({
         type: 'serverInfo',
         port: hooks.getServerPort?.() ?? 0,
-        cliLaunchCount,
+        cliLaunchCount: getCliLaunchCount(),
         sessionId: s.sessionId,
         sessionPath: s.sessionId ? sessionFilePath(s.sessionId, s.workspaceDir) : null,
         // Version of the build serving this connection. The extension and the daemon
@@ -375,7 +375,7 @@ export function attachClientHandlers(
       if (patch) {
         const filtered: Partial<ArgusConfig> = {};
         for (const [k, v] of Object.entries(patch)) {
-          if (k in DEFAULT_CONFIG) (filtered as Record<string, unknown>)[k] = v;
+          if (k in DEFAULT_CONFIG && k !== 'providerDefaults' && k !== 'defaultProvider') (filtered as Record<string, unknown>)[k] = v;
         }
         const config = { ...readConfig(), ...filtered };
         writeConfig(config);
@@ -388,21 +388,7 @@ export function attachClientHandlers(
         const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
         version = pkg.version ?? '';
       } catch {}
-      ws.send(JSON.stringify(buildWorkspaceInfo(s.workspaceDir, version, s.serverDefaultModel)));
-    } else if (msg.type === 'switchModel') {
-      const newModel = typeof (msg as { model?: string }).model === 'string' ? (msg as { model?: string }).model! : '';
-      writeConfig({ ...readConfig(), model: newModel });
-      // Global settings notify every client on every workspace channel; a per-channel
-      // broadcast left other workspaces' panels highlighting the old model.
-      broadcastToAllChannels(JSON.stringify({ type: 'modelChanged', model: newModel }));
-    } else if (msg.type === 'switchEffort') {
-      const newEffort = typeof (msg as { effort?: string }).effort === 'string' ? (msg as { effort?: string }).effort! : 'high';
-      writeConfig({ ...readConfig(), effort: newEffort });
-      broadcastToAllChannels(JSON.stringify({ type: 'effortChanged', effort: newEffort }));
-    } else if (msg.type === 'switchThinking') {
-      const newThinking = (msg as { thinking?: boolean }).thinking !== false;
-      writeConfig({ ...readConfig(), thinking: newThinking });
-      broadcastToAllChannels(JSON.stringify({ type: 'thinkingChanged', thinking: newThinking }));
+      ws.send(JSON.stringify(buildWorkspaceInfo(s.workspaceDir, version, s.serverDefaultModel, channel.getViewingSessionId(ws) ? selectionFor(channel.getViewingSessionId(ws)!, s.workspaceDir) : s.selection)));
     } else if (msg.type === 'retry') {
       if (s.lastMessage) {
         s.sendLog('info', 'Retrying last message');
@@ -412,14 +398,12 @@ export function attachClientHandlers(
     } else if (msg.type === 'forceError') {
       if (s.currentProc) killProc(s.currentProc);
       s.broadcast(JSON.stringify({ type: 'error', text: 'Forced error (kill button)' }));
-    } else if (msg.type === 'getSkills') {
-      ws.send(JSON.stringify({ type: 'skills', skills: getSkills(s.workspaceDir) }));
     } else if (msg.type === 'login') {
       login.start(s.workspaceDir);
     } else if (msg.type === 'loginCode' && msg.text) {
       login.submitCode(msg.text);
     } else if (msg.type === 'toolAnswer') {
-      handleToolAnswer(s, msg as { type: string; id?: string; answers?: unknown; mode?: string });
+      runtime(s).respond(msg.id || '', (msg as { answers?: unknown }).answers);
     } else if (msg.type === 'readFilePreview' && msg.path) {
       const result = readFilePreview(msg.path, s.workspaceDir);
       ws.send(JSON.stringify({ type: 'filePreview', ...result }));
@@ -458,63 +442,20 @@ export function attachClientHandlers(
           ? readFilePreview(String(msg.path), s.workspaceDir)
           : { path: '', content: 'Error: no image recorded for this tool call' };
       ws.send(JSON.stringify({ type: 'toolImage', toolUseId: msg.toolUseId, ...reply }));
-    } else if (msg.type === 'getAccountUsage') {
-      // An explicit refresh means the user is at the machine looking at the numbers,
-      // so it reopens the poller's activity window; merely opening the modal does not.
-      if (msg.force) noteUsageActivity();
-      const accountP = fetchAccountInfo();
-      // Never a per-client fetch: the server refreshes at most once per
-      // USAGE_MIN_REFRESH_MS however many panels ask, and broadcasts what it gets, so
-      // opening this modal also updates every other client's header indicator.
-      const usageP = requestUsageRefresh();
-      accountP.then((account) => {
-        ws.send(JSON.stringify({ type: 'accountUsage', account, usagePending: true }));
-      }).catch(() => {});
-      Promise.all([accountP, usageP]).then(([account, usage]) => {
-        const rateLimits = usage.windows.length > 0 ? usage.windows : Array.from(s.rateLimits.values());
-        const usageError = rateLimits.length === 0 ? usage.error : undefined;
-        ws.send(JSON.stringify({ type: 'accountUsage', account, rateLimits, usageError, usagePending: false }));
-      }).catch((err) => {
-        // One request, one reply - the invariant getUsageLimits and getUsageInsights
-        // already hold. Swallowing here meant a failure sent nothing at all, so the
-        // modal spun on "Loading..." with no reason on screen and a waiting client had
-        // no frame to wake on.
-        ws.send(JSON.stringify({
-          type: 'accountUsage',
-          account: { loggedIn: false },
-          rateLimits: [],
-          usageError: (err as Error)?.message ?? String(err),
-          usagePending: false,
-        }));
-      });
     } else if (msg.type === 'getUsageInsights') {
       collectUsageInsights(msg.force).then((insights) => {
         ws.send(JSON.stringify({ type: 'usageInsights', day: insights.day, week: insights.week }));
       }).catch((err) => {
         ws.send(JSON.stringify({ type: 'usageInsights', error: (err as Error).message ?? String(err) }));
       });
-    } else if (msg.type === 'getModels') {
-      fetchModels().then(({ models, error }) => {
-        const cfg = readConfig();
-        let list = models;
-        if (list.length > 0) {
-          // Persist the last good list so the picker still shows real entries when
-          // a later fetch fails (offline, expired token) or on the next fresh start.
-          if (JSON.stringify(list) !== JSON.stringify(cfg.modelListCache)) {
-            writeConfig({ ...cfg, modelListCache: list });
-          }
-        } else if (cfg.modelListCache.length > 0) {
-          list = cfg.modelListCache;
-        }
-        const withDescriptions = list.map(m => ({ ...m, description: describeModel(m.id, cfg.modelFamilyDescriptions) }));
-        ws.send(JSON.stringify({ type: 'modelList', models: withDescriptions, error, runtimeDefaultModel: cfg.runtimeDefaultModel || '' }));
-      }).catch(() => {});
     } else if (msg.type === 'stop') {
-      handleStop(s);
+      await runtime(s).stop();
     } else if (msg.type === 'newSession') {
       // Create a fresh isolated session entry for this client only.
       // The previous entry's CLI process keeps running for any other clients still in it.
+      const previousSelection = { ...s.selection };
       const newState = channel.moveToNewSession(ws);
+      newState.selection = previousSelection;
       if (!newState.sendLog) initChannelSession(newState, model);
       newState.sessionId = undefined;
       newState.lastMessage = null;
@@ -522,25 +463,24 @@ export function attachClientHandlers(
       // broadcast() on the new entry goes only to this client (the entry is fresh).
       broadcastBgTasks(newState);
       newState.broadcast(JSON.stringify({ type: 'clear' }));
-    } else if (msg.type === 'listSessions') {
-      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(s.workspaceDir), currentId: s.sessionId }));
+      newState.broadcast(JSON.stringify(selectionMessage(newState)));
     } else if (msg.type === 'resumeSession' && msg.id) {
-      handleResumeSession(s, ws, channel, msg.id);
-    } else if (msg.type === 'deleteSession' && msg.id) {
-      deleteSession(msg.id, s.workspaceDir);
-      if (s.sessionId === msg.id) s.sessionId = undefined;
-      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(s.workspaceDir), currentId: s.sessionId }));
-    } else if (msg.type === 'renameSession' && msg.id && typeof msg.title === 'string') {
-      renameSession(msg.id, s.workspaceDir, msg.title);
-      ws.send(JSON.stringify({ type: 'sessionList', sessions: listSessions(s.workspaceDir), currentId: s.sessionId }));
+      await handleResumeSession(s, ws, channel, msg.id);
     } else if (msg.type === 'listWorkspaces') {
       const currentPath = s.workspaceDir;
       listWorkspaces().then(workspaces => {
+        for (const r of records().filter(r => r.selection.providerId !== 'claude')) {
+          const existing = workspaces.find(w => w.path === r.cwd);
+          if (existing) { existing.sessions++; existing.updatedAt = Math.max(existing.updatedAt, r.updatedAt); }
+          else workspaces.push({ path: r.cwd, name: path.basename(r.cwd), sessions: 1, updatedAt: r.updatedAt });
+        }
         try { ws.send(JSON.stringify({ type: 'workspaceList', workspaces, currentPath })); } catch {}
       }).catch(() => {});
     } else if (msg.type === 'listAllSessions') {
       const currentId = s.sessionId;
       listAllSessions().then(sessions => {
+        sessions.push(...records().filter(r => r.selection.providerId !== 'claude').map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, lines: 0, workspacePath: r.cwd, workspaceName: path.basename(r.cwd) })));
+        sessions.sort((a, b) => b.updatedAt - a.updatedAt);
         try { ws.send(JSON.stringify({ type: 'allSessionList', sessions, currentId })); } catch {}
       }).catch(() => {});
     } else if (msg.type === 'getActiveSessions') {
@@ -587,210 +527,29 @@ export function attachClientHandlers(
       }
       ws.send(JSON.stringify({ type: 'fileList', ...result }));
     }
+    };
+    let type = '';
+    try { type = JSON.parse(data.toString()).type; } catch {}
+    const operation = ordered.has(type) ? mutations.then(handle) : handle();
+    const settled = operation.catch(error => {
+      if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'providerNotice', error: true, message: error instanceof Error ? error.message : 'Request failed' }));
+    });
+    if (ordered.has(type)) mutations = settled;
   });
 }
 
-function handleSend(s: SessionState, msg: { type?: string; text?: string; images?: Array<{ data: string; mediaType: string; name?: string }>; mode?: string; _silent?: boolean; _askResume?: boolean }) {
-  const text = msg.text ?? '';
-  const images = msg.images;
-  // Any send spends tokens, including a mid-turn inject and a silent retry, so it is
-  // what keeps the usage poller awake (and wakes it after a paused hour).
-  noteUsageActivity();
-
-  if (s.currentProc?.stdin?.writable && !s.cliDone && !msg._silent && !msg._askResume) {
-    s.lastMessage = { text, images, mode: msg.mode };
-    const contentBlocks: Array<Record<string, unknown>> = [];
-    if (images && images.length > 0) {
-      for (const img of images) {
-        if (img.mediaType.startsWith('text/')) {
-          contentBlocks.push({ type: 'text', text: `[Attached file: ${img.name ?? 'file.txt'}]\n${Buffer.from(img.data, 'base64').toString('utf-8')}` });
-        } else if (img.mediaType === 'application/pdf') {
-          contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
-        } else {
-          contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
-        }
-      }
-    }
-    if (text) contentBlocks.push({ type: 'text', text });
-    const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: contentBlocks } });
-    s.sendLog('info', `Mid-turn inject: ${stdinMsg.length} bytes to stdin`);
-    s.currentProc.stdin.write(stdinMsg + '\n');
-    // The turn stops being the CLI's own the moment the user speaks into it: they are now
-    // waiting on this answer, so it must ring on completion. This branch returns before the
-    // reset block below that normally clears the flag.
-    s.autonomousTurn = false;
-    s.broadcast(JSON.stringify({ type: 'user_inject', text }));
-    return;
-  }
-
-  if (!msg._silent) {
-    s.broadcast(JSON.stringify({ type: 'message', message: { id: String(Date.now()), role: 'user', content: text, images } }));
-  }
-
-  const isPlan = msg.mode === 'plan';
-  const tools = isPlan ? ALLOWED_TOOLS.filter(t => !PLAN_BLOCKED_TOOLS.includes(t)) : ALLOWED_TOOLS;
-  const baseArgs = [
-    '--print', '--verbose',
-    '--output-format', 'stream-json',
-    '--input-format', 'stream-json',
-    '--include-partial-messages',
-    '--tools', tools.join(','),
-    '--allowedTools', tools.join(','),
-  ];
-  // Derived from the config at spawn time (see getInfo): the latest switchModel /
-  // switchEffort / switchThinking always wins, whichever channel or process it came from.
-  const cfg = readConfig();
-  const model = cfg.model || s.serverDefaultModel;
-  if (model) baseArgs.push('--model', model);
-  if (!cfg.thinking) {
-    baseArgs.push('--effort', 'low');
-  } else if (cfg.effort) {
-    baseArgs.push('--effort', cfg.effort);
-  }
-  if (cfg.appendSystemPrompt) baseArgs.push('--append-system-prompt', cfg.appendSystemPrompt);
-  if (isPlan) {
-    baseArgs.push('--permission-mode', 'plan', '--disallowedTools', PLAN_BLOCKED_TOOLS.join(','));
-  }
-  const procKey = baseArgs.join(' ');
-  const args = [...baseArgs];
-  if (s.sessionId && (!s.currentProc || s.currentProcKey !== procKey)) {
-    args.push('--resume', s.sessionId);
-  }
-
-  if (!msg._silent) {
-    s.lastMessage = { text, images, mode: msg.mode };
-    s.watchdog.state.autoRetryCount = 0;
-  }
-
-  s.buffer = '';
-  s.stderrOutput = '';
-  s.textAccum = '';
-  s.resetStaleTimer();
-  s.watchdog.state.active = false;
-  s.receivedDeltas = false;
-  s.receivedThinkingDeltas = false;
-  s.liveOutputChars = 0;
-  s.completedOutputTokens = 0;
-  s.liveInputTokens = 0;
-  s.suppressCliOutput = false;
-  s.cliDone = false;
-  s.autonomousTurn = false;
-  s.toolMap.clear();
-  s.answeredTools.clear();
-  s.pendingAskTools.clear();
-  s.pendingFollowUp = undefined;
-
-  // A stop that has not settled yet (the interrupted turn still owes its `result`) must not
-  // hand its process to this turn: that pending result would be read as *this* turn's and
-  // end it a few milliseconds in, which is the empty-1s-turn failure in another costume.
-  // Measured, the acknowledgement takes single-digit ms, so this only trips when a send
-  // lands in that window - it falls back to the old kill-and-respawn, never to a wrong turn.
-  if (s.stopping) abortPendingStop(s, 'Send arrived before the stopped turn settled; respawning');
-
-  const canReuse = s.currentProc?.stdin?.writable === true && s.currentProcKey === procKey;
-  let proc: ReturnType<typeof spawn>;
-  if (canReuse) {
-    proc = s.currentProc!;
-    s.sendLog('info', 'Reusing claude process');
-  } else {
-    if (s.currentProc) {
-      s.sendLog('info', 'Args changed, respawning claude');
-      killProc(s.currentProc);
-    }
-    const claudeBin = resolveClaudeBin();
-    const spawnCmd = IS_WIN && /\s/.test(claudeBin) ? `"${claudeBin}"` : claudeBin;
-    s.sendLog('info', `Spawning claude: ${args.join(' ')}`);
-    // spawn() throws synchronously when the OS refuses a new process (e.g. resource
-    // exhaustion -> "spawn UNKNOWN"). That must stay a per-turn error: uncaught it
-    // kills the server process and every other client's connection with it.
-    try {
-      proc = spawn(spawnCmd, args, { cwd: s.workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN, windowsHide: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      s.currentProc = undefined;
-      s.currentProcKey = undefined;
-      s.cliDone = true;
-      s.sendLog('error', `spawn failed: ${message}`);
-      s.broadcast(JSON.stringify({ type: 'error', text: `Failed to start Claude CLI: ${message}` }));
-      s.broadcast(JSON.stringify({ type: 'done' }));
-      return;
-    }
-    cliLaunchCount++;
-    s.currentProc = proc;
-    s.currentProcKey = procKey;
-    attachProcHandlers(s, proc);
-  }
-
-  // Reaped when a *new* process is spawned, not on every send. An orphan is created by a
-  // process dying (hard kill, kill-all, daemon respawn - see
-  // !notes/tasks/empty-1s-turn/notes.md), and the replacement cannot deliver the
-  // notifications its predecessor's tasks owed, so that set is worthless to it; a reused
-  // process still owns its tasks and will report them. Clearing on every send instead
-  // dropped tasks that were genuinely still running - tolerable while the count was a
-  // footnote on one message, wrong now that it is a live indicator, because typing
-  // anything mid-watch zeroed it and nothing could restore it (`task_started` is emitted
-  // once per task and never re-emitted, measured in
-  // !notes/tasks/bg-task-indicators/scripts/probe-task-started.js).
-  if (!canReuse && s.pendingBgTasks.size > 0) {
-    s.pendingBgTasks.clear();
-    broadcastBgTasks(s);
-  }
-  if (!msg._askResume) {
-    s.broadcast(JSON.stringify({ type: 'thinking_start', reused: canReuse }));
-  }
-  s.watchdog.state.lastEventTime = Date.now();
-  s.watchdog.state.active = true;
-
-  const contentBlocks: Array<Record<string, unknown>> = [];
-  if (images && images.length > 0) {
-    for (const img of images) {
-      if (img.mediaType.startsWith('text/')) {
-        contentBlocks.push({ type: 'text', text: `[Attached file: ${img.name ?? 'file.txt'}]\n${Buffer.from(img.data, 'base64').toString('utf-8')}` });
-      } else if (img.mediaType === 'application/pdf') {
-        contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
-      } else {
-        contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
-      }
-    }
-    s.sendLog('debug', `Attaching ${plural(images.length, 'attachment')}`);
-  }
-  if (text) contentBlocks.push({ type: 'text', text });
-  const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: contentBlocks } });
-  s.sendLog('debug', `stdin: ${stdinMsg.length} bytes`);
-  proc.stdin!.write(stdinMsg + '\n');
+function handleSend(s: SessionState, msg: TurnInput): void {
+  void runtime(s).send(msg).catch(error => s.broadcast(JSON.stringify({ type: 'providerNotice', error: true, message: error instanceof Error ? error.message : 'Provider failed' })));
 }
 
-function handleToolAnswer(s: SessionState, msg: { type: string; id?: string; answers?: unknown; mode?: string }) {
-  const answerId = msg.id ?? '';
-  const answers = msg.answers as Record<string, string> | undefined;
-  const content = JSON.stringify({ answers });
-  const tc = s.toolMap.get(answerId);
-
-  s.pendingAskTools.delete(answerId);
-  s.answeredTools.add(answerId);
-
-  s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: answerId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: content } }));
-  s.sendLog('info', `Tool answer for ${answerId}: ${content.slice(0, 100)}`);
-
-  if (s.pendingAskTools.size === 0 && s.sessionId && answers && Object.keys(answers).length > 0) {
-    s.pendingFollowUp = { answers, toolId: answerId, mode: msg.mode };
-    if (s.cliDone) s.flushAskFollowUp();
-  } else {
-    if (s.pendingAskTools.size === 0) s.suppressCliOutput = false;
-    if (s.currentProc?.stdin?.writable) s.currentProc.stdin.end();
-    if (s.pendingAskTools.size === 0 && s.cliDone) {
-      setTimeout(() => s.broadcast(JSON.stringify({ type: 'done' })), 100);
-    }
-  }
-}
-
-function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, id: string) {
+async function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, id: string) {
   // If this session is mid-turn in another entry (another panel, or the entry this client
   // detached from on a browsed send), join it instead of reading the transcript. The file
   // on disk stops at the last committed turn, so loading it would drop the turn in flight
   // and leave the client with no progress indicator and no further output.
   const live = channel.attachToLiveSession(ws, id);
   if (live) {
+    ws.send(JSON.stringify(selectionMessage(live)));
     live.sendLog('info', `Joined session ${id}, turn already in progress`);
     // The snapshot replay restores the blocks but not the counters behind the timer.
     const outputTokens = live.completedOutputTokens + Math.ceil(live.liveOutputChars / 4);
@@ -798,18 +557,20 @@ function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, i
     return;
   }
   // Don't kill currentProc - the active CLI turn belongs to the whole entry, not this client.
-  const procRunning = !!s.currentProc && !s.cliDone;
+  const procRunning = s.runtime?.active || !!s.currentProc && !s.cliDone;
   // isBrowsing: proc is active AND the user is viewing a session other than the one being streamed.
   // If the proc is idle, any resumeSession is a direct switch (live mode) - no conflict possible.
   const isBrowsing = procRunning && id !== s.sessionId;
   // Only update the session pointer when the proc is idle or the user is returning to the live session.
   // Updating it while browsing a different session would corrupt the --resume arg for the next spawn.
-  if (!isBrowsing) s.sessionId = id;
+  if (!isBrowsing) restoreSelection(s, id);
   // Record what this client now has on screen. The entry keeps pointing at the streaming
   // session, so without this a send from here has no way back to the session the user is
   // actually looking at, and lands in the running turn instead.
   channel.setBrowsing(ws, isBrowsing, isBrowsing ? id : undefined);
-  const messages = loadSession(id, s.workspaceDir);
+  const messages = await providerForSession(id).load(id, s.workspaceDir);
+  if ((channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId) !== id) return;
+  ws.send(JSON.stringify({ type: 'providerSelection', ...selectionFor(id, s.workspaceDir) }));
   s.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);
   ws.send(JSON.stringify({ type: 'sessionLoaded', id, messages }));
   if (!isBrowsing) {
@@ -821,71 +582,4 @@ function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, i
     const outputTokens = s.completedOutputTokens + Math.ceil(s.liveOutputChars / 4);
     ws.send(JSON.stringify({ type: 'token_update', inputTokens: s.liveInputTokens, outputTokens }));
   }
-}
-
-// Gives up on an in-flight interrupt and falls back to the old kill-and-detach. Used
-// wherever a stopped turn's process must not survive into whatever comes next: a send that
-// beat the interrupt's acknowledgement, and the /clear reset. (newSession is deliberately
-// not one of them - it moves this client to a fresh entry and leaves the old one, process
-// and pending stop included, to whichever clients are still in it.)
-function abortPendingStop(s: SessionState, reason: string) {
-  if (!s.stopping) return;
-  s.stopping = false;
-  if (s.stopKillTimer) { clearTimeout(s.stopKillTimer); s.stopKillTimer = null; }
-  if (!s.currentProc) return;
-  const stale = s.currentProc;
-  s.currentProc = undefined;
-  s.currentProcKey = undefined;
-  s.sendLog('info', reason);
-  killProc(stale);
-}
-
-function handleStop(s: SessionState) {
-  s.watchdog.state.active = false;
-  if (s.watchdog.state.retryTimer) {
-    clearTimeout(s.watchdog.state.retryTimer);
-    s.watchdog.state.retryTimer = null;
-  }
-  s.watchdog.state.retrying = false;
-  for (const toolId of s.pendingAskTools) {
-    const tc = s.toolMap.get(toolId);
-    s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: JSON.stringify({ cancelled: true }) } }));
-  }
-  s.pendingAskTools.clear();
-  // Interrupt a live turn rather than killing the process. A killed CLI leaves its
-  // transcript ending on a user message nobody answered, and the CLI repairs that on the
-  // next `--resume` by splicing a synthetic "No response requested." assistant turn into
-  // the conversation - which it then sends to the model on every later turn (measured, see
-  // !notes/tasks/no-response-requested/notes.md), until the model starts answering real
-  // questions with those four words. The repair only fires when the *last* message is a
-  // user message, so keeping the process alive is what fixes it: the next send reuses it
-  // with no `--resume`, that answer lands after the abandoned message, and the abandoned
-  // message is no longer last.
-  const proc = s.currentProc;
-  if (proc && !s.cliDone && interruptProc(proc)) {
-    s.stopping = true;
-    s.sendLog('info', 'Stop: interrupting the turn, keeping the CLI for reuse');
-    s.stopKillTimer = setTimeout(() => {
-      // The interrupt was written but never acknowledged with a `result`. Fall back to the
-      // old behaviour rather than leave a stopped turn generating where nobody can see it.
-      if (!s.stopping) return;
-      s.stopping = false;
-      s.stopKillTimer = null;
-      s.sendLog('warn', 'Stop: interrupt not acknowledged, killing the CLI');
-      if (s.currentProc === proc) { s.currentProc = undefined; s.currentProcKey = undefined; }
-      killProc(proc);
-    }, STOP_INTERRUPT_TIMEOUT_MS);
-  } else if (proc) {
-    // No live turn to interrupt, or the pipe is already gone. Detach before killing,
-    // exactly like the /clear handler: `close` arrives a beat after killProc, and until it
-    // does the dying proc still has a writable stdin - so a send issued right after a stop
-    // was taken for a mid-turn inject (or reused the proc outright), wrote into a pipe
-    // nobody reads, and the pending close then ended the fresh turn with a bare `done`.
-    // Detached, it can be neither reused nor injected into, and its close is a no-op.
-    s.currentProc = undefined;
-    s.currentProcKey = undefined;
-    killProc(proc);
-  }
-  s.cliDone = true;
-  s.broadcast(JSON.stringify({ type: 'done' }));
 }

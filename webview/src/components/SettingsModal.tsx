@@ -481,7 +481,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
         ref={modalRef}
         style={drag.style}
       >
-        <div className={styles.dragHandle} onPointerDown={drag.onPointerDown} />
+        <div className={styles.dragHandle} data-dialog-drag-handle onPointerDown={drag.onPointerDown} />
         <button className={styles.closeBtn} onClick={onClose} aria-label="Close settings" title="Close">&times;</button>
         <div className={styles.scroll}>
         <div className={styles.tabBar}>

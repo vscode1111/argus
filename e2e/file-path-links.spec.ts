@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { waitForApp } from './helpers';
+import { readFileSync } from 'fs';
+import * as path from 'path';
+
+const appFirstLine = readFileSync(path.join(__dirname, '../webview/src/App.tsx'), 'utf8').split(/\r?\n/)[0];
 
 async function clickDevButton(page: import('@playwright/test').Page, label: string) {
   const found = await page.evaluate((lbl) => {
@@ -92,7 +96,7 @@ test.describe('file path links', () => {
     const link = page.getByRole('link', { name: /App\.tsx:120/ }).first();
     await clickAndWaitForModal(link, page);
 
-    await expect(modalLine(page, 1)).toContainText('import React');
+    await expect(modalLine(page, 1)).toContainText(appFirstLine);
 
     // Escape closes the modal (retry press under parallel load)
     await expect(async () => {
@@ -180,7 +184,7 @@ test.describe('relative file path links', () => {
     const link = page.getByRole('link', { name: 'webview/src/App.tsx' });
     await clickAndWaitForModal(link, page);
 
-    await expect(modalLine(page, 1)).toContainText('import React');
+    await expect(modalLine(page, 1)).toContainText(appFirstLine);
 
     await expect(async () => {
       await page.keyboard.press('Escape');

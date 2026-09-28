@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -30,7 +30,7 @@ test.describe('daemon registration heal (integration)', () => {
   test.beforeAll(() => ensureCompiled());
   test.afterEach(() => { stopDaemon(d); d = undefined; });
 
-  test('rewrites its discovery file after it is deleted', async () => {
+  test('rewrites its discovery file after it is deleted', { tag: ["@shared"] }, async () => {
     const PORT = 3921;
     d = await startDaemon({ port: PORT, healMs: HEAL_MS });
     const before = readInfo(d.file);
@@ -54,7 +54,7 @@ test.describe('daemon registration heal (integration)', () => {
   // tick regardless of its contents would satisfy both other tests while stranding
   // whichever daemon had legitimately registered - the same failure, pointed the
   // other way.
-  test('leaves a discovery file that names another daemon alone', async () => {
+  test('leaves a discovery file that names another daemon alone', { tag: ["@shared"] }, async () => {
     const PORT = 3922;
     d = await startDaemon({ port: PORT, healMs: HEAL_MS });
     const mine = readInfo(d.file);
@@ -73,7 +73,7 @@ test.describe('daemon registration heal (integration)', () => {
     expect(isAlive(mine.pid)).toBe(true); // still running, just not the registered one
   });
 
-  test('a launch after the file was restored declines instead of dying on EADDRINUSE', async () => {
+  test('a launch after the file was restored declines instead of dying on EADDRINUSE', { tag: ["@shared"] }, async () => {
     const PORT = 3923;
     d = await startDaemon({ port: PORT, healMs: HEAL_MS });
     const first = readInfo(d.file);

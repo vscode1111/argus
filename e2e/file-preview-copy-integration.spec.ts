@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 const modalDialog = (page: import('@playwright/test').Page) =>
@@ -13,7 +13,7 @@ test.describe('file preview copy path', () => {
     await waitForApp(page);
   });
 
-  test('copy path button copies file path from Read tool preview', async ({ page }) => {
+  test('copy path button copies file path from Read tool preview', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.fill('read the file package.json using the Read tool, nothing else');
     await page.getByRole('button', { name: 'Send' }).click();

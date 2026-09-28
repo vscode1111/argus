@@ -39,6 +39,8 @@ export default defineConfig({
   projects: [
     {
       name: 'mock',
+      // node:test contracts have their own runner and must not execute at discovery.
+      testMatch: /\.spec\.ts$/,
       testIgnore: /-integration\.spec/,
       use: chromiumOptions,
     },

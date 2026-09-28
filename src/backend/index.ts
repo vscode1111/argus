@@ -1,3 +1,4 @@
+import { sessionRecord } from './providers/store';
 import { createServer } from 'http';
 import { randomBytes } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
@@ -419,7 +420,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     const rawSession = reqUrl.searchParams.get('session');
     let sessionId: string | undefined;
     if (rawSession) {
-      const sessionWs = findWorkspaceForSession(rawSession);
+      const sessionWs = rawSession.startsWith('codex:') ? sessionRecord(rawSession)?.cwd : findWorkspaceForSession(rawSession);
       if (sessionWs) {
         sessionId = rawSession;
         if (resolve(sessionWs) !== workspaceDir) {

@@ -1,6 +1,7 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, writeTestConfig, type Page } from './provider-fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { waitForApp } from './helpers';
 
 // These tests mutate e2e/argus.json (effort and thinking fields) via the UI
@@ -17,14 +18,15 @@ function readConfig(): Record<string, unknown> {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
 }
 
-function writeConfig(patch: Record<string, unknown>) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify({ ...readConfig(), ...patch }, null, 2) + '\n');
+async function writeConfig(patch: Record<string, unknown>): Promise<void> {
+  await writeTestConfig(CONFIG_PATH, JSON.stringify({ ...readConfig(), providerDefaults: {}, defaultProvider: 'claude', ...patch }, null, 2) + '\n');
 }
 
 // Open the Account modal via the slash menu and switch to the Models tab.
 // Returns the dialog locator.
 async function openModelsTab(page: Page) {
   const textarea = page.getByPlaceholder('Ask Argus');
+  await textarea.fill('');
   await textarea.focus();
   await textarea.pressSequentially('/usage');
   await page.locator('[class*="slashMenuItem"]', { hasText: 'Account & usage' }).click();
@@ -40,6 +42,7 @@ async function openModelsTab(page: Page) {
 // Open the slash menu and wait for the Model section to appear.
 async function openSlashMenu(page: Page) {
   const textarea = page.getByPlaceholder('Ask Argus');
+  await textarea.fill('');
   await textarea.focus();
   await textarea.pressSequentially('/');
   await expect(page.locator('[class*="slashMenuHeader"]', { hasText: 'Model' })).toBeVisible({ timeout: 5_000 });
@@ -62,31 +65,44 @@ async function reloadAndWait(page: Page) {
   }
 }
 
-// Send a message and wait for streaming to finish.
+// These cases verify launch arguments, so stop once the real process has started.
+// Waiting for a network response adds no evidence about those arguments.
 async function sendAndWait(page: Page, text: string) {
   const textarea = page.getByPlaceholder('Ask Argus');
   await textarea.fill(text);
   await page.getByRole('button', { name: 'Send' }).click();
   const stopBtn = page.getByRole('button', { name: 'Stop' });
   await expect(stopBtn).toBeVisible({ timeout: 15_000 });
-  await expect(stopBtn).toHaveCount(0, { timeout: 60_000 });
+  await expect(page.locator(LOG_LIST)).toContainText('Spawning claude:', { timeout: 15_000 });
+  await stopBtn.click();
+  await expect(stopBtn).toHaveCount(0, { timeout: 10_000 });
 }
 
 test.describe('effort and thinking (integration)', () => {
   let original: string;
+  let workspace: string;
 
   test.beforeEach(async ({ page }) => {
     original = fs.existsSync(CONFIG_PATH) ? fs.readFileSync(CONFIG_PATH, 'utf-8') : '{}';
-    await waitForApp(page);
+    workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'scub-settings-'));
+    await page.goto('/?dir=' + encodeURIComponent(workspace));
+    await expect(page.getByPlaceholder('Ask Argus')).toBeVisible();
   });
 
-  test.afterEach(() => {
-    fs.writeFileSync(CONFIG_PATH, original);
+  test.afterEach(async ({ page }) => {
+    await writeTestConfig(CONFIG_PATH, original);
+    const close = page.getByRole('button', { name: 'Close', exact: true });
+    if (await close.isVisible()) await close.click();
+    await page.getByPlaceholder('Ask Argus').fill('/clear');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+    await page.close();
+    await fs.promises.rm(workspace, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   });
 
   // ── presence ────────────────────────────────────────────────────────────────
 
-  test('Models tab shows Effort and Thinking controls', async ({ page }) => {
+  test('Models tab shows Effort and Thinking controls', { tag: ["@claude"] }, async ({ page }) => {
     const dialog = await openModelsTab(page);
 
     // Effort label and 4 dots (low / medium / high / max).
@@ -94,21 +110,21 @@ test.describe('effort and thinking (integration)', () => {
     await expect(dialog.locator('[class*="optionLabel"]').first()).toBeVisible();
     // Use span[class*] to exclude the effortDots container div whose CSS-module
     // class name "effortDots_HASH" also contains "effortDot" as a substring.
-    const dots = dialog.locator('span[class*="effortDot"]');
-    await expect(dots).toHaveCount(4);
+    const dots = dialog.locator('button[class*="effortDot"]');
+    await expect(dots).toHaveCount(5);
 
     // Thinking toggle track
     await expect(dialog.locator('[class*="optionLabel"]').nth(1)).toBeVisible();
     await expect(dialog.locator('[class*="toggleTrack"]')).toBeVisible();
   });
 
-  test('slash menu shows Effort dots and Thinking toggle', async ({ page }) => {
+  test('slash menu shows Effort dots and Thinking toggle', { tag: ["@claude"] }, async ({ page }) => {
     await openSlashMenu(page);
 
     // Effort row with dots (use class locator to avoid multi-element match on parent divs)
     await expect(page.locator('[class*="slashMenuName"]', { hasText: /Effort \(/ })).toBeVisible();
     // span[class*] excludes the slashMenuDots container whose CSS-module name also contains "slashMenuDot"
-    await expect(page.locator('span[class*="slashMenuDot"]')).toHaveCount(4);
+    await expect(page.locator('span[class*="slashMenuDot"]')).toHaveCount(5);
 
     // Thinking toggle
     await expect(page.locator('[class*="slashMenuName"]', { hasText: 'Thinking' })).toBeVisible();
@@ -119,11 +135,11 @@ test.describe('effort and thinking (integration)', () => {
 
   // ── effort changes ───────────────────────────────────────────────────────────
 
-  test('clicking effort dot in modal updates label and persists to config', async ({ page }) => {
+  test('clicking effort dot in modal updates label and can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
     const dialog = await openModelsTab(page);
 
     // Click the first dot (Low)
-    await dialog.locator('span[class*="effortDot"]').first().click();
+    await dialog.locator('button[class*="effortDot"]').first().click();
 
     // Label updates immediately (broadcast from backend)
     await expect(dialog.locator('[class*="optionLabel"]', { hasText: /Effort \(Low\)/i })).toBeVisible({ timeout: 8_000 });
@@ -131,13 +147,15 @@ test.describe('effort and thinking (integration)', () => {
     // Persistence: close, reload, reopen. A new WS connection makes the backend
     // re-read its config from disk and send the stored value in workspaceInfo.
     // This verifies the write without depending on which file path the backend uses.
+    await dialog.getByRole('button', { name: 'Use for new conversations' }).click();
+    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     const dialog2 = await openModelsTab(page);
     await expect(dialog2.locator('[class*="optionLabel"]', { hasText: /Effort \(Low\)/i })).toBeVisible({ timeout: 8_000 });
   });
 
-  test('clicking effort dot in slash menu persists to config', async ({ page }) => {
+  test('clicking effort dot in slash menu can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
     await openSlashMenu(page);
 
     // Click the last dot (Max)
@@ -148,6 +166,10 @@ test.describe('effort and thinking (integration)', () => {
 
     // Persistence via reload
     await closeSlashMenu(page);
+    const defaultsDialog = await openModelsTab(page);
+    await defaultsDialog.getByRole('button', { name: 'Use for new conversations' }).click();
+    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
+    await defaultsDialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     await openSlashMenu(page);
     await expect(page.locator('[class*="slashMenuName"]', { hasText: /Effort \(Max\)/i })).toBeVisible({ timeout: 8_000 });
@@ -156,7 +178,7 @@ test.describe('effort and thinking (integration)', () => {
 
   // ── thinking toggle ──────────────────────────────────────────────────────────
 
-  test('clicking thinking toggle in modal flips its state and persists to config', async ({ page }) => {
+  test('clicking thinking toggle in modal flips its state and can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
     const dialog = await openModelsTab(page);
 
     const track = dialog.locator('[class*="toggleTrack"]');
@@ -174,6 +196,8 @@ test.describe('effort and thinking (integration)', () => {
     ).toBe(!initialOn);
 
     // Persistence via reload
+    await dialog.getByRole('button', { name: 'Use for new conversations' }).click();
+    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     const dialog2 = await openModelsTab(page);
@@ -182,7 +206,7 @@ test.describe('effort and thinking (integration)', () => {
     expect(afterReloadOn).toBe(!initialOn);
   });
 
-  test('clicking thinking toggle in slash menu persists to config', async ({ page }) => {
+  test('clicking thinking toggle in slash menu can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
     await openSlashMenu(page);
 
     const track = page.locator('[class*="slashMenuToggleTrack"]');
@@ -201,6 +225,10 @@ test.describe('effort and thinking (integration)', () => {
 
     // Persistence via reload
     await closeSlashMenu(page);
+    const defaultsDialog = await openModelsTab(page);
+    await defaultsDialog.getByRole('button', { name: 'Use for new conversations' }).click();
+    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
+    await defaultsDialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     await openSlashMenu(page);
     const track2 = page.locator('[class*="slashMenuToggleTrack"]');
@@ -211,8 +239,8 @@ test.describe('effort and thinking (integration)', () => {
 
   // ── persistence across reconnect ─────────────────────────────────────────────
 
-  test('effort and thinking are restored from config on reconnect', async ({ page }) => {
-    writeConfig({ effort: 'low', thinking: false });
+  test('effort and thinking are restored from config on reconnect', { tag: ["@claude"] }, async ({ page }) => {
+    await writeConfig({ effort: 'low', thinking: false });
 
     await reloadAndWait(page);
 
@@ -229,8 +257,8 @@ test.describe('effort and thinking (integration)', () => {
     await closeSlashMenu(page);
   });
 
-  test('modal shows restored effort after reconnect', async ({ page }) => {
-    writeConfig({ effort: 'medium', thinking: true });
+  test('modal shows restored effort after reconnect', { tag: ["@claude"] }, async ({ page }) => {
+    await writeConfig({ effort: 'medium', thinking: true });
 
     await reloadAndWait(page);
 
@@ -239,7 +267,7 @@ test.describe('effort and thinking (integration)', () => {
 
     // Active dot: the "medium" dot (index 1) should have the active class
     // span prefix excludes the effortDots container div whose CSS-module class also contains "effortDot"
-    const dots = dialog.locator('span[class*="effortDot"]');
+    const dots = dialog.locator('button[class*="effortDot"]');
     const mediumDot = dots.nth(1);
     const cls = await mediumDot.evaluate((el: Element) => el.className);
     expect(cls).toContain('Active');
@@ -247,9 +275,9 @@ test.describe('effort and thinking (integration)', () => {
 
   // ── CLI flag ─────────────────────────────────────────────────────────────────
 
-  test('thinking=false forces --effort low in the CLI spawn log', async ({ page }) => {
+  test('thinking=false forces --effort low in the CLI spawn log', { tag: ["@claude"] }, async ({ page }) => {
     // Pre-configure: effort=high, thinking=false → CLI should receive --effort low
-    writeConfig({ effort: 'high', thinking: false });
+    await writeConfig({ effort: 'high', thinking: false });
 
     await reloadAndWait(page);
 
@@ -265,9 +293,9 @@ test.describe('effort and thinking (integration)', () => {
     ).toContain('--effort low');
   });
 
-  test('selected effort level is forwarded to the CLI spawn log', async ({ page }) => {
+  test('selected effort level is forwarded to the CLI spawn log', { tag: ["@claude"] }, async ({ page }) => {
     // Set thinking=true, effort=medium so the effort flag is passed as-is
-    writeConfig({ effort: 'medium', thinking: true });
+    await writeConfig({ effort: 'medium', thinking: true });
 
     await reloadAndWait(page);
 
@@ -284,7 +312,7 @@ test.describe('effort and thinking (integration)', () => {
 
   // ── model selection ──────────────────────────────────────────────────────────
 
-  test('clicking a model row in the modal persists to config', async ({ page }) => {
+  test('clicking a model row in the modal can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
     const dialog = await openModelsTab(page);
     await expect(dialog.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
 
@@ -299,6 +327,8 @@ test.describe('effort and thinking (integration)', () => {
     await expect(rows.nth(1).locator('span', { hasText: '✓' })).toBeVisible({ timeout: 8_000 });
 
     // Persistence via reload: after reconnect the Default row no longer has the checkmark
+    await dialog.getByRole('button', { name: 'Use for new conversations' }).click();
+    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     const dialog2 = await openModelsTab(page);
@@ -307,8 +337,8 @@ test.describe('effort and thinking (integration)', () => {
     await expect(defaultRow.locator('span', { hasText: '✓' })).toHaveCount(0);
   });
 
-  test('selecting Default (CLI) in the modal clears the stored model', async ({ page }) => {
-    writeConfig({ model: 'claude-haiku-4-5' });
+  test('selecting Default (CLI) in the modal clears the stored model', { tag: ["@claude"] }, async ({ page }) => {
+    await writeConfig({ model: 'claude-haiku-4-5' });
     await reloadAndWait(page);
 
     const dialog = await openModelsTab(page);
@@ -320,6 +350,8 @@ test.describe('effort and thinking (integration)', () => {
     await expect(defaultRow.locator('span', { hasText: '✓' })).toBeVisible({ timeout: 8_000 });
 
     // Persistence via reload: Default row retains the checkmark after reconnect
+    await dialog.getByRole('button', { name: 'Use for new conversations' }).click();
+    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     const dialog2 = await openModelsTab(page);
@@ -328,7 +360,7 @@ test.describe('effort and thinking (integration)', () => {
     await expect(defaultRow2.locator('span', { hasText: '✓' })).toBeVisible({ timeout: 8_000 });
   });
 
-  test('selecting a model in the slash menu persists to config', async ({ page }) => {
+  test('selecting a model in the slash menu can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
     await openSlashMenu(page);
 
     await page.locator('[class*="slashMenuItem"]').filter({ hasText: 'Switch model...' }).click();
@@ -341,14 +373,18 @@ test.describe('effort and thinking (integration)', () => {
 
     // Persistence via reload: hint still non-empty after reconnect
     await closeSlashMenu(page);
+    const defaultsDialog = await openModelsTab(page);
+    await defaultsDialog.getByRole('button', { name: 'Use for new conversations' }).click();
+    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
+    await defaultsDialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     await openSlashMenu(page);
     await expect(page.locator('[class*="slashMenuHint"]')).not.toHaveText('', { timeout: 8_000 });
     await closeSlashMenu(page);
   });
 
-  test('model persists across reconnect - slash menu hint shows model name', async ({ page }) => {
-    writeConfig({ model: 'claude-haiku-4-5' });
+  test('model persists across reconnect - slash menu hint shows model name', { tag: ["@claude"] }, async ({ page }) => {
+    await writeConfig({ model: 'claude-haiku-4-5' });
     await reloadAndWait(page);
 
     await openSlashMenu(page);
@@ -357,7 +393,7 @@ test.describe('effort and thinking (integration)', () => {
     await closeSlashMenu(page);
   });
 
-  test('model search in the modal filters the list', async ({ page }) => {
+  test('model search in the modal filters the list', { tag: ["@claude"] }, async ({ page }) => {
     const dialog = await openModelsTab(page);
     await expect(dialog.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
 
@@ -367,8 +403,8 @@ test.describe('effort and thinking (integration)', () => {
     await expect(dialog.locator('[class*="modelRow"]').filter({ hasText: /sonnet/i })).toHaveCount(0);
   });
 
-  test('selected model is forwarded to the CLI spawn log', async ({ page }) => {
-    writeConfig({ model: 'claude-sonnet-4-6', effort: 'high', thinking: true });
+  test('selected model is forwarded to the CLI spawn log', { tag: ["@claude"] }, async ({ page }) => {
+    await writeConfig({ model: 'claude-sonnet-4-6', effort: 'high', thinking: true });
     await reloadAndWait(page);
 
     const logList = page.locator(LOG_LIST);

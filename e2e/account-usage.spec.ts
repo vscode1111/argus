@@ -28,8 +28,7 @@ const RATE_LIMITS = [
   { rateLimitType: 'seven_day_sonnet', utilization: 0, resetsAt: NOW + 4 * 86_400, status: 'allowed' },
 ];
 
-// Open the modal via the slash menu, then wait for the real (server) response to
-// land so a later mock dispatch is the final write that wins.
+// Open the modal and explicitly settle its account request with fixture data.
 async function openModal(page: Page) {
   const textarea = page.getByPlaceholder('Ask Argus');
   await textarea.focus();
@@ -38,6 +37,7 @@ async function openModal(page: Page) {
   await expect(action).toBeVisible();
   await action.click();
   await expect(page.getByRole('dialog', { name: 'Account' })).toBeVisible();
+  await send(page, { type: 'accountUsage', account: ACCOUNT, rateLimits: [] });
   await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 15_000 });
 }
 

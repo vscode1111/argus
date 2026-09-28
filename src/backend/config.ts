@@ -5,6 +5,8 @@ import * as path from 'path';
 export const CONFIG_PATH = process.env.ARGUS_CONFIG || path.join(os.homedir(), '.claude', 'argus.json');
 
 export interface ArgusConfig {
+  defaultProvider: string;
+  providerDefaults: Record<string, { providerId: string; model: string; effort: string; thinking: boolean }>;
   verboseTools: boolean;
   showTimer: boolean;
   showOutput: boolean;
@@ -74,6 +76,8 @@ export interface ArgusConfig {
 }
 
 export const DEFAULT_CONFIG: ArgusConfig = {
+  defaultProvider: 'claude',
+  providerDefaults: {},
   verboseTools: false,
   showTimer: true,
   showOutput: false,

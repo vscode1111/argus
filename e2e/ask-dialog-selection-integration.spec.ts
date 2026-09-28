@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // All current Claude models decline to call AskUserQuestion in --print (non-interactive)
@@ -8,7 +8,7 @@ import { waitForApp } from './helpers';
 // These tests are skipped until a model is available that calls AskUserQuestion in
 // --print mode.
 
-test.skip('selecting non-first option: Claude acknowledges the correct choice', async ({ page }) => {
+test.skip('selecting non-first option: Claude acknowledges the correct choice', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
   await waitForApp(page);
 
   const textarea = page.getByPlaceholder('Ask Argus');
@@ -65,7 +65,7 @@ test.skip('selecting non-first option: Claude acknowledges the correct choice', 
   }).toPass({ timeout: 20_000 });
 });
 
-test.skip('selecting last option: Claude acknowledges correct choice', async ({ page }) => {
+test.skip('selecting last option: Claude acknowledges correct choice', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
   await waitForApp(page);
 
   const textarea = page.getByPlaceholder('Ask Argus');

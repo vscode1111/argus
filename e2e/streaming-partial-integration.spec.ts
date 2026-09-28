@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Verifies the assistant response arrives as multiple incremental chunks (streaming),
@@ -9,7 +9,7 @@ import { waitForApp } from './helpers';
 // the server) rather than the DOM, because React 18 batches re-renders so multiple
 // rapid chunks can collapse into a single MutationObserver event.
 
-test('long response streams as many text_chunk frames, not one block', async ({ page }) => {
+test('long response streams as many text_chunk frames, not one block', { tag: ["@shared"] }, async ({ page }) => {
 
   // Collect every text_chunk frame received over the WS connection to the backend.
   const textChunks: string[] = [];
@@ -37,7 +37,9 @@ test('long response streams as many text_chunk frames, not one block', async ({ 
   // Wait for streaming to start, then for it to complete (Stop button disappears).
   const stopBtn = page.getByRole('button', { name: 'Stop' });
   await expect(stopBtn).toBeVisible({ timeout: 10_000 });
-  await expect(stopBtn).toHaveCount(0, { timeout: 20_000 });
+  // A real 200-line response was still emitting deltas at 20s in the full run.
+  // Leave time within the 60s test budget for startup and the assertions below.
+  await expect(stopBtn).toHaveCount(0, { timeout: 45_000 });
 
   // Brief settle so any trailing frames are captured.
   await page.waitForTimeout(300);

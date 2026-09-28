@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Integration tests for realtime token spending:
@@ -26,7 +26,7 @@ const PROMPT = 'Reply with the single word "ok" and nothing else.';
 // the WS connection is created, so they reload the page themselves after mounting
 // the listener. Other tests use beforeEach for isolation via "New chat".
 test.describe('ws-frame tests', () => {
-  test('token_update WS frames arrive during a real turn', async ({ page }) => {
+  test('token_update WS frames arrive during a real turn', { tag: ["@shared"] }, async ({ page }) => {
     const tokenUpdates: { inputTokens?: number; outputTokens?: number }[] = [];
 
     // Register listener before navigation so we capture the WS created on load.
@@ -67,7 +67,7 @@ test.describe('ws-frame tests', () => {
     expect(maxOutput).toBeGreaterThan(0);
   });
 
-  test('output token count never decreases between token_update frames', async ({ page }) => {
+  test('output token count never decreases between token_update frames', { tag: ["@shared"] }, async ({ page }) => {
     // Regression for: each message_delta emitted only that call's per-message count.
     // In a multi-step turn the second call's count was smaller than the accumulated
     // estimate from the first, causing the StreamingTimer to jump backwards.
@@ -111,7 +111,7 @@ test.describe('ui tests', () => {
     await page.getByRole('button', { name: 'New chat' }).click();
   });
 
-  test('completed message timer shows final token counts', async ({ page }) => {
+  test('completed message timer shows final token counts', { tag: ["@shared"] }, async ({ page }) => {
     await page.getByPlaceholder('Ask Argus').fill(PROMPT);
     await page.getByRole('button', { name: 'Send' }).click();
 
@@ -135,7 +135,7 @@ test.describe('ui tests', () => {
     expect(inVal).toBeGreaterThan(1); // same cache-sum check
   });
 
-  test('ThinkingBlock tok estimate is not doubled in completed message', async ({ page }) => {
+  test('ThinkingBlock tok estimate is not doubled in completed message', { tag: ["@shared"] }, async ({ page }) => {
     // Regression for: handleAssistant re-broadcast the full thinking text via a
     // thinking_chunk event even when handleDelta had already streamed it
     // incrementally.  applyMsg accumulated both, so the snapshot and the committed

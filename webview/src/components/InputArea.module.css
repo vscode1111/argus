@@ -598,9 +598,60 @@
 .modePill:hover {
   border-color: var(--vscode-focusBorder);
 }
+.modeAnchor {
+  position: relative;
+}
+.modeMenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  width: min(270px, calc(100vw - 24px));
+  padding: 4px;
+  background: var(--vscode-quickInput-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-widget-border, var(--border));
+  border-radius: 6px;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.3);
+  z-index: 100;
+}
+.modeOption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.modeOptionLabel {
+  font-weight: 500;
+}
+.modeOptionDescription {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.modeOption:hover,
+.modeOption:focus-visible {
+  background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.08));
+  outline: 1px solid var(--vscode-focusBorder);
+}
+.modeOption[aria-selected="true"] {
+  color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
+  background: var(--vscode-list-activeSelectionBackground, rgba(255,255,255,0.1));
+}
 .modePlan {
   color: var(--vscode-terminal-ansiYellow, #cca700);
   border-color: var(--vscode-terminal-ansiYellow, #cca700);
+}
+.modeFull {
+  color: var(--vscode-errorForeground, #f48771);
+  border-color: var(--vscode-errorForeground, #f48771);
 }
 
 /* Settings gear: it uses the global .btn-icon (which has a border + strong

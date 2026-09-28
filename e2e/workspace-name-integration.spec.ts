@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import * as path from 'path';
 import { waitForApp } from './helpers';
 
@@ -8,7 +8,7 @@ import { waitForApp } from './helpers';
 // a dedicated tile button that opens the Workspace History dialog.
 
 test.describe('workspace name tile (integration)', () => {
-  test('renders the server-provided workspace folder name as its own tile', async ({ page }) => {
+  test('renders the server-provided workspace folder name as its own tile', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     // With no `?dir=` on the page URL, the only source of the workspace path is the
@@ -28,7 +28,7 @@ test.describe('workspace name tile (integration)', () => {
     await expect(tile).toHaveCount(1);
   });
 
-  test('reflects the basename of a `?dir=` override path', async ({ page }) => {
+  test('reflects the basename of a `?dir=` override path', { tag: ["@shared"] }, async ({ page }) => {
     // Point the app at a real subfolder of the project so the server accepts it
     // (it validates the path exists). The folder name should appear in the tile.
     const dir = path.join(process.cwd(), 'e2e');
@@ -41,7 +41,7 @@ test.describe('workspace name tile (integration)', () => {
     await expect(tile).toHaveAttribute('title', /[\\/]e2e$/i);
   });
 
-  test('hides the tile when the session bar is collapsed', async ({ page }) => {
+  test('hides the tile when the session bar is collapsed', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     const tile = page.getByRole('button', { name: 'Switch workspace' });

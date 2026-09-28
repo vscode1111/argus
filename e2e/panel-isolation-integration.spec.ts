@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -91,7 +91,7 @@ test.describe('per-panel session isolation (integration)', () => {
     for (const ws of open.splice(0)) await closeClient(ws).catch(() => {/* ignore */});
   });
 
-  test('two panels in one workspace do not receive each other turns', async () => {
+  test('two panels in one workspace do not receive each other turns', { tag: ["@shared"] }, async () => {
     const dir = makeTempDir('isolation');
     const a = openPanel(nonce, dir, 'panel-a');
     const b = openPanel(nonce, dir, 'panel-b');
@@ -109,7 +109,7 @@ test.describe('per-panel session isolation (integration)', () => {
     a.ws.send(JSON.stringify({ type: 'stop' }));
   });
 
-  test('reconnecting with the same panel id rejoins that panel session', async () => {
+  test('reconnecting with the same panel id rejoins that panel session', { tag: ["@shared"] }, async () => {
     const dir = makeTempDir('rejoin');
     const first = openPanel(nonce, dir, 'panel-reconnect');
     open.push(first.ws);
@@ -132,7 +132,7 @@ test.describe('per-panel session isolation (integration)', () => {
     expect(messages.some((m) => m.role === 'user' && m.content === 'scub-panel-rejoin')).toBe(true);
   });
 
-  test('a different panel id starts an empty session in the same workspace', async () => {
+  test('a different panel id starts an empty session in the same workspace', { tag: ["@shared"] }, async () => {
     const dir = makeTempDir('distinct');
     const first = openPanel(nonce, dir, 'panel-one');
     open.push(first.ws);

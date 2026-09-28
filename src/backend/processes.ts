@@ -210,7 +210,7 @@ async function collect(): Promise<Snapshot | string> {
     const procs = IS_WIN
       ? parseWindows(await execText('powershell', ['-NoProfile', '-NonInteractive', '-Command', WIN_PS]), now)
       : parsePosix(await execText('ps', ['-eo', 'pid=,ppid=,etime=,time=,rss=,comm=,args=']), now);
-    return { all: new Map(procs.map(p => [p.pid, p])), clis: procs.filter(p => p.name === CLI_NAME) };
+    return { all: new Map(procs.map(p => [p.pid, p])), clis: procs.filter(p => (p.name === CLI_NAME || p.name === (IS_WIN ? 'codex.exe' : 'codex'))) };
   } catch (err) {
     return err instanceof Error ? err.message : String(err);
   }
@@ -299,7 +299,7 @@ export async function listCliProcesses(owned: OwnedProcs): Promise<CliProcessLis
   const snap = await sample();
   if (typeof snap === 'string') return { processes: [], error: snap };
 
-  const raw = snap.clis;
+  const raw = snap.clis.filter(p => p.name === CLI_NAME || owned.owned.has(p.pid));
   const labelFor = makeLabeller();
   const processes = raw.map(p => {
     // On Windows the CLI is spawned through a cmd.exe shell, so what this server holds
@@ -349,16 +349,17 @@ function isAlive(pid: number): boolean {
 // Windows the kill itself carries an image-name filter so that even if the pid died and
 // was recycled in the moment between the two, the OS refuses to kill the stranger that
 // inherited it (verified against a node.exe decoy - taskkill declined and it survived).
-export async function killCliProcess(pid: number): Promise<KillProcessResult> {
+export async function killCliProcess(pid: number, owned: OwnedProcs['owned'] = new Map()): Promise<KillProcessResult> {
   if (!Number.isInteger(pid) || pid <= 0) return { pid, killed: false, error: 'invalid pid' };
 
   const snap = await sample();
   if (typeof snap === 'string') return { pid, killed: false, error: snap };
-  if (!snap.clis.some(p => p.pid === pid)) return { pid, killed: false, error: 'not a running Claude CLI process' };
+  const target = snap.clis.find(p => p.pid === pid && (p.name === CLI_NAME || owned.has(pid)));
+  if (!target) return { pid, killed: false, error: 'not an allowed running CLI process' };
 
   try {
     if (IS_WIN) {
-      execFileSync('taskkill', ['/T', '/F', '/PID', String(pid), '/FI', `IMAGENAME eq ${CLAUDE_IMAGE_WIN}`], { stdio: 'ignore', windowsHide: true });
+      execFileSync('taskkill', ['/T', '/F', '/PID', String(pid), '/FI', `IMAGENAME eq ${target.name}`], { stdio: 'ignore', windowsHide: true });
     } else {
       process.kill(pid, 'SIGKILL');
     }

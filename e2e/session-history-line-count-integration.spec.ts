@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Exercises the per-session line-count column end to end against the real backend
@@ -47,7 +47,7 @@ async function readCurrentCount(page: Page): Promise<number> {
 }
 
 test.describe('session history - line count (integration)', () => {
-  test('the live session row shows a transcript line count that grows with the conversation', async ({ page }) => {
+  test('the live session row shows a transcript line count that grows with the conversation', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
     await waitForApp(page);
 
     // 1. Create a session whose assistant reply spans many lines, so the backend
@@ -68,7 +68,7 @@ test.describe('session history - line count (integration)', () => {
     expect(count2).toBeGreaterThan(count1);
   });
 
-  test('all-workspaces rows render a numeric line-count column from real transcripts', async ({ page }) => {
+  test('all-workspaces rows render a numeric line-count column from real transcripts', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
     await waitForApp(page);
 
     // Ensure this workspace has at least one real session, then open the global tab

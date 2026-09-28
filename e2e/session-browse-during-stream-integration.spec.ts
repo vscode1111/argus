@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // All tests share the same :3001 backend channel (same workspace dir).
@@ -73,7 +73,7 @@ test.describe('browse past session during active streaming (integration)', () =>
   // on the streaming session even though the user had switched to a different
   // session's transcript.
 
-  test('header title updates to the browsed session', async ({ page }) => {
+  test('header title updates to the browsed session', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
     // 1. Create session A and give it a distinct, known title.
@@ -104,7 +104,7 @@ test.describe('browse past session during active streaming (integration)', () =>
       .toHaveText(knownTitle, { timeout: 10_000 });
   });
 
-  test('modal green highlight moves to the browsed session', async ({ page }) => {
+  test('modal green highlight moves to the browsed session', { tag: ["@shared"] }, async ({ page }) => {
     // Two real turns and four modal round-trips before the assertion can finish, which does
     // not fit the flat 30s. 60s was not enough either, and the reason is not this test: it
     // runs in 12.4s on its own. Every `startStreaming` in this file deliberately leaves its
@@ -144,7 +144,7 @@ test.describe('browse past session during active streaming (integration)', () =>
     await page.keyboard.press('Escape');
   });
 
-  test('token counts are non-zero after returning to a live session', async ({ page }) => {
+  test('token counts are non-zero after returning to a live session', { tag: ["@shared"] }, async ({ page }) => {
     // Regression for: replaySnapshot sent thinking_start which reset liveTokens to
     // undefined, but no token_update followed to restore the accumulated counts.
     // Returning to a streaming session showed "0 in / 0 out" (or nothing) in the
@@ -176,7 +176,9 @@ test.describe('browse past session during active streaming (integration)', () =>
     //    `outcome: 'success'` - no responseTime and no token fields - so there is no
     //    timer element to assert on at all (step 7 skips in that case). 1..3000 keeps
     //    the CLI streaming well past the two modal round-trips even at --effort low.
-    await startStreaming(page, 'Write the numbers 1 to 3000, one per line, no other text.');
+    // Native usage may arrive only after a model call completes. A tool boundary
+    // gives us measured usage before the following long answer, for either runtime.
+    await startStreaming(page, 'First run a shell command that prints scub-token-marker. Then write the numbers 1 to 3000, one per line, no other text.');
 
     // 4. Wait until the live timer shows both token counts. StreamingTimer renders
     //    "<n> in / <m> out" only when input AND output are non-zero, so this waits on

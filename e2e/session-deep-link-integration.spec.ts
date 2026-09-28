@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -89,7 +89,7 @@ function writeSyntheticTranscript(cwd: string, userText: string, assistantText: 
   return id;
 }
 
-test('deep link attaches to the live turn without any click; stop from the linked page ends it for both', async ({ browser }) => {
+test('deep link attaches to the live turn without any click; stop from the linked page ends it for both', { tag: ["@claude","@claude-live"] }, async ({ browser }) => {
   const dir = makeTempDir('live');
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();
@@ -128,7 +128,7 @@ test('deep link attaches to the live turn without any click; stop from the linke
   }
 });
 
-test('deep link with no ?dir= resolves the workspace server-side and replays a finished session from disk', async ({ page }) => {
+test('deep link with no ?dir= resolves the workspace server-side and replays a finished session from disk', { tag: ["@claude"] }, async ({ page }) => {
   const dir = makeTempDir('resolve');
   const id = writeSyntheticTranscript(dir, 'scub-deep-link-past', 'scub-past-reply');
 
@@ -141,7 +141,7 @@ test('deep link with no ?dir= resolves the workspace server-side and replays a f
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toHaveText(path.basename(dir), { timeout: 15_000 });
 });
 
-test('a new chat puts its assigned session id into the page URL', async ({ page }) => {
+test('a new chat puts its assigned session id into the page URL', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
   // The CLI mints the id server-side, so nothing the user clicked carries it. Without
   // the sessionId push the address bar stayed bare and a fresh chat could not be
   // shared or reloaded back into.
@@ -163,7 +163,7 @@ test('a new chat puts its assigned session id into the page URL', async ({ page 
   await expect(page.getByText('Reply with just "OK".')).toBeVisible({ timeout: 15_000 });
 });
 
-test('reloading a deep-linked finished session replays it again', async ({ page }) => {
+test('reloading a deep-linked finished session replays it again', { tag: ["@claude"] }, async ({ page }) => {
   // Regression: the first load leaves an entry bound to the session but with an empty
   // in-memory history (the transcript was read from disk, never streamed). The reload
   // re-attached to that entry and replayed the empty history, blanking the page.
@@ -179,7 +179,7 @@ test('reloading a deep-linked finished session replays it again', async ({ page 
   await expect(page.getByText('scub-reload-reply')).toBeVisible();
 });
 
-test('deep link with a stale ?dir= ends up in the session\'s real workspace', async ({ page }) => {
+test('deep link with a stale ?dir= ends up in the session\'s real workspace', { tag: ["@claude"] }, async ({ page }) => {
   const realDir = makeTempDir('real');
   const staleDir = makeTempDir('stale');
   const id = writeSyntheticTranscript(realDir, 'scub-stale-dir-check', 'scub-stale-reply');
@@ -191,7 +191,7 @@ test('deep link with a stale ?dir= ends up in the session\'s real workspace', as
   await expect(page.getByText('scub-stale-dir-check')).toBeVisible();
 });
 
-test('malformed session id is rejected and the connection falls back to ?dir=', async ({ page }) => {
+test('malformed session id is rejected and the connection falls back to ?dir=', { tag: ["@claude"] }, async ({ page }) => {
   const dir = makeTempDir('malformed');
   await openApp(page, `?dir=${encodeURIComponent(dir)}&session=${encodeURIComponent('../../etc/passwd')}`);
   // The app works normally on the ?dir= workspace; the bad id was dropped.

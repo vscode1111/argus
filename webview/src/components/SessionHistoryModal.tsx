@@ -311,7 +311,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                     ) : (
                       <span className={styles.rowTitle}>
                         {activeIds.has(s.id) && <RunningDot />}
-                        {s.title}
+                        <span>{s.title}</span> <small>{s.id.startsWith('codex:') ? 'Codex' : 'Claude'}</small>
                       </span>
                     )}
                   </div>
@@ -399,7 +399,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                   <div className={styles.allRowMain}>
                     <span className={styles.rowTitle}>
                       {activeIds.has(s.id) && <RunningDot />}
-                      {s.title}
+                      <span>{s.title}</span> <small>{s.id.startsWith('codex:') ? 'Codex' : 'Claude'}</small>
                     </span>
                     <span className={styles.rowSub}>{s.workspaceName}</span>
                   </div>

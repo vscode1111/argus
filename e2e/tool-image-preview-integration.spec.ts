@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
 import { waitForApp } from './helpers';
@@ -19,7 +19,7 @@ import { waitForApp } from './helpers';
 const INLINED_IMAGE_RE = /[A-Za-z0-9+/]{1000,}/;
 
 test.describe('tool image preview (real CLI)', () => {
-  test('an image read by the agent previews after its file is deleted, without shipping the bytes', async ({ page }) => {
+  test('an image read by the agent previews after its file is deleted, without shipping the bytes', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
     const name = `scub-tool-image-${Date.now()}.png`;
     const rel = `e2e/${name}`;
     const file = path.resolve(__dirname, name);

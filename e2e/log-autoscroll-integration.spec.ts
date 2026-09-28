@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // The debug log panel must stay pinned to the bottom as entries stream in.
@@ -19,7 +19,7 @@ function bottomDistance(page: Page): Promise<number> {
     .evaluate((el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight);
 }
 
-test('debug log auto-scrolls to the bottom throughout a stream', async ({ page }) => {
+test('debug log auto-scrolls to the bottom throughout a stream', { tag: ["@shared"] }, async ({ page }) => {
   // Watches a whole real turn, and the prompt deliberately asks for 80 lines so there is
   // something to stream. A fresh session in this workspace starts at ~77k input tokens
   // (CLAUDE.md plus the CLI system prompt), so the turn runs well past the flat 30s once

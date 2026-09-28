@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { waitForApp } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
-test('paste text.jpg via Ctrl+V and recognize text in response', async ({ page }) => {
+test('paste text.jpg via Ctrl+V and recognize text in response', { tag: ["@shared"] }, async ({ page }) => {
   const imagePath = path.resolve(__dirname, '..', 'tests', 'text.jpg');
   const imageBuffer = fs.readFileSync(imagePath);
   const base64 = imageBuffer.toString('base64');

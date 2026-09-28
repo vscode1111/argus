@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Integration: the "What's contributing to your limits usage?" section against
@@ -23,7 +23,7 @@ test.describe('usage insights (integration)', () => {
     await waitForApp(page);
   });
 
-  test('real transcript scan renders the section with well-formed data', async ({ page }) => {
+  test('real transcript scan renders the section with well-formed data', { tag: ["@claude"] }, async ({ page }) => {
     await openModal(page);
     await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
 
@@ -60,7 +60,7 @@ test.describe('usage insights (integration)', () => {
     }
   });
 
-  test('Week tab switches the range note against real data', async ({ page }) => {
+  test('Week tab switches the range note against real data', { tag: ["@claude"] }, async ({ page }) => {
     await openModal(page);
     await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
 

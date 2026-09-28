@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { execFileSync, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -69,18 +69,18 @@ const CACHE = [
   { id: 'claude-legacy-nowindow', displayName: 'No window' },
 ];
 
-test('contextWindowFor resolves the window per model from the cached list', () => {
+test('contextWindowFor resolves the window per model from the cached list', { tag: ["@claude"] }, () => {
   expect(resolveWindow(CACHE, 'claude-opus-5')).toBe(1_000_000);
   expect(resolveWindow(CACHE, 'claude-haiku-4-5-20251001')).toBe(200_000);
 });
 
-test('contextWindowFor matches a snapshot id against its dateless alias both ways', () => {
+test('contextWindowFor matches a snapshot id against its dateless alias both ways', { tag: ["@claude"] }, () => {
   // Reported ids carry a date the cached list may not, and vice versa.
   expect(resolveWindow(CACHE, 'claude-haiku-4-5')).toBe(200_000);
   expect(resolveWindow([{ id: 'claude-opus-5', displayName: 'x', contextWindow: 1_000_000 }], 'claude-opus-5-20260724')).toBe(1_000_000);
 });
 
-test('contextWindowFor falls back to 200k when the model is unknown or has no window', () => {
+test('contextWindowFor falls back to 200k when the model is unknown or has no window', { tag: ["@claude"] }, () => {
   // The window is not derivable from the family (opus-4-5 is 200k, opus-4-6 is 1M),
   // so an unknown id must take the default rather than guess.
   expect(resolveWindow(CACHE, 'claude-unreleased-9')).toBe(200_000);
@@ -100,7 +100,7 @@ function parseTitle(title: string): Record<string, number> {
   return out;
 }
 
-test('the pill reports a percentage of the seeded model window, not a fixed 200k', async ({ page }) => {
+test('the pill reports a percentage of the seeded model window, not a fixed 200k', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
   patchConfig({
     model: PINNED_MODEL,
     modelListCache: [{ id: PINNED_MODEL, displayName: 'Pinned', contextWindow: SEEDED_WINDOW }],

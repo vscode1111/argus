@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -104,7 +104,7 @@ test.describe('usage indicator (integration)', () => {
   // gets exactly one reply carrying a windows array (empty + `error` when the fetch
   // failed). Asserting only the happy path would make a wiring regression look like
   // a rate limit.
-  test('getUsageLimits is answered with a usageLimits frame', async () => {
+  test('getUsageLimits is answered with a usageLimits frame', { tag: ["@claude"] }, async () => {
     const ws = await openClient(await getNonce());
     try {
       ws.send(JSON.stringify({ type: 'getUsageLimits' }));
@@ -132,7 +132,7 @@ test.describe('usage indicator (integration)', () => {
   // Opening the Account & Usage modal fetches usage for that one client. The server adopts
   // those windows as the shared snapshot, so every other panel's indicator matches what the
   // modal shows instead of keeping an older copy.
-  test('a modal fetch becomes the snapshot every other client reads', async () => {
+  test('a modal fetch becomes the snapshot every other client reads', { tag: ["@claude","@claude-live"] }, async () => {
     const nonce = await getNonce();
     const opener = await openClient(nonce);
     const other = await openClient(nonce);
@@ -175,7 +175,7 @@ test.describe('usage indicator (integration)', () => {
     }
   });
 
-  test('the header indicator fills in from the server, with no injected data', async ({ page }) => {
+  test('the header indicator fills in from the server, with no injected data', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
     test.skip(!(await liveUsageAvailable()), 'live usage API unavailable (rate limited / offline)');
 
     // The real app on '/' (no ?mock=1), so getUsageLimits actually reaches the backend.
@@ -247,7 +247,7 @@ test.describe('daemon usage poller (integration)', () => {
     return false;
   }
 
-  test('the daemon polls on its own and serves every client from that one fetch', async () => {
+  test('the daemon polls on its own and serves every client from that one fetch', { tag: ["@claude","@claude-live"] }, async () => {
     test.skip(!(await liveUsageAvailable()), 'live usage API unavailable (rate limited / offline)');
 
     const file = uniqueDaemonFile('usage-poll');
@@ -268,7 +268,7 @@ test.describe('daemon usage poller (integration)', () => {
 
   // Control: without the poller the same request is answered by a fetch made now, so
   // the test above is really detecting the poller and not just any usage reply.
-  test('a daemon with polling disabled answers only from the moment it is asked', async () => {
+  test('a daemon with polling disabled answers only from the moment it is asked', { tag: ["@claude"] }, async () => {
     const file = uniqueDaemonFile('usage-nopoll');
     d = await startDaemon({ port: 4052, file, idleMs: 600_000 });
 

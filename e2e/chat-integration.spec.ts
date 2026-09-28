@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
-test('sending "test" produces an assistant response within 60s', async ({ page }) => {
+test('sending "test" produces an assistant response within 60s', { tag: ["@shared"] }, async ({ page }) => {
   await waitForApp(page);
 
   const textarea = page.getByPlaceholder('Ask Argus');
