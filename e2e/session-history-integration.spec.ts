@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Sends a prompt and waits for the turn to complete (Stop button appears, then
@@ -20,7 +20,7 @@ test.describe('session history (integration)', () => {
     await page.getByRole('button', { name: 'New chat' }).click();
   });
 
-  test('creates a session, lists it, resumes it, and continues context', async ({ page }) => {
+  test('creates a session, lists it, resumes it, and continues context', { tag: ["@shared"] }, async ({ page }) => {
     // 1. Establish a fact in a fresh session. The unique token lets us prove later
     //    that the resumed session still carries the earlier context.
     await sendAndWait(page, 'Remember this token for later: scub-7731. Reply with just "OK".');
@@ -57,7 +57,7 @@ test.describe('session history (integration)', () => {
     await expect(messages.last()).toContainText('scub-7731', { timeout: 10_000 });
   });
 
-  test('renames a session and the new title survives a backend re-list', async ({ page }) => {
+  test('renames a session and the new title survives a backend re-list', { tag: ["@shared"] }, async ({ page }) => {
     // 1. Create a real session so a transcript exists to rename.
     await sendAndWait(page, 'Reply with just "OK".');
 
@@ -93,7 +93,7 @@ test.describe('session history (integration)', () => {
     await expect(dialog2.getByText(newTitle)).toBeVisible({ timeout: 10_000 });
   });
 
-  test('renames the current session inline from the header and it persists', async ({ page }) => {
+  test('renames the current session inline from the header and it persists', { tag: ["@shared"] }, async ({ page }) => {
     // 1. Create a real session. When the turn finishes the app re-fetches the
     //    session list, which populates the header title (and its current id), so
     //    the clickable rename button appears.

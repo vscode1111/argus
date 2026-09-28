@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -60,7 +60,7 @@ function countPlaceholders(file: string): number {
   return n;
 }
 
-test('a stopped turn leaves no "No response requested." placeholder in the transcript', async () => {
+test('a stopped turn leaves no "No response requested." placeholder in the transcript', { tag: ["@claude","@claude-live"] }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'argus-stop-placeholder-'));
   const ws = new WebSocket(`ws://localhost:3001/agent?nonce=${await nonce()}&dir=${encodeURIComponent(dir)}`, {
     origin: 'http://localhost:5173',

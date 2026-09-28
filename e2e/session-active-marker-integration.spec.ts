@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // The running-session marker end to end against the real backend: `listActiveSessions`
@@ -59,7 +59,7 @@ async function waitForRow(dialog: Locator, id: string): Promise<Locator> {
 }
 
 test.describe('running-session marker (integration)', () => {
-  test('the live session is marked while its turn runs and unmarked when it ends', async ({ page }) => {
+  test('the live session is marked while its turn runs and unmarked when it ends', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
     await startTurn(page, LONG_PROMPT);
     const id = await currentSessionId(page);
@@ -85,7 +85,7 @@ test.describe('running-session marker (integration)', () => {
     await expect(stoppedRow.getByRole('img', { name: 'Working now' })).toHaveCount(0, { timeout: 15_000 });
   });
 
-  test('a turn running in one panel is marked in another panel list', async ({ page, context }) => {
+  test('a turn running in one panel is marked in another panel list', { tag: ["@shared"] }, async ({ page, context }) => {
     await waitForApp(page);
     const other = await context.newPage();
     await waitForApp(other);

@@ -33,6 +33,36 @@ function probeOrigin(origin: string, nonce: string): Promise<'open' | number> {
   });
 }
 
+function readNetworkAccess(nonce: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://localhost:3001/agent?nonce=${nonce}`, { origin: 'http://localhost:5173' });
+    ws.on('open', () => ws.send(JSON.stringify({ type: 'getSettings' })));
+    ws.on('message', data => {
+      const message = JSON.parse(data.toString());
+      if (message.type !== 'settings') return;
+      ws.close();
+      resolve(message.settings.allowNetworkAccess !== false);
+    });
+    ws.on('unexpected-response', (_req, res) => reject(new Error(`settings upgrade failed: ${res.statusCode}`)));
+    ws.on('error', reject);
+  });
+}
+
+function updateServerSettings(nonce: string, settings: Record<string, unknown>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://localhost:3001/agent?nonce=${nonce}`, { origin: 'http://localhost:5173' });
+    ws.on('open', () => ws.send(JSON.stringify({ type: 'updateSettings', settings })));
+    ws.on('message', data => {
+      const message = JSON.parse(data.toString());
+      if (message.type !== 'settings') return;
+      ws.close();
+      resolve();
+    });
+    ws.on('unexpected-response', (_req, res) => reject(new Error(`settings upgrade failed: ${res.statusCode}`)));
+    ws.on('error', reject);
+  });
+}
+
 // The backend writes argus.json and re-reads it per upgrade, so a UI change lands
 // asynchronously - poll the gate until it reflects the expected verdict.
 async function expectOrigin(origin: string, nonce: string, expected: 'open' | number) {
@@ -46,13 +76,15 @@ async function openNetworkTab(page: Page) {
   await expect(page.getByText('Network access', { exact: true })).toBeVisible();
 }
 
-// The toggle's <input> is visually collapsed (0x0, opacity 0), so it is not
-// directly clickable - click the row label, which is wired via htmlFor.
-async function setNetworkAccess(page: Page, on: boolean) {
+// Drive the checkbox itself. Clicking the label text can race a settings reply that
+// re-renders the row between pointer down and the label's synthetic input activation.
+async function setNetworkAccess(page: Page, nonce: string, on: boolean) {
   const checkbox = page.getByLabel('Network access');
-  if ((await checkbox.isChecked()) !== on) {
-    await page.getByText('Network access', { exact: true }).click();
-  }
+  await checkbox.evaluate((element: HTMLInputElement, target) => {
+    element.checked = !target;
+    element.click();
+  }, on);
+  await expect.poll(() => readNetworkAccess(nonce), { timeout: 15_000 }).toBe(on);
   await expect(checkbox).toBeChecked({ checked: on });
 }
 
@@ -60,19 +92,13 @@ test.describe('network access (integration)', () => {
   let original: string;
   test.beforeAll(() => {
     original = fs.readFileSync(CONFIG_PATH, 'utf8');
-    // Start from a known gate state. The first test's baseline asserts an external
-    // origin is rejected, which a leftover allowedOrigins entry (from an aborted
-    // earlier run) would silently break.
-    fs.writeFileSync(
-      CONFIG_PATH,
-      JSON.stringify({ ...JSON.parse(original), allowNetworkAccess: true, allowedOrigins: '' }, null, 2) + '\n',
-    );
   });
   test.afterAll(() => { fs.writeFileSync(CONFIG_PATH, original); });
 
-  test('adding an allowed origin in the Network tab lets that origin connect', async ({ page }) => {
+  test('adding an allowed origin in the Network tab lets that origin connect', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
     const nonce = await getNonce();
+    await updateServerSettings(nonce, { allowNetworkAccess: true, allowedOrigins: '' });
 
     // Baseline: an unconfigured external origin is rejected, but local always works.
     await expectOrigin('http://scub-tunnel.test', nonce, 403);
@@ -80,7 +106,7 @@ test.describe('network access (integration)', () => {
 
     // Add the host through the UI (commits on Enter).
     await openNetworkTab(page);
-    await setNetworkAccess(page, true);
+    await setNetworkAccess(page, nonce, true);
     const origins = page.getByLabel('Allowed origins');
     await origins.fill('scub-tunnel.test');
     await origins.press('Enter');
@@ -91,15 +117,16 @@ test.describe('network access (integration)', () => {
     await expectOrigin('http://scub-evil.test', nonce, 403);
   });
 
-  test('the Network access toggle is a kill switch for all non-local origins', async ({ page }) => {
+  test('the Network access toggle is a kill switch for all non-local origins', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
     const nonce = await getNonce();
+    await updateServerSettings(nonce, { allowNetworkAccess: true, allowedOrigins: '' });
 
     await openNetworkTab(page);
 
     // With network access on, private-LAN origins (and a configured host) are allowed.
     // Set allowedOrigins directly here so this test is independent of the previous test's state.
-    await setNetworkAccess(page, true);
+    await setNetworkAccess(page, nonce, true);
     const originsInput = page.getByLabel('Allowed origins');
     await originsInput.fill('scub-tunnel.test');
     await originsInput.press('Enter');
@@ -108,22 +135,23 @@ test.describe('network access (integration)', () => {
 
     // Flip the switch off: every non-local origin is now rejected, but localhost
     // (the local machine / this very page) is never locked out.
-    await setNetworkAccess(page, false);
+    await setNetworkAccess(page, nonce, false);
     await expectOrigin('http://10.1.2.3', nonce, 403);
     await expectOrigin('http://scub-tunnel.test', nonce, 403);
     await expectOrigin('http://localhost:5173', nonce, 'open');
 
     // Flip it back on and the LAN origin is allowed again.
-    await setNetworkAccess(page, true);
+    await setNetworkAccess(page, nonce, true);
     await expectOrigin('http://10.1.2.3', nonce, 'open');
   });
 
-  test('turning Network access off disconnects a live non-local client at once', async ({ page }) => {
+  test('turning Network access off disconnects a live non-local client at once', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
     const nonce = await getNonce();
+    await updateServerSettings(nonce, { allowNetworkAccess: true, allowedOrigins: '' });
 
     await openNetworkTab(page);
-    await setNetworkAccess(page, true);
+    await setNetworkAccess(page, nonce, true);
 
     // Open a live connection from a private-LAN origin and keep it open.
     const ws = new WebSocket('ws://localhost:3001/agent?nonce=' + nonce, { origin: 'http://10.9.9.9' });
@@ -135,7 +163,7 @@ test.describe('network access (integration)', () => {
     });
 
     // Flip the kill switch off: the live client must be dropped without a restart.
-    await setNetworkAccess(page, false);
+    await setNetworkAccess(page, nonce, false);
     const code = await Promise.race([
       closeCode,
       new Promise<string>((r) => setTimeout(() => r('still-open'), 10_000)),

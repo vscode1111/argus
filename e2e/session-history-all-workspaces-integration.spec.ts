@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Exercises the Session History "All workspaces" tab end to end against the real
@@ -24,7 +24,7 @@ async function openAllWorkspaces(page: Page) {
 }
 
 test.describe('session history - all workspaces (integration)', () => {
-  test('lists global sessions spanning multiple workspaces and filters by search', async ({ page }) => {
+  test('lists global sessions spanning multiple workspaces and filters by search', { tag: ["@claude"] }, async ({ page }) => {
     await waitForApp(page);
 
     const { dialog, search } = await openAllWorkspaces(page);
@@ -59,7 +59,7 @@ test.describe('session history - all workspaces (integration)', () => {
     await expect(rows).toHaveCount(initialCount);
   });
 
-  test('the two tabs show different shapes of data', async ({ page }) => {
+  test('the two tabs show different shapes of data', { tag: ["@claude"] }, async ({ page }) => {
     await waitForApp(page);
 
     // Default "This workspace" tab: per-session rows carry rename/delete actions
@@ -80,7 +80,7 @@ test.describe('session history - all workspaces (integration)', () => {
     await expect(dialog.getByRole('button', { name: 'Delete session' })).toHaveCount(0);
   });
 
-  test('resuming a session from another workspace switches the workspace and replays', async ({ page }) => {
+  test('resuming a session from another workspace switches the workspace and replays', { tag: ["@claude"] }, async ({ page }) => {
     await waitForApp(page);
 
     // The panel starts in the argus workspace (from the ?dir= query in waitForApp).

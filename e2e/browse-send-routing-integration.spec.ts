@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { WebSocket } from 'ws';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -103,7 +103,7 @@ test.describe('send while browsing another session (integration)', () => {
   // away from, and the turn the browsed send must start) do not fit the flat 30s budget.
   test.setTimeout(90_000);
 
-  test('the send starts a turn on the browsed session instead of injecting into the live one', async () => {
+  test('the send starts a turn on the browsed session instead of injecting into the live one', { tag: ["@shared"] }, async () => {
     const nonce = await getNonce();
     const dir = makeTempDir('routing');
     const ws = await openClient(nonce, dir);
@@ -151,7 +151,7 @@ test.describe('send while browsing another session (integration)', () => {
     }
   });
 
-  test('a client watching the live session never sees the browsed send', async () => {
+  test('a client watching the live session never sees the browsed send', { tag: ["@shared"] }, async () => {
     const nonce = await getNonce();
     const dir = makeTempDir('leak');
     const browser = await openClient(nonce, dir);

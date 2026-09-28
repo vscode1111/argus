@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Integration tests for the CLI launch counter shown in Settings > Info tab.
@@ -32,7 +32,7 @@ test.describe('CLI launch counter (integration)', () => {
     await waitForApp(page);
   });
 
-  test('Info tab shows CLI launches row with a non-negative integer', async ({ page }) => {
+  test('Info tab shows CLI launches row with a non-negative integer', { tag: ["@claude"] }, async ({ page }) => {
     await openInfoTab(page);
 
     const el = cliLaunchLocator(page);
@@ -46,7 +46,7 @@ test.describe('CLI launch counter (integration)', () => {
     expect(count).toBeGreaterThanOrEqual(0);
   });
 
-  test('CLI launch count increments after a process is spawned', async ({ page }) => {
+  test('CLI launch count increments after a process is spawned', { tag: ["@claude"] }, async ({ page }) => {
     // Read the baseline count before sending any message.
     await openInfoTab(page);
     await expect.poll(() => cliLaunchLocator(page).textContent().then(t => t?.trim()), { timeout: 5_000 })
@@ -72,7 +72,7 @@ test.describe('CLI launch counter (integration)', () => {
       .toBeGreaterThanOrEqual(before + 1);
   });
 
-  test('Info tab re-fetches the count each time it is clicked', async ({ page }) => {
+  test('Info tab re-fetches the count each time it is clicked', { tag: ["@claude"] }, async ({ page }) => {
     // Open Settings modal - mount fires getServerInfo, count resolves to a number.
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();

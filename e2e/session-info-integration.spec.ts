@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // The Settings "Info" tab reports which conversation this panel is in: the session id
@@ -20,7 +20,7 @@ async function openInfoTab(page: Page) {
 }
 
 test.describe('session info in Settings (integration)', () => {
-  test('Info tab shows the live session id and its transcript path', async ({ page, context }) => {
+  test('Info tab shows the live session id and its transcript path', { tag: ["@claude","@claude-live"] }, async ({ page, context }) => {
     await waitForApp(page);
     // Own channel entry, so a concurrent worker cannot move this panel's sessionId.
     await page.getByRole('button', { name: 'New chat' }).click();
@@ -83,7 +83,7 @@ test.describe('session info in Settings (integration)', () => {
   // daemon left running by another install - it connects fine and just quietly lacks
   // the newer features. The Info tab used to show only the UI version, which is never
   // the stale half, so the mismatch was invisible.
-  test('Info tab reports the version of the server actually serving the panel', async ({ page }) => {
+  test('Info tab reports the version of the server actually serving the panel', { tag: ["@claude"] }, async ({ page }) => {
     await waitForApp(page);
     const dialog = await openInfoTab(page);
 

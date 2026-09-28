@@ -1,3 +1,4 @@
+import { useProvider } from '../hooks/useProvider';
 import React, { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import { ImageAttachment } from '../types';
 import { postMessage, isVsCode } from '../vscode';
@@ -47,6 +48,11 @@ const MAX_FILE_ROWS = 60;
 const MENU_TOP_GAP = 12;
 /** Floor for a very short window, where the measured space would be unusably small. */
 const MIN_MENU_HEIGHT = 140;
+const CODEX_MODES = [
+  { value: 'edit', label: 'Ask', description: 'Edit workspace files; ask before actions needing broader access.' },
+  { value: 'plan', label: 'Plan', description: 'Read files and propose changes without editing them.' },
+  { value: 'full-access', label: 'Full', description: 'Edit files and run commands without approval prompts.' },
+] as const;
 
 /** Up-one-level arrow for the picker's ".." row, matching FolderList's up affordance. */
 function UpIcon() {
@@ -75,6 +81,7 @@ function renderHighlight(value: string): React.ReactNode[] {
 }
 
 interface Props {
+  providerId?: string;
   isStreaming: boolean;
   prefill: string;
   workspacePath: string;
@@ -90,10 +97,9 @@ interface Props {
   onStop?: () => void;
 }
 
-const EFFORT_LEVELS = ['low', 'medium', 'high', 'max'] as const;
-type EffortLevel = typeof EFFORT_LEVELS[number];
 
-export function InputArea({ isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, wsCloseReason = null, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop }: Props) {
+
+export function InputArea({ providerId = 'claude', isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, wsCloseReason = null, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -113,13 +119,19 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
   const [filesLoading, setFilesLoading] = useState(false);
   const [fileParent, setFileParent] = useState<string | null>(null);
   const [menuMaxHeight, setMenuMaxHeight] = useState<number | null>(null);
-  const [mode, setMode] = useState<'plan' | 'edit'>('edit');
+  const [mode, setMode] = useState<'plan' | 'edit' | 'full-access'>('edit');
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+  const modeTriggerRef = useRef<HTMLButtonElement>(null);
+  const provider = useProvider(providerId);
+  const [attachmentError, setAttachmentError] = useState('');
   const [accountUsageOpen, setAccountUsageOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [fetchedModels, setFetchedModels] = useState<ModelEntry[] | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [runtimeDefaultModel, setRuntimeDefaultModel] = useState('');
+  const effortLevels = fetchedModels?.find(m => m.id === (currentModel || runtimeDefaultModel))?.efforts ?? provider?.efforts ?? [];
   const [text, setText] = useState('');
   const highlightRef = useRef<HTMLDivElement>(null);
   const historyIndex = useRef(-1);
@@ -143,9 +155,28 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     el.style.height = Math.min(el.scrollHeight, maxH) + 'px';
   }
 
+  useEffect(() => {
+    setMode('edit');
+    setModeMenuOpen(false);
+    setFetchedModels(null); setModelsError(null); setModelsLoading(false); setRuntimeDefaultModel(''); setSkills([]);
+    postMessage({ type: 'getSkills' });
+    if (providerId !== 'claude') postMessage({ type: 'getModels', providerId });
+  }, [providerId]);
+
+  useEffect(() => {
+    if (!modeMenuOpen) return;
+    modeMenuRef.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus();
+    const closeOutside = (event: PointerEvent) => {
+      if (!modeMenuRef.current?.parentElement?.contains(event.target as Node)) setModeMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [modeMenuOpen]);
+
   // Listen for skills and modelList messages
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
+      if (['skills', 'modelList'].includes(e.data?.type) && (e.data.providerId || 'claude') !== providerId) return;
       if (e.data?.type === 'skills') {
         setSkills(e.data.skills ?? []);
       } else if (e.data?.type === 'fileList') {
@@ -167,7 +198,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [providerId]);
 
   const onDragMove = useCallback((e: MouseEvent) => {
     if (!dragging.current) return;
@@ -223,6 +254,11 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
     if (!el) return;
     const text = el.value.trim();
     if (!text && images.length === 0) return;
+    if (images.some(image => {
+      const kind = image.mediaType.startsWith('text/') ? 'text' : image.mediaType.startsWith('image/') ? 'image' : image.mediaType === 'application/pdf' ? 'pdf' : 'file';
+      return provider && !provider.inputKinds.includes(kind);
+    })) { setAttachmentError('This provider does not support one of the attachments. Remove it or choose another provider.'); return; }
+    setAttachmentError('');
     if (text) setHistory(prev => [text, ...prev]);
     historyIndex.current = -1;
     savedDraft.current = '';
@@ -546,7 +582,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
       adjustHeight();
       el.focus();
     }
-    postMessage({ type: 'switchModel', model: id });
+    postMessage({ type: 'switchModel', model: id, providerId });
     setModelPickerOpen(false);
     setSlashQuery(null);
   }
@@ -747,7 +783,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
               >
                 <span className={styles.slashMenuName}>Switch model...</span>
                 <span className={styles.slashMenuHint}>{(() => {
-                  const all = [makeDefaultEntry(runtimeDefaultModel), ...(fetchedModels ?? FALLBACK_MODELS)];
+                  const all = [makeDefaultEntry(runtimeDefaultModel, providerId), ...(fetchedModels ?? (providerId === 'claude' ? FALLBACK_MODELS : []))];
                   const found = all.find(m => sameModel(m.id, currentModel));
                   return found ? found.displayName.replace(/^Claude /, '') : (currentModel || 'Default');
                 })()}</span>
@@ -755,10 +791,10 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
               {modelPickerOpen && (
                 modelsLoading ? (
                   <div className={styles.slashMenuEmpty}>Loading models...</div>
-                ) : modelsError && !fetchedModels ? (
+                ) : modelsError && !fetchedModels && providerId !== 'claude' ? (
                   <div className={styles.slashMenuEmpty}>Failed to load: {modelsError}</div>
                 ) : (
-                  [makeDefaultEntry(runtimeDefaultModel), ...(fetchedModels ?? FALLBACK_MODELS)].map(m => (
+                  [makeDefaultEntry(runtimeDefaultModel, providerId), ...(fetchedModels ?? (providerId === 'claude' ? FALLBACK_MODELS : []))].map(m => (
                     <div
                       key={m.id || '__default__'}
                       className={styles.slashMenuItem}
@@ -782,19 +818,19 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
                 className={styles.slashMenuControl}
                 onMouseDown={e => e.preventDefault()}
               >
-                <span className={styles.slashMenuName}>Effort ({currentEffort.charAt(0).toUpperCase() + currentEffort.slice(1)})</span>
+                <span className={styles.slashMenuName}>Effort ({currentEffort ? currentEffort.charAt(0).toUpperCase() + currentEffort.slice(1) : 'Auto'})</span>
                 <div className={styles.slashMenuDots}>
-                  {EFFORT_LEVELS.map(level => (
+                  {effortLevels.map(level => (
                     <span
                       key={level}
                       title={level.charAt(0).toUpperCase() + level.slice(1)}
-                      className={[styles.slashMenuDot, level === (EFFORT_LEVELS.includes(currentEffort as EffortLevel) ? currentEffort : 'high') ? styles.slashMenuDotActive : ''].filter(Boolean).join(' ')}
+                      className={[styles.slashMenuDot, level === currentEffort ? styles.slashMenuDotActive : ''].filter(Boolean).join(' ')}
                       onClick={() => { postMessage({ type: 'switchEffort', effort: level }); }}
                     />
                   ))}
                 </div>
               </div>
-              <div
+              {provider?.thinkingToggle && <div
                 className={styles.slashMenuControl}
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => postMessage({ type: 'switchThinking', thinking: !thinkingEnabled })}
@@ -803,7 +839,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
                 <div className={[styles.slashMenuToggleTrack, thinkingEnabled ? styles.slashMenuToggleTrackOn : ''].filter(Boolean).join(' ')}>
                   <div className={[styles.slashMenuToggleThumb, thinkingEnabled ? styles.slashMenuToggleThumbOn : ''].filter(Boolean).join(' ')} />
                 </div>
-              </div>
+              </div>}
             </>
           )}
           {showAccountAction && (
@@ -895,15 +931,69 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
           Reconnect
         </button>
       )}
+      {attachmentError && <div role="alert">{attachmentError}</div>}
       <div className={styles.btnGroup}>
         <div className={styles.btnRow}>
-          <button
-            className={[styles.modePill, mode === 'plan' ? styles.modePlan : ''].filter(Boolean).join(' ')}
-            onClick={() => setMode(m => m === 'edit' ? 'plan' : 'edit')}
-            title={mode === 'edit' ? 'Switch to Plan mode' : 'Switch to Edit mode'}
-          >
-            {mode === 'edit' ? 'Edit' : 'Plan'}
-          </button>
+          {providerId === 'codex' ? (
+            <div className={styles.modeAnchor} onBlur={e => {
+              if (!e.currentTarget.contains(e.relatedTarget)) setModeMenuOpen(false);
+            }}>
+              <button
+                ref={modeTriggerRef}
+                type="button"
+                className={[styles.modePill, mode === 'plan' ? styles.modePlan : mode === 'full-access' ? styles.modeFull : ''].filter(Boolean).join(' ')}
+                aria-label="Codex permissions"
+                aria-haspopup="listbox"
+                aria-expanded={modeMenuOpen}
+                title="Codex permissions for the next message"
+                onClick={() => setModeMenuOpen(open => !open)}
+                onKeyDown={e => {
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setModeMenuOpen(true); }
+                }}
+              >
+                {CODEX_MODES.find(option => option.value === mode)?.label}
+              </button>
+              {modeMenuOpen && (
+                <div
+                  ref={modeMenuRef}
+                  className={styles.modeMenu}
+                  role="listbox"
+                  aria-label="Codex permissions"
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { e.preventDefault(); setModeMenuOpen(false); modeTriggerRef.current?.focus(); }
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      const options = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]'));
+                      const index = options.indexOf(document.activeElement as HTMLButtonElement);
+                      options[(index + (e.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length]?.focus();
+                    }
+                  }}
+                >
+                  {CODEX_MODES.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={mode === option.value}
+                      className={styles.modeOption}
+                      onClick={() => { setMode(option.value); setModeMenuOpen(false); modeTriggerRef.current?.focus(); }}
+                    >
+                      <span className={styles.modeOptionLabel}>{option.label}</span>
+                      <span className={styles.modeOptionDescription}>{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              className={[styles.modePill, mode === 'plan' ? styles.modePlan : ''].filter(Boolean).join(' ')}
+              onClick={() => setMode(m => m === 'edit' ? 'plan' : 'edit')}
+              title={mode === 'edit' ? 'Switch to Plan mode' : 'Switch to Edit mode'}
+            >
+              {mode === 'plan' ? 'Plan' : 'Edit'}
+            </button>
+          )}
           {bgTasks > 0 && (
             // The one durable home for the pending count. The per-message note reports what
             // a *finished* turn left behind and is rewritten away by the next turn, so in a
@@ -921,9 +1011,9 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
           {contextUsage && (
             <span
               className={[styles.contextPill, contextUsage.percent >= 80 ? styles.contextHigh : contextUsage.percent >= 50 ? styles.contextMedium : ''].filter(Boolean).join(' ')}
-              title={`${contextUsage.percent}% used\nInput: ${contextUsage.inputTokens.toLocaleString()} tokens\nOutput: ${contextUsage.outputTokens.toLocaleString()} tokens${contextUsage.contextWindow ? `\nWindow: ${contextUsage.contextWindow.toLocaleString()} tokens` : ''}`}
+              title={`${contextUsage.percent.toFixed(1)}% used\nInput: ${contextUsage.inputTokens.toLocaleString()} tokens\nOutput: ${contextUsage.outputTokens.toLocaleString()} tokens${contextUsage.contextWindow ? `\nWindow: ${contextUsage.contextWindow.toLocaleString()} tokens` : ''}`}
             >
-              {contextUsage.percent}%
+              {contextUsage.percent.toFixed(1)}%
             </span>
           )}
           <div className={settings.anchor}>
@@ -960,7 +1050,7 @@ export function InputArea({ isStreaming, prefill, workspacePath, version, contex
           onClose={() => setViewerIndex(null)}
         />
       )}
-      {accountUsageOpen && <AccountUsageModal onClose={() => setAccountUsageOpen(false)} currentModel={currentModel} currentEffort={currentEffort} thinkingEnabled={thinkingEnabled} />}
+      {accountUsageOpen && <AccountUsageModal key={providerId} providerId={providerId} onClose={() => setAccountUsageOpen(false)} currentModel={currentModel} currentEffort={currentEffort} thinkingEnabled={thinkingEnabled} />}
     </div>
   );
 

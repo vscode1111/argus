@@ -1,3 +1,4 @@
+import { ProviderInteraction } from './components/ProviderInteraction';
 import React, { useEffect, useReducer, useRef, useCallback } from 'react';
 import { MessageList, MessageListHandle } from './components/MessageList';
 import { InputArea } from './components/InputArea';
@@ -71,6 +72,9 @@ function AppInner() {
   const hadPendingAsk = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [providerNotice, setProviderNotice] = React.useState('');
+  const providerRef = React.useRef(state.providerId);
+  providerRef.current = state.providerId;
   const [accountUsageOpen, setAccountUsageOpen] = React.useState(false);
   const [initialFile, setInitialFile] = React.useState<string | null>(null);
   // Spinner overlay shown while a session resume or workspace switch is in flight
@@ -130,7 +134,7 @@ function AppInner() {
 
   useEffect(() => {
     const VALID_TYPES = new Set<AppAction['type']>([
-      'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
+      'providerSelection', 'interaction', 'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
       'tool_start', 'tool_end', 'done', 'error', 'clear', 'user_inject', 'sessionLoaded',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
       'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'token_update', 'retry_status', 'retry_clean', 'ws_status', 'modelChanged', 'effortChanged', 'thinkingChanged',
@@ -138,6 +142,8 @@ function AppInner() {
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;
+      if (data?.type === 'providerNotice') setProviderNotice(String(data.message || ''));
+      if (data?.type === 'providerSelection') setProviderNotice('');
       if (data && typeof data.type === 'string' && VALID_TYPES.has(data.type)) {
         dispatch(data as AppAction);
       }
@@ -149,6 +155,7 @@ function AppInner() {
     if (window.argusAuthRequired?.()) dispatch({ type: 'auth_required', required: true });
     postMessage({ type: 'webviewReady' });
     postMessage({ type: 'getInfo' });
+    postMessage({ type: 'getProviders' });
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
@@ -179,6 +186,11 @@ function AppInner() {
       }
     }
   }, [state.turnCompletions, soundOnComplete, notifyOnComplete]);
+
+  useEffect(() => {
+    setUsageWindows([]); setUsageError(undefined);
+    postMessage({ type: 'getUsageLimits' });
+  }, [state.providerId]);
 
   const hasPendingAsk = !!state.streaming?.askPausedAt;
   useEffect(() => {
@@ -257,6 +269,7 @@ function AppInner() {
       } else if (t === 'activeSessions' && Array.isArray(e.data.sessions)) {
         setActiveIds(new Set((e.data.sessions as ActiveSession[]).map(a => a.id)));
       } else if (t === 'usageLimits' && Array.isArray(e.data.windows)) {
+        if ((e.data.providerId || 'claude') !== providerRef.current) return;
         // Empty means the fetch behind it failed (a reconnect landing on a 429, say).
         // Keep whatever we are already showing and only record the reason - same rule the
         // server applies to its own snapshot; blanking good bars on a transient failure is
@@ -497,6 +510,15 @@ function AppInner() {
           {workspaceName && (
             <WorkspaceMenu currentPath={state.workspacePath} name={workspaceName} onSelect={switchWorkspace} />
           )}
+          <button
+            type="button"
+            className="headerModelButton"
+            aria-label="Choose provider and model"
+            title={state.currentModel || 'Default'}
+            onClick={() => setAccountUsageOpen(true)}
+          >
+            {state.currentModel || 'Default'}
+          </button>
           {/* Doubles as the Account & usage button: it opens the modal, and falls
               back to that button's icon when there are no windows to draw. */}
           <UsageIndicator windows={usageWindows} error={usageError} onClick={() => setAccountUsageOpen(true)} />
@@ -522,8 +544,10 @@ function AppInner() {
 
   return (
     <div className="app">
+      {providerNotice && <div role="status"><span>{providerNotice}</span><button aria-label="Dismiss provider notice" onClick={() => setProviderNotice('')}>Close</button></div>}
+      {state.interaction && <ProviderInteraction key={state.interaction.id} request={state.interaction} />}
       {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} activeIds={activeIds} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
-      {accountUsageOpen && <AccountUsageModal currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onClose={() => setAccountUsageOpen(false)} />}
+      {accountUsageOpen && <AccountUsageModal key={state.providerId} providerId={state.providerId} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onClose={() => setAccountUsageOpen(false)} />}
       {initialFile && <AutoFileViewer path={initialFile} onClose={() => setInitialFile(null)} />}
       <div className="content">
         {showLogs && isNarrow && (
@@ -535,7 +559,7 @@ function AppInner() {
         <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
           {topRightActions}
           <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
-          <InputArea isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
+          <InputArea providerId={state.providerId} isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
           {loadingSession && (
             <div className="sessionLoader" role="status" aria-live="polite" aria-busy="true" aria-label="Loading session">
               <div className="sessionSpinner" />

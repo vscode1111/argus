@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 test.describe('/clear command', () => {
@@ -6,7 +6,7 @@ test.describe('/clear command', () => {
     await waitForApp(page);
   });
 
-  test('clears conversation without error block', async ({ page }) => {
+  test('clears conversation without error block', { tag: ["@shared"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.fill('say "scub-clear-test" and nothing else');
     await page.getByRole('button', { name: 'Send' }).click();
@@ -32,7 +32,7 @@ test.describe('/clear command', () => {
     await expect(textarea).toBeEnabled();
   });
 
-  test('can send a message after /clear', async ({ page }) => {
+  test('can send a message after /clear', { tag: ["@shared"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.fill('say "scub-before-clear" and nothing else');
     await page.getByRole('button', { name: 'Send' }).click();
@@ -59,7 +59,7 @@ test.describe('/clear command', () => {
     await expect(errorBlock).toHaveCount(0);
   });
 
-  test('stop then /clear does not produce error', async ({ page }) => {
+  test('stop then /clear does not produce error', { tag: ["@shared"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.fill('write a detailed essay about the history of computing');
     await page.getByRole('button', { name: 'Send' }).click();

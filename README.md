@@ -1,45 +1,52 @@
 # argus
 
 VS Code extension: AI coding assistant with streaming tool calls, inline diff viewer,
-and custom skill support. Built in TypeScript + NestJS, active in 2026.
+and custom skill support. Built in TypeScript, active in 2026.
 
 ## Overview
 
-Argus embeds a Claude Code CLI session directly in VS Code as a side panel. It streams
-responses in real time, shows collapsible thinking blocks, renders tool calls (file
-reads, edits, bash, search) with inline diff and file viewers, and lets you approve or
-reject each action before it runs. Custom slash-command skills live in
-`~/.claude/skills/` and are loaded automatically.
-
-The goal: full Claude Code capability without leaving the editor, with a UI layer that
-makes long agentic sessions readable.
+Argus runs Claude Code or Codex conversations in a VS Code webview or browser.
+The provider button beside the composer opens the account and model picker.
+Switching provider starts a new conversation; existing conversations retain their
+provider and can be resumed from history. Models and reasoning options apply to the
+current conversation. Use **Use for new conversations** to save a default.
 
 ## Architecture
 
-```
-VS Code webview (React + TypeScript)
-  <- streaming SSE from NestJS backend (localhost)
-NestJS backend
-  -> spawns Claude Code CLI as a subprocess per session
-  -> pipes CLI stdout/stderr back to the webview as SSE
-  -> relays tool approvals from webview to CLI stdin
-Claude Code CLI
-  -> talks to Anthropic API under your account
-  -> executes tool calls (read, write, edit, bash, grep, ...) locally
+```text
+React webview / browser
+  <-> WebSocket server, workspace channels and conversation state
+  <-> provider registry (AgentProvider + AgentSession)
+       | Claude Code: existing streaming CLI execution
+       | Codex: bidirectional app-server JSONL RPC over stdio
 ```
 
-All file edits go through the same tool-approval flow as the standalone CLI. Conversation
-history stays local.
+Adapters own native protocols, model discovery, account usage, skills and history.
+The UI consumes shared events and capability descriptors. Session bindings and
+selection are saved in argus-provider-sessions.json beside argus.json; native
+transcripts and authentication remain with their runtimes. Existing Claude
+configuration and transcript paths are unchanged.
 
-## Key decisions
+For Codex, install the CLI on the **server machine** and sign in there with
+`codex login`. Argus uses that login. If the executable is not on PATH, set
+`ARGUS_CODEX_BIN` to its executable path before starting the server. The adapter
+uses `codex app-server`; it was verified with 0.155.0-alpha.16. It discovers models
+and supported effort levels from the signed-in runtime.
 
-**CLI-as-subprocess, not API-direct:** spawning the CLI means Argus inherits all CLI
-features (tools, skills, MCP servers, slash commands) without reimplementing them.
-Switching models or adding a new tool requires no changes to Argus.
+Codex supports text/images, command and file-change approvals, and user-input
+requests. The composer offers Ask (workspace-write with on-request approvals),
+Plan (read-only), and Full (unrestricted access without approval prompts).
+Unsupported permission requests are rejected. A timed-out
+turn is never automatically replayed. PDF input, Claude-specific usage attribution,
+background-task markers and transcript tool-image preview remain Claude features.
+Codex history currently lists conversations created through Argus. Provider switching
+does not transfer context. Inline completions still use their existing Claude path.
 
-**NestJS over plain Node HTTP:** the backend manages multiple concurrent sessions (one
-per chat panel). NestJS's module system makes session lifecycle, SSE endpoint, and
-approval routing cleanly separable without growing into a monolith.
+Add a provider by implementing the contracts in src/backend/providers/types.ts,
+registering it in registry.ts, and translating native events inside the adapter.
+Do not add native protocol branches to React components. Run `npm run test:providers`
+for the transport/lifecycle contract tests and the provider picker/switch Playwright
+specs for the browser workflow.
 
 ## Commands
 
@@ -86,9 +93,31 @@ approval routing cleanly separable without growing into a monolith.
 
 ## Requirements
 
-- [Claude Code CLI](https://docs.anthropic.com/claude/docs/claude-code) installed and
-  authenticated (`claude` in terminal once to log in).
+- At least one installed, authenticated provider CLI: Claude Code (`claude` to
+  log in) or Codex (`codex login`). Codex requires the `app-server` command.
+- On Windows, Codex uses `ARGUS_CODEX_BIN` when set, then `codex.exe` on PATH,
+  then the newest executable in the installed desktop app's local bin cache.
+  This also works from terminals that do not inherit the desktop app's PATH.
 - VS Code 1.85 or newer.
+
+## Provider integration tests
+
+Run `npm run test:e2e:integration -- --retries=0` for the full integration project.
+Shared scenarios use the real Codex runtime by default. The fixture selects and
+restores `e2e/argus.json` for each case; integration tests run with one worker.
+
+- `@shared`: provider-independent behavior, exercised with Codex by default.
+- `@codex`: native Codex capabilities and protocol behavior.
+- `@claude`: Claude-specific formats, configuration or launch arguments; local
+  checks still run without Claude network access.
+- `@claude-live`: requires a working Claude account/network connection and is
+  skipped unless `ARGUS_TEST_CLAUDE=1`. Existing unsupported AskUserQuestion cases
+  remain explicitly skipped even with that switch.
+
+Set `ARGUS_TEST_PROVIDER=claude` to exercise shared cases with Claude when access
+is available. `npm run test:providers` runs the isolated app-server contract tests.
+For Codex-only shared/native integration coverage, use
+`npm run test:e2e:integration -- --grep "@shared|@codex" --retries=0`.
 
 ## License
 

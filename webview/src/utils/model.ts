@@ -4,6 +4,8 @@ export interface ModelEntry {
   id: string;
   displayName: string;
   description?: string;
+  efforts?: string[];
+  inputKinds?: string[];
 }
 
 type ModelFamily = 'fable' | 'opus' | 'sonnet' | 'haiku';
@@ -47,15 +49,15 @@ export const FALLBACK_MODELS: ModelEntry[] = [
 
 // Built at render time so runtimeDefaultModel can be injected into the description.
 // The value auto-refreshes daily via the daemon (manually: yarn update-models).
-export function makeDefaultEntry(runtimeModel: string): ModelEntry {
+export function makeDefaultEntry(runtimeModel: string, providerId = 'claude'): ModelEntry {
   return {
     id: '',
     displayName: 'Default (CLI)',
-    description: runtimeModel ? `Currently ${runtimeModel}` : 'Defers to the Claude CLI default',
+    description: runtimeModel ? `Currently ${runtimeModel}` : `Defers to the ${providerId} default`,
   };
 }
 
 // Maps a raw modelList payload entry, preferring the server-resolved description.
-export function toModelEntry(m: { id: string; displayName: string; description?: string }): ModelEntry {
-  return { id: m.id, displayName: m.displayName, description: describeModel(m.id, m.description) };
+export function toModelEntry(m: ModelEntry): ModelEntry {
+  return { ...m, description: describeModel(m.id, m.description) };
 }

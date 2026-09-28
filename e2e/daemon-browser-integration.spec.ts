@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import {
   ensureCompiled, ensureBuilt, startDaemon, stopDaemon, type DaemonHandle,
 } from './daemonHelpers';
@@ -39,7 +39,7 @@ async function gotoDaemon(page: Page): Promise<void> {
   }
 }
 
-test('serves the app at / and connects over its own same-origin WebSocket', async ({ page }) => {
+test('serves the app at / and connects over its own same-origin WebSocket', { tag: ["@shared"] }, async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
@@ -51,7 +51,7 @@ test('serves the app at / and connects over its own same-origin WebSocket', asyn
   expect(errors).toEqual([]);
 });
 
-test('serves the static asset allowlist and 404s anything else', async () => {
+test('serves the static asset allowlist and 404s anything else', { tag: ["@shared"] }, async () => {
   const cases: Array<[string, number, RegExp | null]> = [
     ['/', 200, /text\/html/],
     ['/ws-bridge.js', 200, /javascript/],

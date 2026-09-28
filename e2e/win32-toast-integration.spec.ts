@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './provider-fixtures';
 import { execFileSync } from 'child_process';
 import { showWindowsToast } from '../src/frontend/utils/win32Toast';
 
@@ -7,7 +7,7 @@ import { showWindowsToast } from '../src/frontend/utils/win32Toast';
 // we call showWindowsToast() directly and assert the full FFI/COM chain succeeds
 // against the actual OS. Windows-only.
 test.describe('win32 toast (real OS)', () => {
-  test('fires a real Windows toast via koffi WinRT (cold + warm)', () => {
+  test('fires a real Windows toast via koffi WinRT (cold + warm)', { tag: ["@shared"] }, () => {
     test.skip(process.platform !== 'win32', 'Windows-only OS toast');
     const logs: string[] = [];
     const log = (m: string) => logs.push(m);
@@ -22,14 +22,14 @@ test.describe('win32 toast (real OS)', () => {
     expect(warm, logs.join('\n')).toBe(true);
   });
 
-  test('escapes XML-special characters without failing', () => {
+  test('escapes XML-special characters without failing', { tag: ["@shared"] }, () => {
     test.skip(process.platform !== 'win32', 'Windows-only OS toast');
     // Title/body with <, >, &, quotes must not break the toast XML.
     const ok = showWindowsToast('Argus <e2e> & "co"', "scub-toast <b> & 'q'");
     expect(ok).toBe(true);
   });
 
-  test('fires with a protocol-activation launch URI (click-to-focus)', () => {
+  test('fires with a protocol-activation launch URI (click-to-focus)', { tag: ["@shared"] }, () => {
     test.skip(process.platform !== 'win32', 'Windows-only OS toast');
     const logs: string[] = [];
     const log = (m: string) => logs.push(m);
@@ -39,7 +39,7 @@ test.describe('win32 toast (real OS)', () => {
     expect(ok, logs.join('\n')).toBe(true);
   });
 
-  test('registers the Argus AppUserModelId in HKCU', () => {
+  test('registers the Argus AppUserModelId in HKCU', { tag: ["@shared"] }, () => {
     test.skip(process.platform !== 'win32', 'Windows-only OS toast');
     showWindowsToast('Argus e2e', 'scub-toast-reg');
     // execFile (not a shell) so the registry path/flags are passed verbatim.
@@ -51,7 +51,7 @@ test.describe('win32 toast (real OS)', () => {
     expect(out).toContain('Argus');
   });
 
-  test('registers a CustomActivator CLSID so protocol toasts stay activatable', () => {
+  test('registers a CustomActivator CLSID so protocol toasts stay activatable', { tag: ["@shared"] }, () => {
     test.skip(process.platform !== 'win32', 'Windows-only OS toast');
     showWindowsToast('Argus e2e', 'scub-toast-activator');
     const out = execFileSync(

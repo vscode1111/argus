@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './provider-fixtures';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -84,7 +84,7 @@ test.describe('account & usage (integration)', () => {
     await waitForApp(page);
   });
 
-  test('fetches real account info from `claude auth status`', async ({ page }) => {
+  test('fetches real account info from `claude auth status`', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
     await openModal(page);
 
     const dialog = page.getByRole('dialog', { name: 'Account' });
@@ -106,7 +106,7 @@ test.describe('account & usage (integration)', () => {
     await expect(dialog.locator('[class*="row"]', { hasText: 'Plan' })).toBeVisible();
   });
 
-  test('renders the Usage section up front (live API, or graceful fallback)', async ({ page }) => {
+  test('renders the Usage section up front (live API, or graceful fallback)', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
     await openModal(page);
     await expect(page.getByText('Loading...')).toHaveCount(0, { timeout: 20_000 });
 
@@ -129,7 +129,7 @@ test.describe('account & usage (integration)', () => {
     }).toPass({ timeout: 12_000 });
   });
 
-  test('rendered usage values match the live /oauth/usage API', async ({ page }) => {
+  test('rendered usage values match the live /oauth/usage API', { tag: ["@claude","@claude-live"] }, async ({ page }) => {
     // Ground truth, fetched the same way the backend does. Skip (do not fail) if
     // the endpoint is unavailable - it rate-limits aggressively.
     const live = await fetchLiveUsage();
