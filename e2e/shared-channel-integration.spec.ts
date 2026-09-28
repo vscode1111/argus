@@ -205,6 +205,9 @@ test.describe('shared channel broadcast (integration)', () => {
   test('switchModel broadcast reaches all clients on the channel', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('model-broadcast');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dir)]);
+    const originalInfo = waitForType(clientA, 'workspaceInfo', 3000);
+    clientA.send(JSON.stringify({ type: 'getInfo' }));
+    const originalModel = (await originalInfo as Record<string, unknown>).model as string;
 
     // Drain initial replay on B
     await collectMessages(clientB, 300);
@@ -217,12 +220,12 @@ test.describe('shared channel broadcast (integration)', () => {
     const msg = await bGotModel as Record<string, unknown>;
     expect(msg.model).toBe(model);
 
-    // Restore model to empty (CLI default)
-    clientA.send(JSON.stringify({ type: 'switchModel', model: '' }));
+    // Restore the configured model for the rest of the suite.
+    clientA.send(JSON.stringify({ type: 'switchModel', model: originalModel }));
     await waitForType(clientA, 'providerSelection', 3000);
   });
 
-  // Selection belongs to one conversation; other workspaces keep their defaults.
+  // Selection belongs to one conversation; an existing session in another workspace keeps its model.
   test('switchModel stays in its conversation and does not change another workspace', { tag: ["@shared"] }, async () => {
     dir = makeTempDir('model-global-a');
     const dirB = makeTempDir('model-global-b');
@@ -230,6 +233,12 @@ test.describe('shared channel broadcast (integration)', () => {
 
     // Drain initial replay on B
     await collectMessages(clientB, 300);
+    const originalInfo = waitForType(clientA, 'workspaceInfo', 3000);
+    clientA.send(JSON.stringify({ type: 'getInfo' }));
+    const originalModel = (await originalInfo as Record<string, unknown>).model as string;
+    const bInitialInfo = waitForType(clientB, 'workspaceInfo', 3000);
+    clientB.send(JSON.stringify({ type: 'getInfo' }));
+    const bInitialModel = (await bInitialInfo as Record<string, unknown>).model as string;
 
     const catalog = waitForType(clientA, 'modelList', 30_000);
     clientA.send(JSON.stringify({ type: 'getModels' }));
@@ -241,10 +250,10 @@ test.describe('shared channel broadcast (integration)', () => {
     await unchanged;
     const bInfo = waitForType(clientB, 'workspaceInfo', 3000);
     clientB.send(JSON.stringify({ type: 'getInfo' }));
-    expect((await bInfo as Record<string, unknown>).model).toBe('');
+    expect((await bInfo as Record<string, unknown>).model).toBe(bInitialModel);
 
-    // Restore model to empty (CLI default)
-    clientA.send(JSON.stringify({ type: 'switchModel', model: '' }));
+    // Restore the configured model for the rest of the suite.
+    clientA.send(JSON.stringify({ type: 'switchModel', model: originalModel }));
     await waitForType(clientA, 'providerSelection', 3000);
   });
 

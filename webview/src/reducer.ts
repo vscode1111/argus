@@ -159,7 +159,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       if (state.streaming && inStreaming) {
         const updatedBlocks = state.streaming.blocks.map(b =>
           b.type === 'tool' && b.call.id === action.call.id
-            ? { type: 'tool' as const, call: { ...b.call, result: action.call.result, error: action.call.error } }
+            ? { type: 'tool' as const, call: { ...b.call, ...(action.call.kind === 'fileChange' ? { input: action.call.input } : {}), result: action.call.result, error: action.call.error } }
             : b
         );
         const stillHasPendingAsk = updatedBlocks.some(
@@ -183,7 +183,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
           ...msg,
           blocks: msg.blocks.map(b =>
             b.type === 'tool' && b.call.id === action.call.id
-              ? { type: 'tool' as const, call: { ...b.call, result: action.call.result, error: action.call.error } }
+              ? { type: 'tool' as const, call: { ...b.call, ...(action.call.kind === 'fileChange' ? { input: action.call.input } : {}), result: action.call.result, error: action.call.error } }
               : b
           ),
         };

@@ -25,6 +25,11 @@ async function until(predicate) {
   while (!predicate()) { if (Date.now() > end) assert.fail('scub condition timed out'); await new Promise(r => setTimeout(r, 10)); }
 }
 
+test('new conversations default to Codex and GPT-6-Luna without a saved selection', () => {
+  assert.deepEqual(defaultSelection(), { providerId: 'codex', model: 'gpt-6-luna', effort: '', thinking: true });
+  assert.deepEqual(selectionFor(undefined, dir), defaultSelection());
+});
+
 test('ordinary Windows PATH can find the installed desktop executable', () => {
   const local = path.join(dir, 'scub-local');
   const installed = path.join(local, 'OpenAI', 'Codex', 'bin', 'scub-version', 'codex.exe');
@@ -129,7 +134,7 @@ test('slash skills use the provider-discovered path and native skill input', asy
 });
 
 test('independent selections and unknown usage remain independent', () => {
-  writeConfig({ ...DEFAULT_CONFIG, model: 'scub-model', effort: 'high' });
+  writeConfig({ ...DEFAULT_CONFIG, providerDefaults: { codex: { providerId: 'codex', model: 'scub-model', effort: 'high', thinking: true } } });
   const first = createSessionState(dir); const second = createSessionState(dir);
   first.selection.model = 'scub-other'; assert.equal(second.selection.model, 'scub-model');
   assert.deepEqual(rateLimits({ rateLimits: { primary: null } }), []);
@@ -145,4 +150,13 @@ test('history preserves user text, ordered tools and assistant text', () => {
   assert.equal(replay[0].content, 'scub-request');
   assert.equal(replay[1].blocks[0].call.kind, 'command');
   assert.equal(replay[1].content, 'scub-done');
+});
+
+test('history keeps file patches available for later diff previews', () => {
+  const changes = [{ path: 'D:/scub/one.ts', kind: { type: 'update', move_path: null }, diff: '@@ -1 +1 @@\n-scub-old\n+scub-new\n' }];
+  const replay = replayThread({ turns: [{ id: 'scub-turn', items: [
+    { type: 'userMessage', id: 'scub-user', content: [{ type: 'text', text: 'scub-request' }] },
+    { type: 'fileChange', id: 'scub-change', changes, status: 'completed' },
+  ] }] });
+  assert.deepEqual(replay[1].blocks[0].call.input.changes, changes);
 });

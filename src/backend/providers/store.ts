@@ -50,11 +50,11 @@ export function forgetSession(id: string): void { write(records().filter(r => r.
 
 export function defaultSelection(providerId?: string): ProviderSelection {
   const cfg = readConfig();
-  providerId ??= cfg.defaultProvider || 'claude';
+  providerId ??= cfg.defaultProvider || 'codex';
   const saved = cfg.providerDefaults?.[providerId];
   if (saved && saved.providerId === providerId && typeof saved.model === 'string' && typeof saved.effort === 'string' && typeof saved.thinking === 'boolean') return { ...saved };
   if (providerId === 'claude') return { providerId, model: cfg.model, effort: cfg.effort, thinking: cfg.thinking };
-  return { providerId, model: '', effort: '', thinking: true };
+  return { providerId, model: 'gpt-6-luna', effort: '', thinking: true };
 }
 
 export function selectionFor(id: string | undefined, cwd: string): ProviderSelection {

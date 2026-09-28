@@ -3,6 +3,7 @@ import { WebSocket } from 'ws';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { waitForApp } from './helpers';
 
 type Frame = Record<string, any>;
 async function connect(dir: string, panel: string) {
@@ -35,7 +36,7 @@ test('native model capabilities, effort changes and account usage work without a
     expect(selected.providerId).toBe('codex');
     b.frames.length = 0;
     b.send({ type: 'getProviders' });
-    expect((await b.wait('providerSelection')).model).toBe('');
+    expect((await b.wait('providerSelection')).model).toBe('gpt-6-luna');
     a.send({ type: 'getAccountUsage' });
     const account = await a.wait('accountUsage', f => f.usagePending === false);
     expect(account.account.loggedIn).toBe(true);
@@ -56,10 +57,54 @@ test('native model capabilities, effort changes and account usage work without a
   }
 });
 
+test('provider and model choices apply to future conversations without an extra save', { tag: ['@codex'] }, async () => {
+  const firstDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scub-choice-a-'));
+  const nextDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scub-choice-b-'));
+  const thirdDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scub-choice-c-'));
+  const first = await connect(firstDir, 'scub-first');
+  let next: Awaited<ReturnType<typeof connect>> | undefined;
+  let third: Awaited<ReturnType<typeof connect>> | undefined;
+  try {
+    first.send({ type: 'getModels' });
+    const catalog = await first.wait('modelList');
+    const selected = catalog.models.find((model: Frame) => model.id !== 'gpt-6-luna' && model.efforts?.length);
+    expect(selected).toBeTruthy();
+    first.send({ type: 'switchModel', model: selected.id });
+    await first.wait('providerSelection', frame => frame.model === selected.id);
+    await expect.poll(() => JSON.parse(fs.readFileSync(path.join(__dirname, 'argus.json'), 'utf8')).providerDefaults?.codex?.model).toBe(selected.id);
+    next = await connect(nextDir, 'scub-next');
+    next.send({ type: 'getProviders' });
+    expect((await next.wait('providerSelection')).model, JSON.stringify(next.frames.filter(frame => frame.type === 'providerSelection'))).toBe(selected.id);
+    expect((await next.wait('providerSelection')).providerId).toBe('codex');
+    first.send({ type: 'switchProvider', providerId: 'claude' });
+    await first.wait('providerSelection', frame => frame.providerId === 'claude');
+    third = await connect(thirdDir, 'scub-third');
+    third.send({ type: 'getProviders' });
+    expect((await third.wait('providerSelection')).providerId).toBe('claude');
+    first.send({ type: 'switchProvider', providerId: 'codex' });
+    await first.wait('providerSelection', frame => frame.providerId === 'codex' && frame.model === selected.id);
+  } finally {
+    first.ws.close(); next?.ws.close(); third?.ws.close();
+    fs.rmSync(firstDir, { recursive: true, force: true });
+    fs.rmSync(nextDir, { recursive: true, force: true });
+    fs.rmSync(thirdDir, { recursive: true, force: true });
+  }
+});
+
+test('account picker shows the initial Codex and GPT-6-Luna selection', { tag: ['@codex'] }, async ({ page }) => {
+  await waitForApp(page);
+  await page.getByRole('button', { name: 'Choose provider and model' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Account' });
+  await expect(dialog.getByRole('combobox', { name: 'Provider' })).toHaveValue('codex');
+  await dialog.getByRole('button', { name: 'Models', exact: true }).click();
+  await expect(dialog.locator('[class*="modelRow"]').filter({ hasText: 'GPT-6-Luna' }).locator('[class*="modelCheck"]')).toHaveText('✓');
+  await expect(dialog.getByRole('button', { name: 'Use for new conversations' })).toHaveCount(0);
+});
+
 test('unsupported attachment keeps the draft and does not start a turn', { tag: ['@codex'] }, async ({ page }) => {
   await page.goto('/');
   const input = page.getByPlaceholder('Ask Argus');
-  await expect(page.getByRole('button', { name: 'Choose provider and model' })).toContainText('Codex');
+  await expect(page.getByRole('button', { name: 'Codex permissions' })).toBeVisible();
   await input.fill('scub-retained-draft');
   await page.evaluate(() => {
     const transfer = new DataTransfer();

@@ -26,7 +26,7 @@ test('provider switch, real reply and reload preserve the conversation', { tag: 
     const other = await context.newPage();
     await other.goto('/?dir=' + encodeURIComponent(dir));
     await other.getByRole('button', { name: 'Choose provider and model' }).click();
-    await expect(other.getByLabel('Provider', { exact: true })).toHaveValue(original);
+    await expect(other.getByLabel('Provider', { exact: true })).toHaveValue(alternative);
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     await input.fill('Reply only scub-ready. Do not use tools.');
     await page.getByRole('button', { name: 'Send', exact: true }).click();

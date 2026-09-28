@@ -3,7 +3,10 @@ import { ToolCallData } from '../types';
 import { postMessage } from '../vscode';
 import { useSettings } from '../contexts/SettingsContext';
 import { plural } from '../utils/text';
+import { countUnifiedDiff } from '../utils/unifiedDiff';
+import { shellCommand } from '../utils/shellCommand';
 import { usePreview, type PreviewRequest } from '../contexts/PreviewContext';
+import { ShellIcon } from './ShellIcon';
 import styles from './ToolCall.module.css';
 
 // The CLI can deliver AskUserQuestion's `questions` as a JSON string rather than the
@@ -64,17 +67,27 @@ export function ToolCall({ call, sessionDone }: Props) {
   const { verboseTools, showOutput } = useSettings();
   const { input, result, error } = call;
   const name = call.kind === 'command' ? 'Bash' : call.name;
+  const fileChanges = useMemo(() => call.kind === 'fileChange' && Array.isArray(input.changes)
+    ? input.changes.filter((change): change is { path: string; diff: string } =>
+      !!change && typeof change === 'object' && typeof change.path === 'string' && typeof change.diff === 'string')
+      .map(change => ({ ...change, ...countUnifiedDiff(change.diff) }))
+    : [], [call.kind, input.changes]);
+  const fileChangeTotals = fileChanges.reduce((total, change) => ({
+    added: total.added + change.added, removed: total.removed + change.removed,
+  }), { added: 0, removed: 0 });
   const isFile = ['Read', 'Write', 'Edit'].includes(name);
-  const summary = toolSummary(name, input);
+  const bashCommand = name === 'Bash' ? (input.command as string) || '' : '';
+  const shell = name === 'Bash' ? shellCommand(bashCommand) : null;
+  const rawSummary = toolSummary(name, input);
+  const summary = shell && rawSummary === bashCommand ? shell.display : rawSummary;
   const limit = name === 'Bash' ? 600 : 200;
   const preview = result ? result.slice(0, limit) + (result.length > limit ? '...' : '') : undefined;
   const previewer = usePreview();
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string | string[]>>({});
   const [otherText, setOtherText] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState(0);
-  const bashCommand = name === 'Bash' ? (input.command as string) || '' : '';
   // True when the row shows two summaries: Bash's own description, then the command it ran.
-  const bashDesc = name === 'Bash' && !!bashCommand && summary !== bashCommand;
+  const bashDesc = name === 'Bash' && !!bashCommand && rawSummary !== bashCommand;
   const agentType = name === 'Agent' ? (input.subagent_type as string) || '' : '';
   const resultLineCount = useMemo(
     () => result ? result.trim().split('\n').filter(Boolean).length : 0,
@@ -110,7 +123,7 @@ export function ToolCall({ call, sessionDone }: Props) {
       kind: 'file',
       key: `${call.id}:file`,
       path: name === 'Bash'
-        ? (summary !== bashCommand && summary ? `${summary}: ${bashCommand}` : bashCommand || summary)
+        ? (bashDesc && summary ? `${summary}: ${shell?.display}` : shell?.display || summary)
         : ((input.file_path as string) || summary),
       content,
       line: name === 'Read' && input.offset != null ? (input.offset as number) : undefined,
@@ -131,6 +144,14 @@ export function ToolCall({ call, sessionDone }: Props) {
       oldString: String(input.old_string || ''),
       newString: String(input.new_string || ''),
     });
+  }
+
+  function openFileChange(path: string, diff: string): void {
+    previewer.open({ kind: 'diff', key: `${call.id}:${path}:diff`, path, unifiedDiff: diff });
+  }
+
+  function openChangedFile(path: string): void {
+    previewer.open({ kind: 'path', key: `${call.id}:${path}:file`, path });
   }
 
   // A background Bash task reports its output long after the modal was opened, so
@@ -366,16 +387,46 @@ export function ToolCall({ call, sessionDone }: Props) {
       <div className={[styles.toolCall, error && styles.error].filter(Boolean).join(' ')}>
         {verboseTools ? (
           <pre className={styles.toolInput}>
-            {isFile && fileViewerContent ? (
+            {fileChanges.length > 0 ? (
+              <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={e => { e.preventDefault(); openFileChange(fileChanges[0].path, fileChanges[0].diff); }}>{name}</a>
+            ) : shell ? (
+                <ShellIcon shell={shell.shell} command={bashCommand} className={pending ? styles.toolNamePending : undefined} />
+            ) : isFile && fileViewerContent ? (
               <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={handleFileClick}>{name}</a>
             ) : (
               <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
             )}
+            {fileChanges.length > 0 && <> <span className={styles.statsAdded}>+{fileChangeTotals.added}</span> <span className={styles.statsRemoved}>-{fileChangeTotals.removed}</span></>}
             {'\n'}{JSON.stringify(input, null, 2)}
           </pre>
         ) : (
           <div className={styles.toolHeader}>
-            <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
+            {fileChanges.length > 0 ? (
+              <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={e => { e.preventDefault(); openFileChange(fileChanges[0].path, fileChanges[0].diff); }}>{name}</a>
+            ) : shell ? (
+                <ShellIcon shell={shell.shell} command={bashCommand} className={pending ? styles.toolNamePending : undefined} />
+            ) : (
+              <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
+            )}
+            {fileChanges.length > 0 && (
+              fileChanges.length === 1 ? (
+                <a className={[styles.toolSummary, styles.toolFileLink].join(' ')} href="#" title={fileChanges[0].path}
+                  onClick={e => { e.preventDefault(); openChangedFile(fileChanges[0].path); }}>
+                  {fileChanges[0].path}
+                </a>
+              ) : (
+                <span className={styles.toolSummary} title={fileChanges.map(change => change.path).join('\n')}>{fileChanges.length} files</span>
+              )
+            )}
+            {fileChanges.length > 0 && (
+              <>
+                <span className={styles.statsAdded}>+{fileChangeTotals.added}</span>
+                <span className={styles.statsRemoved}>-{fileChangeTotals.removed}</span>
+              </>
+            )}
+            {fileChanges.length === 1 && (
+              <a className={styles.toolOutLink} href="#" onClick={e => { e.preventDefault(); openFileChange(fileChanges[0].path, fileChanges[0].diff); }}>Diff</a>
+            )}
             {name === 'Agent' && agentType && (
               <span className={styles.toolAgentType}>{agentType}</span>
             )}
@@ -390,11 +441,11 @@ export function ToolCall({ call, sessionDone }: Props) {
                   {summary}
                 </a>
               ) : (
-                <span className={[styles.toolSummary, name === 'Bash' && summary === bashCommand && styles.toolSummaryBash, bashDesc && styles.toolSummaryDesc].filter(Boolean).join(' ')} title={summary}>{summary}</span>
+                <span className={[styles.toolSummary, name === 'Bash' && !bashDesc && styles.toolSummaryBash, bashDesc && styles.toolSummaryDesc].filter(Boolean).join(' ')} title={name === 'Bash' ? bashCommand : summary}>{summary}</span>
               )
             )}
             {bashDesc && (
-              <span className={[styles.toolSummary, styles.toolSummaryBash].join(' ')} title={bashCommand}>{bashCommand}</span>
+              <span className={[styles.toolSummary, styles.toolSummaryBash].join(' ')} title={bashCommand}>{shell?.display}</span>
             )}
             {name === 'Bash' && result && (
               <a
@@ -435,7 +486,22 @@ export function ToolCall({ call, sessionDone }: Props) {
             )}
           </div>
         )}
-        {showOutput && preview !== undefined && (
+        {(fileChanges.length > 1 || (verboseTools && fileChanges.length > 0)) && (
+          <div className={styles.fileChanges}>
+            {fileChanges.map((change, index) => (
+              <div key={`${change.path}:${index}`} className={styles.fileChangeRow}>
+                <a className={[styles.toolFileLink, styles.fileChangePath].join(' ')} href="#" title={change.path}
+                  onClick={e => { e.preventDefault(); openChangedFile(change.path); }}>
+                  {change.path}
+                </a>
+                <span className={styles.statsAdded}>+{change.added}</span>
+                <span className={styles.statsRemoved}>-{change.removed}</span>
+                <a className={styles.toolOutLink} href="#" onClick={e => { e.preventDefault(); openFileChange(change.path, change.diff); }}>Diff</a>
+              </div>
+            ))}
+          </div>
+        )}
+        {showOutput && preview !== undefined && call.kind !== 'fileChange' && (
           <div className={styles.toolResult}>{preview}</div>
         )}
       </div>

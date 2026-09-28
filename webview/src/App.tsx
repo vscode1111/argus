@@ -75,7 +75,7 @@ function AppInner() {
   const [providerNotice, setProviderNotice] = React.useState('');
   const providerRef = React.useRef(state.providerId);
   providerRef.current = state.providerId;
-  const [accountUsageOpen, setAccountUsageOpen] = React.useState(false);
+  const [accountUsageTab, setAccountUsageTab] = React.useState<'usage' | 'models' | null>(null);
   const [initialFile, setInitialFile] = React.useState<string | null>(null);
   // Spinner overlay shown while a session resume or workspace switch is in flight
   // (a big transcript replay or a WS reconnect can take a few seconds).
@@ -510,18 +510,18 @@ function AppInner() {
           {workspaceName && (
             <WorkspaceMenu currentPath={state.workspacePath} name={workspaceName} onSelect={switchWorkspace} />
           )}
+          {/* Doubles as the Account & usage button: it opens the modal, and falls
+              back to that button's icon when there are no windows to draw. */}
+          <UsageIndicator windows={usageWindows} error={usageError} onClick={() => setAccountUsageTab('usage')} />
           <button
             type="button"
             className="headerModelButton"
             aria-label="Choose provider and model"
             title={state.currentModel || 'Default'}
-            onClick={() => setAccountUsageOpen(true)}
+            onClick={() => setAccountUsageTab('models')}
           >
             {state.currentModel || 'Default'}
           </button>
-          {/* Doubles as the Account & usage button: it opens the modal, and falls
-              back to that button's icon when there are no windows to draw. */}
-          <UsageIndicator windows={usageWindows} error={usageError} onClick={() => setAccountUsageOpen(true)} />
         </>
       )}
       <button
@@ -547,7 +547,7 @@ function AppInner() {
       {providerNotice && <div role="status"><span>{providerNotice}</span><button aria-label="Dismiss provider notice" onClick={() => setProviderNotice('')}>Close</button></div>}
       {state.interaction && <ProviderInteraction key={state.interaction.id} request={state.interaction} />}
       {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} activeIds={activeIds} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
-      {accountUsageOpen && <AccountUsageModal key={state.providerId} providerId={state.providerId} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onClose={() => setAccountUsageOpen(false)} />}
+      {accountUsageTab && <AccountUsageModal key={state.providerId} initialTab={accountUsageTab} providerId={state.providerId} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onClose={() => setAccountUsageTab(null)} />}
       {initialFile && <AutoFileViewer path={initialFile} onClose={() => setInitialFile(null)} />}
       <div className="content">
         {showLogs && isNarrow && (

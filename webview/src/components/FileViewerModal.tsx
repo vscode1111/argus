@@ -485,10 +485,11 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
   }
 
   return createPortal(
-    <div className={modal.overlay} onClick={onClose} aria-hidden="true">
+    <div className={modal.overlay} onClick={onClose}>
       <div
         className={modal.modal}
         role="dialog"
+        aria-modal="true"
         aria-label={`File viewer: ${filename}`}
         onClick={e => e.stopPropagation()}
       >

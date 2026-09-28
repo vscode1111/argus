@@ -135,7 +135,7 @@ test.describe('effort and thinking (integration)', () => {
 
   // ── effort changes ───────────────────────────────────────────────────────────
 
-  test('clicking effort dot in modal updates label and can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
+  test('clicking effort dot in modal updates label and saves the default', { tag: ["@claude"] }, async ({ page }) => {
     const dialog = await openModelsTab(page);
 
     // Click the first dot (Low)
@@ -147,15 +147,13 @@ test.describe('effort and thinking (integration)', () => {
     // Persistence: close, reload, reopen. A new WS connection makes the backend
     // re-read its config from disk and send the stored value in workspaceInfo.
     // This verifies the write without depending on which file path the backend uses.
-    await dialog.getByRole('button', { name: 'Use for new conversations' }).click();
-    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     const dialog2 = await openModelsTab(page);
     await expect(dialog2.locator('[class*="optionLabel"]', { hasText: /Effort \(Low\)/i })).toBeVisible({ timeout: 8_000 });
   });
 
-  test('clicking effort dot in slash menu can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
+  test('clicking effort dot in slash menu saves the default', { tag: ["@claude"] }, async ({ page }) => {
     await openSlashMenu(page);
 
     // Click the last dot (Max)
@@ -167,8 +165,6 @@ test.describe('effort and thinking (integration)', () => {
     // Persistence via reload
     await closeSlashMenu(page);
     const defaultsDialog = await openModelsTab(page);
-    await defaultsDialog.getByRole('button', { name: 'Use for new conversations' }).click();
-    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await defaultsDialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     await openSlashMenu(page);
@@ -178,7 +174,7 @@ test.describe('effort and thinking (integration)', () => {
 
   // ── thinking toggle ──────────────────────────────────────────────────────────
 
-  test('clicking thinking toggle in modal flips its state and can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
+  test('clicking thinking toggle in modal flips its state and saves the default', { tag: ["@claude"] }, async ({ page }) => {
     const dialog = await openModelsTab(page);
 
     const track = dialog.locator('[class*="toggleTrack"]');
@@ -196,8 +192,6 @@ test.describe('effort and thinking (integration)', () => {
     ).toBe(!initialOn);
 
     // Persistence via reload
-    await dialog.getByRole('button', { name: 'Use for new conversations' }).click();
-    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     const dialog2 = await openModelsTab(page);
@@ -206,7 +200,7 @@ test.describe('effort and thinking (integration)', () => {
     expect(afterReloadOn).toBe(!initialOn);
   });
 
-  test('clicking thinking toggle in slash menu can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
+  test('clicking thinking toggle in slash menu saves the default', { tag: ["@claude"] }, async ({ page }) => {
     await openSlashMenu(page);
 
     const track = page.locator('[class*="slashMenuToggleTrack"]');
@@ -226,8 +220,6 @@ test.describe('effort and thinking (integration)', () => {
     // Persistence via reload
     await closeSlashMenu(page);
     const defaultsDialog = await openModelsTab(page);
-    await defaultsDialog.getByRole('button', { name: 'Use for new conversations' }).click();
-    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await defaultsDialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     await openSlashMenu(page);
@@ -312,7 +304,7 @@ test.describe('effort and thinking (integration)', () => {
 
   // ── model selection ──────────────────────────────────────────────────────────
 
-  test('clicking a model row in the modal can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
+  test('clicking a model row in the modal saves the default', { tag: ["@claude"] }, async ({ page }) => {
     const dialog = await openModelsTab(page);
     await expect(dialog.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
 
@@ -327,8 +319,6 @@ test.describe('effort and thinking (integration)', () => {
     await expect(rows.nth(1).locator('span', { hasText: '✓' })).toBeVisible({ timeout: 8_000 });
 
     // Persistence via reload: after reconnect the Default row no longer has the checkmark
-    await dialog.getByRole('button', { name: 'Use for new conversations' }).click();
-    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     const dialog2 = await openModelsTab(page);
@@ -350,8 +340,6 @@ test.describe('effort and thinking (integration)', () => {
     await expect(defaultRow.locator('span', { hasText: '✓' })).toBeVisible({ timeout: 8_000 });
 
     // Persistence via reload: Default row retains the checkmark after reconnect
-    await dialog.getByRole('button', { name: 'Use for new conversations' }).click();
-    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     const dialog2 = await openModelsTab(page);
@@ -360,7 +348,7 @@ test.describe('effort and thinking (integration)', () => {
     await expect(defaultRow2.locator('span', { hasText: '✓' })).toBeVisible({ timeout: 8_000 });
   });
 
-  test('selecting a model in the slash menu can be saved as the default', { tag: ["@claude"] }, async ({ page }) => {
+  test('selecting a model in the slash menu saves the default', { tag: ["@claude"] }, async ({ page }) => {
     await openSlashMenu(page);
 
     await page.locator('[class*="slashMenuItem"]').filter({ hasText: 'Switch model...' }).click();
@@ -374,8 +362,6 @@ test.describe('effort and thinking (integration)', () => {
     // Persistence via reload: hint still non-empty after reconnect
     await closeSlashMenu(page);
     const defaultsDialog = await openModelsTab(page);
-    await defaultsDialog.getByRole('button', { name: 'Use for new conversations' }).click();
-    await expect(page.getByText('Saved for new conversations', { exact: true })).toBeVisible();
     await defaultsDialog.getByRole('button', { name: 'Close' }).click();
     await reloadAndWait(page);
     await openSlashMenu(page);

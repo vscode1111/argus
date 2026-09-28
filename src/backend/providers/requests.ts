@@ -6,6 +6,13 @@ import { provider, providers, runtime, persistSelection, selectionMessage, provi
 import { defaultSelection, selectionFor, forgetSession } from './store';
 import { string } from './rpc';
 import { readConfig, writeConfig } from '../config';
+import type { ProviderSelection } from '../../shared/provider';
+
+function saveDefaultSelection(selection: ProviderSelection): void {
+  const config = readConfig();
+  writeConfig({ ...config, defaultProvider: selection.providerId,
+    providerDefaults: { ...config.providerDefaults, [selection.providerId]: { ...selection } } });
+}
 
 const handled = new Set(['getProviders', 'switchProvider', 'saveProviderDefault', 'switchModel', 'switchEffort', 'switchThinking',
   'getModels', 'getAccountUsage', 'getSkills', 'listSessions', 'renameSession', 'deleteSession', 'providerResponse']);
@@ -27,15 +34,14 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       if (id === selection.providerId) return true;
       const fresh = channel.moveToNewSession(ws); init(fresh);
       fresh.selection = defaultSelection(id);
+      saveDefaultSelection(fresh.selection);
       fresh.broadcast(JSON.stringify({ type: 'clear' }));
       fresh.broadcast(JSON.stringify(selectionMessage(fresh)));
     } else if (type === 'providerResponse') {
       if (viewing) throw new Error('Return to the active conversation before answering');
       runtime(state).respond(string(msg.id), msg.response);
     } else if (type === 'saveProviderDefault') {
-      const config = readConfig();
-      writeConfig({ ...config, defaultProvider: selection.providerId,
-        providerDefaults: { ...config.providerDefaults, [selection.providerId]: { ...selection } } });
+      saveDefaultSelection(selection);
       reply({ type: 'providerNotice', message: 'Saved for new conversations' });
     } else if (['switchModel', 'switchEffort', 'switchThinking'].includes(type)) {
       if (msg.providerId !== undefined && msg.providerId !== selection.providerId) throw new Error('Provider selection changed; try again');
@@ -51,6 +57,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       const detached = channel.detachToBrowsedSession(ws);
       if (detached) { state = detached; init(state); }
       state.selection = next; persistSelection(state);
+      saveDefaultSelection(next);
       state.broadcast(JSON.stringify(selectionMessage(state)));
     } else if (type === 'getModels') {
       reply({ type: 'modelList', ...await p.models() });

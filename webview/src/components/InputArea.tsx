@@ -53,6 +53,23 @@ const CODEX_MODES = [
   { value: 'plan', label: 'Plan', description: 'Read files and propose changes without editing them.' },
   { value: 'full-access', label: 'Full', description: 'Edit files and run commands without approval prompts.' },
 ] as const;
+const CLAUDE_MODES = [
+  { value: 'edit', label: 'Edit', description: 'Use the configured tools and approval rules.' },
+  { value: 'plan', label: 'Plan', description: 'Read files and propose changes without editing them.' },
+  { value: 'full-access', label: 'Full', description: 'Bypass Claude permission prompts for tool use.' },
+] as const;
+type Mode = 'plan' | 'edit' | 'full-access';
+const CODEX_MODE_KEY = 'argus.codexPermissionMode';
+const CLAUDE_MODE_KEY = 'argus.claudePermissionMode';
+
+function savedMode(providerId: string): Mode {
+  try {
+    const value = localStorage.getItem(providerId === 'codex' ? CODEX_MODE_KEY : CLAUDE_MODE_KEY);
+    const modes = providerId === 'codex' ? CODEX_MODES : CLAUDE_MODES;
+    if (modes.some(option => option.value === value)) return value as Mode;
+  } catch {}
+  return 'full-access';
+}
 
 /** Up-one-level arrow for the picker's ".." row, matching FolderList's up affordance. */
 function UpIcon() {
@@ -119,7 +136,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
   const [filesLoading, setFilesLoading] = useState(false);
   const [fileParent, setFileParent] = useState<string | null>(null);
   const [menuMaxHeight, setMenuMaxHeight] = useState<number | null>(null);
-  const [mode, setMode] = useState<'plan' | 'edit' | 'full-access'>('edit');
+  const [mode, setMode] = useState<Mode>(() => savedMode(providerId));
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const modeMenuRef = useRef<HTMLDivElement>(null);
   const modeTriggerRef = useRef<HTMLButtonElement>(null);
@@ -156,7 +173,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
   }
 
   useEffect(() => {
-    setMode('edit');
+    setMode(savedMode(providerId));
     setModeMenuOpen(false);
     setFetchedModels(null); setModelsError(null); setModelsLoading(false); setRuntimeDefaultModel(''); setSkills([]);
     postMessage({ type: 'getSkills' });
@@ -677,6 +694,9 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
     }
   }
 
+  const modes = providerId === 'codex' ? CODEX_MODES : CLAUDE_MODES;
+  const providerName = providerId === 'codex' ? 'Codex' : 'Claude';
+
   return (
     <div className={styles.inputArea} ref={inputAreaRef}>
       {pasteError && (
@@ -934,31 +954,30 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
       {attachmentError && <div role="alert">{attachmentError}</div>}
       <div className={styles.btnGroup}>
         <div className={styles.btnRow}>
-          {providerId === 'codex' ? (
-            <div className={styles.modeAnchor} onBlur={e => {
+          <div className={styles.modeAnchor} onBlur={e => {
               if (!e.currentTarget.contains(e.relatedTarget)) setModeMenuOpen(false);
             }}>
               <button
                 ref={modeTriggerRef}
                 type="button"
                 className={[styles.modePill, mode === 'plan' ? styles.modePlan : mode === 'full-access' ? styles.modeFull : ''].filter(Boolean).join(' ')}
-                aria-label="Codex permissions"
+                aria-label={`${providerName} permissions`}
                 aria-haspopup="listbox"
                 aria-expanded={modeMenuOpen}
-                title="Codex permissions for the next message"
+                title={`${providerName} permissions for the next message`}
                 onClick={() => setModeMenuOpen(open => !open)}
                 onKeyDown={e => {
                   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setModeMenuOpen(true); }
                 }}
               >
-                {CODEX_MODES.find(option => option.value === mode)?.label}
+                {modes.find(option => option.value === mode)?.label}
               </button>
               {modeMenuOpen && (
                 <div
                   ref={modeMenuRef}
                   className={styles.modeMenu}
                   role="listbox"
-                  aria-label="Codex permissions"
+                  aria-label={`${providerName} permissions`}
                   onKeyDown={e => {
                     if (e.key === 'Escape') { e.preventDefault(); setModeMenuOpen(false); modeTriggerRef.current?.focus(); }
                     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -969,14 +988,19 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
                     }
                   }}
                 >
-                  {CODEX_MODES.map(option => (
+                  {modes.map(option => (
                     <button
                       key={option.value}
                       type="button"
                       role="option"
                       aria-selected={mode === option.value}
                       className={styles.modeOption}
-                      onClick={() => { setMode(option.value); setModeMenuOpen(false); modeTriggerRef.current?.focus(); }}
+                      onClick={() => {
+                        setMode(option.value);
+                        try { localStorage.setItem(providerId === 'codex' ? CODEX_MODE_KEY : CLAUDE_MODE_KEY, option.value); } catch {}
+                        setModeMenuOpen(false);
+                        modeTriggerRef.current?.focus();
+                      }}
                     >
                       <span className={styles.modeOptionLabel}>{option.label}</span>
                       <span className={styles.modeOptionDescription}>{option.description}</span>
@@ -984,16 +1008,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
                   ))}
                 </div>
               )}
-            </div>
-          ) : (
-            <button
-              className={[styles.modePill, mode === 'plan' ? styles.modePlan : ''].filter(Boolean).join(' ')}
-              onClick={() => setMode(m => m === 'edit' ? 'plan' : 'edit')}
-              title={mode === 'edit' ? 'Switch to Plan mode' : 'Switch to Edit mode'}
-            >
-              {mode === 'plan' ? 'Plan' : 'Edit'}
-            </button>
-          )}
+          </div>
           {bgTasks > 0 && (
             // The one durable home for the pending count. The per-message note reports what
             // a *finished* turn left behind and is rewritten away by the next turn, so in a

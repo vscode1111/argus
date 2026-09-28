@@ -54,6 +54,7 @@ const EFFORT_LEVELS = ['low', 'medium', 'high', 'max'] as const;
 type EffortLevel = typeof EFFORT_LEVELS[number];
 
 interface Props {
+  initialTab?: Tab;
   providerId?: string;
   onClose: () => void;
   currentModel?: string;
@@ -105,9 +106,9 @@ const BEHAVIOR_META: Record<string, { headline: (pct: number) => string; body: s
 const MIN_BEHAVIOR_PCT = 10;
 const TABLE_ROW_CAP = 8;
 
-export function AccountUsageModal({ providerId = 'claude', onClose, currentModel = '', currentEffort = 'high', thinkingEnabled = true }: Props) {
+export function AccountUsageModal({ initialTab, providerId = 'claude', onClose, currentModel = '', currentEffort = 'high', thinkingEnabled = true }: Props) {
   const provider = useProvider(providerId);
-  const [tab, setTabState] = useState<Tab>(() => (getDialogState('accountUsage')?.tab as Tab) || 'usage');
+  const [tab, setTabState] = useState<Tab>(() => initialTab ?? ((getDialogState('accountUsage')?.tab as Tab) || 'usage'));
   const setTab = (t: Tab) => { setTabState(t); patchDialogState('accountUsage', { tab: t }); };
   const [account, setAccount] = useState<AccountInfo | null>(null);
   const [rateLimits, setRateLimits] = useState<RateLimitInfo[]>([]);
