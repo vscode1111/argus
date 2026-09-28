@@ -197,7 +197,13 @@ export async function restartDaemon(extensionPath: string): Promise<void> {
   // probe is what tells the two apart, so a file that answers nothing is simply
   // cleared and replaced rather than killed.
   const ours = !!info && await isDaemonUp(info);
-  clearDaemonInfo();
+  // Ownership-aware, like every other clear: drop only the registration we just read.
+  // An unconditional clear deletes whatever is there *now*, and between the read above
+  // and this line that can be a different daemon's file - including the one a daemon
+  // whose registration went missing has just re-asserted. Deleting a live daemon's file
+  // is the permanent strand healRegistration() in daemon.ts exists to undo, so this
+  // path must not be a way of creating it.
+  if (info) clearDaemonInfo(info.pid);
   lastDaemonSpawn = Date.now();
   const afterKill = () => { setTimeout(() => { spawnDaemon(extensionPath, true); }, 300); };
   if (info && ours) {
