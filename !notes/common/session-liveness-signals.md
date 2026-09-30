@@ -39,6 +39,16 @@ one waiting for input from one working. In normal use this is not a gap, because
 serves every panel and so owns every row; the `-` only appears when a *dev server* panel
 looks at the daemon's CLIs.
 
+## Process age is not idle time
+
+The idle CLI reaper measures from the server's last recorded activity and sweeps once per
+minute. A process can be older than its idle timeout yet still be correctly alive because
+it handled a recent turn. For owned Codex rows, the process modal now receives the same
+channel activity clock used by the reaper; a foreign process has no authoritative
+server-side activity clock. `CLI launches` counts process spawns by this server, while
+`CLI processes` lists recognized processes across the machine, so these numbers have
+different scopes. See the [watchdog investigation](../tasks/codex-watchdog-counts/notes.md).
+
 ## Check all three states against ground truth before shipping
 
 The first live check of the column showed `no` on our own row and could easily have been

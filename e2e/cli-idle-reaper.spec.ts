@@ -26,6 +26,7 @@ interface FakeState {
   currentProcKey?: string;
   cliDone: boolean;
   sessionId?: string;
+  runtime?: { pid?: number; active: boolean; dispose(): void };
 }
 
 type ChannelModule = {
@@ -35,6 +36,7 @@ type ChannelModule = {
   };
   destroyChannel(dir: string): void;
   reapIdleCliProcs(idleMs: number, now?: number): Array<{ pid: number; sessionId: string; idleMs: number }>;
+  listOwnedProcs(): Map<number, { lastActivityAt: number }>;
 };
 
 let mod: ChannelModule;
@@ -145,6 +147,27 @@ test.describe('idle CLI reaper', () => {
     await settle();
     expect(alive(proc.pid)).toBe(true);
 
+    mod.destroyChannel(dir);
+  });
+
+  test('reports an idle provider process it terminated and exposes its activity clock', async () => {
+    const dir = 'D:\\scub-reap-provider';
+    const proc = decoy();
+    await new Promise(r => setTimeout(r, 400));
+    const ch = mod.getOrCreateChannel(dir);
+    const ws = fakeWs(); ch.addClient(ws);
+    const state = ch.getClientState(ws);
+    state.sessionId = 'scub-provider-session';
+    state.runtime = { pid: proc.pid, active: false, dispose: () => { proc.kill(); } };
+    const owned = mod.listOwnedProcs().get(proc.pid!);
+
+    const reaped = mod.reapIdleCliProcs(1_000, Date.now() + 3_600_000);
+    await settle();
+    expect(alive(proc.pid)).toBe(false);
+    expect(state.runtime).toBeUndefined();
+    expect(state.sessionId).toBe('scub-provider-session');
+    expect(owned?.lastActivityAt).toBeGreaterThan(0);
+    expect(reaped.map(r => r.sessionId)).toEqual(['scub-provider-session']);
     mod.destroyChannel(dir);
   });
 });

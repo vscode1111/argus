@@ -1,11 +1,11 @@
 import { randomUUID } from 'crypto';
 import type { AgentProvider, AgentSession, AgentEvent, TurnInput } from './types';
 import type { SessionState } from '../sessionState';
-import type { ReplayMessage } from '../sessions';
+import { codexSessionLineCount, type ReplayMessage } from '../sessions';
 import type { RateLimitInfo } from '../accountUsage';
 import { AppServerRpc, object, array, string, type JsonObject } from './rpc';
 import { records, sessionRecord, saveSession, forgetSession, sameWorkspace } from './store';
-import type { ProviderModel, ProviderSelection } from '../../shared/provider';
+import type { ProviderInteraction, ProviderModel, ProviderSelection } from '../../shared/provider';
 import { readConfig } from '../config';
 
 function nativeId(id: string): string {
@@ -103,6 +103,16 @@ function tool(item: JsonObject) {
     error: item.status === 'failed' || item.status === 'declined' };
 }
 
+// Async questions are agent messages, not server requests with an RPC id. The
+// user's choice returns as a normal message, possibly after this turn has ended.
+function asyncQuestion(item: JsonObject): ProviderInteraction | undefined {
+  if (item.delivery !== 'async' || !array(item.questions).length) return undefined;
+  return { id: string(item.id), kind: 'question', async: true, title: 'Your input is needed',
+    questions: array(item.questions).map((value, index) => { const question = object(value);
+      return { id: String(index), question: string(question.title), options: array(question.options).map(string).filter(Boolean) };
+    }) };
+}
+
 export function replayThread(thread: JsonObject): ReplayMessage[] {
   const messages: ReplayMessage[] = [];
   for (const rawTurn of array(thread.turns)) {
@@ -127,6 +137,7 @@ export function replayThread(thread: JsonObject): ReplayMessage[] {
         if (item.type === 'agentMessage') {
           assistant.content += string(item.text);
           assistant.blocks!.push({ type: 'text', text: string(item.text) });
+          assistant.interaction = asyncQuestion(item) ?? assistant.interaction;
         } else if (item.type === 'reasoning') {
           assistant.thinking = array(item.summary).map(v => typeof v === 'string' ? v : string(object(v).text)).join('\n');
         } else if (item.type !== 'contextCompaction') assistant.blocks!.push({ type: 'tool', call: tool(item) });
@@ -147,12 +158,14 @@ export class CodexSession implements AgentSession {
   private deltas = new Set<string>();
   private interactions = new Map<string, { rpcId: string | number; method: string; params: JsonObject }>();
   private pendingInteractionIds: string[] = [];
+  private pendingAsyncQuestion?: ProviderInteraction;
   private idleTimer?: NodeJS.Timeout;
   get active(): boolean { return this.busy; }
   get pid(): number | undefined { return this.rpc.pid; }
   get reconnectNeeded(): boolean { return this.closed; }
 
   constructor(private readonly state: SessionState, private readonly rpc = new AppServerRpc(), private readonly validate = codexProvider.validate) {
+    this.pendingAsyncQuestion = state.interaction?.async ? state.interaction : undefined;
     this.rpc.onMessage = (method, params, id) => this.receive(method, params, id);
     this.rpc.onFailure = error => { if (!this.closed) { if (this.busy) this.fail(error); else this.dispose(); } };
   }
@@ -187,9 +200,11 @@ export class CodexSession implements AgentSession {
     if (this.busy) {
       if (!this.turnId || this.interactions.size) throw new Error('Answer the pending question or wait for the turn to start');
       await this.rpc.request('turn/steer', { threadId: this.threadId, expectedTurnId: this.turnId, input: content });
+      if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
       this.emit({ type: 'user_inject', text: input.text || '' });
       return;
     }
+    if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
     this.busy = true; this.state.cliDone = false; this.deltas.clear();
     this.state.liveInputTokens = 0; this.state.completedOutputTokens = 0; this.state.liveOutputChars = 0;
     this.state.lastMessage = { text: input.text || '', images: input.images, mode: input.mode };
@@ -304,7 +319,7 @@ export class CodexSession implements AgentSession {
   private showInteraction(): void {
     this.armIdleTimer();
     const id = this.pendingInteractionIds[0]; const entry = this.interactions.get(id);
-    if (!entry) { this.emit({ type: 'interaction', request: null }); return; }
+    if (!entry) { this.emit({ type: 'interaction', request: this.pendingAsyncQuestion ?? null }); return; }
     const { params, method } = entry;
     this.emit({ type: 'interaction', request: { id,
       kind: method === 'item/tool/requestUserInput' ? 'question' : 'approval',
@@ -342,6 +357,7 @@ export class CodexSession implements AgentSession {
       const item = object(params.item); const done = method === 'item/completed';
       if (item.type === 'agentMessage') {
         if (done && !this.deltas.has(`item/agentMessage/delta:${string(item.id)}`)) this.emit({ type: 'text_chunk', text: string(item.text) });
+        if (done) { const question = asyncQuestion(item); if (question) { this.pendingAsyncQuestion = question; this.showInteraction(); } }
       } else if (!['userMessage', 'reasoning', 'contextCompaction'].includes(string(item.type))) {
         this.emit({ type: done ? 'tool_end' : 'tool_start', call: tool(item) });
       }
@@ -364,7 +380,7 @@ export class CodexSession implements AgentSession {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.busy = false; this.state.cliDone = true; this.turnId = undefined;
     this.interactions.clear(); this.pendingInteractionIds = [];
-    this.emit({ type: 'interaction', request: null });
+    this.showInteraction();
     this.emit({ type: 'done', interrupted });
     this.interruptSettled?.();
   }
@@ -401,7 +417,7 @@ export const codexProvider: AgentProvider = {
   },
   async list(cwd) {
     return records().filter(r => r.selection.providerId === 'codex' && sameWorkspace(r.cwd, cwd))
-      .map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, lines: 0, providerId: 'codex' }));
+      .map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, lines: codexSessionLineCount(r.id), providerId: 'codex' }));
   },
   async load(id, cwd) {
     if (!sessionRecord(id, cwd)) throw new Error('Conversation does not belong to this workspace');

@@ -6,3 +6,15 @@
 .chevron { position: absolute; right: 10px; width: 12px; height: 12px; pointer-events: none; }
 .row select:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
 .hint { font-size: 11px; color: var(--vscode-descriptionForeground); }
+.questionDialog { position: fixed; inset: 0; margin: auto; width: min(480px, calc(100vw - 32px)); max-height: min(80vh, 700px); padding: 20px; color: var(--vscode-foreground); background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border, #555); border-radius: 8px; box-shadow: 0 16px 48px #0008; }
+.questionDialog::backdrop { background: #0009; }
+.questionDialog form { display: flex; flex-direction: column; gap: 16px; }
+.questionDialog h2 { margin: 0; font-size: 16px; }
+.questionField { display: flex; flex-direction: column; gap: 8px; padding: 0; border: 0; }
+.questionField legend { margin-bottom: 8px; font-weight: 600; }
+.questionOption { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--vscode-panel-border, #555); border-radius: 4px; cursor: pointer; }
+.questionOption:has(input:checked) { border-color: var(--vscode-focusBorder); background: var(--vscode-list-activeSelectionBackground); }
+.questionOption input { accent-color: var(--vscode-focusBorder); }
+.customAnswer { width: 100%; box-sizing: border-box; padding: 8px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, #555); border-radius: 4px; font: inherit; }
+.questionDialog button { align-self: flex-end; padding: 7px 14px; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; border-radius: 4px; cursor: pointer; }
+.questionDialog button:disabled { opacity: .5; cursor: default; }

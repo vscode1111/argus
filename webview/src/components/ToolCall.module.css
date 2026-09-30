@@ -83,6 +83,9 @@
   white-space: nowrap;
 }
 
+.fileChangeAdded { color: var(--diff-added); }
+.fileChangeDeleted { color: var(--diff-removed); text-decoration: line-through; }
+
 .toolOutLink {
   color: var(--vscode-textLink-foreground);
   font-family: var(--font-mono);

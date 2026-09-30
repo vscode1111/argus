@@ -11,6 +11,7 @@ const { CodexSession, replayThread, rateLimits } = require('../out/backend/provi
 const { createSessionState } = require('../out/backend/sessionState');
 const { defaultSelection, selectionFor } = require('../out/backend/providers/store');
 const { writeConfig, DEFAULT_CONFIG } = require('../out/backend/config');
+const { getCliLaunchCount, resetCliLaunchCount } = require('../out/backend/providers/claudeExecution');
 const live = [];
 after(() => { for (const runtime of live) runtime.dispose(); fs.rmSync(dir, { recursive: true, force: true }); });
 function session(validate = async () => {}) {
@@ -45,6 +46,18 @@ test('ordinary Windows PATH can find the installed desktop executable', () => {
 test('missing installations and non-Windows hosts keep ordinary command lookup', () => {
   assert.equal(resolveCodexBinary({ PATH: '', LOCALAPPDATA: path.join(dir, 'scub-missing') }, 'win32'), 'codex');
   assert.equal(resolveCodexBinary({}, 'linux'), 'codex');
+});
+
+test('Codex child finds Git Bash before the WSL launcher', { skip: process.platform !== 'win32' || !fs.existsSync(path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe')) }, async () => {
+  const server = "require('node:readline').createInterface({input:process.stdin}).on('line', line => { const message = JSON.parse(line); if (message.id) { const bash = require('node:child_process').spawnSync('bash', ['-lc', 'echo $MSYSTEM'], {encoding:'utf8'}); process.stdout.write(JSON.stringify({id:message.id,result:{path:process.env.Path || process.env.PATH, system:bash.stdout.trim(), error:bash.stderr}}) + '\\n'); } })";
+  const rpc = new AppServerRpc(process.execPath, ['-e', server]);
+  try {
+    await rpc.start();
+    const result = await rpc.request('scub/path');
+    const first = String(result.path).split(path.delimiter)[0];
+    assert.equal(path.win32.normalize(first), path.win32.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin'));
+    assert.equal(result.system, 'MINGW64', result.error);
+  } finally { rpc.dispose(); }
 });
 
 test('streamed text is not duplicated by the completed item; binding survives recreation', async () => {
@@ -114,6 +127,34 @@ test('a response goes to its pending RPC exactly once', async () => {
   await until(() => !runtime.active);
 });
 
+test('async choice items become a persistent question after the turn completes', async () => {
+  const { state, events, runtime } = session();
+  await runtime.send({ text: 'scub-async-question' }); await until(() => !runtime.active);
+  const request = events.find(e => e.type === 'interaction' && e.request?.async)?.request;
+  assert.equal(request?.kind, 'question');
+  assert.deepEqual(request?.questions, [{ id: '0', question: 'scub-choice', options: ['scub-blue', 'scub-green'] }]);
+  assert.deepEqual(state.interaction, request);
+  const replay = replayThread({ turns: [{ id: 'scub-turn', items: [
+    { type: 'userMessage', id: 'scub-user', content: [{ type: 'text', text: 'scub-request' }] },
+    { type: 'agentMessage', id: 'scub-ask', text: 'scub-choice', delivery: 'async',
+      questions: [{ title: 'scub-choice', options: ['scub-blue', 'scub-green'] }] },
+  ] }] });
+  assert.deepEqual(replay[1].interaction, request);
+  await runtime.send({ text: 'scub-green' }); await until(() => !runtime.active);
+  assert.equal(state.interaction, null);
+});
+
+test('an async choice can be answered while the turn continues', async () => {
+  const { state, events, runtime } = session();
+  await runtime.send({ text: 'scub-async-question-live' });
+  await until(() => !!state.interaction?.async);
+  assert.equal(runtime.active, true);
+  await runtime.send({ text: 'scub-green' });
+  await until(() => !runtime.active);
+  assert.equal(state.interaction, null);
+  assert.equal(events.some(event => event.type === 'user_inject' && event.text === 'scub-green'), true);
+});
+
 test('unknown permission requests are rejected, not silently approved', async () => {
   const { events, runtime } = session(); await runtime.send({ text: 'scub-unknown-request' });
   await until(() => !runtime.active);
@@ -159,4 +200,15 @@ test('history keeps file patches available for later diff previews', () => {
     { type: 'fileChange', id: 'scub-change', changes, status: 'completed' },
   ] }] });
   assert.deepEqual(replay[1].blocks[0].call.input.changes, changes);
+});
+
+test('a provider process launch increments the shared count once across reused turns', async () => {
+  const before = getCliLaunchCount();
+  const { runtime } = session();
+  await runtime.send({ text: 'scub-count-first' }); await until(() => !runtime.active);
+  assert.equal(getCliLaunchCount(), before + 1);
+  await runtime.send({ text: 'scub-count-second' }); await until(() => !runtime.active);
+  assert.equal(getCliLaunchCount(), before + 1);
+  resetCliLaunchCount();
+  assert.equal(getCliLaunchCount(), before + 1);
 });

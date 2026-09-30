@@ -186,6 +186,8 @@ export interface OwnedProc {
   sessionId: string;
   /** The entry is mid-turn right now - same test listActiveSessions uses. */
   running: boolean;
+  /** Last event from this session, the clock used by the idle CLI reaper. */
+  lastActivityAt: number;
 }
 
 // Every CLI process this server currently holds, across all workspaces, mapped to the
@@ -203,7 +205,7 @@ export function listOwnedProcs(): Map<number, OwnedProc> {
     for (const entry of cd.entries.values()) {
       const st = entry.state;
       const pid = st.runtime?.pid ?? st.currentProc?.pid;
-      if (pid) owned.set(pid, { sessionId: st.sessionId ?? '', running: !!(st.runtime?.active || st.currentProc && !st.cliDone) });
+      if (pid) owned.set(pid, { sessionId: st.sessionId ?? '', running: !!(st.runtime?.active || st.currentProc && !st.cliDone), lastActivityAt: entry.lastActivityAt });
     }
   }
   return owned;
@@ -269,7 +271,13 @@ export function reapIdleCliProcs(idleMs: number, now: number = Date.now()): Reap
       const st = entry.state;
       // No process to reclaim, or one that is still working.
       if (st.runtime && !st.currentProc) {
-        if (!st.runtime.active && now - entry.lastActivityAt >= idleMs) { st.runtime.dispose(); st.runtime = undefined; }
+        const idle = now - entry.lastActivityAt;
+        if (!st.runtime.active && idle >= idleMs) {
+          const pid = st.runtime.pid ?? 0;
+          st.runtime.dispose(); st.runtime = undefined;
+          st.sendLog?.('info', `Reaped idle CLI (pid ${pid}, idle ${Math.round(idle / 1000)}s) - the next message starts a fresh one`);
+          reaped.push({ pid, sessionId: st.sessionId ?? '', workspacePath: cd.dir, idleMs: idle });
+        }
         continue;
       }
       if (!st.currentProc || !st.cliDone) continue;
