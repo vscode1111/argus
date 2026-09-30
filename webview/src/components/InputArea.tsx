@@ -8,6 +8,7 @@ import { ImageViewerModal } from './ImageViewerModal';
 import { type ModelEntry, FALLBACK_MODELS, makeDefaultEntry, sameModel, toModelEntry } from '../utils/model';
 import { findMentions } from '../utils/filePath';
 import { plural } from '../utils/text';
+import { permissionModeKey, savedMode, type Mode } from '../utils/permissionMode';
 import { FolderIcon, FileTypeIcon } from './shared/FolderList';
 import styles from './InputArea.module.css';
 import settings from './SettingsModal.module.css';
@@ -58,18 +59,6 @@ const CLAUDE_MODES = [
   { value: 'plan', label: 'Plan', description: 'Read files and propose changes without editing them.' },
   { value: 'full-access', label: 'Full', description: 'Bypass Claude permission prompts for tool use.' },
 ] as const;
-type Mode = 'plan' | 'edit' | 'full-access';
-const CODEX_MODE_KEY = 'argus.codexPermissionMode';
-const CLAUDE_MODE_KEY = 'argus.claudePermissionMode';
-
-function savedMode(providerId: string): Mode {
-  try {
-    const value = localStorage.getItem(providerId === 'codex' ? CODEX_MODE_KEY : CLAUDE_MODE_KEY);
-    const modes = providerId === 'codex' ? CODEX_MODES : CLAUDE_MODES;
-    if (modes.some(option => option.value === value)) return value as Mode;
-  } catch {}
-  return 'full-access';
-}
 
 /** Up-one-level arrow for the picker's ".." row, matching FolderList's up affordance. */
 function UpIcon() {
@@ -997,7 +986,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
                       className={styles.modeOption}
                       onClick={() => {
                         setMode(option.value);
-                        try { localStorage.setItem(providerId === 'codex' ? CODEX_MODE_KEY : CLAUDE_MODE_KEY, option.value); } catch {}
+                        try { localStorage.setItem(permissionModeKey(providerId), option.value); } catch {}
                         setModeMenuOpen(false);
                         modeTriggerRef.current?.focus();
                       }}

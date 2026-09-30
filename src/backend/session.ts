@@ -24,7 +24,7 @@ import { listCliProcesses, killCliProcess, cpuCoreCount } from './processes';
 import { type ClientInfo, type CloseClientResult } from './clients';
 import { readAuth, setPassword, clearPassword, dropAllSessions, sessionCount, MIN_PASSWORD_LENGTH } from './auth';
 import { broadcastBgTasks } from './cliHandler';
-import { listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage } from './sessions';
+import { listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage, codexSessionLineCount } from './sessions';
 import { readServerVersion } from './version';
 import { buildWorkspaceInfo } from './workspaceInfo';
 import { searchFiles, type FileSearchResult } from './fileSearch';
@@ -288,9 +288,8 @@ export function attachClientHandlers(
       else ws.send(JSON.stringify({ type: 'daemonStopping', stopped: false }));
     } else if (msg.type === 'killAllClaude') {
       const result = killAllClaude();
-      // The counter only ever increments on spawn, so a kill alone never moves it -
-      // reset it here (only when something was actually killed) so the Info tab's
-      // "CLI launches" visibly reflects the action instead of looking like a no-op.
+      // This action only kills Claude processes, so it resets only the Claude
+      // subtotal. Codex launches remain in the combined CLI launch count.
       if (result.count > 0) resetCliLaunchCount();
       ws.send(JSON.stringify({ type: 'killAllClaudeResult', ...result }));
     } else if (msg.type === 'listCliProcesses') {
@@ -307,7 +306,7 @@ export function attachClientHandlers(
       // must not be able to name an arbitrary process for the server to terminate.
       const raw = (msg as { pid?: number }).pid;
       const pid = typeof raw === 'number' ? raw : -1;
-      killCliProcess(pid, listOwnedProcs()).then((result) => {
+      killCliProcess(pid).then((result) => {
         ws.send(JSON.stringify({ type: 'cliProcessKilled', ...result }));
       }).catch((err) => {
         ws.send(JSON.stringify({ type: 'cliProcessKilled', pid, killed: false, error: (err as Error)?.message ?? String(err) }));
@@ -357,13 +356,14 @@ export function attachClientHandlers(
       ws.send(JSON.stringify({ type: 'clientClosed', ...result }));
     } else if (msg.type === 'getServerInfo') {
       // sessionId is undefined until the CLI reports one (a brand-new chat before its
-      // first turn); sessionPath is null until the transcript folder exists on disk.
+      // first turn); sessionPath is null until the transcript exists on disk.
+      const currentSessionId = channel.getViewingSessionId(ws) ?? s.sessionId;
       ws.send(JSON.stringify({
         type: 'serverInfo',
         port: hooks.getServerPort?.() ?? 0,
         cliLaunchCount: getCliLaunchCount(),
-        sessionId: s.sessionId,
-        sessionPath: s.sessionId ? sessionFilePath(s.sessionId, s.workspaceDir) : null,
+        sessionId: currentSessionId,
+        sessionPath: currentSessionId ? sessionFilePath(currentSessionId, s.workspaceDir) : null,
         // Version of the build serving this connection. The extension and the daemon
         // are separate installs that find each other through one machine-global
         // discovery file, so a panel can be talking to an older daemon left running by
@@ -479,7 +479,7 @@ export function attachClientHandlers(
     } else if (msg.type === 'listAllSessions') {
       const currentId = s.sessionId;
       listAllSessions().then(sessions => {
-        sessions.push(...records().filter(r => r.selection.providerId !== 'claude').map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, lines: 0, workspacePath: r.cwd, workspaceName: path.basename(r.cwd) })));
+        sessions.push(...records().filter(r => r.selection.providerId !== 'claude').map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, lines: codexSessionLineCount(r.id), workspacePath: r.cwd, workspaceName: path.basename(r.cwd) })));
         sessions.sort((a, b) => b.updatedAt - a.updatedAt);
         try { ws.send(JSON.stringify({ type: 'allSessionList', sessions, currentId })); } catch {}
       }).catch(() => {});

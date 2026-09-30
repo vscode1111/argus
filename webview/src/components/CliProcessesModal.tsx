@@ -247,8 +247,8 @@ export function CliProcessesModal({ onClose }: Props) {
 
   return (
     <Modal
-      title="Claude CLI processes"
-      ariaLabel="Claude CLI processes"
+      title="CLI processes"
+      ariaLabel="CLI processes"
       onClose={onClose}
       width={780}
       persistKey="cliProcesses"
@@ -277,7 +277,7 @@ export function CliProcessesModal({ onClose }: Props) {
         {killError && <div className={table.error} data-testid="cli-process-kill-error">{killError}</div>}
         {processes === null && !timedOut && !error && <div className={table.placeholder}>Loading...</div>}
         {processes !== null && processes.length === 0 && !error && (
-          <div className={table.placeholder}>No Claude CLI processes are running.</div>
+          <div className={table.placeholder}>No CLI processes are running.</div>
         )}
         {processes !== null && processes.length > 0 && (
           <table className={table.table}>

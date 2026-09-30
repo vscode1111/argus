@@ -28,7 +28,7 @@ test('file change opens the original patch for each changed file', async ({ page
   await expect(firstLink.locator('..').locator('[class*="statsAdded"]')).toHaveText('+3');
   await expect(firstLink.locator('..').locator('[class*="statsRemoved"]')).toHaveText('-2');
   await expect(secondFile.locator('..').locator('[class*="statsAdded"]')).toHaveText('+1');
-  await expect(secondFile.locator('..').locator('[class*="statsRemoved"]')).toHaveText('-0');
+  await expect(secondFile.locator('..').locator('[class*="statsRemoved"]')).toHaveCount(0);
   await secondFile.locator('..').getByRole('link', { name: 'Diff' }).click();
   const secondDiff = page.getByRole('dialog', { name: 'Diff: D:/scub/two.ts' });
   await expect(secondDiff).toBeVisible();

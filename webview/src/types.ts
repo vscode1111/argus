@@ -55,6 +55,7 @@ export type UIMessage = {
   images?: ImageAttachment[];
   thinking?: string;
   blocks?: ContentBlock[];
+  interaction?: import('../../src/shared/provider').ProviderInteraction;
   responseTime?: number;
   finishedAt?: number;
   outcome?: Outcome;

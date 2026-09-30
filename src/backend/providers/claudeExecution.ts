@@ -4,12 +4,11 @@ import { readConfig } from '../config';
 import { noteUsageActivity } from '../usagePoller';
 import { attachProcHandlers, broadcastBgTasks } from '../cliHandler';
 import type { SessionState } from '../sessionState';
+import { noteCliLaunch } from '../cliLaunchCount';
+export { getCliLaunchCount, resetClaudeLaunchCount as resetCliLaunchCount } from '../cliLaunchCount';
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
 const STOP_INTERRUPT_TIMEOUT_MS = 5_000;
-let cliLaunchCount = 0;
-export function getCliLaunchCount(): number { return cliLaunchCount; }
-export function resetCliLaunchCount(): void { cliLaunchCount = 0; }
 
 export function handleSend(s: SessionState, msg: { type?: string; text?: string; images?: Array<{ data: string; mediaType: string; name?: string }>; mode?: string; _silent?: boolean; _askResume?: boolean }) {
   const text = msg.text ?? '';
@@ -138,7 +137,7 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
       s.broadcast(JSON.stringify({ type: 'done' }));
       return;
     }
-    cliLaunchCount++;
+    noteCliLaunch('claude');
     s.currentProc = proc;
     s.currentProcKey = procKey;
     attachProcHandlers(s, proc);

@@ -34,6 +34,13 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     if (String(text).includes('scub-skill') && (text !== '$scub-skill scub-input' || !params.input.some(i => i.type === 'skill' && i.path === '/scub/skills/scub-skill/SKILL.md'))) process.exit(4);
     if (text === 'scub-question') {
       emit({ id: 100, method: 'item/tool/requestUserInput', params: { threadId, turnId, questions: [{ id: 'scub-choice', question: 'Choose a color', options: [{ label: 'scub-blue' }] }] } });
+    } else if (text === 'scub-async-question') {
+      notify('item/completed', { turnId, item: { id: 'scub-ask', type: 'agentMessage', text: 'scub-choice', delivery: 'async',
+        questions: [{ title: 'scub-choice', options: ['scub-blue', 'scub-green'] }] } });
+      notify('turn/completed', { turn: { id: turnId, status: 'completed' } });
+    } else if (text === 'scub-async-question-live') {
+      notify('item/completed', { turnId, item: { id: 'scub-ask-live', type: 'agentMessage', text: 'scub-choice', delivery: 'async',
+        questions: [{ title: 'scub-choice', options: ['scub-blue', 'scub-green'] }] } });
     } else if (text === 'scub-unknown-request') {
       emit({ id: 101, method: 'item/permissions/requestApproval', params: { threadId, turnId } });
     } else if (text !== 'scub-wait' && text !== 'scub-interrupt-race') {
@@ -54,7 +61,10 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     emit({ id, result: {} });
     setTimeout(() => notify('turn/completed', { turn: { id: params.turnId, status: 'interrupted' } }), 40);
     setTimeout(() => notify('item/agentMessage/delta', { turnId: params.turnId, itemId: 'scub-late', delta: 'scub-stale' }), 100);
-  } else if (method === 'turn/steer') emit({ id, result: { turnId: params.expectedTurnId } });
+  } else if (method === 'turn/steer') {
+    emit({ id, result: { turnId: params.expectedTurnId } });
+    if (params.input?.[0]?.text === 'scub-green') notify('turn/completed', { turn: { id: params.expectedTurnId, status: 'completed' } });
+  }
   else if (id === 100 && !method) {
     if (message.result?.answers?.['scub-choice']?.answers?.[0] !== 'scub-blue') process.exit(2);
     notify('serverRequest/resolved', { requestId: 100 });

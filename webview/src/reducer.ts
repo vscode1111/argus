@@ -92,13 +92,24 @@ function extractText(blocks: ContentBlock[]): string {
     .join('');
 }
 
+function pendingReplayQuestion(messages: UIMessage[]): ProviderInteraction | null {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role === 'user') return null;
+    if (message.interaction?.async) return message.interaction;
+  }
+  return null;
+}
+
 export function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'message':
       // A message of the user's own supersedes a notice still waiting for a turn: the CLI
       // answers some notifications with an empty turn (the orphan replay on --resume), and
       // the marker must not end up opening the turn the user started.
-      return { ...state, messages: [...state.messages, action.message], pendingNotice: action.message.role === 'user' ? null : state.pendingNotice };
+      return { ...state, messages: [...state.messages, action.message],
+        interaction: action.message.role === 'user' && state.interaction?.async ? null : state.interaction,
+        pendingNotice: action.message.role === 'user' ? null : state.pendingNotice };
 
     case 'thinking_start': {
       const prev = state.streaming;
@@ -310,7 +321,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'sessionLoaded':
       // Replace the conversation with the replayed transcript and drop any
       // in-flight streaming/usage state from the previous session.
-      return { ...state, interaction: null, messages: action.messages, streaming: null, isStreaming: false, contextUsage: null, bgTasks: 0, pendingNotice: null };
+      return { ...state, interaction: pendingReplayQuestion(action.messages), messages: action.messages, streaming: null, isStreaming: false, contextUsage: null, bgTasks: 0, pendingNotice: null };
 
     case 'prefill':
       return { ...state, prefill: action.text + '\x00' + Date.now() };

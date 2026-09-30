@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { waitForApp } from './helpers';
 
-// The "CLI launches" value in Settings > Info opens a list of every Claude CLI process
+// The "CLI launches" value in Settings > Info opens a list of recognized CLI processes
 // on the server's machine. `listCliProcesses` is in webview/index.html's MOCK_SUPPRESSED,
 // so the live dev backend never answers here and these tests own the data - which is what
 // lets them pin cases the real machine would not reproduce on demand (a process with no
@@ -35,7 +35,7 @@ async function openProcessList(page: import('@playwright/test').Page, processes:
   await expect(settings).toBeVisible();
   await settings.getByRole('button', { name: 'Info' }).click();
   await page.getByTestId('cli-launches').click();
-  const dialog = page.getByRole('dialog', { name: 'Claude CLI processes' });
+  const dialog = page.getByRole('dialog', { name: 'CLI processes' });
   await expect(dialog).toBeVisible();
   // The modal registers its listener in an effect, so re-dispatch until it lands.
   await expect(async () => {
@@ -66,7 +66,7 @@ test.describe('CLI process list', () => {
     await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Info' }).click();
     await page.getByTestId('cli-launches').click();
 
-    await expect(page.getByRole('dialog', { name: 'Claude CLI processes' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'CLI processes' })).toBeVisible();
     await expect.poll(() => suppressed).toContain('listCliProcesses');
   });
 
@@ -110,7 +110,7 @@ test.describe('CLI process list', () => {
 
   test('says so when no CLI is running, which is not an error', async ({ page }) => {
     const { dialog } = await openProcessList(page, []);
-    await expect(dialog.getByTestId('cli-processes-body')).toContainText('No Claude CLI processes are running.');
+    await expect(dialog.getByTestId('cli-processes-body')).toContainText('No CLI processes are running.');
     await expect(dialog.getByTestId('cli-processes-error')).toHaveCount(0);
   });
 

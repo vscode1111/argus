@@ -28,6 +28,7 @@ export interface ProviderInteraction {
   title: string;
   detail?: string;
   kind: 'approval' | 'question';
+  async?: boolean;
   options?: string[];
   questions?: Array<{ id: string; question: string; options: string[] }>;
 }

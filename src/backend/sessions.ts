@@ -53,6 +53,7 @@ export interface ReplayMessage {
   images?: Array<{ data: string; mediaType: string; name?: string }>;
   thinking?: string;
   blocks?: ReplayBlock[];
+  interaction?: import('../shared/provider').ProviderInteraction;
   outcome?: 'success';
 }
 
@@ -149,12 +150,65 @@ function readSessionMeta(file: string): { title: string; lastPrompt: string; lin
 }
 
 // Absolute path of the transcript file backing a session, for display in the
-// Settings "Info" tab. Null for a malformed id, or when the CLI has not created the
-// project folder yet (a session that has not been written to disk).
+// Settings "Info" tab. Null for a malformed id or a session not yet written to disk.
 export function sessionFilePath(sessionId: string, workspaceDir: string): string | null {
+  if (sessionId.startsWith('codex:')) return codexSessionFilePath(sessionId.slice(6));
   if (!UUID_RE.test(sessionId)) return null;
   const dir = resolveProjectDir(workspaceDir);
   return dir ? path.join(dir, `${sessionId}.jsonl`) : null;
+}
+
+function codexSessionFilePath(id: string): string | null {
+  if (!UUID_RE.test(id)) return null;
+  const root = path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'sessions');
+  const directories = (parent: string): string[] => {
+    try { return fs.readdirSync(parent, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => path.join(parent, entry.name)); }
+    catch { return []; }
+  };
+  for (const year of directories(root)) for (const month of directories(year)) for (const day of directories(month)) {
+    try {
+      const name = fs.readdirSync(day).find(entry => entry.startsWith('rollout-') && entry.endsWith(`-${id}.jsonl`));
+      if (name) return path.join(day, name);
+    } catch { /* The runtime may remove a session folder while it is being scanned. */ }
+  }
+  return null;
+}
+
+const codexLineCounts = new Map<string, { mtimeMs: number; size: number; lines: number }>();
+
+export function codexSessionLineCount(sessionId: string): number {
+  const file = sessionFilePath(sessionId, '');
+  if (!file) return 0;
+  let stat: fs.Stats;
+  try { stat = fs.statSync(file); } catch { return 0; }
+  const cached = codexLineCounts.get(file);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.lines;
+
+  let lines = 0;
+  let content: string;
+  try { content = fs.readFileSync(file, 'utf8'); } catch { return 0; }
+  for (const raw of content.split(/\r?\n/)) {
+    if (!raw) continue;
+    let record: { type?: string; payload?: { type?: string; role?: string; content?: unknown; summary?: unknown; input?: unknown; arguments?: unknown; output?: unknown } };
+    try { record = JSON.parse(raw); } catch { continue; }
+    if (record.type !== 'response_item' || !record.payload) continue;
+    const item = record.payload;
+    if (item.type === 'message' && (item.role === 'user' || item.role === 'assistant')) lines += countCodexText(item.content);
+    else if (item.type === 'reasoning') lines += countCodexText(item.summary);
+    else if (item.type === 'custom_tool_call' || item.type === 'function_call') lines += countCodexText(item.input ?? item.arguments);
+    else if (item.type === 'custom_tool_call_output' || item.type === 'function_call_output') lines += countCodexText(item.output);
+  }
+  codexLineCounts.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, lines });
+  return lines;
+}
+
+function countCodexText(value: unknown): number {
+  if (typeof value === 'string') return textLines(value);
+  if (Array.isArray(value)) return value.reduce<number>((total, block) => total + countCodexText(block), 0);
+  if (!value || typeof value !== 'object') return 0;
+  const block = value as { type?: string; text?: unknown; content?: unknown };
+  if (block.type === 'image' || block.type === 'input_image' || block.type === 'output_image') return 0;
+  return countCodexText(block.text ?? block.content);
 }
 
 // Where a session's transcript lives, for a session whose workspace is not known -

@@ -1,6 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import { existsSync } from 'fs';
+import { win32 as path } from 'path';
 import { killProc } from '../cli';
 import { resolveCodexBinary } from './executable';
+import { noteCliLaunch } from '../cliLaunchCount';
 
 export type JsonObject = Record<string, unknown>;
 export function object(value: unknown): JsonObject {
@@ -31,7 +34,16 @@ export class AppServerRpc {
 
   private async initialize(): Promise<void> {
     if (this.closed) throw new Error('Provider connection is closed');
-    this.proc = spawn(this.binary, this.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, shell: false });
+    let env: NodeJS.ProcessEnv | undefined;
+    if (process.platform === 'win32') {
+      const gitBashDir = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin');
+      if (existsSync(path.join(gitBashDir, 'bash.exe'))) {
+        const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === 'path') || 'Path';
+        env = { ...process.env, [pathKey]: `${gitBashDir};${process.env[pathKey] || ''}` };
+      }
+    }
+    this.proc = spawn(this.binary, this.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, shell: false, env });
+    if (this.proc.pid) noteCliLaunch('codex');
     this.proc.stdout.setEncoding('utf8');
     this.proc.stdout.on('data', (chunk: string) => {
       this.buffer += chunk;

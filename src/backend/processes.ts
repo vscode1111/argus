@@ -64,6 +64,7 @@ export interface CliProcessList {
 export interface OwnedProc {
   sessionId: string;
   running: boolean;
+  lastActivityAt: number;
 }
 
 export interface OwnedProcs {
@@ -292,14 +293,13 @@ function makeLabeller(): (p: RawProc) => string | undefined {
   };
 }
 
-// Every Claude CLI process on this machine, with the timing and memory counters the
-// OS keeps for it - the same scope as killAllClaude, so the Settings panel's process
-// list and its "Stop all Claude CLI processes" button describe the same set.
+// Every Claude or Codex CLI process on this machine, with the timing and memory
+// counters the OS keeps for it. The stop-all button covers only Claude processes.
 export async function listCliProcesses(owned: OwnedProcs): Promise<CliProcessList> {
   const snap = await sample();
   if (typeof snap === 'string') return { processes: [], error: snap };
 
-  const raw = snap.clis.filter(p => p.name === CLI_NAME || owned.owned.has(p.pid));
+  const raw = snap.clis;
   const labelFor = makeLabeller();
   const processes = raw.map(p => {
     // On Windows the CLI is spawned through a cmd.exe shell, so what this server holds
@@ -320,7 +320,7 @@ export async function listCliProcesses(owned: OwnedProcs): Promise<CliProcessLis
       cpuPercent: p.cpuPercent,
       memBytes: p.memBytes,
       sessionId,
-      lastActivityAt: sessionId ? (sessionLastActivity(sessionId) ?? undefined) : undefined,
+      lastActivityAt: mine?.lastActivityAt ?? (sessionId ? (sessionLastActivity(sessionId) ?? undefined) : undefined),
       // Ours: the registry knows. Not ours: nothing here can tell, so say so.
       sessionRunning: mine ? mine.running : null,
       model: model?.[1],
@@ -344,17 +344,17 @@ function isAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
-// Terminates ONE Claude CLI process. The pid arrives from a client, so it is never
+// Terminates ONE listed CLI process. The pid arrives from a client, so it is never
 // passed to the OS on trust: it must appear in the current listing as a CLI, and on
 // Windows the kill itself carries an image-name filter so that even if the pid died and
 // was recycled in the moment between the two, the OS refuses to kill the stranger that
 // inherited it (verified against a node.exe decoy - taskkill declined and it survived).
-export async function killCliProcess(pid: number, owned: OwnedProcs['owned'] = new Map()): Promise<KillProcessResult> {
+export async function killCliProcess(pid: number): Promise<KillProcessResult> {
   if (!Number.isInteger(pid) || pid <= 0) return { pid, killed: false, error: 'invalid pid' };
 
   const snap = await sample();
   if (typeof snap === 'string') return { pid, killed: false, error: snap };
-  const target = snap.clis.find(p => p.pid === pid && (p.name === CLI_NAME || owned.has(pid)));
+  const target = snap.clis.find(p => p.pid === pid);
   if (!target) return { pid, killed: false, error: 'not an allowed running CLI process' };
 
   try {

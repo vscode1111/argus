@@ -68,10 +68,14 @@ export function ToolCall({ call, sessionDone }: Props) {
   const { input, result, error } = call;
   const name = call.kind === 'command' ? 'Bash' : call.name;
   const fileChanges = useMemo(() => call.kind === 'fileChange' && Array.isArray(input.changes)
-    ? input.changes.filter((change): change is { path: string; diff: string } =>
+    ? input.changes.filter((change): change is { path: string; diff: string; kind?: unknown } =>
       !!change && typeof change === 'object' && typeof change.path === 'string' && typeof change.diff === 'string')
-      .map(change => ({ ...change, ...countUnifiedDiff(change.diff) }))
+      .map(change => ({ ...change,
+        status: change.kind && typeof change.kind === 'object' && 'type' in change.kind ? change.kind.type : undefined,
+        ...countUnifiedDiff(change.diff),
+      }))
     : [], [call.kind, input.changes]);
+  const firstFileDiff = fileChanges.find(change => change.diff.trim());
   const fileChangeTotals = fileChanges.reduce((total, change) => ({
     added: total.added + change.added, removed: total.removed + change.removed,
   }), { added: 0, removed: 0 });
@@ -387,8 +391,8 @@ export function ToolCall({ call, sessionDone }: Props) {
       <div className={[styles.toolCall, error && styles.error].filter(Boolean).join(' ')}>
         {verboseTools ? (
           <pre className={styles.toolInput}>
-            {fileChanges.length > 0 ? (
-              <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={e => { e.preventDefault(); openFileChange(fileChanges[0].path, fileChanges[0].diff); }}>{name}</a>
+            {firstFileDiff ? (
+              <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={e => { e.preventDefault(); openFileChange(firstFileDiff.path, firstFileDiff.diff); }}>{name}</a>
             ) : shell ? (
                 <ShellIcon shell={shell.shell} command={bashCommand} className={pending ? styles.toolNamePending : undefined} />
             ) : isFile && fileViewerContent ? (
@@ -396,13 +400,14 @@ export function ToolCall({ call, sessionDone }: Props) {
             ) : (
               <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
             )}
-            {fileChanges.length > 0 && <> <span className={styles.statsAdded}>+{fileChangeTotals.added}</span> <span className={styles.statsRemoved}>-{fileChangeTotals.removed}</span></>}
+            {fileChangeTotals.added > 0 && <> <span className={styles.statsAdded}>+{fileChangeTotals.added}</span></>}
+            {fileChangeTotals.removed > 0 && <> <span className={styles.statsRemoved}>-{fileChangeTotals.removed}</span></>}
             {'\n'}{JSON.stringify(input, null, 2)}
           </pre>
         ) : (
           <div className={styles.toolHeader}>
-            {fileChanges.length > 0 ? (
-              <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={e => { e.preventDefault(); openFileChange(fileChanges[0].path, fileChanges[0].diff); }}>{name}</a>
+            {firstFileDiff ? (
+              <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={e => { e.preventDefault(); openFileChange(firstFileDiff.path, firstFileDiff.diff); }}>{name}</a>
             ) : shell ? (
                 <ShellIcon shell={shell.shell} command={bashCommand} className={pending ? styles.toolNamePending : undefined} />
             ) : (
@@ -410,21 +415,21 @@ export function ToolCall({ call, sessionDone }: Props) {
             )}
             {fileChanges.length > 0 && (
               fileChanges.length === 1 ? (
-                <a className={[styles.toolSummary, styles.toolFileLink].join(' ')} href="#" title={fileChanges[0].path}
-                  onClick={e => { e.preventDefault(); openChangedFile(fileChanges[0].path); }}>
-                  {fileChanges[0].path}
-                </a>
+                fileChanges[0].status === 'delete' ? (
+                  <span className={[styles.toolSummary, styles.fileChangeDeleted].join(' ')} title={fileChanges[0].path}>{fileChanges[0].path}</span>
+                ) : (
+                  <a className={[styles.toolSummary, styles.toolFileLink, fileChanges[0].status === 'add' && styles.fileChangeAdded].filter(Boolean).join(' ')} href="#" title={fileChanges[0].path}
+                    onClick={e => { e.preventDefault(); openChangedFile(fileChanges[0].path); }}>
+                    {fileChanges[0].path}
+                  </a>
+                )
               ) : (
                 <span className={styles.toolSummary} title={fileChanges.map(change => change.path).join('\n')}>{fileChanges.length} files</span>
               )
             )}
-            {fileChanges.length > 0 && (
-              <>
-                <span className={styles.statsAdded}>+{fileChangeTotals.added}</span>
-                <span className={styles.statsRemoved}>-{fileChangeTotals.removed}</span>
-              </>
-            )}
-            {fileChanges.length === 1 && (
+            {fileChangeTotals.added > 0 && <span className={styles.statsAdded}>+{fileChangeTotals.added}</span>}
+            {fileChangeTotals.removed > 0 && <span className={styles.statsRemoved}>-{fileChangeTotals.removed}</span>}
+            {fileChanges.length === 1 && firstFileDiff && (
               <a className={styles.toolOutLink} href="#" onClick={e => { e.preventDefault(); openFileChange(fileChanges[0].path, fileChanges[0].diff); }}>Diff</a>
             )}
             {name === 'Agent' && agentType && (
@@ -490,13 +495,17 @@ export function ToolCall({ call, sessionDone }: Props) {
           <div className={styles.fileChanges}>
             {fileChanges.map((change, index) => (
               <div key={`${change.path}:${index}`} className={styles.fileChangeRow}>
-                <a className={[styles.toolFileLink, styles.fileChangePath].join(' ')} href="#" title={change.path}
-                  onClick={e => { e.preventDefault(); openChangedFile(change.path); }}>
-                  {change.path}
-                </a>
-                <span className={styles.statsAdded}>+{change.added}</span>
-                <span className={styles.statsRemoved}>-{change.removed}</span>
-                <a className={styles.toolOutLink} href="#" onClick={e => { e.preventDefault(); openFileChange(change.path, change.diff); }}>Diff</a>
+                {change.status === 'delete' ? (
+                  <span className={[styles.fileChangePath, styles.fileChangeDeleted].join(' ')} title={change.path}>{change.path}</span>
+                ) : (
+                  <a className={[styles.toolFileLink, styles.fileChangePath, change.status === 'add' && styles.fileChangeAdded].filter(Boolean).join(' ')} href="#" title={change.path}
+                    onClick={e => { e.preventDefault(); openChangedFile(change.path); }}>
+                    {change.path}
+                  </a>
+                )}
+                {change.added > 0 && <span className={styles.statsAdded}>+{change.added}</span>}
+                {change.removed > 0 && <span className={styles.statsRemoved}>-{change.removed}</span>}
+                {!!change.diff.trim() && <a className={styles.toolOutLink} href="#" onClick={e => { e.preventDefault(); openFileChange(change.path, change.diff); }}>Diff</a>}
               </div>
             ))}
           </div>
