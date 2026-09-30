@@ -696,7 +696,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 : <span className={styles.infoValue} data-testid="workspace-path">(no workspace)</span>}
             </div>
             <div className={styles.infoRow}>
-              <span className={styles.infoLabel} title="How many times THIS server has started a Claude CLI since it booted - a running tally of events, not of live processes, so it only goes up (except when 'Stop all Claude CLI processes' resets it). A server that has run no turns shows 0 even while other CLIs run on the machine.">CLI launches<span className={styles.infoScope} data-testid="cli-launches-scope">
+              <span className={styles.infoLabel} title="How many Claude and Codex CLI processes THIS server has started. This counts launches, not currently running processes. Stop all Claude CLI processes resets only the Claude part of the count.">CLI launches<span className={styles.infoScope} data-testid="cli-launches-scope">
                 {ownedProcesses == null ? 'this server, total' : `this server, total · ${ownedProcesses} still alive`}
               </span></span>
               <span
@@ -704,7 +704,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 data-testid="cli-launches"
                 role="button"
                 tabIndex={0}
-                title="Show every Claude CLI process running on the server's machine, with its PID, age, CPU and memory"
+                title="Show every Claude and Codex CLI process running on the server's machine, with its PID, age, CPU and memory"
                 onClick={() => setShowProcesses(true)}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowProcesses(true); } }}
               >
@@ -712,7 +712,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
               </span>
             </div>
             <div className={styles.infoRow}>
-              <span className={styles.infoLabel} title="How many Claude CLIs are alive on the server's machine right now, whoever started them - a live count that rises and falls, unlike the launch tally above. This is the set the process list shows and the set 'Stop all Claude CLI processes' would kill.">CLI processes<span className={styles.infoScope}>whole machine, now</span></span>
+              <span className={styles.infoLabel} title="How many Claude and Codex CLIs are alive on the server's machine right now, whoever started them. Stop all Claude CLI processes only affects Claude processes.">CLI processes<span className={styles.infoScope}>whole machine, now</span></span>
               <span
                 className={[styles.infoValue, styles.addrLink].join(' ')}
                 data-testid="cli-processes-count"

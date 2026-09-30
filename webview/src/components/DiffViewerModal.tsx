@@ -145,10 +145,10 @@ export function DiffViewerModal({ path, oldString = '', newString = '', unifiedD
         <div className={modal.header}>
           <div className={modal.titleRow}>
             <span className={modal.title} title={path}>{path}</span>
-            <span className={styles.stats}>
-              <span className={tc.statsAdded}>+{addedCount}</span>
-              <span className={tc.statsRemoved}>-{removedCount}</span>
-            </span>
+            {(addedCount > 0 || removedCount > 0) && <span className={styles.stats}>
+              {addedCount > 0 && <span className={tc.statsAdded}>+{addedCount}</span>}
+              {removedCount > 0 && <span className={tc.statsRemoved}>-{removedCount}</span>}
+            </span>}
           </div>
           <div className={modal.actions}>
             <EncodingSelect value={encoding} onChange={setEncoding} />
