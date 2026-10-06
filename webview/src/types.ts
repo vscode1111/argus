@@ -159,6 +159,9 @@ export type ArgusSettings = {
   watchdogAutoRetries: number;
   watchdogRetryDelay: number;
   watchdogDelayFactor: number;
+  errorRetryMaxRetries: number;
+  errorRetryDelay: number;
+  errorRetryPatterns: string;
   cliIdleTimeoutSec: number;
   connectionIdleTimeoutSec: number;
   allowNetworkAccess: boolean;

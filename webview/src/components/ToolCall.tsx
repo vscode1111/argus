@@ -84,6 +84,7 @@ export function ToolCall({ call, sessionDone }: Props) {
   const shell = name === 'Bash' ? shellCommand(bashCommand) : null;
   const rawSummary = toolSummary(name, input);
   const summary = shell && rawSummary === bashCommand ? shell.display : rawSummary;
+  const showSummary = !!summary && (isFile || name === 'Bash' || summary !== name);
   const limit = name === 'Bash' ? 600 : 200;
   const preview = result ? result.slice(0, limit) + (result.length > limit ? '...' : '') : undefined;
   const previewer = usePreview();
@@ -435,7 +436,7 @@ export function ToolCall({ call, sessionDone }: Props) {
             {name === 'Agent' && agentType && (
               <span className={styles.toolAgentType}>{agentType}</span>
             )}
-            {summary && (
+            {showSummary && (
               isFile ? (
                 <a
                   className={[styles.toolSummary, styles.toolFileLink].join(' ')}

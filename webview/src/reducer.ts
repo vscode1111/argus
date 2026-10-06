@@ -63,7 +63,7 @@ export type AppAction =
   | { type: 'loginSubmitting' }
   | { type: 'loginResult'; success: boolean; message?: string }
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number; contextWindow?: number }
-  | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; timedOut?: boolean }
+  | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; errorRetry?: boolean; timedOut?: boolean }
   | { type: 'retry_clean' }
   | { type: 'user_inject'; text: string }
   | { type: 'sessionLoaded'; id: string; messages: UIMessage[] }
@@ -359,9 +359,9 @@ export function reducer(state: AppState, action: AppAction): AppState {
         autoRetryMax: action.autoRetryMax,
         timedOut: action.timedOut,
       };
-      const isWatchdogRetry = action.autoRetry != null && !action.timedOut;
+      const startsNewAttempt = (action.autoRetry != null || action.errorRetry === true) && !action.timedOut;
       let messages = state.messages;
-      if (isWatchdogRetry) {
+      if (startsNewAttempt) {
         const finalBlocks = finalizeBlocks(state.streaming.blocks);
         const content = extractText(finalBlocks);
         const partial: UIMessage = {
@@ -375,7 +375,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
           outcome: 'retried',
           watchdogRetries: state.streaming.watchdogRetries + 1,
         };
-        messages = [...messages, partial];
+        if (action.errorRetry !== true || finalBlocks.length > 0 || state.streaming.thinking) messages = [...messages, partial];
       }
       return {
         ...state,
@@ -384,7 +384,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
           ...state.streaming,
           retryStatus,
           lastEventTime: Date.now(),
-          ...(isWatchdogRetry ? {
+          ...(startsNewAttempt ? {
             thinking: '',
             blocks: [],
             watchdogRetries: state.streaming.watchdogRetries + 1,

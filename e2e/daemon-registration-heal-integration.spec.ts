@@ -18,7 +18,7 @@ import {
 // only party that knows the nonce.
 //
 // Real daemon processes on private ports + throwaway discovery files, so none of this
-// touches the user's own ~/.claude/argus-daemon.json. Serial to keep ports predictable.
+// touches the user's own ~/.argus/daemon.json. Serial to keep ports predictable.
 test.describe.configure({ mode: 'serial' });
 
 const DAEMON_JS = path.resolve(__dirname, '..', 'out', 'backend', 'daemon.js');

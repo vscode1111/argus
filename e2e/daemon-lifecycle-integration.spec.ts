@@ -14,7 +14,7 @@ import {
 // nonce gate, single-instance guard, requested shutdown (Settings "Stop daemon"),
 // and connection-count idle self-shutdown. Each
 // test gets its own port + throwaway discovery file (via env) so they never touch
-// the user's real ~/.claude/argus-daemon.json. Serial to keep the spawned processes
+// the user's real ~/.argus/daemon.json. Serial to keep the spawned processes
 // and port use predictable.
 test.describe.configure({ mode: 'serial' });
 

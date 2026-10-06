@@ -16,6 +16,9 @@ const DEFAULTS: ArgusSettings = {
   watchdogAutoRetries: 3,
   watchdogRetryDelay: 5,
   watchdogDelayFactor: 2,
+  errorRetryMaxRetries: 5,
+  errorRetryDelay: 10,
+  errorRetryPatterns: 'Selected model is at capacity',
   cliIdleTimeoutSec: 0,
   connectionIdleTimeoutSec: 0,
   allowNetworkAccess: true,
@@ -39,6 +42,9 @@ interface SettingsContextValue extends ArgusSettings {
   setWatchdogAutoRetries: (v: number) => void;
   setWatchdogRetryDelay: (v: number) => void;
   setWatchdogDelayFactor: (v: number) => void;
+  setErrorRetryMaxRetries: (v: number) => void;
+  setErrorRetryDelay: (v: number) => void;
+  setErrorRetryPatterns: (v: string) => void;
   setCliIdleTimeoutSec: (v: number) => void;
   setConnectionIdleTimeoutSec: (v: number) => void;
   setAllowNetworkAccess: (v: boolean) => void;
@@ -63,6 +69,9 @@ const SettingsContext = createContext<SettingsContextValue>({
   setWatchdogAutoRetries: () => {},
   setWatchdogRetryDelay: () => {},
   setWatchdogDelayFactor: () => {},
+  setErrorRetryMaxRetries: () => {},
+  setErrorRetryDelay: () => {},
+  setErrorRetryPatterns: () => {},
   setCliIdleTimeoutSec: () => {},
   setConnectionIdleTimeoutSec: () => {},
   setAllowNetworkAccess: () => {},
@@ -108,6 +117,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const setWatchdogAutoRetries = useCallback((v: number) => update({ watchdogAutoRetries: v }), [update]);
   const setWatchdogRetryDelay = useCallback((v: number) => update({ watchdogRetryDelay: v }), [update]);
   const setWatchdogDelayFactor = useCallback((v: number) => update({ watchdogDelayFactor: v }), [update]);
+  const setErrorRetryMaxRetries = useCallback((v: number) => update({ errorRetryMaxRetries: v }), [update]);
+  const setErrorRetryDelay = useCallback((v: number) => update({ errorRetryDelay: v }), [update]);
+  const setErrorRetryPatterns = useCallback((v: string) => update({ errorRetryPatterns: v }), [update]);
   const setCliIdleTimeoutSec = useCallback((v: number) => update({ cliIdleTimeoutSec: v }), [update]);
   const setConnectionIdleTimeoutSec = useCallback((v: number) => update({ connectionIdleTimeoutSec: v }), [update]);
   const setAllowNetworkAccess = useCallback((v: boolean) => update({ allowNetworkAccess: v }), [update]);
@@ -128,7 +140,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       update,
       setVerboseTools, setShowTimer, setShowOutput, setShowLogs,
       setShowLogTime, setShowLogType, setSoundOnComplete, setNotifyOnComplete,
-      setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setCliIdleTimeoutSec, setConnectionIdleTimeoutSec,
+      setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setErrorRetryMaxRetries, setErrorRetryDelay, setErrorRetryPatterns, setCliIdleTimeoutSec, setConnectionIdleTimeoutSec,
       setAllowNetworkAccess, setAllowedOrigins, setDaemonPort, setDaemonIdleMs,
     }}>
       {children}

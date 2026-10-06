@@ -35,6 +35,7 @@ interface NumberInputProps {
   value: number;
   onChange: (v: number) => void;
   min?: number;
+  max?: number;
   step?: number;
   disabled?: boolean;
 }
@@ -69,7 +70,7 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-function NumberInput({ id, value, onChange, min = 1, step, disabled }: NumberInputProps) {
+function NumberInput({ id, value, onChange, min = 1, max, step, disabled }: NumberInputProps) {
   const [text, setText] = useState(String(value));
   useEffect(() => { setText(String(value)); }, [value]);
   return (
@@ -78,17 +79,18 @@ function NumberInput({ id, value, onChange, min = 1, step, disabled }: NumberInp
       type="number"
       className={styles.numberInput}
       min={min}
+      max={max}
       step={step}
       disabled={disabled}
       value={text}
       onChange={e => {
         setText(e.target.value);
         const parsed = step ? parseFloat(e.target.value) : parseInt(e.target.value);
-        if (!isNaN(parsed)) onChange(Math.max(min, parsed));
+        if (!isNaN(parsed)) onChange(Math.min(max ?? Infinity, Math.max(min, parsed)));
       }}
       onBlur={() => {
         const parsed = step ? parseFloat(text) : parseInt(text);
-        const final = isNaN(parsed) || parsed < min ? min : parsed;
+        const final = isNaN(parsed) ? min : Math.min(max ?? Infinity, Math.max(min, parsed));
         onChange(final);
         setText(String(final));
       }}
@@ -102,6 +104,25 @@ interface TextInputProps {
   onChange: (v: string) => void;
   placeholder?: string;
   disabled?: boolean;
+}
+
+function PatternInput({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled: boolean }) {
+  const [text, setText] = useState(value);
+  useEffect(() => { setText(value); }, [value]);
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  let error = text.length > 4096 ? 'Use at most 4096 characters' : lines.length > 20 ? 'Use at most 20 patterns' : '';
+  if (!error) for (const [index, line] of lines.entries()) {
+    if (line.length > 200) { error = `Pattern ${index + 1} exceeds 200 characters`; break; }
+    try { new RegExp(line, 'i'); }
+    catch { error = `Pattern ${index + 1} is not a valid regular expression`; break; }
+  }
+  return <>
+    <textarea id="input-error-patterns" className={styles.patternInput} rows={4} value={text} disabled={disabled}
+      aria-invalid={!!error} aria-describedby="error-patterns-help error-patterns-error"
+      onChange={event => setText(event.target.value)} onBlur={() => { if (!error && text !== value) onChange(text); }} />
+    <span id="error-patterns-help" className={styles.fieldHint}>One regular expression per line, matched without case sensitivity. Empty list disables error retries.</span>
+    {error && <span id="error-patterns-error" className={styles.patternError} role="alert">{error}</span>}
+  </>;
 }
 
 /**
@@ -270,7 +291,7 @@ interface Props {
 type Tab = 'general' | 'watchdog' | 'network' | 'info';
 
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
-  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, cliIdleTimeoutSec, connectionIdleTimeoutSec, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setCliIdleTimeoutSec, setConnectionIdleTimeoutSec, setAllowNetworkAccess, setAllowedOrigins, daemonPort, setDaemonPort, daemonIdleMs, setDaemonIdleMs } = useSettings();
+  const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, errorRetryMaxRetries, errorRetryDelay, errorRetryPatterns, cliIdleTimeoutSec, connectionIdleTimeoutSec, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setErrorRetryMaxRetries, setErrorRetryDelay, setErrorRetryPatterns, setCliIdleTimeoutSec, setConnectionIdleTimeoutSec, setAllowNetworkAccess, setAllowedOrigins, daemonPort, setDaemonPort, daemonIdleMs, setDaemonIdleMs } = useSettings();
   const [activeClients, setActiveClients] = useState<number | null>(null);
   const [serverPort, setServerPort] = useState<number | null>(null);
   const [cliLaunchCount, setCliLaunchCount] = useState<number | null>(null);
@@ -543,22 +564,40 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
               <span className={styles.settingLabel} title="Monitor CLI process for stalls and auto-recover">Enabled</span>
               <Toggle id="toggle-watchdog" checked={watchdogEnabled} onChange={setWatchdogEnabled} />
             </label>
-            <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-watchdog">
-              <span className={styles.settingLabel} title="Seconds of no CLI output before a retry is triggered">Timeout (s)</span>
-              <NumberInput id="input-watchdog" value={watchdogTimeout} onChange={setWatchdogTimeout} min={1} disabled={!watchdogEnabled} />
-            </label>
-            <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-retries">
-              <span className={styles.settingLabel} title="Max consecutive retries before giving up">Auto retries</span>
-              <NumberInput id="input-retries" value={watchdogAutoRetries} onChange={setWatchdogAutoRetries} min={0} disabled={!watchdogEnabled} />
-            </label>
-            <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-retry-delay">
-              <span className={styles.settingLabel} title="Initial wait before the first retry">Base delay (s)</span>
-              <NumberInput id="input-retry-delay" value={watchdogRetryDelay} onChange={setWatchdogRetryDelay} min={1} disabled={!watchdogEnabled} />
-            </label>
-            <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-delay-factor">
-              <span className={styles.settingLabel} title="Multiplier applied each retry: delay = base * factor^attempt. Set to 1 for fixed delay">Delay factor</span>
-              <NumberInput id="input-delay-factor" value={watchdogDelayFactor} onChange={setWatchdogDelayFactor} min={1} step={0.5} disabled={!watchdogEnabled} />
-            </label>
+            <fieldset className={styles.settingGroup}>
+              <legend className={styles.groupLegend}>Inactivity retries</legend>
+              <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-watchdog">
+                <span className={styles.settingLabel} title="Seconds of no CLI output before a retry is triggered">Timeout (s)</span>
+                <NumberInput id="input-watchdog" value={watchdogTimeout} onChange={setWatchdogTimeout} min={1} disabled={!watchdogEnabled} />
+              </label>
+              <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-retries">
+                <span className={styles.settingLabel} title="Max consecutive retries before giving up">Auto retries</span>
+                <NumberInput id="input-retries" value={watchdogAutoRetries} onChange={setWatchdogAutoRetries} min={0} disabled={!watchdogEnabled} />
+              </label>
+              <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-retry-delay">
+                <span className={styles.settingLabel} title="Initial wait before the first retry">Base delay (s)</span>
+                <NumberInput id="input-retry-delay" value={watchdogRetryDelay} onChange={setWatchdogRetryDelay} min={1} disabled={!watchdogEnabled} />
+              </label>
+              <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-delay-factor">
+                <span className={styles.settingLabel} title="Multiplier applied each retry: delay = base * factor^attempt. Set to 1 for fixed delay">Delay factor</span>
+                <NumberInput id="input-delay-factor" value={watchdogDelayFactor} onChange={setWatchdogDelayFactor} min={1} step={0.5} disabled={!watchdogEnabled} />
+              </label>
+            </fieldset>
+            <fieldset className={styles.settingGroup}>
+              <legend className={styles.groupLegend}>Matching errors</legend>
+              <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-error-retries">
+                <span className={styles.settingLabel} title="Maximum retries after an error matches a pattern below">Error retries</span>
+                <NumberInput id="input-error-retries" value={errorRetryMaxRetries} onChange={setErrorRetryMaxRetries} min={0} max={20} disabled={!watchdogEnabled} />
+              </label>
+              <label className={[styles.settingRow, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')} htmlFor="input-error-retry-delay">
+                <span className={styles.settingLabel} title="Wait this many seconds between matching-error retries">Error retry delay (s)</span>
+                <NumberInput id="input-error-retry-delay" value={errorRetryDelay} onChange={setErrorRetryDelay} min={1} max={3600} disabled={!watchdogEnabled} />
+              </label>
+              <div className={[styles.settingColumn, !watchdogEnabled ? styles.settingDisabled : ''].filter(Boolean).join(' ')}>
+                <label className={styles.settingLabel} htmlFor="input-error-patterns">Error patterns</label>
+                <PatternInput value={errorRetryPatterns} onChange={setErrorRetryPatterns} disabled={!watchdogEnabled} />
+              </div>
+            </fieldset>
             <label className={styles.settingRow} htmlFor="input-cli-idle">
               <span className={styles.settingLabel} title="Terminate a CLI process this server owns once its session has been idle this long, to reclaim its memory (each one holds ~250MB). 0 disables it. A process that is mid-turn is never touched, and the conversation survives - the next message respawns the CLI with --resume.">
                 Idle CLI timeout (s)

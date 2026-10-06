@@ -56,7 +56,7 @@ test.describe('remote access gate (integration)', () => {
 
   test('logs a remote client in, then locks it out, then revokes it', { tag: ["@shared"] }, async () => {
     // Its own server and its own credential file: the shared one must stay password-free
-    // for the test above, and the real ~/.claude/argus-auth.json is never touched.
+    // for the test above, and the real ~/.argus/auth.json is never touched.
     const priorAuthFile = process.env.ARGUS_AUTH_FILE;
     const priorConfig = process.env.ARGUS_CONFIG;
     const priorUsagePoll = process.env.ARGUS_USAGE_POLL;

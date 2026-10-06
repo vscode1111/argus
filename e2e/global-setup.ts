@@ -4,7 +4,7 @@ import * as path from 'path';
 //
 // playwright.config.ts sets `reuseExistingServer: true`, so a `yarn dev` the user
 // already had running is adopted as the backend. If that process was launched from
-// a plain shell it reads and WRITES the real ~/.claude/argus.json instead of
+// a plain shell it reads and WRITES the real ~/.argus/config.json instead of
 // e2e/argus.json: tests that change settings through the UI corrupt the user's
 // config, and tests that depend on e2e/argus.json (showLogs, effort, allowedOrigins)
 // fail against values they never set. That looks like several unrelated product

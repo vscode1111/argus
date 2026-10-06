@@ -109,7 +109,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     }
     // Which settings file this process is actually reading. The e2e global setup
     // uses it to detect a reused dev server that was started without ARGUS_CONFIG -
-    // such a server writes the user's real ~/.claude/argus.json and reads settings
+    // such a server writes the user's real ~/.argus/config.json and reads settings
     // the tests never set, which fails tests for reasons invisible in their output.
     // Loopback only, so the path is never disclosed to a LAN client.
     if (urlPath === '/health') {

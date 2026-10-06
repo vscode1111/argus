@@ -7,7 +7,7 @@ import * as http from 'http';
 // Helpers for the daemon integration specs. They spawn the real compiled daemon
 // (out/backend/daemon.js) the extension auto-starts, but pointed at a throwaway
 // discovery file and a private port via env, so they never touch the user's real
-// ~/.claude/argus-daemon.json or collide with a running daemon.
+// ~/.argus/daemon.json or collide with a running daemon.
 
 const ROOT = path.resolve(__dirname, '..');
 const DAEMON_JS = path.join(ROOT, 'out', 'backend', 'daemon.js');
@@ -96,7 +96,7 @@ export async function startDaemon(opts: StartOpts): Promise<DaemonHandle> {
     ARGUS_DAEMON_FILE: file,
     // The daemon records daemonLastStartAt (and would run the daily model-data
     // refresh, spawning a real CLI turn) against its config on startup - keep test
-    // daemons off the user's real ~/.claude/argus.json and skip the refresh.
+    // daemons off the user's real ~/.argus/config.json and skip the refresh.
     ARGUS_CONFIG: opts.configPath ?? uniqueConfigFile('default'),
     ARGUS_MODEL_REFRESH: '0',
     // Same reasoning for the usage poller: a test daemon must not call the live

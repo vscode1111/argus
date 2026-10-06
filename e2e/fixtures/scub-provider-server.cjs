@@ -1,5 +1,6 @@
 const readline = require('readline');
 let turn = 0;
+const capacityAttempts = new Map();
 let timer;
 let pendingStartInterrupt = false;
 let threadParams;
@@ -30,6 +31,23 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     emit({ id, result: { turn: { id: turnId } } });
     notify('turn/started', { turn: { id: turnId } });
     const text = params.input?.[0]?.text;
+    if (String(text).startsWith('scub-capacity-')) {
+      const attempt = (capacityAttempts.get(text) || 0) + 1;
+      capacityAttempts.set(text, attempt);
+      if (text === 'scub-capacity-always' || attempt <= 2) {
+        if (text === 'scub-capacity-twice' && attempt === 1) {
+          const item = { id: 'scub-tool', type: 'commandExecution', command: 'echo scub', status: 'completed' };
+          notify('item/started', { turnId, item });
+          notify('item/completed', { turnId, item });
+        }
+        notify('turn/completed', { turn: { id: turnId, status: 'failed', error: { message: 'Selected model is at capacity. Please try a different model.' } } });
+        return;
+      }
+    }
+    if (text === 'scub-other-error') {
+      notify('turn/completed', { turn: { id: turnId, status: 'failed', error: { message: 'scub-unrelated failure' } } });
+      return;
+    }
     if (text === 'scub-interrupt-race') pendingStartInterrupt = true;
     if (String(text).includes('scub-skill') && (text !== '$scub-skill scub-input' || !params.input.some(i => i.type === 'skill' && i.path === '/scub/skills/scub-skill/SKILL.md'))) process.exit(4);
     if (text === 'scub-question') {

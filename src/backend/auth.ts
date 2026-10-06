@@ -1,7 +1,7 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import { ARGUS_DIR, LEGACY_ARGUS_DIR, migrateLegacyFile } from './paths';
 
 /**
  * Remote-access credentials.
@@ -38,8 +38,10 @@ export interface AuthRecord {
  * Resolving on each call costs an env lookup and removes the whole class of problem.
  */
 export function authFilePath(): string {
-  return process.env.ARGUS_AUTH_FILE
-    || path.join(os.homedir(), '.claude', 'argus-auth.json');
+  if (process.env.ARGUS_AUTH_FILE) return process.env.ARGUS_AUTH_FILE;
+  const file = path.join(ARGUS_DIR, 'auth.json');
+  migrateLegacyFile(file, path.join(LEGACY_ARGUS_DIR, 'argus-auth.json'));
+  return file;
 }
 
 const SCRYPT_KEYLEN = 64;
@@ -105,6 +107,9 @@ export function setPassword(user: string, password: string, currentPassword?: st
   };
   fs.mkdirSync(path.dirname(authFilePath()), { recursive: true });
   fs.writeFileSync(authFilePath(), JSON.stringify(record, null, 2) + '\n', { mode: 0o600 });
+  if (!process.env.ARGUS_AUTH_FILE) {
+    try { fs.unlinkSync(path.join(LEGACY_ARGUS_DIR, 'argus-auth.json')); } catch { /* no legacy credential */ }
+  }
   // Every existing session was issued against the old password.
   dropAllSessions();
   return { ok: true };
@@ -116,6 +121,9 @@ export function clearPassword(currentPassword: string): SetPasswordResult {
   if (!existing) return { ok: true };
   if (!verifyPassword(existing.user, currentPassword)) return { ok: false, error: 'current password is wrong' };
   try { fs.unlinkSync(authFilePath()); } catch { /* already gone */ }
+  if (!process.env.ARGUS_AUTH_FILE) {
+    try { fs.unlinkSync(path.join(LEGACY_ARGUS_DIR, 'argus-auth.json')); } catch { /* already gone */ }
+  }
   dropAllSessions();
   return { ok: true };
 }
