@@ -11,15 +11,20 @@ const { CodexSession, replayThread, rateLimits } = require('../out/backend/provi
 const { createSessionState } = require('../out/backend/sessionState');
 const { defaultSelection, selectionFor } = require('../out/backend/providers/store');
 const { writeConfig, DEFAULT_CONFIG } = require('../out/backend/config');
+const { createErrorRetry, parseErrorRetryPatterns } = require('../out/backend/errorRetry');
+const { handleCliEvent } = require('../out/backend/cliHandler');
 const { getCliLaunchCount, resetCliLaunchCount } = require('../out/backend/providers/claudeExecution');
 const live = [];
 after(() => { for (const runtime of live) runtime.dispose(); fs.rmSync(dir, { recursive: true, force: true }); });
 function session(validate = async () => {}) {
   const state = createSessionState(dir); state.selection = defaultSelection('codex');
-  const events = []; state.broadcast = text => events.push(JSON.parse(text));
+  const events = [];
   const rpc = new AppServerRpc(process.execPath, [path.join(__dirname, 'fixtures/scub-provider-server.cjs')]);
   const runtime = new CodexSession(state, rpc, validate); state.runtime = runtime; live.push(runtime);
-  return { state, events, runtime };
+  const controller = createErrorRetry({ broadcast: text => events.push(JSON.parse(text)), getLastMessage: () => state.lastMessage,
+    retry: input => { void runtime.send(input); }, log: () => {} });
+  state.broadcast = controller.broadcast;
+  return { state, events, runtime, controller };
 }
 async function until(predicate) {
   const end = Date.now() + 3000;
@@ -66,6 +71,101 @@ test('streamed text is not duplicated by the completed item; binding survives re
   assert.equal(events.filter(e => e.type === 'text_chunk').map(e => e.text).join(''), 'scub-ok');
   assert.equal(events.filter(e => e.type === 'done').length, 1);
   assert.equal(selectionFor(state.sessionId, dir).providerId, 'codex');
+});
+
+test('capacity failures retry the same request and finish after recovery', async () => {
+  writeConfig({ ...DEFAULT_CONFIG, errorRetryMaxRetries: 3, errorRetryDelay: 1 });
+  const { events, runtime } = session();
+  await runtime.send({ text: 'scub-capacity-twice' });
+  await until(() => events.filter(e => e.type === 'retry_status').length === 2);
+  await until(() => events.some(e => e.type === 'done'));
+  assert.deepEqual(events.filter(e => e.type === 'retry_status').map(e => e.attempt), [1, 2]);
+  assert.equal(events.filter(e => e.type === 'tool_end').length, 1);
+  assert.equal(events.filter(e => e.type === 'message').length, 1);
+  assert.equal(events.filter(e => e.type === 'done').length, 1);
+  assert.equal(events.filter(e => e.type === 'error').length, 0);
+  assert.equal(events.filter(e => e.type === 'text_chunk').map(e => e.text).join(''), 'scub-ok');
+});
+
+test('capacity retry limit leaves the final error for manual retry', async () => {
+  writeConfig({ ...DEFAULT_CONFIG, errorRetryMaxRetries: 1, errorRetryDelay: 1 });
+  const { events, runtime } = session();
+  await runtime.send({ text: 'scub-capacity-always' }); await until(() => events.some(e => e.type === 'done'));
+  assert.deepEqual(events.filter(e => e.type === 'retry_status').map(e => e.attempt), [1]);
+  assert.match(events.find(e => e.type === 'error').text, /at capacity/i);
+  assert.equal(events.filter(e => e.type === 'done').length, 1);
+});
+
+test('zero configured capacity retries reports the first error', async () => {
+  writeConfig({ ...DEFAULT_CONFIG, errorRetryMaxRetries: 0 });
+  const { events, runtime } = session();
+  await runtime.send({ text: 'scub-capacity-always' }); await until(() => !runtime.active);
+  assert.equal(events.filter(e => e.type === 'retry_status').length, 0);
+  assert.match(events.find(e => e.type === 'error').text, /at capacity/i);
+});
+
+test('stop cancels a scheduled capacity retry and unrelated errors never retry', async () => {
+  writeConfig({ ...DEFAULT_CONFIG, errorRetryMaxRetries: 2, errorRetryDelay: 1 });
+  const stopped = session();
+  await stopped.runtime.send({ text: 'scub-capacity-always' });
+  await until(() => stopped.events.some(e => e.type === 'retry_status'));
+  stopped.controller.cancel(true);
+  assert.equal(stopped.runtime.active, false);
+  assert.equal(stopped.events.filter(e => e.type === 'done').length, 1);
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  assert.equal(stopped.events.filter(e => e.type === 'retry_status').length, 1);
+  const unrelated = session();
+  await unrelated.runtime.send({ text: 'scub-other-error' }); await until(() => !unrelated.runtime.active);
+  assert.equal(unrelated.events.filter(e => e.type === 'retry_status').length, 0);
+  assert.match(unrelated.events.find(e => e.type === 'error').text, /unrelated/);
+  writeConfig(DEFAULT_CONFIG);
+});
+
+test('pattern list accepts multiple case-insensitive expressions and rejects invalid input', () => {
+  const valid = parseErrorRetryPatterns('scub-overload\\d+\nSCUB-BUSY');
+  assert.equal(valid.error, undefined);
+  assert.equal(valid.patterns.some(pattern => pattern.test('scub-overload42')), true);
+  assert.equal(valid.patterns.some(pattern => pattern.test('scub-busy')), true);
+  assert.match(parseErrorRetryPatterns('scub-[').error, /valid regular expression/);
+  assert.deepEqual(parseErrorRetryPatterns('').patterns, []);
+});
+
+test('an empty pattern list disables error retries and a duplicate terminal error stays closed', () => {
+  writeConfig({ ...DEFAULT_CONFIG, errorRetryPatterns: '' });
+  const events = [];
+  const controller = createErrorRetry({ broadcast: text => events.push(JSON.parse(text)), getLastMessage: () => ({ text: 'scub-request' }),
+    retry: () => assert.fail('scub-unexpected retry'), log: () => {} });
+  controller.broadcast(JSON.stringify({ type: 'error', text: 'Selected model is at capacity' }));
+  controller.broadcast(JSON.stringify({ type: 'done' }));
+  controller.broadcast(JSON.stringify({ type: 'error', text: 'Selected model is at capacity' }));
+  controller.broadcast(JSON.stringify({ type: 'done' }));
+  assert.deepEqual(events.map(event => event.type), ['error', 'done']);
+  writeConfig(DEFAULT_CONFIG);
+});
+
+test('a Claude terminal error uses the same retry rules', async () => {
+  writeConfig({ ...DEFAULT_CONFIG, errorRetryMaxRetries: 1, errorRetryDelay: 1, errorRetryPatterns: 'scub-transient\\s+overload' });
+  const state = createSessionState(dir);
+  state.selection = defaultSelection('claude');
+  state.lastMessage = { text: 'scub-request' };
+  state.sendLog = () => {};
+  state.resetStaleTimer = () => {};
+  state.watchdog = { state: { lastEventTime: 0, active: true, autoRetryCount: 0, retrying: false }, interval: null };
+  const events = []; const retried = [];
+  const controller = createErrorRetry({ broadcast: text => events.push(JSON.parse(text)), getLastMessage: () => state.lastMessage,
+    retry: input => retried.push(input), log: () => {} });
+  state.broadcast = controller.broadcast;
+  handleCliEvent(state, { type: 'result', is_error: true, error: 'Scub-transient overload' });
+  assert.equal(events.filter(e => e.type === 'error' || e.type === 'done').length, 0);
+  assert.equal(events.find(e => e.type === 'retry_status').attempt, 1);
+  await until(() => retried.length === 1);
+  assert.equal(retried[0].text, 'scub-request');
+  assert.equal(retried[0]._silent, true);
+  controller.broadcast(JSON.stringify({ type: 'error', text: 'scub-transient overload' }));
+  controller.broadcast(JSON.stringify({ type: 'done' }));
+  assert.equal(events.filter(e => e.type === 'error').length, 1);
+  assert.equal(events.filter(e => e.type === 'done').length, 1);
+  writeConfig(DEFAULT_CONFIG);
 });
 
 test('permission modes reach thread and turn requests', async () => {

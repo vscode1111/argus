@@ -371,7 +371,8 @@ export class CodexSession implements AgentSession {
     } else if (method === 'turn/completed') {
       const turn = object(params.turn);
       if (this.turnId && turn.id !== this.turnId) return;
-      if (turn.error) this.emit({ type: 'error', text: string(object(turn.error).message) || 'Provider turn failed' });
+      const error = turn.error ? string(object(turn.error).message) || 'Provider turn failed' : '';
+      if (error) this.emit({ type: 'error', text: error });
       this.finish(turn.status === 'interrupted');
     }
   }

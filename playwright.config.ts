@@ -12,7 +12,7 @@ const e2eAuthFile = path.resolve(__dirname, 'e2e', 'argus-auth.e2e.json');
 process.env['ARGUS_CONFIG'] = e2eConfig;
 // Same for the remote-access credential: a worker that resolved this to the default
 // would read - and a careless spec would overwrite - the developer's real
-// ~/.claude/argus-auth.json. Nothing creates this path, so specs see "no password set".
+// ~/.argus/auth.json. Nothing creates this path, so specs see "no password set".
 process.env['ARGUS_AUTH_FILE'] = e2eAuthFile;
 
 const chromiumOptions = {
@@ -80,7 +80,7 @@ export default defineConfig({
     // API-dependent specs skip.
     // ARGUS_AUTH_FILE is pinned for the same reason ARGUS_CONFIG is: a suite run must
     // never read - let alone overwrite - the real remote-access credential in
-    // ~/.claude/argus-auth.json. Nothing creates this path, so the shared dev server
+    // ~/.argus/auth.json. Nothing creates this path, so the shared dev server
     // runs with no password, which is the state the gate tests assert against.
     env: { ARGUS_CONFIG: e2eConfig, ARGUS_USAGE_POLL: '0', ARGUS_AUTH_FILE: e2eAuthFile },
   },

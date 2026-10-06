@@ -1,8 +1,12 @@
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import { ARGUS_DIR, LEGACY_ARGUS_DIR, migrateLegacyFile } from './paths';
 
-export const CONFIG_PATH = process.env.ARGUS_CONFIG || path.join(os.homedir(), '.claude', 'argus.json');
+export const CONFIG_PATH = process.env.ARGUS_CONFIG || path.join(ARGUS_DIR, 'config.json');
+
+function migrateConfig(): void {
+  if (!process.env.ARGUS_CONFIG) migrateLegacyFile(CONFIG_PATH, path.join(LEGACY_ARGUS_DIR, 'argus.json'));
+}
 
 export interface ArgusConfig {
   defaultProvider: string;
@@ -20,6 +24,9 @@ export interface ArgusConfig {
   watchdogAutoRetries: number;
   watchdogRetryDelay: number;
   watchdogDelayFactor: number;
+  errorRetryMaxRetries: number;
+  errorRetryDelay: number;
+  errorRetryPatterns: string;
   // Seconds a CLI process this server owns may sit idle before it is terminated to
   // reclaim its memory. 0 disables it. Only ever applies to an IDLE process - one
   // mid-turn is never touched - and the session id survives, so the next message
@@ -91,6 +98,9 @@ export const DEFAULT_CONFIG: ArgusConfig = {
   watchdogAutoRetries: 3,
   watchdogRetryDelay: 5,
   watchdogDelayFactor: 2,
+  errorRetryMaxRetries: 5,
+  errorRetryDelay: 10,
+  errorRetryPatterns: 'Selected model is at capacity',
   // Off by default: terminating a process on a timer is the user's call to make, not
   // something to start doing to them silently on upgrade.
   cliIdleTimeoutSec: 0,
@@ -116,10 +126,15 @@ let cachedMtime = 0;
 
 export function readConfig(): ArgusConfig {
   try {
+    migrateConfig();
     const mtime = fs.statSync(CONFIG_PATH).mtimeMs;
     if (cachedConfig && mtime === cachedMtime) return cachedConfig;
     const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
-    const config = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    const { codexCapacityRetries, codexCapacityRetryDelay, ...stored } = JSON.parse(raw);
+    const config = { ...DEFAULT_CONFIG, ...stored,
+      errorRetryMaxRetries: stored.errorRetryMaxRetries ?? codexCapacityRetries ?? DEFAULT_CONFIG.errorRetryMaxRetries,
+      errorRetryDelay: stored.errorRetryDelay ?? codexCapacityRetryDelay ?? DEFAULT_CONFIG.errorRetryDelay,
+    };
     cachedConfig = config;
     cachedMtime = mtime;
     return config;
@@ -131,6 +146,8 @@ export function readConfig(): ArgusConfig {
 
 export function writeConfig(config: ArgusConfig): void {
   try {
+    migrateConfig();
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true, mode: 0o700 });
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
     cachedConfig = config;
   } catch (err) {

@@ -3,7 +3,7 @@
 // chromium, and stray test daemons. Deliberately conservative - it never kills:
 //   - this very session (the whole ancestor chain of this script, so the Claude
 //     process running the agent and its node parents are safe),
-//   - the real Argus daemon (the pid in ~/.claude/argus-daemon.json) and its
+//   - the real Argus daemon (the pid in ~/.argus/daemon.json) and its
 //     whole process subtree - live user sessions are `claude --print` children
 //     of the daemon (via a cmd.exe shell on Windows), so killing them would
 //     drop conversations that are mid-turn,
@@ -66,7 +66,9 @@ while (cur && byPid.has(cur) && !protectedPids.has(cur)) {
 // this script exists to kill.
 const protectedRoots = new Set();
 try {
-  const info = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'argus-daemon.json'), 'utf8'));
+  const current = path.join(os.homedir(), '.argus', 'daemon.json');
+  const legacy = path.join(os.homedir(), '.claude', 'argus-daemon.json');
+  const info = JSON.parse(fs.readFileSync(fs.existsSync(current) ? current : legacy, 'utf8'));
   if (typeof info.pid === 'number') {
     protectedPids.add(info.pid);
     protectedRoots.add(info.pid);

@@ -434,10 +434,10 @@ function applyMsg(entry: SessionEntry, p: Record<string, unknown>): void {
       if (entry.snapshot) entry.snapshot.blocks.push({ type: 'user_inject', text: String(p.text ?? '') });
       break;
     case 'retry_status': {
-      if (!entry.snapshot || typeof p.autoRetry !== 'number' || p.timedOut === true) break;
+      if (!entry.snapshot || (typeof p.autoRetry !== 'number' && p.errorRetry !== true) || p.timedOut === true) break;
       const blocks = [...entry.snapshot.blocks];
       const content = blocks.filter(b => b.type === 'text').map(b => b.text ?? '').join('');
-      entry.history.push({
+      if (p.errorRetry !== true || blocks.length > 0 || entry.snapshot.thinking) entry.history.push({
         id: nextMsgId(), role: 'assistant', content,
         thinking: entry.snapshot.thinking || undefined,
         blocks: blocks.length > 0 ? blocks : undefined, outcome: 'retried',
@@ -593,6 +593,7 @@ function joinEntry(cd: ChannelData, ws: WebSocket, target: SessionEntry, skipRep
 // and schedule eviction from the registry. The session proc is NOT killed - it runs to
 // natural completion. Broadcasts from the proc go to zero clients (no-op) until it exits.
 function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
+  entry.state.errorRetry?.cancel(true);
   if (entry.state.watchdog?.state) {
     entry.state.watchdog.state.active = false;
     clearInterval(entry.state.watchdog.interval);

@@ -2,6 +2,7 @@ import type { spawn } from 'child_process';
 import type { WatchdogState } from './watchdog';
 import type { RateLimitInfo } from './accountUsage';
 import type { AgentSession } from './providers/types';
+import type { ErrorRetryController } from './errorRetry';
 import type { ProviderSelection, ProviderInteraction } from '../shared/provider';
 import { defaultSelection } from './providers/store';
 
@@ -53,6 +54,7 @@ export interface SessionState {
   liveInputTokens: number;
   rateLimits: Map<string, RateLimitInfo>;
   watchdog: { state: WatchdogState; interval: ReturnType<typeof setInterval> };
+  errorRetry?: ErrorRetryController;
   sendLog: (level: 'debug' | 'info' | 'warn' | 'error', text: string) => void;
   resetStaleTimer: () => void;
   startStaleTimer: () => void;

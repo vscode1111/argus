@@ -24,9 +24,12 @@ React webview / browser
 
 Adapters own native protocols, model discovery, account usage, skills and history.
 The UI consumes shared events and capability descriptors. Session bindings and
-selection are saved in argus-provider-sessions.json beside argus.json; native
-transcripts and authentication remain with their runtimes. Existing Claude
-configuration and transcript paths are unchanged.
+selection are saved in `~/.argus/argus-provider-sessions.json` beside
+`~/.argus/config.json`. Argus stores remote-access credentials and daemon
+discovery in the same directory. Existing files under `~/.claude/` migrate on
+first use; native provider transcripts and credentials remain with their runtimes.
+`ARGUS_CONFIG`, `ARGUS_AUTH_FILE`, and `ARGUS_DAEMON_FILE` still override the
+default paths.
 
 For Codex, install the CLI on the **server machine** and sign in there with
 `codex login`. Argus uses that login. If the executable is not on PATH, set
@@ -79,6 +82,7 @@ specs for the browser workflow.
 - A turn the CLI started by itself says so: it opens with the report of the background task that woke it ("Background command "Watch CI until all checks complete" completed (exit code 0)") and a link to that task's output, instead of appearing out of nowhere. Its completion time is shown in a neutral colour rather than the success green while any task is still running.
 - A CLI process panel, opened from the process counts in Settings > Info: every Claude CLI running on the server's machine with its pid, session, uptime, CPU and memory, grouped under the process that started each one (the daemon, a dev server, a terminal). Any single one can be terminated from its row, and a session that is mid-turn is marked as such.
 - Optional idle-CLI timeout (Settings > Watchdog): a finished turn keeps its CLI alive for reuse, which costs ~250MB per abandoned panel, so a limit in seconds reclaims them. Only ever an idle process - one mid-turn is never touched - and the conversation survives, since the next message respawns with `--resume`.
+- Configurable error retries (Settings > Watchdog): enter one case-insensitive regular expression per line to choose which terminal errors trigger a retry across providers. Defaults to five retries, ten seconds apart, with a model-capacity pattern; an empty list disables error retries.
 - Optional connection idle timeout (Settings > Network): closes a WebSocket connection that has sat unused this long, to stop an abandoned panel showing up in "Active connections" indefinitely. A connection mid-turn is never touched, and a panel reconnects on its own once it is looked at again.
 - Optional "Ask Argus" code lens above functions and classes.
 - Optional inline completions (Haiku model, Copilot-style).

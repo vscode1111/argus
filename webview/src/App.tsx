@@ -192,6 +192,12 @@ function AppInner() {
     postMessage({ type: 'getUsageLimits' });
   }, [state.providerId]);
 
+  useEffect(() => {
+    if (state.providerId !== 'codex' || !state.wsConnected) return;
+    const timer = window.setInterval(() => postMessage({ type: 'getUsageLimits' }), 60_000);
+    return () => window.clearInterval(timer);
+  }, [state.providerId, state.wsConnected]);
+
   const hasPendingAsk = !!state.streaming?.askPausedAt;
   useEffect(() => {
     if (hasPendingAsk && !hadPendingAsk.current) {

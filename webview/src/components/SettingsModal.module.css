@@ -94,6 +94,20 @@
   min-height: 0;
 }
 
+.settingGroup {
+  min-width: 0;
+  margin: 6px 10px 10px;
+  padding: 2px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.groupLegend {
+  padding: 0 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.82em;
+}
+
 .settingRow {
   display: flex;
   align-items: center;
@@ -260,6 +274,22 @@
 .textInput:disabled {
   opacity: 0.5;
 }
+
+.patternInput {
+  width: 100%;
+  min-height: 72px;
+  background: var(--input-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 0.88em;
+  font-family: var(--vscode-editor-font-family, monospace);
+  box-sizing: border-box;
+  resize: vertical;
+}
+.patternInput:focus { outline: 2px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.patternError { color: var(--error-fg); font-size: 0.82em; }
 
 .fieldHint {
   font-size: 0.82em;

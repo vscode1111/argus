@@ -17,6 +17,7 @@ import { grantMedia } from './media';
 import { collectUsageInsights } from './usageInsights';
 import { getUsageSnapshot, noteUsageActivity, requestUsageRefresh } from './usagePoller';
 import { createWatchdog } from './watchdog';
+import { createErrorRetry, parseErrorRetryPatterns } from './errorRetry';
 import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
 import { type Channel, listActiveSessions, listOwnedProcs } from './channel';
@@ -94,6 +95,15 @@ export interface ConnectionHooks {
 // Called once per SessionEntry (on first client join or on moveToNewSession).
 function initChannelSession(s: SessionState, model: string): void {
   s.serverDefaultModel = model;
+
+  const broadcast = s.broadcast;
+  s.errorRetry = createErrorRetry({
+    broadcast,
+    getLastMessage: () => s.lastMessage,
+    retry: input => handleSend(s, input),
+    log: message => s.sendLog('warn', message),
+  });
+  s.broadcast = s.errorRetry.broadcast;
 
   s.sendLog = (level, text) => {
     s.broadcast(JSON.stringify({ type: 'log', level, text, timestamp: new Date().toISOString() }));
@@ -249,6 +259,7 @@ export function attachClientHandlers(
       }
     } else if (msg.type === 'send' && msg.text?.trim() === '/clear') {
       channel.setBrowsing(ws, false);
+      s.errorRetry?.cancel(false);
       s.runtime?.dispose(); s.runtime = undefined;
       s.sessionId = undefined;
       abortPendingStop(s, '/clear during a pending stop: killing the CLI');
@@ -373,6 +384,13 @@ export function attachClientHandlers(
     } else if (msg.type === 'updateSettings') {
       const patch = (msg as { settings?: Partial<ArgusConfig> }).settings;
       if (patch) {
+        if ('errorRetryPatterns' in patch) {
+          const validation = parseErrorRetryPatterns(patch.errorRetryPatterns);
+          if (validation.error) {
+            ws.send(JSON.stringify({ type: 'providerNotice', error: true, message: validation.error }));
+            return;
+          }
+        }
         const filtered: Partial<ArgusConfig> = {};
         for (const [k, v] of Object.entries(patch)) {
           if (k in DEFAULT_CONFIG && k !== 'providerDefaults' && k !== 'defaultProvider') (filtered as Record<string, unknown>)[k] = v;
@@ -449,7 +467,7 @@ export function attachClientHandlers(
         ws.send(JSON.stringify({ type: 'usageInsights', error: (err as Error).message ?? String(err) }));
       });
     } else if (msg.type === 'stop') {
-      await runtime(s).stop();
+      if (!s.errorRetry?.cancel(true)) await runtime(s).stop();
     } else if (msg.type === 'newSession') {
       // Create a fresh isolated session entry for this client only.
       // The previous entry's CLI process keeps running for any other clients still in it.
@@ -539,6 +557,8 @@ export function attachClientHandlers(
 }
 
 function handleSend(s: SessionState, msg: TurnInput): void {
+  if (!msg._silent) s.errorRetry?.cancel(true);
+  s.errorRetry?.beginTurn();
   void runtime(s).send(msg).catch(error => s.broadcast(JSON.stringify({ type: 'providerNotice', error: true, message: error instanceof Error ? error.message : 'Provider failed' })));
 }
 

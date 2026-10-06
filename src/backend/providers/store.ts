@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { CONFIG_PATH, readConfig } from '../config';
+import { LEGACY_ARGUS_DIR, migrateLegacyFile } from '../paths';
 import type { ProviderSelection } from '../../shared/provider';
 
 export interface SessionRecord {
@@ -13,8 +14,12 @@ export interface SessionRecord {
 
 // Metadata only. Native transcripts and credentials stay with their owning runtime.
 const file = path.join(path.dirname(CONFIG_PATH), 'argus-provider-sessions.json');
+function migrateRecords(): void {
+  if (!process.env.ARGUS_CONFIG) migrateLegacyFile(file, path.join(LEGACY_ARGUS_DIR, 'argus-provider-sessions.json'));
+}
 export function records(): SessionRecord[] {
   try {
+    migrateRecords();
     const data: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (!Array.isArray(data)) return [];
     return data.filter((r): r is SessionRecord => !!r && typeof r.id === 'string'
@@ -25,6 +30,7 @@ export function records(): SessionRecord[] {
 }
 
 function write(all: SessionRecord[]): void {
+  migrateRecords();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(temp, JSON.stringify(all), { mode: 0o600 });

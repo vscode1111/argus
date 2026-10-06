@@ -1,15 +1,19 @@
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import * as http from 'http';
 import { execFileSync } from 'child_process';
+import { ARGUS_DIR, LEGACY_ARGUS_DIR } from './paths';
 
 // Discovery file the daemon writes on startup and the extension reads to find it.
-// Lives in the user-owned ~/.claude/ (same trust boundary as .dev-nonce and
-// .credentials.json). Holds the per-process nonce, so it is written mode 600.
+// Holds the per-process nonce, so it is written mode 600.
 // ARGUS_DAEMON_FILE overrides the path (used by e2e to isolate from the real daemon).
 export const DAEMON_FILE = process.env.ARGUS_DAEMON_FILE
-  || path.join(os.homedir(), '.claude', 'argus-daemon.json');
+  || path.join(ARGUS_DIR, 'daemon.json');
+const LEGACY_DAEMON_FILE = path.join(LEGACY_ARGUS_DIR, 'argus-daemon.json');
+
+function discoveryFile(): string {
+  return fs.existsSync(DAEMON_FILE) || process.env.ARGUS_DAEMON_FILE ? DAEMON_FILE : LEGACY_DAEMON_FILE;
+}
 
 // Fixed default port for the daemon, distinct from dev's 3001. Override via
 // ARGUS_DAEMON_PORT for testing or to dodge a port conflict.
@@ -25,7 +29,7 @@ export interface DaemonInfo {
 
 export function readDaemonInfo(): DaemonInfo | undefined {
   try {
-    const raw = fs.readFileSync(DAEMON_FILE, 'utf-8');
+    const raw = fs.readFileSync(discoveryFile(), 'utf-8');
     const info = JSON.parse(raw) as Partial<DaemonInfo>;
     if (typeof info.port !== 'number' || typeof info.nonce !== 'string' || typeof info.pid !== 'number') {
       return undefined;
@@ -37,7 +41,7 @@ export function readDaemonInfo(): DaemonInfo | undefined {
 }
 
 export function writeDaemonInfo(info: DaemonInfo): void {
-  fs.mkdirSync(path.dirname(DAEMON_FILE), { recursive: true });
+  fs.mkdirSync(path.dirname(DAEMON_FILE), { recursive: true, mode: 0o700 });
   fs.writeFileSync(DAEMON_FILE, JSON.stringify(info, null, 2) + '\n', { mode: 0o600 });
 }
 
@@ -48,7 +52,7 @@ export function writeDaemonInfo(info: DaemonInfo): void {
 // neither connect (no file) nor respawn (port held), with the nonce lost to memory.
 export function clearDaemonInfo(onlyIfPid?: number): void {
   if (onlyIfPid !== undefined && readDaemonInfo()?.pid !== onlyIfPid) return;
-  try { fs.unlinkSync(DAEMON_FILE); } catch { /* already gone */ }
+  try { fs.unlinkSync(discoveryFile()); } catch { /* already gone */ }
 }
 
 // Whether a process with the given pid is currently running. `kill(pid, 0)` sends

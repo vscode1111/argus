@@ -56,6 +56,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       if (channel.getClientState(ws) !== state || (channel.getViewingSessionId(ws) || undefined) !== viewing) throw new Error('Conversation changed; try again');
       const detached = channel.detachToBrowsedSession(ws);
       if (detached) { state = detached; init(state); }
+      state.errorRetry?.cancel(true);
       state.selection = next; persistSelection(state);
       saveDefaultSelection(next);
       state.broadcast(JSON.stringify(selectionMessage(state)));

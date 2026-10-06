@@ -59,7 +59,13 @@ let lastAttemptAt = 0;
 let inFlight: Promise<UsageSnapshot> | null = null;
 let snapshot: UsageSnapshot = { windows: [], fetchedAt: 0 };
 let lastBroadcast = '';
+let lastLoggedFailure = '';
 let logFn: (msg: string) => void = () => {};
+
+function logFailure(message: string): void {
+  if (message !== lastLoggedFailure) logFn(message);
+  lastLoggedFailure = message;
+}
 
 /** Last usage windows this process fetched. Empty until the first successful poll. */
 export function getUsageSnapshot(): UsageSnapshot {
@@ -116,6 +122,7 @@ function tick(): void {
  */
 export function publishUsageWindows(windows: RateLimitInfo[]): void {
   if (windows.length === 0) return;
+  lastLoggedFailure = '';
   snapshot = { windows, fetchedAt: Date.now() };
   // Only the numbers matter to a client, so an unchanged set sends nothing - most polls
   // during a quiet hour return percentages identical to the previous one.
@@ -140,7 +147,7 @@ function runFetch(): Promise<UsageSnapshot> {
         // Keep the last good snapshot: a 429 or an expired token is transient, and a
         // blank indicator is worse than a slightly old one. Record the reason so a
         // client with nothing to show can say why.
-        logFn(`usage refresh failed: ${res.error ?? 'no windows returned'}`);
+        logFailure(`usage refresh failed: ${res.error ?? 'no windows returned'}`);
         snapshot = { ...snapshot, error: res.error };
         return snapshot;
       }
@@ -148,7 +155,7 @@ function runFetch(): Promise<UsageSnapshot> {
       return snapshot;
     } catch (e) {
       const error = (e as Error).message ?? String(e);
-      logFn(`usage refresh error: ${error}`);
+      logFailure(`usage refresh error: ${error}`);
       snapshot = { ...snapshot, error };
       return snapshot;
     } finally {

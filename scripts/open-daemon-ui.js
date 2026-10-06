@@ -19,7 +19,10 @@ const CHROME_PATH = CHROME_PATHS[process.platform] || "google-chrome";
 
 // Resolve the daemon port + liveness from the discovery file, falling back to the
 // fixed default (mirrors DEFAULT_DAEMON_PORT in src/backend/daemonInfo.ts).
-const DAEMON_FILE = path.join(os.homedir(), ".claude", "argus-daemon.json");
+const DAEMON_FILE = process.env.ARGUS_DAEMON_FILE
+  || (fs.existsSync(path.join(os.homedir(), ".argus", "daemon.json"))
+    ? path.join(os.homedir(), ".argus", "daemon.json")
+    : path.join(os.homedir(), ".claude", "argus-daemon.json"));
 let port = parseInt(process.env.ARGUS_DAEMON_PORT || "3017", 10);
 let alive = false;
 try {

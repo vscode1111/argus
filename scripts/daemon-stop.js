@@ -15,7 +15,9 @@ const http = require('http');
 // ARGUS_DAEMON_FILE mirrors src/backend/daemonInfo.ts, so a test (or a second daemon
 // on a private port) can point this script at a throwaway registration.
 const FILE = process.env.ARGUS_DAEMON_FILE
-  || path.join(os.homedir(), '.claude', 'argus-daemon.json');
+  || (fs.existsSync(path.join(os.homedir(), '.argus', 'daemon.json'))
+    ? path.join(os.homedir(), '.argus', 'daemon.json')
+    : path.join(os.homedir(), '.claude', 'argus-daemon.json'));
 
 function isAlive(pid) {
   try { process.kill(pid, 0); return true; }
