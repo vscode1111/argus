@@ -226,4 +226,22 @@ test.describe('account & usage', () => {
     await openModal(page);
     await expect(page.getByRole('button', { name: 'Manage usage on claude.ai' })).toBeVisible();
   });
+
+  for (const { providerId, label, url } of [
+    { providerId: 'claude', label: 'Manage usage on claude.ai', url: 'https://claude.ai/new#settings/usage' },
+    { providerId: 'codex', label: 'Manage usage on chatgpt.com', url: 'https://chatgpt.com/settings/usage?tab=overview' },
+  ]) {
+    test(`usage link opens the ${providerId} provider page`, async ({ page }) => {
+      await send(page, { type: 'providerSelection', providerId, model: 'scub-model', effort: '', thinking: true });
+      const textarea = page.getByPlaceholder('Ask Argus');
+      await textarea.focus();
+      await textarea.pressSequentially('/usage');
+      await page.locator('[class*="slashMenuItem"]', { hasText: 'Account & usage' }).click();
+      const button = page.getByRole('dialog', { name: 'Account' }).getByRole('button', { name: label });
+      await expect(button).toBeVisible();
+      const [popup] = await Promise.all([page.waitForEvent('popup'), button.click()]);
+      await expect(popup).toHaveURL(url);
+      await popup.close();
+    });
+  }
 });
