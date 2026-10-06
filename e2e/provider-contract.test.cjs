@@ -282,6 +282,14 @@ test('independent selections and unknown usage remain independent', () => {
   assert.equal(rateLimits({ rateLimits: { primary: { usedPercent: 23, windowDurationMins: 300 } } })[0].utilization, 0.23);
 });
 
+test('usage window labels express whole days and remaining hours', () => {
+  const label = windowDurationMins => rateLimits({ rateLimits: { limitId: 'scub-limit', limitName: 'scub',
+    primary: { usedPercent: 31, windowDurationMins } } })[0].label;
+  assert.equal(label(10_080), 'scub 7d');
+  assert.equal(label(1_500), 'scub 1d 1h');
+  assert.equal(label(300), 'scub 5h');
+});
+
 test('history preserves user text, ordered tools and assistant text', () => {
   const replay = replayThread({ turns: [{ id: 'scub-turn', items: [
     { type: 'userMessage', id: 'scub-user', content: [{ type: 'text', text: 'scub-request' }] },
