@@ -100,12 +100,14 @@ const PATH_CH_ND = '[\\p{L}\\p{N}_\\-!@]';
 export const PATH_SEG = `(?:${PATH_CH_ND}+(?: ${PATH_CH_ND}+)+|${PATH_CH}+)`;
 
 /**
- * The final segment, as two alternatives in order:
+ * The final segment, as three alternatives in order:
  *  1. spaces allowed, anchored on an extension, and crossing them LAZILY so
  *     `file.md and see other.txt here` stops at `file.md`; a greedy scan would run to
  *     `other.txt`, the same runaway that killed every candidate @-mention rule. Its
  *     `(?:-…)*` tail is required or `.corp-account` regresses to `.corp`.
- *  2. no spaces, no extension needed - bare directories (`…\scripts\`), which the
+ *  2. a dotless spaced directory at a line break, which bounds the link before
+ *     the following line's prose.
+ *  3. no spaces, no extension needed - bare directories (`…\scripts\`), which the
  *     extension anchor cannot express. May not end in a dot, so a sentence's full stop
  *     stays prose and the elision `C:\...` does not linkify.
  *
@@ -114,7 +116,7 @@ export const PATH_SEG = `(?:${PATH_CH_ND}+(?: ${PATH_CH_ND}+)+|${PATH_CH}+)`;
  * `.М` as the extension, so a spaced prose tail linked as a file. A genuinely
  * Cyrillic-suffixed extension is vanishingly rare; initials next to a path are not.
  */
-export const PATH_FINAL = `(?:${PATH_CH}+ )*?${PATH_CH}*\\.[A-Za-z\\d]+(?:-[A-Za-z\\d]+)*|${PATH_CH}*[\\p{L}\\p{N}\\-!]`;
+export const PATH_FINAL = `(?:${PATH_CH}+ )*?${PATH_CH}*\\.[A-Za-z\\d]+(?:-[A-Za-z\\d]+)*|(?:${PATH_CH_ND}+ )+${PATH_CH_ND}*[\\p{L}\\p{N}\\-!](?=[ \\t]*\\r?\\n)|${PATH_CH}*[\\p{L}\\p{N}\\-!]`;
 
 /**
  * Drive-letter tail. Either one-or-more separator-terminated segments with an OPTIONAL
@@ -133,6 +135,13 @@ const FILE_PATH_RE = new RegExp(
   ')' +
   '(?::(\\d+)(?:-(\\d+))?)?',
   'gu'
+);
+
+// An inline code span supplies its own end boundary. Accept the whole span when it
+// is a dotless Windows directory with spaces; ordinary prose has no such boundary.
+const INLINE_SPACED_DIR_RE = new RegExp(
+  `^[A-Za-z]:[\\\\/](?:${PATH_SEG}[\\\\/])*(?:${PATH_CH_ND}+ )+${PATH_CH_ND}*[\\p{L}\\p{N}\\-!]$`,
+  'u'
 );
 
 // The preview itself is owned by PreviewProvider, not by this link: markdown is
@@ -303,8 +312,11 @@ export function linkifyWithMentions(text: string): React.ReactNode {
 /**
  * Recursively processes React children, linkifying file paths in string nodes.
  */
-function isLinkElement(el: React.ReactElement): boolean {
-  return el.type === 'a' || (el.props as Record<string, unknown>)?.href != null;
+function isAlreadyLinkedOrCode(el: React.ReactElement): boolean {
+  const props = el.props as { href?: string; node?: { tagName?: string } };
+  // Markdown's parent renderer runs before its code renderer. Leave code children
+  // untouched so the code span can decide where its own path ends.
+  return el.type === 'a' || props.href != null || props.node?.tagName === 'code';
 }
 
 export function withLinkedPaths(children: React.ReactNode): React.ReactNode {
@@ -316,15 +328,22 @@ export function withLinkedPaths(children: React.ReactNode): React.ReactNode {
       typeof child === 'string'
         ? <React.Fragment key={i}>{linkifyPaths(child)}</React.Fragment>
         : React.isValidElement(child)
-          ? (isLinkElement(child)
+          ? (isAlreadyLinkedOrCode(child)
             ? child
             : React.cloneElement(child, { key: i } as Record<string, unknown>, withLinkedPaths((child.props as { children?: React.ReactNode }).children)))
           : child
     );
   }
   if (React.isValidElement(children)) {
-    if (isLinkElement(children)) return children;
+    if (isAlreadyLinkedOrCode(children)) return children;
     return React.cloneElement(children, {} as Record<string, unknown>, withLinkedPaths((children.props as { children?: React.ReactNode }).children));
   }
   return children;
+}
+
+export function linkifyInlineCode(children: React.ReactNode, text: string): React.ReactNode {
+  if (text.length <= MAX_LINKIFY_LENGTH && INLINE_SPACED_DIR_RE.test(text)) {
+    return <FilePathLink path={text} display={text} />;
+  }
+  return withLinkedPaths(children);
 }

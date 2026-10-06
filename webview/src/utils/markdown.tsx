@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { withLinkedPaths, PATH_CH, PATH_SEG, PATH_FINAL } from './filePath';
+import { withLinkedPaths, linkifyInlineCode, PATH_CH, PATH_SEG, PATH_FINAL } from './filePath';
 import { openExternal } from './url';
 import { usePreviewNav } from '../contexts/PreviewNavContext';
 
@@ -176,7 +176,7 @@ export function Markdown({ children, breaks }: { children: string; breaks?: bool
           if (isInline) {
             return (
               <code style={{ background: 'var(--tool-bg)', padding: '1px 4px', borderRadius: 3, fontFamily: 'var(--font-mono)', fontSize: '0.9em' }}>
-                {withLinkedPaths(children)}
+                {linkifyInlineCode(children, extractText(children))}
               </code>
             );
           }

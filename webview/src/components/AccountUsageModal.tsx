@@ -228,6 +228,9 @@ export function AccountUsageModal({ initialTab, providerId = 'claude', onClose, 
         m.id.toLowerCase().includes(modelSearchLower)
       )
     : allModels;
+  const usagePage = providerId === 'codex'
+    ? { site: 'chatgpt.com', url: 'https://chatgpt.com/settings/usage?tab=overview' }
+    : { site: 'claude.ai', url: 'https://claude.ai/new#settings/usage' };
 
   return (
     <Modal title="Account" ariaLabel="Account" onClose={onClose} width={380} persistKey="accountUsage">
@@ -358,12 +361,11 @@ export function AccountUsageModal({ initialTab, providerId = 'claude', onClose, 
             <button
               className={styles.footerLink}
               onClick={() => {
-                const url = 'https://claude.ai/new#settings/usage';
-                postMessage({ type: 'openUrl', url }); // VS Code extension path
-                window.open(url, '_blank'); // browser dev path (WS bridge has no openUrl)
+                postMessage({ type: 'openUrl', url: usagePage.url }); // VS Code extension path
+                window.open(usagePage.url, '_blank'); // browser dev path (WS bridge has no openUrl)
               }}
             >
-              Manage usage on claude.ai
+              Manage usage on {usagePage.site}
             </button>
           </div>
         </>
