@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { waitForApp } from './helpers';
+import { rateLimits } from '../src/backend/providers/codex';
 
 function send(page: Page, data: object) {
   return page.evaluate((d) => {
@@ -116,6 +117,14 @@ test.describe('account & usage', () => {
     await expect(rows.nth(1).locator('[class*="resetLabel"]')).toHaveText(/Resets in \d+d/);
     await expect(rows.nth(0).locator('[class*="resetLabel"]'))
       .toHaveText(/· (Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2}:\d{2} (AM|PM)/);
+  });
+
+  test('shows a week-long usage window in days', async ({ page }) => {
+    await openModal(page);
+    await send(page, { type: 'accountUsage', account: ACCOUNT, rateLimits: rateLimits({ rateLimits: {
+      limitId: 'scub-limit', limitName: 'scub', primary: { usedPercent: 31, windowDurationMins: 10_080 },
+    } }) });
+    await expect(page.locator('[class*="usageName"]')).toHaveText('scub 7d');
   });
 
   test('model-scoped weekly windows render their label in sort order (Weekly Fable)', async ({ page }) => {

@@ -47,6 +47,14 @@ async function models(): Promise<NonNullable<typeof catalog>> {
   return catalogPending;
 }
 
+function windowDurationLabel(minutes: number): string {
+  const hours = minutes / 60;
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours - days * 24;
+  return `${days}d${remainingHours ? ` ${remainingHours}h` : ''}`;
+}
+
 export function rateLimits(result: JsonObject): RateLimitInfo[] {
   const buckets = Object.values(object(result.rateLimitsByLimitId));
   if (!buckets.length && result.rateLimits) buckets.push(result.rateLimits);
@@ -58,7 +66,7 @@ export function rateLimits(result: JsonObject): RateLimitInfo[] {
       return [{ rateLimitType: `${string(bucket.limitId) || 'codex'}_${key}`,
         utilization: Math.max(0, Math.min(1, w.usedPercent / 100)),
         resetsAt: typeof w.resetsAt === 'number' ? w.resetsAt : undefined,
-        label: `${string(bucket.limitName) || 'Codex'} ${typeof w.windowDurationMins === 'number' ? `${w.windowDurationMins / 60}h` : key}` }];
+        label: `${string(bucket.limitName) || 'Codex'} ${typeof w.windowDurationMins === 'number' ? windowDurationLabel(w.windowDurationMins) : key}` }];
     });
   });
 }
