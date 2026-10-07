@@ -5,10 +5,12 @@ import * as path from 'path';
 export const IS_WIN = process.platform === 'win32';
 
 // Image/process name of the Claude Code CLI, shared by everything that has to find
-// those processes on the machine (killAllClaude here, the process listing in
+// those processes on the machine (killAllCliProcesses here, the process listing in
 // processes.ts) so the two can never disagree about what they are looking at.
 export const CLAUDE_IMAGE_WIN = 'claude.exe';
 export const CLAUDE_PROC_POSIX = 'claude';
+export const CODEX_IMAGE_WIN = 'codex.exe';
+export const CODEX_PROC_POSIX = 'codex';
 
 let resolvedClaudeBin: string | null = null;
 export function resolveClaudeBin(): string {
@@ -69,38 +71,42 @@ export interface KillAllResult {
   error?: string;
 }
 
-// Force-terminates every Claude Code CLI process on the machine, not just the one(s)
-// this server spawned - the same scope as cmd/kill-claude.bat. Since any running
-// claude.exe shares the same image name, this can kill unrelated sessions (e.g. a
-// terminal-driven CLI session elsewhere on the box); that is the intended "panic
-// button" behavior, not a bug.
-export function killAllClaude(): KillAllResult {
-  if (IS_WIN) {
-    // Count first via CSV output (locale-independent - it echoes the literal image
-    // name, unlike taskkill's own human-readable success/error sentences) so the
-    // reported count doesn't depend on taskkill's localized text.
-    let count = 0;
-    try {
-      const csv = execFileSync('tasklist', ['/FI', `IMAGENAME eq ${CLAUDE_IMAGE_WIN}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
-      count = csv.split(/\r?\n/).filter(line => line.trim().startsWith(`"${CLAUDE_IMAGE_WIN}"`)).length;
-    } catch {}
-    if (count === 0) return { count: 0 };
-    try {
-      execFileSync('taskkill', ['/F', '/IM', CLAUDE_IMAGE_WIN], { stdio: 'ignore', windowsHide: true });
-      return { count };
-    } catch (err) {
-      return { count: 0, error: err instanceof Error ? err.message : String(err) };
+// Force-terminates both supported CLIs machine-wide, including processes launched
+// outside this server. The two-click UI confirmation covers this broad scope.
+export function killAllCliProcesses(): KillAllResult {
+  const names = IS_WIN ? [CLAUDE_IMAGE_WIN, CODEX_IMAGE_WIN] : [CLAUDE_PROC_POSIX, CODEX_PROC_POSIX];
+  let count = 0;
+  const errors: string[] = [];
+  for (const name of names) {
+    if (IS_WIN) {
+      // Count first via CSV output (locale-independent - it echoes the literal image
+      // name, unlike taskkill's own human-readable success/error sentences) so the
+      // reported count doesn't depend on taskkill's localized text.
+      let found = 0;
+      try {
+        const csv = execFileSync('tasklist', ['/FI', `IMAGENAME eq ${name}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+        found = csv.split(/\r?\n/).filter(line => line.trim().toLowerCase().startsWith(`"${name}"`)).length;
+      } catch (err) { errors.push(`${name}: ${err instanceof Error ? err.message : String(err)}`); continue; }
+      if (found === 0) continue;
+      try {
+        execFileSync('taskkill', ['/F', '/IM', name], { stdio: 'ignore', windowsHide: true });
+        count += found;
+      } catch (err) {
+        errors.push(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } else {
+      try {
+        const listed = execFileSync('pgrep', ['-x', name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const pids = listed.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        if (pids.length === 0) continue;
+        execFileSync('pkill', ['-x', name], { stdio: 'ignore' });
+        count += pids.length;
+      } catch (err) {
+        if ((err as { status?: number }).status !== 1) errors.push(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
-  try {
-    const listed = execFileSync('pgrep', ['-x', CLAUDE_PROC_POSIX], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    const pids = listed.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    if (pids.length === 0) return { count: 0 };
-    execFileSync('pkill', ['-x', CLAUDE_PROC_POSIX], { stdio: 'ignore' });
-    return { count: pids.length };
-  } catch {
-    return { count: 0 };
-  }
+  return { count, ...(errors.length ? { error: errors.join('; ') } : {}) };
 }
 
 export function plural(count: number, singular: string, pluralForm?: string): string {

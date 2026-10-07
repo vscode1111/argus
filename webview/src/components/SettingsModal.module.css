@@ -378,8 +378,8 @@
 }
 .resetCorner:hover { opacity: 1; }
 
-/* "Stop all Claude CLI processes" - a machine-wide kill switch (cmd/kill-claude.bat
-   equivalent), armed by a first click and fired by a second (see dangerBtnArmed). */
+/* "Stop all CLI processes" is machine-wide, armed by a first click and
+   fired by a second (see dangerBtnArmed). */
 .dangerBtn {
   margin-top: 8px;
   align-self: stretch;

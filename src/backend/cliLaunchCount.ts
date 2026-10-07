@@ -8,6 +8,4 @@ export function noteCliLaunch(provider: 'claude' | 'codex'): void {
 
 export function getCliLaunchCount(): number { return claudeLaunches + codexLaunches; }
 
-// The machine-wide stop button only terminates Claude processes. Keep the Codex
-// launches in the total when that button resets its historical Claude count.
-export function resetClaudeLaunchCount(): void { claudeLaunches = 0; }
+export function resetCliLaunchCount(): void { claudeLaunches = 0; codexLaunches = 0; }
