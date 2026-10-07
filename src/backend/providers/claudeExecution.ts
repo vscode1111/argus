@@ -5,7 +5,7 @@ import { noteUsageActivity } from '../usagePoller';
 import { attachProcHandlers, broadcastBgTasks } from '../cliHandler';
 import type { SessionState } from '../sessionState';
 import { noteCliLaunch } from '../cliLaunchCount';
-export { getCliLaunchCount, resetClaudeLaunchCount as resetCliLaunchCount } from '../cliLaunchCount';
+export { getCliLaunchCount, resetCliLaunchCount } from '../cliLaunchCount';
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
 const STOP_INTERRUPT_TIMEOUT_MS = 5_000;

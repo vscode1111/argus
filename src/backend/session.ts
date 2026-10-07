@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { WebSocket } from 'ws';
 
-import { killProc, killAllClaude, plural, classifyError, API_ERROR_RE } from './cli';
+import { killProc, killAllCliProcesses, plural, classifyError, API_ERROR_RE } from './cli';
 import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
 import { readFilePreview } from './filePreview';
 import { grantMedia } from './media';
@@ -297,14 +297,12 @@ export function attachClientHandlers(
       // UI reports "not a daemon" instead of waiting for a reply that never comes.
       if (hooks.onStopRequest) hooks.onStopRequest();
       else ws.send(JSON.stringify({ type: 'daemonStopping', stopped: false }));
-    } else if (msg.type === 'killAllClaude') {
-      const result = killAllClaude();
-      // This action only kills Claude processes, so it resets only the Claude
-      // subtotal. Codex launches remain in the combined CLI launch count.
+    } else if (msg.type === 'killAllCliProcesses') {
+      const result = killAllCliProcesses();
       if (result.count > 0) resetCliLaunchCount();
-      ws.send(JSON.stringify({ type: 'killAllClaudeResult', ...result }));
+      ws.send(JSON.stringify({ type: 'killAllCliProcessesResult', ...result }));
     } else if (msg.type === 'listCliProcesses') {
-      // Runs where the server runs, like killAllClaude: the processes worth listing are
+      // Runs where the server runs, like killAllCliProcesses: the processes worth listing are
       // the ones on the machine the CLI is spawned on, which over a remote connection is
       // not the machine the panel is on.
       listCliProcesses({ owned: listOwnedProcs(), current: s.runtime?.pid ?? s.currentProc?.pid }).then(({ processes, error }) => {

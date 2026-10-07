@@ -1,14 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { waitForApp } from './helpers';
 
-// "Stop all Claude CLI processes" (Settings > Info) sends a machine-wide taskkill
-// via the real backend - see killAllClaude in src/backend/cli.ts. A real second
-// click is intentionally never exercised here (mock or otherwise): killAllClaude
-// is not in ws-bridge's MOCK_SUPPRESSED list, so it would reach the live dev
-// backend and actually terminate every claude.exe on whatever machine runs this
-// suite, including the CLI session driving an AI coding assistant on it. Only the
-// arm step (client-only, no message sent) and the result rendering (via a
-// simulated reply) are covered.
+// "Stop all CLI processes" (Settings > Info) sends a machine-wide taskkill
+// via the real backend - see killAllCliProcesses in src/backend/cli.ts.
+// The mock host suppresses killAllCliProcesses before it reaches the real backend,
+// so both confirmation clicks can be exercised without stopping host processes.
 
 async function openInfoTab(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: 'Settings' }).click();
@@ -42,50 +38,64 @@ async function captureSentTypes(page: import('@playwright/test').Page, action: (
   return types;
 }
 
-test.describe('stop all Claude CLI processes button', () => {
+test.describe('stop all CLI processes button', () => {
   test.beforeEach(async ({ page }) => {
     await waitForApp(page);
   });
 
   test('arms on first click and auto-reverts, without sending a message', async ({ page }) => {
     const dialog = await openInfoTab(page);
-    const btn = dialog.getByTestId('kill-all-claude');
-    await expect(btn).toHaveText('Stop all Claude CLI processes');
+    const btn = dialog.getByTestId('kill-all-cli');
+    await expect(btn).toHaveText('Stop all CLI processes');
 
     const sent = await captureSentTypes(page, async () => {
       await btn.click();
       await expect(btn).toHaveText('Click again to confirm');
     }, 1000);
-    // Still armed well before the 4s window closes, and no killAllClaude frame went
+    // Still armed well before the 4s window closes, and no killAllCliProcesses frame went
     // out (the real send only happens on the second click, which this test never does).
     await expect(btn).toHaveText('Click again to confirm');
-    expect(sent).not.toContain('killAllClaude');
+    expect(sent).not.toContain('killAllCliProcesses');
 
-    await expect(btn).toHaveText('Stop all Claude CLI processes', { timeout: 5000 });
+    await expect(btn).toHaveText('Stop all CLI processes', { timeout: 5000 });
+  });
+
+  test('second click sends the shared stop request', async ({ page }) => {
+    const suppressed: string[] = [];
+    page.on('console', message => {
+      const text = message.text();
+      if (text.includes('[mock] suppressed')) suppressed.push(text.replace('[mock] suppressed ', '').trim());
+    });
+    const dialog = await openInfoTab(page);
+    const btn = dialog.getByTestId('kill-all-cli');
+    await btn.click();
+    await btn.click();
+    await expect(btn).toHaveText('Stopping...');
+    await expect.poll(() => suppressed).toContain('killAllCliProcesses');
   });
 
   test('renders a success result from a simulated reply', async ({ page }) => {
     const dialog = await openInfoTab(page);
     await page.evaluate(() => {
-      window.dispatchEvent(new MessageEvent('message', { data: { type: 'killAllClaudeResult', count: 3 } }));
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'killAllCliProcessesResult', count: 3 } }));
     });
-    await expect(dialog.getByTestId('kill-all-claude-result')).toHaveText('Stopped 3 processes.');
+    await expect(dialog.getByTestId('kill-all-cli-result')).toHaveText('Stopped 3 processes.');
   });
 
   test('renders a zero-count result from a simulated reply', async ({ page }) => {
     const dialog = await openInfoTab(page);
     await page.evaluate(() => {
-      window.dispatchEvent(new MessageEvent('message', { data: { type: 'killAllClaudeResult', count: 0 } }));
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'killAllCliProcessesResult', count: 0 } }));
     });
-    await expect(dialog.getByTestId('kill-all-claude-result')).toHaveText('No Claude CLI processes were running.');
+    await expect(dialog.getByTestId('kill-all-cli-result')).toHaveText('No CLI processes were running.');
   });
 
   test('renders an error result from a simulated reply', async ({ page }) => {
     const dialog = await openInfoTab(page);
     await page.evaluate(() => {
-      window.dispatchEvent(new MessageEvent('message', { data: { type: 'killAllClaudeResult', count: 0, error: 'boom' } }));
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'killAllCliProcessesResult', count: 0, error: 'boom' } }));
     });
-    const result = dialog.getByTestId('kill-all-claude-result');
+    const result = dialog.getByTestId('kill-all-cli-result');
     await expect(result).toHaveText('Failed to stop processes: boom');
   });
 
@@ -93,7 +103,7 @@ test.describe('stop all Claude CLI processes button', () => {
     await openInfoTab(page);
     const sent = await captureSentTypes(page, async () => {
       await page.evaluate(() => {
-        window.dispatchEvent(new MessageEvent('message', { data: { type: 'killAllClaudeResult', count: 1 } }));
+        window.dispatchEvent(new MessageEvent('message', { data: { type: 'killAllCliProcessesResult', count: 1 } }));
       });
     });
     expect(sent).toContain('getServerInfo');

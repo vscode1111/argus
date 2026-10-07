@@ -1,6 +1,6 @@
 import { execFile, execFileSync } from 'child_process';
 import * as os from 'os';
-import { CLAUDE_IMAGE_WIN, CLAUDE_PROC_POSIX, IS_WIN } from './cli';
+import { CLAUDE_IMAGE_WIN, CLAUDE_PROC_POSIX, CODEX_IMAGE_WIN, CODEX_PROC_POSIX, IS_WIN } from './cli';
 import { readDaemonInfo } from './daemonInfo';
 import { sessionLastActivity } from './sessions';
 
@@ -211,7 +211,7 @@ async function collect(): Promise<Snapshot | string> {
     const procs = IS_WIN
       ? parseWindows(await execText('powershell', ['-NoProfile', '-NonInteractive', '-Command', WIN_PS]), now)
       : parsePosix(await execText('ps', ['-eo', 'pid=,ppid=,etime=,time=,rss=,comm=,args=']), now);
-    return { all: new Map(procs.map(p => [p.pid, p])), clis: procs.filter(p => (p.name === CLI_NAME || p.name === (IS_WIN ? 'codex.exe' : 'codex'))) };
+    return { all: new Map(procs.map(p => [p.pid, p])), clis: procs.filter(p => (p.name === CLI_NAME || p.name === (IS_WIN ? CODEX_IMAGE_WIN : CODEX_PROC_POSIX))) };
   } catch (err) {
     return err instanceof Error ? err.message : String(err);
   }

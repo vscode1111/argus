@@ -312,9 +312,9 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   // Which value was just copied, so the "Copied!" feedback shows on that row only
   // (several rows are copyable now, and a shared boolean lit all of them at once).
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  // "Stop all Claude CLI processes": armed by a first click, fired by a second
+  // "Stop all CLI processes": armed by a first click, fired by a second
   // within killArmTimer's window - this kills processes machine-wide (see
-  // killAllClaude in cli.ts), so it needs more friction than a single click.
+  // killAllCliProcesses in cli.ts), so it needs more friction than a single click.
   const [killArmed, setKillArmed] = useState(false);
   const [killing, setKilling] = useState(false);
   const [killResult, setKillResult] = useState<{ count: number; error?: string } | null>(null);
@@ -378,7 +378,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
         // the live port and client count so the address rows reflect the new daemon.
         postMessage({ type: 'getServerInfo' });
         postMessage({ type: 'getClientCount' });
-      } else if (msg && msg.type === 'killAllClaudeResult' && typeof msg.count === 'number') {
+      } else if (msg && msg.type === 'killAllCliProcessesResult' && typeof msg.count === 'number') {
         setKilling(false);
         setKillResult({ count: msg.count, error: typeof msg.error === 'string' ? msg.error : undefined });
         // A kill can respawn this panel's own CLI process count (or end its session),
@@ -436,7 +436,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     if (killArmTimer.current) { clearTimeout(killArmTimer.current); killArmTimer.current = null; }
     setKillArmed(false);
     setKilling(true);
-    postMessage({ type: 'killAllClaude' });
+    postMessage({ type: 'killAllCliProcesses' });
   }
   function handleStopDaemon(): void {
     if (stopping) return;
@@ -735,7 +735,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
                 : <span className={styles.infoValue} data-testid="workspace-path">(no workspace)</span>}
             </div>
             <div className={styles.infoRow}>
-              <span className={styles.infoLabel} title="How many Claude and Codex CLI processes THIS server has started. This counts launches, not currently running processes. Stop all Claude CLI processes resets only the Claude part of the count.">CLI launches<span className={styles.infoScope} data-testid="cli-launches-scope">
+              <span className={styles.infoLabel} title="How many Claude and Codex CLI processes THIS server has started. This counts launches, not currently running processes. Stop all CLI processes resets this count.">CLI launches<span className={styles.infoScope} data-testid="cli-launches-scope">
                 {ownedProcesses == null ? 'this server, total' : `this server, total · ${ownedProcesses} still alive`}
               </span></span>
               <span
@@ -751,7 +751,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
               </span>
             </div>
             <div className={styles.infoRow}>
-              <span className={styles.infoLabel} title="How many Claude and Codex CLIs are alive on the server's machine right now, whoever started them. Stop all Claude CLI processes only affects Claude processes.">CLI processes<span className={styles.infoScope}>whole machine, now</span></span>
+              <span className={styles.infoLabel} title="How many Claude and Codex CLIs are alive on the server's machine right now, whoever started them.">CLI processes<span className={styles.infoScope}>whole machine, now</span></span>
               <span
                 className={[styles.infoValue, styles.addrLink].join(' ')}
                 data-testid="cli-processes-count"
@@ -778,23 +778,23 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             </div>
             <div className={styles.settingColumn}>
               <span className={styles.fieldHint}>
-                Force-stops every Claude Code CLI process on this machine (all workspaces and terminals) - not just this panel's session.
+                Force-stops every Claude and Codex CLI process on this machine (all workspaces and terminals) - not just this panel's session.
               </span>
               <button
                 className={[styles.dangerBtn, killArmed ? styles.dangerBtnArmed : ''].filter(Boolean).join(' ')}
                 onClick={handleKillAll}
                 disabled={killing}
-                data-testid="kill-all-claude"
-                title="Force-terminates every Claude Code CLI process on this machine"
+                data-testid="kill-all-cli"
+                title="Force-terminates every Claude and Codex CLI process on this machine"
               >
-                {killing ? 'Stopping...' : killArmed ? 'Click again to confirm' : 'Stop all Claude CLI processes'}
+                {killing ? 'Stopping...' : killArmed ? 'Click again to confirm' : 'Stop all CLI processes'}
               </button>
               {killResult && (
-                <span className={killResult.error ? styles.fieldHintError : styles.fieldHint} data-testid="kill-all-claude-result">
+                <span className={killResult.error ? styles.fieldHintError : styles.fieldHint} data-testid="kill-all-cli-result">
                   {killResult.error
                     ? `Failed to stop processes: ${killResult.error}`
                     : killResult.count === 0
-                      ? 'No Claude CLI processes were running.'
+                      ? 'No CLI processes were running.'
                       : `Stopped ${plural(killResult.count, 'process', 'processes')}.`}
                 </span>
               )}

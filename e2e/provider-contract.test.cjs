@@ -318,5 +318,5 @@ test('a provider process launch increments the shared count once across reused t
   await runtime.send({ text: 'scub-count-second' }); await until(() => !runtime.active);
   assert.equal(getCliLaunchCount(), before + 1);
   resetCliLaunchCount();
-  assert.equal(getCliLaunchCount(), before + 1);
+  assert.equal(getCliLaunchCount(), 0);
 });
