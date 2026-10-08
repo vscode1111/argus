@@ -42,6 +42,8 @@ export interface AgentProvider {
   skills(cwd: string): Promise<Array<{ name: string; scope: string; kind?: string; description?: string; path?: string }>>;
   list(cwd: string): Promise<SessionSummary[]>;
   load(id: string, cwd: string): Promise<ReplayMessage[]>;
+  loadSubagents?(id: string, cwd: string): Promise<Array<{ id: string; path: string; active: boolean }>>;
+  loadSubagent?(parentId: string, childId: string, cwd: string): Promise<ReplayMessage[]>;
   rename(id: string, cwd: string, title: string): Promise<void>;
   remove(id: string, cwd: string): Promise<void>;
   validate(selection: ProviderSelection): Promise<void>;

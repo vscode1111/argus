@@ -7,7 +7,7 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scub-providers-'));
 process.env.ARGUS_CONFIG = path.join(dir, 'settings.json');
 const { AppServerRpc } = require('../out/backend/providers/rpc');
 const { resolveCodexBinary } = require('../out/backend/providers/executable');
-const { CodexSession, replayThread, rateLimits } = require('../out/backend/providers/codex');
+const { CodexSession, replayThread, linksSubagent, subagentsInThread, rateLimits } = require('../out/backend/providers/codex');
 const { createSessionState } = require('../out/backend/sessionState');
 const { defaultSelection, selectionFor } = require('../out/backend/providers/store');
 const { writeConfig, DEFAULT_CONFIG } = require('../out/backend/config');
@@ -308,6 +308,44 @@ test('history keeps file patches available for later diff previews', () => {
     { type: 'fileChange', id: 'scub-change', changes, status: 'completed' },
   ] }] });
   assert.deepEqual(replay[1].blocks[0].call.input.changes, changes);
+});
+
+test('history keeps subagent identities and activity transitions', () => {
+  const replay = replayThread({ turns: [{ id: 'scub-turn', items: [
+    { type: 'userMessage', id: 'scub-user', content: [{ type: 'text', text: 'scub-request' }] },
+    { type: 'subAgentActivity', id: 'scub-start', kind: 'started', agentThreadId: 'scub-child', agentPath: '/root/scub_child' },
+    { type: 'subAgentActivity', id: 'scub-done', kind: 'completed', agentThreadId: 'scub-child', agentPath: '/root/scub_child' },
+  ] }] });
+  const calls = replay[1].blocks.map(block => block.call);
+  assert.deepEqual(calls.map(call => call.kind), ['subAgentActivity', 'subAgentActivity']);
+  assert.deepEqual(calls.map(call => call.input.activity), ['started', 'completed']);
+  assert.equal(calls[0].input.agentThreadId, 'scub-child');
+});
+
+test('only a started child of the viewed parent can be opened', () => {
+  const thread = { turns: [{ items: [
+    { type: 'subAgentActivity', kind: 'started', agentThreadId: 'scub-child' },
+    { type: 'subAgentActivity', kind: 'interacted', agentThreadId: 'scub-parent' },
+  ] }] };
+  assert.equal(linksSubagent(thread, 'scub-child'), true);
+  assert.equal(linksSubagent(thread, 'scub-parent'), false);
+  assert.equal(linksSubagent(thread, 'scub-stranger'), false);
+});
+
+test('a fresh thread read replaces stale active subagent status', () => {
+  const thread = { turns: [{ items: [
+    { type: 'subAgentActivity', kind: 'started', agentThreadId: 'scub-child', agentPath: '/root/scub_child' },
+    { type: 'subAgentActivity', kind: 'completed', agentThreadId: 'scub-child', agentPath: '/root/scub_child' },
+  ] }] };
+  assert.deepEqual(subagentsInThread(thread), [{ id: 'scub-child', path: '/root/scub_child', active: false }]);
+});
+
+test('live subagent events retain their identities', async () => {
+  const { events, runtime } = session();
+  await runtime.send({ text: 'scub-subagent' }); await until(() => !runtime.active);
+  const calls = events.filter(event => event.type === 'tool_start' && event.call.kind === 'subAgentActivity').map(event => event.call);
+  assert.deepEqual(calls.map(call => call.input.activity), ['started', 'completed']);
+  assert.equal(calls[0].input.agentThreadId, 'scub-child');
 });
 
 test('a provider process launch increments the shared count once across reused turns', async () => {

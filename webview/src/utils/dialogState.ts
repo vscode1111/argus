@@ -10,6 +10,7 @@ export interface DialogState {
 }
 
 const STORAGE_KEY = 'argus.dialogState';
+export const DIALOG_LAYOUT_RESET_EVENT = 'argus.dialogLayoutReset';
 
 function readStore(): Record<string, DialogState> {
   try {
@@ -45,4 +46,5 @@ export function clearDialogState(): void {
   } catch {
     // Ignore unavailable storage.
   }
+  window.dispatchEvent(new Event(DIALOG_LAYOUT_RESET_EVENT));
 }

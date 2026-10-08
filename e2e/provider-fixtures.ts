@@ -29,6 +29,7 @@ export const test = base.extend<{ providerDefaults: void }>({
     config.defaultProvider = info.tags.includes('@claude') ? 'claude'
       : info.tags.includes('@codex') ? 'codex' : (process.env.ARGUS_TEST_PROVIDER || 'codex');
     config.providerDefaults = {};
+    config.showLogs = true;
     await writeTestConfig(file, JSON.stringify(config, null, 2) + '\n');
     try { await use(); } finally { await writeTestConfig(file, original); }
   }, { auto: true }],

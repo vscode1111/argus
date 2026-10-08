@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { postMessage } from '../vscode';
-import { getDialogState, patchDialogState } from '../utils/dialogState';
+import { DIALOG_LAYOUT_RESET_EVENT, getDialogState, patchDialogState } from '../utils/dialogState';
 import { WorkspaceSummary, DirListing } from '../types';
 import { plural } from '../utils/text';
 import { relativeTime } from '../utils/time';
@@ -27,6 +27,11 @@ export function WorkspaceHistoryModal({ currentPath, onSelect, onClose }: Props)
   // Remember the selected tab in-memory (reset on page refresh).
   const [tab, setTabState] = useState<Tab>(() => (getDialogState('workspaceHistory')?.tab as Tab) || 'recent');
   const setTab = (t: Tab) => { setTabState(t); patchDialogState('workspaceHistory', { tab: t }); };
+  useEffect(() => {
+    const resetTab = () => setTabState('recent');
+    window.addEventListener(DIALOG_LAYOUT_RESET_EVENT, resetTab);
+    return () => window.removeEventListener(DIALOG_LAYOUT_RESET_EVENT, resetTab);
+  }, []);
 
   // Recent tab state
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);

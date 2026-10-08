@@ -1,5 +1,5 @@
-import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { getDialogState, patchDialogState } from '../utils/dialogState';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { DIALOG_LAYOUT_RESET_EVENT, getDialogState, patchDialogState } from '../utils/dialogState';
 
 interface Options {
   // When set, the dialog's position and size are remembered (in-memory, reset on
@@ -29,6 +29,7 @@ export function useDialogGeometry(ref: React.RefObject<HTMLElement>, opts: Optio
   const { persistKey, defaultWidth, fullHeight } = opts;
   const saved = persistKey ? getDialogState(persistKey) : undefined;
   const [pos, setPos] = useState<{ x: number; y: number } | null>(saved?.pos ?? null);
+  const preferredPos = useRef<{ x: number; y: number } | null>(saved?.pos ?? null);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
 
   useLayoutEffect(() => {
@@ -64,6 +65,24 @@ export function useDialogGeometry(ref: React.RefObject<HTMLElement>, opts: Optio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const keepVisible = () => {
+      const wanted = (persistKey && getDialogState(persistKey)?.pos) || preferredPos.current;
+      if (!wanted) return;
+      const { width, height } = el.getBoundingClientRect();
+      const x = Math.min(Math.max(0, wanted.x), Math.max(0, window.innerWidth - width));
+      const y = Math.min(Math.max(0, wanted.y), Math.max(0, window.innerHeight - height));
+      setPos(current => current?.x === x && current.y === y ? current : { x, y });
+    };
+    keepVisible();
+    window.addEventListener('resize', keepVisible);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(keepVisible);
+    observer?.observe(el);
+    return () => { window.removeEventListener('resize', keepVisible); observer?.disconnect(); };
+  }, [ref, persistKey]);
+
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     // Ignore drags that start on interactive controls inside the handle.
     if ((e.target as HTMLElement).closest('button, input, textarea, select, a')) return;
@@ -78,8 +97,8 @@ export function useDialogGeometry(ref: React.RefObject<HTMLElement>, opts: Optio
       if (!d || !el) return;
       const w = el.offsetWidth;
       const h = el.offsetHeight;
-      const x = Math.min(Math.max(0, ev.clientX - d.dx), window.innerWidth - w);
-      const y = Math.min(Math.max(0, ev.clientY - d.dy), window.innerHeight - h);
+      const x = Math.min(Math.max(0, ev.clientX - d.dx), Math.max(0, window.innerWidth - w));
+      const y = Math.min(Math.max(0, ev.clientY - d.dy), Math.max(0, window.innerHeight - h));
       setPos({ x, y });
     };
     const onUp = () => {
@@ -87,9 +106,10 @@ export function useDialogGeometry(ref: React.RefObject<HTMLElement>, opts: Optio
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       const el = ref.current;
-      if (persistKey && el) {
+      if (el) {
         const r = el.getBoundingClientRect();
-        patchDialogState(persistKey, { pos: { x: r.left, y: r.top } });
+        preferredPos.current = { x: r.left, y: r.top };
+        if (persistKey) patchDialogState(persistKey, { pos: preferredPos.current });
       }
     };
     window.addEventListener('pointermove', onMove);
@@ -98,12 +118,18 @@ export function useDialogGeometry(ref: React.RefObject<HTMLElement>, opts: Optio
 
   // Snap the live element back to its default geometry (used by "Reset layout").
   const reset = useCallback(() => {
+    preferredPos.current = null;
     setPos(null);
     const el = ref.current;
     if (!el) return;
     el.style.width = defaultWidth ? `${defaultWidth}px` : '';
     el.style.height = fullHeight ? 'calc(100vh - 64px)' : '';
   }, [ref, defaultWidth, fullHeight]);
+
+  useEffect(() => {
+    window.addEventListener(DIALOG_LAYOUT_RESET_EVENT, reset);
+    return () => window.removeEventListener(DIALOG_LAYOUT_RESET_EVENT, reset);
+  }, [reset]);
 
   const style: React.CSSProperties | undefined = pos
     ? { top: pos.y, left: pos.x, transform: 'none' }

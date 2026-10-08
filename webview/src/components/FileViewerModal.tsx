@@ -501,9 +501,11 @@ export function FileViewerModal({ path, content, line, copyText, entries, dirPar
               </button>
             )}
             <span className={modal.title} title={current.path}>{current.path}</span>
-            <button className={modal.btnIcon} onClick={handleCopyPath} title="Copy path to clipboard" aria-label="Copy path">
-              {copied === 'path' ? <CheckIcon /> : <CopyIcon />}
-            </button>
+            {!copyText && (
+              <button className={modal.btnIcon} onClick={handleCopyPath} title="Copy path to clipboard" aria-label="Copy path">
+                {copied === 'path' ? <CheckIcon /> : <CopyIcon />}
+              </button>
+            )}
             {copyText && (
               <button className={modal.btnIcon} onClick={handleCopyCmd} title="Copy command to clipboard" aria-label="Copy command">
                 {copied === 'cmd' ? <CheckIcon /> : <CopyIcon />}

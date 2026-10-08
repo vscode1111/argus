@@ -1,0 +1,30 @@
+.body { flex: 1; overflow: auto; padding: 16px; min-height: min(220px, max(0px, calc(100vh - 160px))); max-height: max(0px, calc(100vh - 160px)); }
+.agentBody { padding-top: 0; }
+.centeredHeader { padding-top: 11px; padding-bottom: 11px; }
+.summary { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); font-weight: 600; }
+.counts { font-family: var(--font-mono); }
+.added { color: var(--diff-added); }
+.removed { color: var(--diff-removed); }
+.sectionTitle { display: flex; align-items: center; gap: 8px; margin: 20px 0 8px; color: var(--thinking-fg); font-weight: 600; }
+.empty { padding: 8px 0; color: var(--thinking-fg); }
+.loading { display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; color: var(--thinking-fg); }
+.spinner { width: 12px; height: 12px; flex: none; border: 2px solid var(--thinking-fg); border-top-color: var(--vscode-textLink-foreground); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.skeletonRow { display: flex; align-items: center; gap: 10px; height: 35px; padding: 0 8px; }
+.skeletonDot, .skeletonName, .skeletonStatus { flex: none; background: var(--hover-bg); animation: pulse 1.4s ease-in-out infinite; }
+.skeletonDot { width: 9px; height: 9px; border-radius: 50%; }
+.skeletonName { width: 110px; height: 9px; border-radius: 3px; }
+.skeletonStatus { width: 66px; height: 9px; margin-left: auto; border-radius: 3px; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .spinner, .skeletonDot, .skeletonName, .skeletonStatus { animation: none; } }
+.agent { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
+.agent:hover, .agent:focus-visible { background: var(--hover-bg); }
+.activeDot, .completeDot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--vscode-testing-iconPassed, #73c991); }
+.completeDot { background: var(--thinking-fg); }
+.status { margin-left: auto; color: var(--thinking-fg); font-size: 0.85em; }
+.titleWithBack { display: flex; align-items: center; gap: 8px; max-width: 100%; }
+.backButton { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: var(--vscode-textLink-foreground); cursor: pointer; padding: 3px; line-height: 0; }
+.backButton:hover { background: var(--hover-bg); }
+.agentTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agentStatus { color: var(--thinking-fg); border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 12px; }
+.error { color: var(--error-fg); padding: 10px 0; }

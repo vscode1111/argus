@@ -487,7 +487,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
   function handleClearLayout() {
     clearDialogState();
     localStorage.removeItem('argus.settingsTab');
-    drag.reset();
+    setTabState('general');
     setLayoutCleared(true);
     setTimeout(() => setLayoutCleared(false), 1500);
   }

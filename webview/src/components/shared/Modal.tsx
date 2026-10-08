@@ -16,6 +16,7 @@ interface Props {
   // Extra controls rendered in the header before the close button (e.g. a
   // RefreshButton). The close button is always appended.
   headerActions?: React.ReactNode;
+  headerClassName?: string;
   // Escape handler override. Defaults to onClose; modals with inline editing
   // pass a guarded version (cancel edit first, then close).
   onEscape?: () => void;
@@ -28,7 +29,7 @@ interface Props {
 // Centered, draggable portal shell shared by the Account/Session/Workspace
 // modals: overlay, draggable header (title + actions + close) and a flex body.
 // Each modal supplies only its own content below the header.
-export function Modal({ title, ariaLabel, onClose, width, fullHeight, persistKey, headerActions, onEscape, elevated, children }: Props) {
+export function Modal({ title, ariaLabel, onClose, width, fullHeight, persistKey, headerActions, headerClassName, onEscape, elevated, children }: Props) {
   const modalRef = useRef<HTMLDivElement>(null);
   // Geometry hook applies width/height imperatively (so CSS resize + persistence
   // work); React's style only carries the drag position.
@@ -42,7 +43,7 @@ export function Modal({ title, ariaLabel, onClose, width, fullHeight, persistKey
     <>
       <div className={[shell.overlay, elevated ? shell.overlayElevated : ''].filter(Boolean).join(' ')} onClick={onClose} aria-hidden="true" />
       <div className={[shell.modal, elevated ? shell.modalElevated : ''].filter(Boolean).join(' ')} role="dialog" aria-label={ariaLabel} ref={modalRef} style={style}>
-        <div className={shell.header} data-dialog-drag-handle onPointerDown={drag.onPointerDown}>
+        <div className={[shell.header, headerClassName].filter(Boolean).join(' ')} data-dialog-drag-handle onPointerDown={drag.onPointerDown}>
           <span className={shell.title} title={typeof title === 'string' ? title : undefined}>{title}</span>
           <div className={shell.headerActions}>
             {headerActions}

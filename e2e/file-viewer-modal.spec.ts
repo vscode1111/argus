@@ -127,3 +127,23 @@ test.describe('FileViewerModal copy path button', () => {
     await expect(checkmark).toBeVisible();
   });
 });
+
+test('command output has one copy button for the command', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await waitForApp(page);
+  const command = 'echo scub-output';
+  await page.evaluate(({ command }) => {
+    const fire = (data: object) => window.dispatchEvent(new MessageEvent('message', { data }));
+    const call = { id: 'scub-command-copy', name: 'Bash', input: { command } };
+    fire({ type: 'thinking_start' });
+    fire({ type: 'tool_start', call });
+    fire({ type: 'tool_end', call: { ...call, result: 'scub-output\n' } });
+    fire({ type: 'done' });
+  }, { command });
+  await page.getByRole('link', { name: 'Out' }).click();
+  const viewer = page.getByRole('dialog', { name: /File viewer:/ });
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByRole('button', { name: /Copy/ })).toHaveCount(1);
+  await viewer.getByRole('button', { name: 'Copy command' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+});

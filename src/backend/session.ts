@@ -29,6 +29,7 @@ import { listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImag
 import { readServerVersion } from './version';
 import { buildWorkspaceInfo } from './workspaceInfo';
 import { searchFiles, type FileSearchResult } from './fileSearch';
+import { workspaceChanges } from './workspaceChanges';
 
 export { getCliLaunchCount } from './providers/claudeExecution';
 
@@ -216,6 +217,7 @@ export function attachClientHandlers(
       path?: string;
       force?: boolean;
       id?: string;
+      childId?: string;
       toolUseId?: string;
       title?: string;
       query?: string;
@@ -286,6 +288,45 @@ export function attachClientHandlers(
       } else {
         channel.setBrowsing(ws, false);
         handleSend(s, msg);
+      }
+    } else if (msg.type === 'getWorkspaceChanges') {
+      const workspace = s.workspaceDir;
+      workspaceChanges(workspace).then(changes => {
+        if (channel.getClientState(ws).workspaceDir === workspace)
+          ws.send(JSON.stringify({ type: 'workspaceChanges', ...changes }));
+      });
+    } else if (msg.type === 'getSessionActivity') {
+      const parentId = msg.id;
+      const viewedId = channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId;
+      if (!parentId || viewedId !== parentId) {
+        ws.send(JSON.stringify({ type: 'sessionActivity', parentId, error: 'Conversation is not being viewed' }));
+      } else {
+        const provider = providerForSession(parentId);
+        if (!provider.loadSubagents) {
+          ws.send(JSON.stringify({ type: 'sessionActivity', parentId, error: 'This provider has no subagent activity' }));
+        } else {
+          provider.loadSubagents(parentId, s.workspaceDir).then(agents => {
+            if ((channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId) === parentId)
+              ws.send(JSON.stringify({ type: 'sessionActivity', parentId, agents }));
+          }).catch(error => ws.send(JSON.stringify({ type: 'sessionActivity', parentId, error: (error as Error).message })));
+        }
+      }
+    } else if (msg.type === 'getSubagentThread') {
+      const parentId = msg.id;
+      const childId = msg.childId;
+      const viewedId = channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId;
+      if (!parentId || !childId || viewedId !== parentId) {
+        ws.send(JSON.stringify({ type: 'subagentThread', parentId, childId, error: 'Conversation is not being viewed' }));
+      } else {
+        const provider = providerForSession(parentId);
+        if (!provider.loadSubagent) {
+          ws.send(JSON.stringify({ type: 'subagentThread', parentId, childId, error: 'This provider has no subagent transcript' }));
+        } else {
+          provider.loadSubagent(parentId, childId, s.workspaceDir).then(messages => {
+            if ((channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId) === parentId)
+              ws.send(JSON.stringify({ type: 'subagentThread', parentId, childId, messages }));
+          }).catch(error => ws.send(JSON.stringify({ type: 'subagentThread', parentId, childId, error: (error as Error).message })));
+        }
       }
     } else if (msg.type === 'getSettings') {
       ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
