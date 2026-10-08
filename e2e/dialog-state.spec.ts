@@ -76,6 +76,77 @@ test.describe('dialog state persistence', () => {
     expect(Math.abs(reopened.height - 480)).toBeLessThan(3);
   });
 
+  test('dragged Settings stays fully visible as the Argus window shrinks', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Settings' });
+    const handle = dialog.locator('[data-dialog-drag-handle]');
+    const start = await handle.boundingBox();
+    if (!start) throw new Error('Missing Settings drag handle');
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(start.x + start.width / 2 + 450, start.y + start.height / 2 + 280, { steps: 5 });
+    await page.mouse.up();
+    const moved = await dialog.boundingBox();
+    if (!moved) throw new Error('Missing dragged Settings dialog');
+    await page.setViewportSize({ width: 500, height: 350 });
+    await expect.poll(async () => {
+      const box = await dialog.boundingBox();
+      return !!box && box.x >= 0 && box.y >= 0 && box.x + box.width <= 501 && box.y + box.height <= 351;
+    }).toBe(true);
+    await page.setViewportSize({ width: 220, height: 190 });
+    await expect.poll(async () => {
+      const box = await dialog.boundingBox();
+      return !!box && box.x >= 0 && box.y >= 0 && box.x + box.width <= 221 && box.y + box.height <= 191;
+    }).toBe(true);
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await expect.poll(async () => {
+      const restored = await dialog.boundingBox();
+      return !!restored && Math.abs(restored.x - moved.x) < 3 && Math.abs(restored.y - moved.y) < 3;
+    }).toBe(true);
+  });
+
+  test('resized centered dialog stays fully visible as the Argus window shrinks', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 800 });
+    const dialog = await openModal(page);
+    const handle = dialog.locator('[data-dialog-drag-handle]');
+    const start = await handle.boundingBox();
+    if (!start) throw new Error('Missing dialog drag handle');
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(start.x + start.width / 2 + 400, start.y + start.height / 2 + 250, { steps: 5 });
+    await page.mouse.up();
+    await resizeModal(page, 580, 500);
+    await expect.poll(async () => {
+      const box = await dialog.boundingBox();
+      return !!box && box.x + box.width <= 1201 && box.y + box.height <= 801;
+    }).toBe(true);
+    const moved = await dialog.boundingBox();
+    if (!moved) throw new Error('Missing resized dialog');
+    await page.setViewportSize({ width: 500, height: 350 });
+    await expect.poll(async () => {
+      const box = await dialog.boundingBox();
+      return !!box && box.x >= 0 && box.y >= 0 && box.x + box.width <= 501 && box.y + box.height <= 351;
+    }).toBe(true);
+    await closeModal(page);
+    await openModal(page);
+    await expect.poll(async () => {
+      const box = await dialog.boundingBox();
+      return !!box && box.x >= 0 && box.y >= 0 && box.x + box.width <= 501 && box.y + box.height <= 351;
+    }).toBe(true);
+    await page.setViewportSize({ width: 300, height: 250 });
+    await expect.poll(async () => {
+      const box = await dialog.boundingBox();
+      return !!box && box.x >= 0 && box.y >= 0 && box.x + box.width <= 301 && box.y + box.height <= 251;
+    }).toBe(true);
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await expect.poll(async () => {
+      const restored = await dialog.boundingBox();
+      return !!restored && Math.abs(restored.x - Math.min(moved.x, 1200 - restored.width)) < 3 && Math.abs(restored.y - moved.y) < 3
+        && Math.abs(restored.width - 580) < 3 && Math.abs(restored.height - 500) < 3;
+    }).toBe(true);
+  });
+
   test('persists tab and size across a page refresh', async ({ page }) => {
     let dialog = await openModal(page);
     await dialog.getByRole('tab', { name: 'All workspaces' }).click();
@@ -136,5 +207,30 @@ test.describe('dialog state persistence', () => {
     const box = await dialog.boundingBox();
     if (!box) throw new Error('no dialog box');
     expect(Math.abs(box.width - 440)).toBeLessThan(3); // back to the default width
+  });
+
+  test('Reset layout restores dialogs that are currently open', async ({ page }) => {
+    const history = await openModal(page);
+    await history.getByRole('tab', { name: 'All workspaces' }).click();
+    await resizeModal(page, 560, 480);
+    await page.evaluate(() => document.querySelector<HTMLButtonElement>('button[aria-label="Settings"]')?.click());
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await expect(settings).toBeVisible();
+    await settings.getByRole('button', { name: 'Info' }).evaluate(button => (button as HTMLButtonElement).click());
+    await settings.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: box.right - 4, clientY: box.bottom - 4 }));
+      (element as HTMLElement).style.width = '470px';
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+    });
+    await settings.getByRole('button', { name: 'Reset dialog layout' }).evaluate(button => (button as HTMLButtonElement).click());
+    await expect(settings.getByRole('button', { name: 'General' })).toHaveClass(/tabActive/);
+    const settingsBox = await settings.boundingBox();
+    if (!settingsBox) throw new Error('Missing Settings dialog');
+    expect(Math.abs(settingsBox.width - 340)).toBeLessThan(3);
+    await expect(history.getByRole('tab', { name: 'This workspace' })).toHaveAttribute('aria-selected', 'true');
+    const box = await history.boundingBox();
+    if (!box) throw new Error('Missing session history dialog');
+    expect(Math.abs(box.width - 440)).toBeLessThan(3);
   });
 });

@@ -2,7 +2,7 @@ import { useProvider } from '../hooks/useProvider';
 import { ProviderSelector } from './ProviderSelector';
 import React, { useState, useRef, useEffect } from 'react';
 import { postMessage } from '../vscode';
-import { getDialogState, patchDialogState } from '../utils/dialogState';
+import { DIALOG_LAYOUT_RESET_EVENT, getDialogState, patchDialogState } from '../utils/dialogState';
 import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
 import { useWebviewMessage } from '../hooks/useWebviewMessage';
@@ -110,6 +110,11 @@ export function AccountUsageModal({ initialTab, providerId = 'claude', onClose, 
   const provider = useProvider(providerId);
   const [tab, setTabState] = useState<Tab>(() => initialTab ?? ((getDialogState('accountUsage')?.tab as Tab) || 'usage'));
   const setTab = (t: Tab) => { setTabState(t); patchDialogState('accountUsage', { tab: t }); };
+  useEffect(() => {
+    const resetTab = () => setTabState('usage');
+    window.addEventListener(DIALOG_LAYOUT_RESET_EVENT, resetTab);
+    return () => window.removeEventListener(DIALOG_LAYOUT_RESET_EVENT, resetTab);
+  }, []);
   const [account, setAccount] = useState<AccountInfo | null>(null);
   const [rateLimits, setRateLimits] = useState<RateLimitInfo[]>([]);
   const [usageError, setUsageError] = useState<string | undefined>(undefined);

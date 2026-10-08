@@ -61,6 +61,10 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         questions: [{ title: 'scub-choice', options: ['scub-blue', 'scub-green'] }] } });
     } else if (text === 'scub-unknown-request') {
       emit({ id: 101, method: 'item/permissions/requestApproval', params: { threadId, turnId } });
+    } else if (text === 'scub-subagent') {
+      notify('item/completed', { turnId, item: { id: 'scub-subagent-start', type: 'subAgentActivity', kind: 'started', agentThreadId: 'scub-child', agentPath: '/root/scub_child' } });
+      notify('item/completed', { turnId, item: { id: 'scub-subagent-done', type: 'subAgentActivity', kind: 'completed', agentThreadId: 'scub-child', agentPath: '/root/scub_child' } });
+      notify('turn/completed', { turn: { id: turnId, status: 'completed' } });
     } else if (text !== 'scub-wait' && text !== 'scub-interrupt-race') {
       timer = setTimeout(() => {
         notify('item/agentMessage/delta', { turnId, itemId: 'scub-answer', delta: 'scub-ok' });

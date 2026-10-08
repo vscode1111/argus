@@ -7,6 +7,7 @@ import { SessionHistoryModal } from './components/SessionHistoryModal';
 import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
 import { UsageIndicator } from './components/UsageIndicator';
+import { SessionActivityModal } from './components/SessionActivityModal';
 import { AutoFileViewer } from './components/AutoFileViewer';
 import { LoginScreen } from './components/LoginScreen';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
@@ -17,6 +18,7 @@ import { SessionSummary, ActiveSession } from './types';
 import { basename } from './utils/path';
 import { type RateLimitInfo } from './utils/usage';
 import { fmtLineCount } from './utils/text';
+import { sessionActivity } from './utils/sessionActivity';
 
 function playCompletionSound(): void {
   try {
@@ -72,6 +74,8 @@ function AppInner() {
   const hadPendingAsk = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [activityOpen, setActivityOpen] = React.useState(false);
+  const activity = React.useMemo(() => sessionActivity(state.messages, state.streaming), [state.messages, state.streaming]);
   const [providerNotice, setProviderNotice] = React.useState('');
   const providerRef = React.useRef(state.providerId);
   providerRef.current = state.providerId;
@@ -86,6 +90,11 @@ function AppInner() {
   const loadTimer = React.useRef<number | null>(null);
   const [sessionTitle, setSessionTitle] = React.useState('');
   const [sessionId, setSessionId] = React.useState<string | null>(null);
+  const previousActivitySessionId = React.useRef(sessionId);
+  useEffect(() => {
+    if (previousActivitySessionId.current && previousActivitySessionId.current !== sessionId) setActivityOpen(false);
+    previousActivitySessionId.current = sessionId;
+  }, [sessionId]);
   // When the user browses a past session while another is streaming, s.sessionId on
   // the server is not updated (to protect the live --resume arg). We cache the
   // loaded id here so the header and modal still reflect the session being viewed.
@@ -266,6 +275,9 @@ function AppInner() {
         }
         postMessage({ type: 'listSessions' });
         endSessionLoad(); // the resumed transcript has been replayed
+      } else if (t === 'sessionId' && typeof e.data.id === 'string') {
+        loadedSessionId.current = null;
+        setSessionId(e.data.id);
       } else if (t === 'clear') {
         loadedSessionId.current = null;
         setSessionTitle('');
@@ -528,6 +540,16 @@ function AppInner() {
           >
             {state.currentModel || 'Default'}
           </button>
+          {state.providerId === 'codex' && <button
+            className="btn-icon"
+            title="Session activity"
+            aria-label="Session activity"
+            onClick={() => setActivityOpen(true)}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="3" width="8" height="8" rx="1" /><rect x="3" y="13" width="8" height="8" rx="1" /><rect x="13" y="13" width="8" height="8" rx="1" />
+            </svg>
+          </button>}
         </>
       )}
       <button
@@ -553,6 +575,7 @@ function AppInner() {
       {providerNotice && <div role="status"><span>{providerNotice}</span><button aria-label="Dismiss provider notice" onClick={() => setProviderNotice('')}>Close</button></div>}
       {state.interaction && <ProviderInteraction key={state.interaction.id} request={state.interaction} />}
       {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} activeIds={activeIds} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
+      {activityOpen && <SessionActivityModal parentId={sessionId} activity={activity} onClose={() => setActivityOpen(false)} />}
       {accountUsageTab && <AccountUsageModal key={state.providerId} initialTab={accountUsageTab} providerId={state.providerId} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onClose={() => setAccountUsageTab(null)} />}
       {initialFile && <AutoFileViewer path={initialFile} onClose={() => setInitialFile(null)} />}
       <div className="content">

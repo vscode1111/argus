@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { postMessage, isVsCode } from '../vscode';
-import { getDialogState, patchDialogState } from '../utils/dialogState';
+import { DIALOG_LAYOUT_RESET_EVENT, getDialogState, patchDialogState } from '../utils/dialogState';
 import { SessionSummary, GlobalSessionSummary } from '../types';
 import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
@@ -66,6 +66,11 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
   // Remember the selected tab in-memory (reset on page refresh).
   const [tab, setTabState] = useState<Tab>(() => (getDialogState('sessionHistory')?.tab as Tab) || 'workspace');
   const setTab = (t: Tab) => { setTabState(t); patchDialogState('sessionHistory', { tab: t }); };
+  useEffect(() => {
+    const resetTab = () => setTabState('workspace');
+    window.addEventListener(DIALOG_LAYOUT_RESET_EVENT, resetTab);
+    return () => window.removeEventListener(DIALOG_LAYOUT_RESET_EVENT, resetTab);
+  }, []);
 
   // Cached rows only stand in for the workspace they were listed for.
   const cached = wsCache?.path === currentPath ? wsCache : null;

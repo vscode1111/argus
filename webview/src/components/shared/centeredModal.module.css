@@ -24,8 +24,8 @@
   border-top: 3px solid var(--modal-accent);
   display: flex;
   flex-direction: column;
-  min-width: 320px;
-  min-height: 200px;
+  min-width: min(320px, calc(100vw - 32px));
+  min-height: min(200px, calc(100vh - 64px));
   resize: both;
   overflow: hidden;
 }

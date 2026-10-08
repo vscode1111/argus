@@ -102,12 +102,14 @@ function toolResult(value: unknown): string {
 
 function tool(item: JsonObject) {
   const type = string(item.type);
-  const kind = type === 'commandExecution' ? 'command' : type === 'fileChange' ? 'fileChange' : 'generic';
+  const kind = type === 'commandExecution' ? 'command' : type === 'fileChange' ? 'fileChange' : type === 'subAgentActivity' ? 'subAgentActivity' : 'generic';
   const input: JsonObject = type === 'commandExecution' ? { command: item.command, cwd: item.cwd }
-    : type === 'fileChange' ? { changes: item.changes } : { ...object(item.arguments), detail: item.query || item.name || type };
+    : type === 'fileChange' ? { changes: item.changes }
+    : type === 'subAgentActivity' ? { agentThreadId: item.agentThreadId, agentPath: item.agentPath, activity: item.kind }
+    : { ...object(item.arguments), detail: item.query || item.name || type };
   return { id: string(item.id), name: string(item.tool) || type, kind, input,
     result: typeof item.aggregatedOutput === 'string' ? item.aggregatedOutput
-      : item.result !== undefined ? toolResult(item.result) : type === 'fileChange' ? JSON.stringify(item.changes, null, 2) : string(item.status),
+      : item.result !== undefined ? toolResult(item.result) : type === 'fileChange' ? JSON.stringify(item.changes, null, 2) : type === 'subAgentActivity' ? string(item.kind) : string(item.status),
     error: item.status === 'failed' || item.status === 'declined' };
 }
 
@@ -153,6 +155,29 @@ export function replayThread(thread: JsonObject): ReplayMessage[] {
     }
   }
   return messages;
+}
+
+export function linksSubagent(thread: JsonObject, childId: string): boolean {
+  return array(thread.turns).some(rawTurn => array(object(rawTurn).items).some(rawItem => {
+    const item = object(rawItem);
+    return item.type === 'subAgentActivity' && item.kind === 'started' && item.agentThreadId === childId;
+  }));
+}
+
+export function subagentsInThread(thread: JsonObject): Array<{ id: string; path: string; active: boolean }> {
+  const agents = new Map<string, { id: string; path: string; active: boolean }>();
+  for (const rawTurn of array(thread.turns)) for (const rawItem of array(object(rawTurn).items)) {
+    const item = object(rawItem);
+    if (item.type !== 'subAgentActivity') continue;
+    const id = string(item.agentThreadId); const agentPath = string(item.agentPath);
+    if (!id || !agentPath) continue;
+    if (item.kind === 'started') agents.set(id, { id, path: agentPath, active: true });
+    else if (item.kind === 'completed' || item.kind === 'interrupted') {
+      const prior = agents.get(id);
+      if (prior) agents.set(id, { ...prior, active: false });
+    }
+  }
+  return [...agents.values()];
 }
 
 export class CodexSession implements AgentSession {
@@ -366,6 +391,8 @@ export class CodexSession implements AgentSession {
       if (item.type === 'agentMessage') {
         if (done && !this.deltas.has(`item/agentMessage/delta:${string(item.id)}`)) this.emit({ type: 'text_chunk', text: string(item.text) });
         if (done) { const question = asyncQuestion(item); if (question) { this.pendingAsyncQuestion = question; this.showInteraction(); } }
+      } else if (item.type === 'subAgentActivity') {
+        if (done) { const call = tool(item); this.emit({ type: 'tool_start', call }); this.emit({ type: 'tool_end', call }); }
       } else if (!['userMessage', 'reasoning', 'contextCompaction'].includes(string(item.type))) {
         this.emit({ type: done ? 'tool_end' : 'tool_start', call: tool(item) });
       }
@@ -431,6 +458,21 @@ export const codexProvider: AgentProvider = {
   async load(id, cwd) {
     if (!sessionRecord(id, cwd)) throw new Error('Conversation does not belong to this workspace');
     return withRpc(async rpc => replayThread(object((await rpc.request('thread/read', { threadId: nativeId(id), includeTurns: true })).thread)));
+  },
+  async loadSubagents(id, cwd) {
+    if (!sessionRecord(id, cwd)) throw new Error('Conversation does not belong to this workspace');
+    return withRpc(async rpc => subagentsInThread(object((await rpc.request('thread/read', { threadId: nativeId(id), includeTurns: true })).thread)));
+  },
+  async loadSubagent(parentId, childId, cwd) {
+    if (!sessionRecord(parentId, cwd)) throw new Error('Conversation does not belong to this workspace');
+    const childNativeId = nativeId(`codex:${childId}`);
+    return withRpc(async rpc => {
+      const parent = object((await rpc.request('thread/read', { threadId: nativeId(parentId), includeTurns: true })).thread);
+      if (!linksSubagent(parent, childNativeId)) throw new Error('Subagent is not part of this conversation');
+      const child = object((await rpc.request('thread/read', { threadId: childNativeId, includeTurns: true })).thread);
+      if (child.parentThreadId !== nativeId(parentId)) throw new Error('Subagent parent does not match');
+      return replayThread(child);
+    });
   },
   async rename(id, cwd, title) {
     const record = sessionRecord(id, cwd); if (!record) throw new Error('Conversation not found');
