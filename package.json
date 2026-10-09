@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.111",
+  "version": "0.0.112",
   "displayName": "Argus",
   "description": "AI coding assistant with Claude Code and Codex providers",
   "license": "UNLICENSED",
@@ -19,7 +19,8 @@
   "main": "./out/frontend/extension.js",
   "icon": "media/argus-icon.png",
   "scripts": {
-    "vscode:prepublish": "npm run build && npm run compile",
+    "vscode:prepublish": "npm run build && npm run compile && npm run build:focus",
+    "build:focus": "gcc -O2 -s -municode -mwindows src/frontend/native/argus-focus.c -o media/argus-focus.exe -luser32",
     "build": "vite build --config webview/vite.config.ts",
     "watch": "vite build --watch --config webview/vite.config.ts",
     "dev": "node scripts/dev.js",
