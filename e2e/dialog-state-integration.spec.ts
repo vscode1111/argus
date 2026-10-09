@@ -172,7 +172,10 @@ test.describe('dialog state persistence (integration)', () => {
     const reopened = await dialog.boundingBox();
     if (!reopened) throw new Error('no reopened box');
     expect(Math.abs(reopened.x - moved.x)).toBeLessThan(3);
-    expect(Math.abs(reopened.y - moved.y)).toBeLessThan(3);
+    // Restoring the taller saved size can move the dialog up to keep it visible.
+    const viewportHeight = page.viewportSize()!.height;
+    const expectedY = Math.min(moved.y, Math.max(0, viewportHeight - reopened.height));
+    expect(Math.abs(reopened.y - expectedY)).toBeLessThan(3);
     expect(Math.abs(reopened.width - 560)).toBeLessThan(3);
     expect(Math.abs(reopened.height - 480)).toBeLessThan(3);
 
