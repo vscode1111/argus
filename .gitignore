@@ -11,6 +11,7 @@ playwright-report/
 media/webview.js
 media/webview.css
 media/ws-bridge.js
+media/argus-focus.exe
 bash.exe.stackdump
 .dev-nonce
 \!notes/common/scripts/*.log

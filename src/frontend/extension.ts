@@ -11,19 +11,14 @@ import { readDaemonInfo, clearDaemonInfo, isProcessAlive, isDaemonUp, type Daemo
 
 let extensionId = 'local.argus';
 
-// Toast click-to-focus delivery. A clicked toast can only launch a URI, and the
-// background extension host cannot switch virtual desktops (only a process holding
-// foreground/input rights can). So the toast launches `argus-focus://` -> a
-// windowless launcher (argus-focus.vbs) that runs argus-focus-switch.ps1; that
-// freshly-spawned, foreground-righted helper does the actual SwitchToThisWindow.
+// A toast click launches this protocol in a separate process. The helper dismisses
+// Notification Center before switching to the VS Code window's virtual desktop.
 export const FOCUS_PROTOCOL = 'argus-focus';
 
 function registerFocusProtocol(extensionUri: vscode.Uri): void {
   if (process.platform !== 'win32') return;
-  const vbs = vscode.Uri.joinPath(extensionUri, 'media', 'argus-focus.vbs').fsPath;
-  const ps1 = vscode.Uri.joinPath(extensionUri, 'media', 'argus-focus-switch.ps1').fsPath;
-  // vbs (windowless) runs the focus PowerShell passed as arg 0; %1 (the URI) is ignored.
-  const command = `wscript.exe "${vbs}" "${ps1}" "%1"`;
+  const helper = vscode.Uri.joinPath(extensionUri, 'media', 'argus-focus.exe').fsPath;
+  const command = `"${helper}" "%1"`;
   const base = `HKCU\\Software\\Classes\\${FOCUS_PROTOCOL}`;
   const add = (args: string[]) => execFile('reg', args, () => { /* best-effort */ });
   add(['add', base, '/ve', '/d', 'URL:Argus Focus', '/f']);
