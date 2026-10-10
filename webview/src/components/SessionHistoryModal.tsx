@@ -7,6 +7,7 @@ import { RefreshButton } from './shared/RefreshButton';
 import { useWebviewMessage } from '../hooks/useWebviewMessage';
 import { relativeTime } from '../utils/time';
 import { fmtLineCount } from '../utils/text';
+import { ProviderIcon } from './shared/ProviderIcon';
 import shell from './shared/centeredModal.module.css';
 import styles from './SessionHistoryModal.module.css';
 
@@ -22,11 +23,6 @@ interface Props {
   activeIds: Set<string>;
   onResumeWorkspaceSession: (workspacePath: string, sessionId: string, lines?: number) => void;
   onClose: () => void;
-}
-
-// Pulsing dot marking a session that is working right now.
-function RunningDot() {
-  return <span className={styles.runningDot} role="img" aria-label="Working now" title="Working now" />;
 }
 
 type Tab = 'workspace' | 'all';
@@ -315,8 +311,8 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                       />
                     ) : (
                       <span className={styles.rowTitle}>
-                        {activeIds.has(s.id) && <RunningDot />}
-                        <span>{s.title}</span> <small>{s.id.startsWith('codex:') ? 'Codex' : 'Claude'}</small>
+                        <ProviderIcon providerId={s.id.startsWith('codex:') ? 'codex' : 'claude'} label active={activeIds.has(s.id)} size={14} className={activeIds.has(s.id) ? styles.activeProviderIcon : undefined} />
+                        <span className={styles.titleText}>{s.title}</span>
                       </span>
                     )}
                   </div>
@@ -403,8 +399,8 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                 >
                   <div className={styles.allRowMain}>
                     <span className={styles.rowTitle}>
-                      {activeIds.has(s.id) && <RunningDot />}
-                      <span>{s.title}</span> <small>{s.id.startsWith('codex:') ? 'Codex' : 'Claude'}</small>
+                      <ProviderIcon providerId={s.id.startsWith('codex:') ? 'codex' : 'claude'} label active={activeIds.has(s.id)} size={14} className={activeIds.has(s.id) ? styles.activeProviderIcon : undefined} />
+                      <span className={styles.titleText}>{s.title}</span>
                     </span>
                     <span className={styles.rowSub}>{s.workspaceName}</span>
                   </div>

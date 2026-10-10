@@ -417,7 +417,14 @@ export function AccountUsageModal({ initialTab, providerId = 'claude', onClose, 
             <div className={styles.optionRow}>
               <span className={styles.optionLabel}>Effort ({currentEffort ? currentEffort.charAt(0).toUpperCase() + currentEffort.slice(1) : 'Default'})</span>
               <div className={styles.effortDots}>
-                <button type="button" title="Use default effort" aria-label="Default effort" onClick={() => postMessage({ type: 'switchEffort', effort: '', providerId })}>Auto</button>
+                <button
+                  type="button"
+                  title="Use default effort"
+                  aria-label="Default effort"
+                  aria-pressed={!currentEffort}
+                  className={[styles.effortAuto, !currentEffort ? styles.effortAutoActive : ''].filter(Boolean).join(' ')}
+                  onClick={() => postMessage({ type: 'switchEffort', effort: '', providerId })}
+                >Auto</button>
                 {efforts.map(level => (
                   <button type="button"
                     aria-label={`Effort ${level}`}
