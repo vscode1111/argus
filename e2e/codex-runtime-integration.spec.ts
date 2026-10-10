@@ -95,7 +95,20 @@ test('account picker shows the initial Codex and GPT-6-Luna selection', { tag: [
   await waitForApp(page);
   await page.getByRole('button', { name: 'Choose provider and model' }).click();
   const dialog = page.getByRole('dialog', { name: 'Account' });
-  await expect(dialog.getByRole('combobox', { name: 'Provider' })).toHaveValue('codex');
+  const picker = dialog.getByRole('button', { name: 'Provider' });
+  await expect(picker).toContainText('Codex');
+  await picker.press('ArrowDown');
+  const options = dialog.getByRole('listbox', { name: 'Providers' }).getByRole('option');
+  await expect(options).toHaveCount(2);
+  await expect(options.locator('[data-provider-icon]')).toHaveCount(2);
+  for (const icon of await options.locator('[data-provider-icon]').all()) {
+    await expect(icon).toBeVisible();
+  }
+  await expect.poll(() => options.locator('img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await expect(dialog.getByRole('option', { selected: true })).toBeFocused();
+  await dialog.getByRole('option', { selected: true }).press('Escape');
+  await expect(dialog.getByRole('listbox', { name: 'Providers' })).toHaveCount(0);
+  await expect(picker).toBeFocused();
   await dialog.getByRole('button', { name: 'Models', exact: true }).click();
   await expect(dialog.locator('[class*="modelRow"]').filter({ hasText: 'GPT-6-Luna' }).locator('[class*="modelCheck"]')).toHaveText('✓');
   await expect(dialog.getByRole('button', { name: 'Use for new conversations' })).toHaveCount(0);

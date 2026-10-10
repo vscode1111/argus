@@ -210,7 +210,7 @@ test.describe('session history', () => {
     await send(page, { type: 'sessionList', sessions: SESSIONS, currentId: SESSIONS[1].id });
 
     const dialog = page.getByRole('dialog', { name: 'Session History' });
-    const marks = dialog.getByRole('img', { name: 'Working now' });
+    const marks = dialog.getByRole('img', { name: /working now/i });
     await expect(dialog.getByText('scub-oldest-session')).toBeVisible();
     // Nothing is running until the server says so.
     await expect(marks).toHaveCount(0);
@@ -222,7 +222,7 @@ test.describe('session history', () => {
     });
     await expect(marks).toHaveCount(1);
     await expect(dialog.locator('[class*="rowTitle"]', { hasText: 'scub-oldest-session' })
-      .getByRole('img', { name: 'Working now' })).toHaveCount(1);
+      .getByRole('img', { name: /working now/i })).toHaveCount(1);
 
     // The same set marks the global tab, which lists sessions from every workspace.
     await dialog.getByRole('tab', { name: 'All workspaces' }).click();
@@ -232,7 +232,7 @@ test.describe('session history', () => {
       currentId: undefined,
     });
     await expect(dialog.locator('[class*="rowTitle"]', { hasText: 'scub-oldest-session' })
-      .getByRole('img', { name: 'Working now' })).toHaveCount(1);
+      .getByRole('img', { name: /working now/i })).toHaveCount(1);
     await expect(marks).toHaveCount(1);
 
     // The turn finishes: the server pushes a set without it and the mark clears.

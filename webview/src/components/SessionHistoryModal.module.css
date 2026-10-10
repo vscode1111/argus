@@ -15,8 +15,18 @@
 }
 
 .rowTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
   font-size: 0.92em;
   white-space: nowrap;
+  overflow: hidden;
+}
+
+.titleText {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -132,21 +142,18 @@
   outline: none;
 }
 
-/* Marks a session whose turn is running right now. Reuses the pending-tool green and
-   pulse so "working" reads the same everywhere in the app. */
-.runningDot {
-  display: inline-block;
-  flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  margin-right: 6px;
-  border-radius: 50%;
-  vertical-align: middle;
-  background: var(--vscode-testing-iconPassed, #73c991);
+/* The provider icon pulses while its session has a running turn. */
+.activeProviderIcon {
   animation: runningPulse 1.5s ease-in-out infinite;
 }
 
 @keyframes runningPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activeProviderIcon {
+    animation: none;
+  }
 }

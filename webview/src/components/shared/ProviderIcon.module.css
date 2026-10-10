@@ -1,0 +1,11 @@
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.openai {
+  background: var(--fg);
+  -webkit-mask: url('../../assets/openai.svg?inline') center / contain no-repeat;
+  mask: url('../../assets/openai.svg?inline') center / contain no-repeat;
+}

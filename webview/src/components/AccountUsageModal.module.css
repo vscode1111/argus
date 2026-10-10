@@ -246,6 +246,30 @@
   align-items: center;
 }
 
+.effortAuto {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.85em;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.effortAuto:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.effortAutoActive {
+  border-color: var(--btn-bg);
+  background: color-mix(in srgb, var(--btn-bg) 20%, var(--input-bg));
+}
+.effortAuto:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
 .effortDot {
   width: 9px;
   height: 9px;
