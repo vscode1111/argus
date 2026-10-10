@@ -8,7 +8,7 @@ async function send(page: Page, data: object) {
   await page.evaluate(value => window.dispatchEvent(new MessageEvent('message', { data: value })), data);
 }
 
-test('async choice opens a modal, survives turn completion, and sends the selected response', async ({ page }) => {
+test('async choice opens a modal, survives turn completion, and sends the selected response', async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     (window as unknown as { scubSent: unknown[] }).scubSent = [];
     const original = WebSocket.prototype.send;
@@ -25,7 +25,7 @@ test('async choice opens a modal, survives turn completion, and sends the select
   await send(page, { type: 'interaction', request });
   const dialog = page.getByRole('dialog', { name: 'scub-input-needed' });
   await expect(dialog).toBeVisible();
-  await page.screenshot({ path: '!notes/tasks/codex-async-question-dialog/scripts/dialog.png' });
+  await page.screenshot({ path: testInfo.outputPath('dialog.png') });
   expect(await dialog.evaluate(element => element.matches(':modal'))).toBe(true);
   await send(page, { type: 'done' });
   await expect(dialog).toBeVisible();
