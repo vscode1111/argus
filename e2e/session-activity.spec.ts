@@ -43,6 +43,37 @@ test('session activity shows changed lines, subagent status, and a child transcr
   await expect(dialog).toContainText('Subagents · 2');
 });
 
+test('open active child transcript updates without pressing Refresh', async ({ page }) => {
+  await waitForApp(page);
+  let requests = 0;
+  page.on('console', message => {
+    if (message.text().includes('[mock] suppressed getSubagentThread')) requests++;
+  });
+  await page.evaluate(() => {
+    const send = (data: object) => window.dispatchEvent(new MessageEvent('message', { data }));
+    send({ type: 'providerSelection', providerId: 'codex', model: 'scub-model', effort: '', thinking: true });
+    send({ type: 'sessionLoaded', id: 'codex:scub-parent', messages: [{ id: 'scub-reply', role: 'assistant', content: '', blocks: [
+      { type: 'tool', call: { id: 'scub-agent-start', name: 'subAgentActivity', kind: 'subAgentActivity',
+        input: { agentThreadId: 'scub-child', agentPath: '/root/scub_child', activity: 'started' }, result: 'started' } },
+    ] }] });
+  });
+  await page.getByRole('button', { name: 'Session activity' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Session activity' });
+  await dialog.getByRole('button', { name: /Scub child/ }).click();
+  await expect.poll(() => requests).toBe(1);
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: {
+    type: 'subagentThread', parentId: 'codex:scub-parent', childId: 'scub-child',
+    messages: [{ id: 'scub-first', role: 'assistant', content: 'scub-first-update' }],
+  } })));
+  await expect(dialog).toContainText('scub-first-update');
+  await expect.poll(() => requests, { timeout: 8000 }).toBeGreaterThan(1);
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: {
+    type: 'subagentThread', parentId: 'codex:scub-parent', childId: 'scub-child',
+    messages: [{ id: 'scub-second', role: 'assistant', content: 'scub-second-update' }],
+  } })));
+  await expect(dialog).toContainText('scub-second-update');
+});
+
 test('activity list and transcript keep separate positions and sizes', async ({ page }) => {
   await waitForApp(page);
   await page.evaluate(() => {

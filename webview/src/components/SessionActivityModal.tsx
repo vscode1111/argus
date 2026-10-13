@@ -73,18 +73,29 @@ export function SessionActivityModal({ parentId, activity, onClose }: Props) {
     if (!selected) return;
     setMessages(null); setError('');
     if (!parentId) { setError('Conversation ID is not available yet.'); return; }
-    const deadline = window.setTimeout(() => setError('Transcript unavailable. Update or restart the Argus server.'), 4000);
+    let pending = false;
+    let deadline: number | undefined;
+    const request = () => {
+      if (pending) return;
+      pending = true;
+      deadline = window.setTimeout(() => { pending = false; setError('Transcript unavailable. Update or restart the Argus server.'); }, 4000);
+      postMessage({ type: 'getSubagentThread', id: parentId, childId: selected });
+    };
     const receive = (event: MessageEvent) => {
       const data = event.data;
       if (data?.type !== 'subagentThread' || data.parentId !== parentId || data.childId !== selected) return;
-      window.clearTimeout(deadline);
+      if (deadline) window.clearTimeout(deadline);
+      pending = false;
       if (typeof data.error === 'string') setError(data.error);
-      else if (Array.isArray(data.messages)) setMessages(data.messages);
+      else if (Array.isArray(data.messages)) { setMessages(data.messages); setError(''); }
     };
     window.addEventListener('message', receive);
-    postMessage({ type: 'getSubagentThread', id: parentId, childId: selected });
-    return () => { window.removeEventListener('message', receive); window.clearTimeout(deadline); };
-  }, [parentId, selected, refresh]);
+    request();
+    const interval = agent?.active
+      ? window.setInterval(request, 5000)
+      : undefined;
+    return () => { window.removeEventListener('message', receive); window.clearTimeout(deadline); if (interval) window.clearInterval(interval); };
+  }, [parentId, selected, refresh, agent?.active]);
 
   return <Modal key={agent ? 'agent' : 'summary'} title={agent ? <span className={styles.titleWithBack}><button className={styles.backButton} onClick={() => setSelected(null)} onPointerDown={event => event.stopPropagation()} title="All activity" aria-label="All activity"><BackIcon size={14} /></button><span className={styles.agentTitle}>{agentLabel(agent.path)}</span></span> : 'Session activity'} ariaLabel="Session activity" onClose={onClose} onEscape={agent ? () => setSelected(null) : onClose} width={620} fullHeight={!!agent} persistKey={agent ? 'sessionActivityTranscript' : 'sessionActivityList'}
     headerClassName={styles.centeredHeader}
