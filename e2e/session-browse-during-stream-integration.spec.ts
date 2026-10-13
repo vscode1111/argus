@@ -30,6 +30,25 @@ async function startStreaming(page: Page, text: string) {
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible({ timeout: 15_000 });
 }
 
+// Establish a native session ID without waiting for a model response. The browse
+// tests need a finished session to navigate to, not a successful model turn.
+async function establishSession(page: Page, text: string): Promise<string> {
+  await startStreaming(page, text);
+  const dialog = await openHistoryModal(page);
+  const currentRow = dialog.locator('[class*="rowCurrent"]');
+  await expect(currentRow).toBeVisible({ timeout: 10_000 });
+  const id = await currentRow.getAttribute('data-session-id');
+  expect(id).toBeTruthy();
+  await page.keyboard.press('Escape');
+  const stop = page.getByRole('button', { name: 'Stop' });
+  if (await stop.isVisible()) {
+    try { await stop.click({ timeout: 1500 }); }
+    catch (error) { if (await stop.isVisible()) throw error; }
+  }
+  await expect(stop).toHaveCount(0, { timeout: 10_000 });
+  return id!;
+}
+
 // Opens the Session History modal and waits for the session list to load.
 // The list arrives over the WS, and under parallel integration load that round-trip
 // occasionally outlasts a single wait. Reopening re-fires listSessions on mount, so
@@ -76,10 +95,9 @@ test.describe('browse past session during active streaming (integration)', () =>
   test('header title updates to the browsed session', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
-    // 1. Create session A and give it a distinct, known title.
-    await sendAndWait(page, 'Reply with just "OK".');
-    const knownTitle = `scub-browse-a-${Date.now()}`;
-    await renameCurrentSession(page, knownTitle);
+    // 1. Create session A with a distinct title, then stop its turn.
+    const knownTitle = `scub-browse-a-${Date.now()}: Reply with just "OK".`;
+    const sessionAId = await establishSession(page, knownTitle);
 
     // 2. Open a new session (session B) and start streaming without waiting.
     await page.getByRole('button', { name: 'New chat' }).click();
@@ -89,12 +107,10 @@ test.describe('browse past session during active streaming (integration)', () =>
     //    modal and click session A. This triggers resumeSession which puts the client
     //    into browsing mode when the CLI proc is still running.
     const hist = await openHistoryModal(page);
-    // Click the rowTitle span; the click bubbles up to the row div's onClick so the
-    // outer row div's class ambiguity ([class*="row"] matches rowMain/rowTitle too)
-    // is avoided entirely.
-    const sessionATitle = hist.getByText(knownTitle, { exact: true });
-    await expect(sessionATitle).toBeVisible({ timeout: 10_000 });
-    await sessionATitle.click();
+    // Select session A by its stable ID, independent of provider-generated titles.
+    const sessionARow = hist.locator(`[data-session-id="${sessionAId}"]`);
+    await expect(sessionARow).toBeVisible({ timeout: 10_000 });
+    await sessionARow.click();
     await expect(hist).toHaveCount(0);
 
     // 4. Header title must reflect session A, not the live/last streaming session.
@@ -105,19 +121,15 @@ test.describe('browse past session during active streaming (integration)', () =>
   });
 
   test('modal green highlight moves to the browsed session', { tag: ["@shared"] }, async ({ page }) => {
-    // Two real turns and four modal round-trips before the assertion can finish, which does
-    // not fit the flat 30s. 60s was not enough either, and the reason is not this test: it
-    // runs in 12.4s on its own. Every `startStreaming` in this file deliberately leaves its
-    // turn running when the test ends, so by the time this one runs it is competing with
-    // live CLI processes from its neighbours, and each turn stretches. Budgeted like its
-    // siblings rather than made faster, since the leftover turns are what the file is for.
+    // Session setup and the modal round-trips can outlast the flat 30s under suite load.
+    // The first session is stopped as soon as it has an ID; the second stays live for
+    // the browsing assertion.
     test.setTimeout(90_000);
     await waitForApp(page);
 
-    // 1. Create session A with a known title.
-    await sendAndWait(page, 'Reply with just "OK".');
-    const knownTitle = `scub-browse-b-${Date.now()}`;
-    await renameCurrentSession(page, knownTitle);
+    // 1. Create session A and keep its stable id. A provider-side rename is not
+    // needed to test which session receives the current-row highlight.
+    const sessionAId = await establishSession(page, 'scub-browse-b: Reply with just "OK".');
 
     // 2. Start a new session (session B) and begin streaming.
     await page.getByRole('button', { name: 'New chat' }).click();
@@ -125,13 +137,10 @@ test.describe('browse past session during active streaming (integration)', () =>
 
     // 3. While session B is streaming, open history and switch to session A.
     const hist = await openHistoryModal(page);
-    await expect(hist.getByText(knownTitle, { exact: true })).toBeVisible({ timeout: 10_000 });
-    await hist.getByText(knownTitle, { exact: true }).click();
+    const sessionARow = hist.locator(`[data-session-id="${sessionAId}"]`);
+    await expect(sessionARow).toBeVisible({ timeout: 10_000 });
+    await sessionARow.click();
     await expect(hist).toHaveCount(0);
-
-    // Wait for the sessionLoaded -> listSessions round-trip to settle.
-    await expect(page.locator('button.sessionNameBtn'))
-      .toHaveText(knownTitle, { timeout: 10_000 });
 
     // 4. Reopen the modal. The green highlight (rowCurrent) must be on session A.
     //    Before the fix it stayed on session B (or nothing) because the modal used
@@ -139,7 +148,7 @@ test.describe('browse past session during active streaming (integration)', () =>
     const hist2 = await openHistoryModal(page);
     const greenRow = hist2.locator('[class*="rowCurrent"]');
     await expect(greenRow).toBeVisible({ timeout: 10_000 });
-    await expect(greenRow).toContainText(knownTitle);
+    await expect(greenRow).toHaveAttribute('data-session-id', sessionAId);
 
     await page.keyboard.press('Escape');
   });
