@@ -234,6 +234,13 @@ function sample(): Promise<Snapshot | string> {
   return inFlight;
 }
 
+// A machine-wide stop can complete while an older OS sample is still in flight.
+// Let that sample finish, then discard it before the stop result prompts a new list.
+export async function invalidateProcessSamples(): Promise<void> {
+  if (inFlight) await inFlight;
+  cached = null;
+}
+
 // Turns each process's total-CPU-since-start into a reading over the interval since the
 // previous sample, and forgets the pids that have gone.
 function measureCpu(procs: RawProc[], now: number): void {
