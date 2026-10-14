@@ -56,7 +56,7 @@ test('controller registers a goal and runs a named worker with session-only sele
     assert.equal(code, 0, stderr);
     assert.match(stdout, /scub-result/);
     assert.equal(frames.find(frame => frame.type === 'configureSession').model, 'scub-model');
-    assert.equal(frames.find(frame => frame.type === 'send').mode, 'edit');
+    assert.equal(frames.find(frame => frame.type === 'send').mode, 'full-access');
     assert.equal(frames.find(frame => frame.type === 'renameSession').title, 'scub-task-title');
     const checkpoint = JSON.parse(fs.readFileSync(path.join(runs, 'scub-company', 'scub-task.json'), 'utf8'));
     assert.equal(checkpoint.status, 'idle');
@@ -74,12 +74,13 @@ test('controller registers a goal and runs a named worker with session-only sele
     const listed = listOrchestratorGoals();
     assert.equal(listed[0].workers[0].title, 'scub-task-title');
 
-    const question = spawn(process.execPath, [script, 'send', '--company', 'scub-company', '--key', 'scub-task', '--text', 'scub-question'], { env });
+    const question = spawn(process.execPath, [script, 'send', '--company', 'scub-company', '--key', 'scub-task', '--mode', 'edit', '--text', 'scub-question'], { env });
     let questionOutput = '';
     question.stdout.on('data', chunk => { questionOutput += chunk; });
     const questionCode = await new Promise((resolve, reject) => { question.on('exit', resolve); question.on('error', reject); });
     assert.equal(questionCode, 0);
     assert.match(questionOutput, /needs-input/);
+    assert.equal(frames.filter(frame => frame.type === 'send').at(-1).mode, 'edit');
     const inspection = spawn(process.execPath, [script, 'inspect', '--company', 'scub-company', '--key', 'scub-task'], { env });
     let inspectionOutput = '';
     inspection.stdout.on('data', chunk => { inspectionOutput += chunk; });
