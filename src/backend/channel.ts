@@ -67,6 +67,7 @@ interface SessionEntry {
   // the snapshot. Without it a client joining mid-turn replays the answer with no cause.
   pendingNotice?: Record<string, unknown>;
   snapshotStartedAt: number | null;
+  lastContextUsage: { sessionId?: string; frame: string } | null;
   lastActivityAt: number;
 }
 
@@ -137,6 +138,7 @@ export interface Channel {
 }
 
 const registry = new Map<string, ChannelData>();
+const workspaceKey = (dir: string): string => process.platform === 'win32' ? dir.toLowerCase() : dir;
 
 // Send a message to every connected client across ALL workspace channels. Used for
 // global settings changes (model/effort/thinking), which live in the shared config:
@@ -507,6 +509,8 @@ function createBroadcastForEntry(entry: SessionEntry): (msg: string) => void {
     let parsed: Record<string, unknown> | undefined;
     try { parsed = JSON.parse(msg) as Record<string, unknown>; } catch {}
     if (parsed) applyMsg(entry, parsed);
+    if (parsed?.type === 'contextUsage') entry.lastContextUsage = { sessionId: entry.state.sessionId, frame: msg };
+    if (parsed?.type === 'clear') entry.lastContextUsage = null;
     if (parsed && ACTIVITY_EVENTS.has(parsed.type as string)) notifyActiveSessions();
     const gated = parsed ? SESSION_STREAM_EVENTS.has(parsed.type as string) : false;
     for (const ws of entry.clients) {
@@ -527,6 +531,7 @@ function createEntry(cd: ChannelData, owner?: string): SessionEntry {
     history: [],
     snapshot: null,
     snapshotStartedAt: null,
+    lastContextUsage: null,
     lastActivityAt: Date.now(),
   };
   entry.state.broadcast = createBroadcastForEntry(entry);
@@ -551,6 +556,9 @@ function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
         ws.send(JSON.stringify({ type: 'user_inject', text: block.text ?? '' }));
       }
     } catch { return; }
+  }
+  if (entry.state.sessionId && entry.lastContextUsage?.sessionId === entry.state.sessionId) {
+    try { ws.send(entry.lastContextUsage.frame); } catch { /* closing */ }
   }
 }
 
@@ -624,7 +632,7 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
         // An evicted entry can be mid-turn, so its row must stop showing as running.
         notifyActiveSessions();
       }
-      if (cd.entries.size === 0 && cd.ownerLastSession.size === 0) registry.delete(cd.dir);
+      if (cd.entries.size === 0 && cd.ownerLastSession.size === 0) registry.delete(workspaceKey(cd.dir));
     }
     // Read per call, not captured at import: a reused test worker that set the env
     // override for one spec must not leak a shortened grace period into every other
@@ -636,10 +644,11 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
 }
 
 export function getOrCreateChannel(dir: string): Channel {
-  let cd = registry.get(dir);
+  const key = workspaceKey(dir);
+  let cd = registry.get(key);
   if (!cd) {
     cd = { dir, entries: new Map(), clientEntry: new Map(), clientViewing: new Map(), ownerLastSession: new Map() };
-    registry.set(dir, cd);
+    registry.set(key, cd);
   }
   const _cd = cd;
 
@@ -776,5 +785,5 @@ export function getOrCreateChannel(dir: string): Channel {
 
 // Exposed for tests to force-evict a channel without waiting for the grace period.
 export function destroyChannel(dir: string): void {
-  registry.delete(dir);
+  registry.delete(workspaceKey(dir));
 }
