@@ -31,7 +31,7 @@ test('controller registers a goal and runs a named worker with session-only sele
       if (frame.type === 'configureSession') ws.send(JSON.stringify({ type: 'sessionConfigured', requestId: frame.requestId, selection: { providerId: frame.providerId, model: frame.model, effort: '', thinking: true } }));
       if (frame.type === 'send') {
         ws.send(JSON.stringify({ type: 'sessionId', id: 'scub-session-id' }));
-        if (frame.text === 'scub-question') {
+        if (frame.text === '🤖 scub-question') {
           pendingInteraction = { id: 'scub-interaction', kind: 'question', title: 'scub-question' };
           ws.send(JSON.stringify({ type: 'interaction', request: pendingInteraction }));
         }
@@ -57,6 +57,7 @@ test('controller registers a goal and runs a named worker with session-only sele
     assert.match(stdout, /scub-result/);
     assert.equal(frames.find(frame => frame.type === 'configureSession').model, 'scub-model');
     assert.equal(frames.find(frame => frame.type === 'send').mode, 'full-access');
+    assert.equal(frames.find(frame => frame.type === 'send').text, '🤖 scub-request');
     assert.equal(frames.find(frame => frame.type === 'renameSession').title, 'scub-task-title');
     const checkpoint = JSON.parse(fs.readFileSync(path.join(runs, 'scub-company', 'scub-task.json'), 'utf8'));
     assert.equal(checkpoint.status, 'idle');
@@ -81,6 +82,7 @@ test('controller registers a goal and runs a named worker with session-only sele
     assert.equal(questionCode, 0);
     assert.match(questionOutput, /needs-input/);
     assert.equal(frames.filter(frame => frame.type === 'send').at(-1).mode, 'edit');
+    assert.equal(frames.filter(frame => frame.type === 'send').at(-1).text, '🤖 scub-question');
     const inspection = spawn(process.execPath, [script, 'inspect', '--company', 'scub-company', '--key', 'scub-task'], { env });
     let inspectionOutput = '';
     inspection.stdout.on('data', chunk => { inspectionOutput += chunk; });
@@ -95,6 +97,16 @@ test('controller registers a goal and runs a named worker with session-only sele
     assert.match(answerOutput, /scub-resumed-result/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(runs, 'scub-company', 'scub-task.json'), 'utf8')).status, 'idle');
     assert.deepEqual(frames.find(frame => frame.type === 'providerResponse').response, { answers: { 'scub-question': 'scub-answer' } });
+    const skill = spawn(process.execPath, [script, 'send', '--company', 'scub-company', '--key', 'scub-task', '--text', '/scub-skill scub-request'], { env });
+    let skillError = '';
+    skill.stderr.on('data', chunk => { skillError += chunk; });
+    assert.equal(await new Promise((resolve, reject) => { skill.on('exit', resolve); skill.on('error', reject); }), 0, skillError);
+    assert.equal(frames.filter(frame => frame.type === 'send').at(-1).text, '/scub-skill 🤖 scub-request');
+    const marked = spawn(process.execPath, [script, 'send', '--company', 'scub-company', '--key', 'scub-task', '--text', '/scub-skill 🤖 scub-request'], { env });
+    let markedError = '';
+    marked.stderr.on('data', chunk => { markedError += chunk; });
+    assert.equal(await new Promise((resolve, reject) => { marked.on('exit', resolve); marked.on('error', reject); }), 0, markedError);
+    assert.equal(frames.filter(frame => frame.type === 'send').at(-1).text, '/scub-skill 🤖 scub-request');
   } finally {
     await new Promise(resolve => wss.close(resolve));
     await new Promise(resolve => server.close(resolve));

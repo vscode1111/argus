@@ -11,6 +11,7 @@ import { formatDuration, formatTime } from '../utils/time';
 import { ImageViewerModal } from './ImageViewerModal';
 import { useSettings } from '../contexts/SettingsContext';
 import { postMessage } from '../vscode';
+import { isOrchestratorPrompt } from '../utils/orchestratorMarker';
 import msg from './shared/message.module.css';
 import styles from './ChatMessage.module.css';
 
@@ -234,7 +235,7 @@ function UserMessage({ message }: Props) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   return (
-    <div className={[msg.message, msg.user, styles.userMsg].join(' ')}>
+    <div className={[msg.message, msg.user, isOrchestratorPrompt(content) ? msg.orchestrator : '', styles.userMsg].filter(Boolean).join(' ')}>
       <div className={msg.messageContent} style={{ whiteSpace: 'pre-wrap' }}>{content ? linkifyWithMentions(content) : content}</div>
       {content && <MessageCopyButton text={content} />}
       {message.images && message.images.length > 0 && (
