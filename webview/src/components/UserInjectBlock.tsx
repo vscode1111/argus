@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import msg from './shared/message.module.css';
+import { isOrchestratorPrompt } from '../utils/orchestratorMarker';
 
 export function UserInjectBlock({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -11,7 +12,7 @@ export function UserInjectBlock({ text }: { text: string }) {
   }, [text]);
 
   return (
-    <div className={msg.userInject}>
+    <div className={[msg.userInject, isOrchestratorPrompt(text) ? msg.orchestrator : ''].filter(Boolean).join(' ')}>
       {text}
       <button className={msg.userInjectCopy} onClick={handleCopy} title="Copy to clipboard" aria-label="Copy to clipboard">{copied ? '✓' : '⧉'}</button>
     </div>
