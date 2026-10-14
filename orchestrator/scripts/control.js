@@ -94,6 +94,12 @@ function prompt() {
   if (args['text-file']) return fs.readFileSync(args['text-file'], 'utf8');
   return required('text');
 }
+function markedPrompt(text) {
+  if (/^🤖(?:\s|$)/u.test(text)) return text;
+  const command = /^([/$][A-Za-z0-9_-]+)(?=\s|$)/.exec(text);
+  if (command && /^\s+🤖(?:\s|$)/u.test(text.slice(command[1].length))) return text;
+  return command ? `${command[1]} 🤖${text.slice(command[1].length)}` : `🤖 ${text}`;
+}
 async function rename(ws, id, title) {
   if (!title || !id) return;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -158,7 +164,7 @@ async function runTurn(existing) {
       ws.addEventListener('message', onMessage);
       ws.addEventListener('close', () => { if (!completed) reject(new Error('Argus connection closed during turn')); }, { once: true });
     });
-    send(ws, { type: 'send', text: prompt(), mode: args.mode || 'full-access' });
+    send(ws, { type: 'send', text: markedPrompt(prompt()), mode: args.mode || 'full-access' });
     const status = await turn;
     completed = true;
     if (renamePending) await renamePending;

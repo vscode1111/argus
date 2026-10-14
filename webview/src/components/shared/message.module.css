@@ -35,6 +35,8 @@
   position: relative;
 }
 
+.orchestrator { background: var(--orchestrator-msg-bg); }
+
 .userInject:hover .userInjectCopy { opacity: 0.6; }
 .userInjectCopy:hover { opacity: 1 !important; }
 
