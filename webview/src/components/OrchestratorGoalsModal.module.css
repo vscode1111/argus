@@ -1,0 +1,81 @@
+.body {
+  padding: 8px 16px 20px;
+  overflow: auto;
+  min-height: 120px;
+}
+
+.goal {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.goalHeader,
+.worker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.goalHeader {
+  justify-content: space-between;
+  background: var(--tool-bg, var(--assistant-bg));
+}
+
+.company {
+  display: block;
+  color: var(--thinking-fg);
+  font-size: 0.85em;
+  margin-top: 2px;
+}
+
+.worker {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.worker:hover:not(:disabled),
+.worker:focus-visible {
+  background: var(--hover-bg, rgba(128, 128, 128, 0.15));
+}
+
+.worker:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.workerName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.details,
+.status,
+.empty {
+  color: var(--thinking-fg);
+  font-size: 0.85em;
+}
+
+.details {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status {
+  flex-shrink: 0;
+}
+
+.empty {
+  margin: 8px 12px 12px;
+}

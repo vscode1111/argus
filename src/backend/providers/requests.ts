@@ -14,7 +14,7 @@ function saveDefaultSelection(selection: ProviderSelection): void {
     providerDefaults: { ...config.providerDefaults, [selection.providerId]: { ...selection } } });
 }
 
-const handled = new Set(['getProviders', 'switchProvider', 'saveProviderDefault', 'switchModel', 'switchEffort', 'switchThinking',
+const handled = new Set(['getProviders', 'switchProvider', 'configureSession', 'saveProviderDefault', 'switchModel', 'switchEffort', 'switchThinking',
   'getModels', 'getAccountUsage', 'getSkills', 'listSessions', 'renameSession', 'deleteSession', 'providerResponse']);
 
 export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg: Record<string, unknown>, init: (s: SessionState) => void): Promise<boolean> {
@@ -29,6 +29,28 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
     if (type === 'getProviders') {
       reply({ type: 'providers', providers: providers().map(p => p.descriptor) });
       reply({ type: 'providerSelection', ...selection });
+    } else if (type === 'configureSession') {
+      if (viewing || state.runtime?.active || state.currentProc && !state.cliDone) throw new Error('Wait for the active turn before configuring this conversation');
+      if (msg.providerId !== undefined && typeof msg.providerId !== 'string') throw new Error('Invalid provider');
+      const providerId = string(msg.providerId) || state.selection.providerId;
+      if (state.sessionId && providerId !== state.selection.providerId) throw new Error('An existing conversation cannot change provider');
+      const target = provider(providerId);
+      const base = providerId === state.selection.providerId ? state.selection : defaultSelection(providerId);
+      const next: ProviderSelection = {
+        providerId,
+        model: msg.model === undefined ? base.model : string(msg.model),
+        effort: msg.effort === undefined ? base.effort : string(msg.effort),
+        thinking: msg.thinking === undefined ? base.thinking : msg.thinking === true,
+      };
+      if ((msg.model !== undefined && typeof msg.model !== 'string') || (msg.effort !== undefined && typeof msg.effort !== 'string')
+        || (msg.thinking !== undefined && typeof msg.thinking !== 'boolean')) throw new Error('Invalid session selection');
+      if (next.thinking !== base.thinking && !target.descriptor.thinkingToggle) throw new Error('This provider does not support a thinking toggle');
+      await target.validate(next);
+      if (channel.getClientState(ws) !== state || channel.getViewingSessionId(ws)) throw new Error('Conversation changed; try again');
+      state.runtime?.dispose(); state.runtime = undefined;
+      state.selection = next; persistSelection(state);
+      state.broadcast(JSON.stringify(selectionMessage(state)));
+      reply({ type: 'sessionConfigured', selection: next });
     } else if (type === 'switchProvider') {
       const id = string(msg.providerId); provider(id);
       if (id === selection.providerId) return true;
@@ -40,6 +62,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
     } else if (type === 'providerResponse') {
       if (viewing) throw new Error('Return to the active conversation before answering');
       runtime(state).respond(string(msg.id), msg.response);
+      reply({ type: 'providerResponseAccepted' });
     } else if (type === 'saveProviderDefault') {
       saveDefaultSelection(selection);
       reply({ type: 'providerNotice', message: 'Saved for new conversations' });

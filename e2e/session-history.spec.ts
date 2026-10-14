@@ -56,6 +56,22 @@ test.describe('session history', () => {
     await expect(dialog.getByText('scub-newest-session')).toHaveCount(0);
   });
 
+  test('a missing workspace match can search all workspaces with the same query', async ({ page }) => {
+    await openModal(page);
+    await send(page, { type: 'sessionList', sessions: SESSIONS, currentId: SESSIONS[1].id });
+
+    const dialog = page.getByRole('dialog', { name: 'Session History' });
+    await dialog.getByRole('textbox', { name: 'Search sessions' }).fill('scub-elsewhere');
+    await dialog.getByRole('button', { name: 'Search all workspaces' }).click();
+    await expect(dialog.getByRole('tab', { name: 'All workspaces' })).toHaveAttribute('aria-selected', 'true');
+    await expect(dialog.getByRole('textbox', { name: 'Search all sessions' })).toHaveValue('scub-elsewhere');
+
+    await send(page, { type: 'allSessionList', sessions: [
+      { ...SESSIONS[0], title: 'scub-elsewhere-session', lines: 2, workspacePath: 'd:\\_Projects\\scub-elsewhere', workspaceName: 'scub-elsewhere' },
+    ] });
+    await expect(dialog.getByText('scub-elsewhere-session')).toBeVisible();
+  });
+
   test('delete optimistically removes a row', async ({ page }) => {
     await openModal(page);
     // A fake (non-existent) session id: the dev server validates the UUID and

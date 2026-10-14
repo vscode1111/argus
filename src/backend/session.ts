@@ -30,6 +30,7 @@ import { readServerVersion } from './version';
 import { buildWorkspaceInfo } from './workspaceInfo';
 import { searchFiles, type FileSearchResult } from './fileSearch';
 import { workspaceChanges } from './workspaceChanges';
+import { listOrchestratorGoals } from './orchestratorGoals';
 
 export { getCliLaunchCount } from './providers/claudeExecution';
 
@@ -200,7 +201,7 @@ export function attachClientHandlers(
   });
 
   let mutations = Promise.resolve();
-  const ordered = new Set(['send', 'stop', 'newSession', 'resumeSession', 'switchProvider', 'switchModel', 'switchEffort', 'switchThinking', 'saveProviderDefault', 'providerResponse', 'toolAnswer']);
+  const ordered = new Set(['send', 'stop', 'newSession', 'resumeSession', 'switchProvider', 'configureSession', 'switchModel', 'switchEffort', 'switchThinking', 'saveProviderDefault', 'providerResponse', 'toolAnswer']);
   ws.on('message', (data: Buffer) => {
     const handle = async () => {
     // Resolve the session state fresh on every message so that after moveToNewSession
@@ -544,6 +545,12 @@ export function attachClientHandlers(
       // Initial sync for a client that just connected; later changes arrive as
       // `activeSessions` pushes from notifyActiveSessions().
       ws.send(JSON.stringify({ type: 'activeSessions', sessions: listActiveSessions() }));
+    } else if (msg.type === 'getOrchestratorGoals') {
+      const active = new Set(listActiveSessions().map(session => session.id));
+      const goals = listOrchestratorGoals().map(goal => ({ ...goal, workers: goal.workers.map(worker => ({ ...worker,
+        status: worker.sessionId && active.has(worker.sessionId) ? 'running' : worker.status === 'running' ? 'idle' : worker.status,
+      })) }));
+      ws.send(JSON.stringify({ type: 'orchestratorGoals', goals }));
     } else if (msg.type === 'getBgTasks') {
       // Same shape: the count is pushed only when it changes, so a client that joined
       // mid-watch (page reload, daemon restart) has to ask for the current one.
