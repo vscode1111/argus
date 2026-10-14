@@ -148,6 +148,11 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
     loadAllOnce();
   }
 
+  function searchAll() {
+    setAllQuery(query);
+    openAll();
+  }
+
   function refreshAll() {
     setAllRefreshing(true);
     postMessage({ type: 'listAllSessions' });
@@ -282,7 +287,8 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
               <div className={shell.placeholder}>Loading...</div>
             ) : filtered.length === 0 ? (
               <div className={shell.placeholder}>
-                {sessions.length === 0 ? 'No sessions yet.' : 'No matching sessions.'}
+                <div>{sessions.length === 0 ? 'No sessions in this workspace.' : 'No matching sessions in this workspace.'}</div>
+                <button type="button" className={styles.searchAll} onClick={searchAll}>Search all workspaces</button>
               </div>
             ) : (
               filtered.map(s => (

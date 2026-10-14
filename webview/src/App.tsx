@@ -4,6 +4,7 @@ import { MessageList, MessageListHandle } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
 import { SessionHistoryModal } from './components/SessionHistoryModal';
+import { OrchestratorGoalsModal } from './components/OrchestratorGoalsModal';
 import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
 import { UsageIndicator } from './components/UsageIndicator';
@@ -74,6 +75,7 @@ function AppInner() {
   const hadPendingAsk = React.useRef(false);
   const [isNarrow, setIsNarrow] = React.useState(window.innerWidth < 650);
   const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [goalsOpen, setGoalsOpen] = React.useState(false);
   const [activityOpen, setActivityOpen] = React.useState(false);
   const activity = React.useMemo(() => sessionActivity(state.messages, state.streaming), [state.messages, state.streaming]);
   const [providerNotice, setProviderNotice] = React.useState('');
@@ -550,6 +552,11 @@ function AppInner() {
               <rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="3" width="8" height="8" rx="1" /><rect x="3" y="13" width="8" height="8" rx="1" /><rect x="13" y="13" width="8" height="8" rx="1" />
             </svg>
           </button>}
+          <button className="btn-icon" title="Company goals" aria-label="Company goals" onClick={() => setGoalsOpen(true)}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" />
+            </svg>
+          </button>
         </>
       )}
       <button
@@ -575,6 +582,7 @@ function AppInner() {
       {providerNotice && <div role="status"><span>{providerNotice}</span><button aria-label="Dismiss provider notice" onClick={() => setProviderNotice('')}>Close</button></div>}
       {state.interaction && <ProviderInteraction key={state.interaction.id} request={state.interaction} />}
       {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} activeIds={activeIds} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
+      {goalsOpen && <OrchestratorGoalsModal onOpenSession={resumeWorkspaceSession} onClose={() => setGoalsOpen(false)} />}
       {activityOpen && <SessionActivityModal parentId={sessionId} activity={activity} onClose={() => setActivityOpen(false)} />}
       {accountUsageTab && <AccountUsageModal key={state.providerId} initialTab={accountUsageTab} providerId={state.providerId} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onClose={() => setAccountUsageTab(null)} />}
       {initialFile && <AutoFileViewer path={initialFile} onClose={() => setInitialFile(null)} />}

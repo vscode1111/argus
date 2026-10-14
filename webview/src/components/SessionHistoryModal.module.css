@@ -6,6 +6,25 @@
   composes: row from './shared/centeredModal.module.css';
 }
 
+.searchAll {
+  margin-top: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.searchAll:hover {
+  background: var(--hover-bg, rgba(128, 128, 128, 0.15));
+}
+
+.searchAll:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
 .rowMain {
   flex: 1;
   min-width: 0;

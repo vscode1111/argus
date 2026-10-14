@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.114",
+  "version": "0.0.117",
   "displayName": "Argus",
   "description": "AI coding assistant with Claude Code and Codex providers",
   "license": "UNLICENSED",
@@ -35,6 +35,7 @@
     "test:clean": "node scripts/test-clean.js && node scripts/dev-stop.js",
     "test:e2e:install": "node scripts/install-browsers-manual.js",
     "test:providers": "npm run compile && node --test --test-force-exit e2e/provider-contract.test.cjs e2e/session-transcript-path.test.cjs",
+    "test:orchestrator": "npm run compile && node --test --test-force-exit e2e/orchestrator-client.test.cjs e2e/orchestrator-control.test.cjs e2e/orchestrator-wire.test.cjs && node node_modules/@playwright/test/cli.js test e2e/orchestrator-goals.spec.ts --project=mock --retries=0",
     "test:e2e": "node node_modules/@playwright/test/cli.js test",
     "test:e2e:mock": "node node_modules/@playwright/test/cli.js test --project=mock",
     "test:e2e:integration": "node node_modules/@playwright/test/cli.js test --project=integration --no-deps",
