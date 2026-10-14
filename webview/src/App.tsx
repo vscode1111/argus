@@ -155,7 +155,7 @@ function AppInner() {
     function handleMessage(event: MessageEvent) {
       const data = event.data;
       if (data?.type === 'providerNotice') setProviderNotice({ message: String(data.message || ''), error: data.error === true });
-      if (data?.type === 'providerSelection') setProviderNotice('');
+      if (data?.type === 'providerSelection') setProviderNotice(null);
       if (data && typeof data.type === 'string' && VALID_TYPES.has(data.type)) {
         dispatch(data as AppAction);
       }
