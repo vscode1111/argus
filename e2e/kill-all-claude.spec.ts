@@ -114,4 +114,34 @@ test.describe('stop all CLI processes button', () => {
     });
     await expect(page.getByTestId('cli-launches')).toHaveText('42');
   });
+
+  test('refreshes the live process count after a stop result', async ({ page }) => {
+    const suppressed: string[] = [];
+    page.on('console', message => {
+      const text = message.text();
+      if (text.includes('[mock] suppressed')) suppressed.push(text.replace('[mock] suppressed ', '').trim());
+    });
+    const dialog = await openInfoTab(page);
+    await page.evaluate(() => {
+      window.dispatchEvent(new MessageEvent('message', { data: {
+        type: 'cliProcessList', processes: Array.from({ length: 4 }, () => ({ ours: false })),
+      } }));
+    });
+    await expect(dialog.getByTestId('cli-processes-count')).toHaveText('4');
+    const before = suppressed.filter(type => type === 'listCliProcesses').length;
+
+    const button = dialog.getByTestId('kill-all-cli');
+    await button.click();
+    await button.click();
+    await page.evaluate(() => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'killAllCliProcessesResult', count: 4 } }));
+    });
+    await expect(dialog.getByTestId('kill-all-cli-result')).toHaveText('Stopped 4 processes.');
+    await expect.poll(() => suppressed.filter(type => type === 'listCliProcesses').length).toBeGreaterThan(before);
+
+    await page.evaluate(() => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'cliProcessList', processes: [] } }));
+    });
+    await expect(dialog.getByTestId('cli-processes-count')).toHaveText('0');
+  });
 });
