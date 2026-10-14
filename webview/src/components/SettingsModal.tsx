@@ -381,10 +381,10 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
       } else if (msg && msg.type === 'killAllCliProcessesResult' && typeof msg.count === 'number') {
         setKilling(false);
         setKillResult({ count: msg.count, error: typeof msg.error === 'string' ? msg.error : undefined });
-        // A kill can respawn this panel's own CLI process count (or end its session),
-        // so refresh the Info tab snapshot instead of leaving it at whatever it showed
-        // before the click.
+        // A kill can change both the server's launch tally and the machine-wide live
+        // process count, which arrive in separate replies.
         postMessage({ type: 'getServerInfo' });
+        postMessage({ type: 'listCliProcesses' });
       }
     };
     window.addEventListener('message', onMessage);
