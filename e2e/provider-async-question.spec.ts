@@ -53,3 +53,26 @@ test('history replay restores the latest unanswered choice', async ({ page }) =>
   ] });
   await expect(page.getByRole('dialog', { name: 'scub-input-needed' })).toHaveCount(0);
 });
+
+test('approval actions use the panel button styles at compact width', async ({ page }) => {
+  await page.setViewportSize({ width: 970, height: 500 });
+  await waitForApp(page);
+  await send(page, { type: 'interaction', request: { id: 'scub-approval', kind: 'approval', title: 'scub-operation', detail: 'scub-command', options: ['accept', 'decline'] } });
+  const panel = page.getByRole('region', { name: 'Provider request' });
+  const allow = panel.getByRole('button', { name: 'Allow once' });
+  const decline = panel.getByRole('button', { name: 'Decline' });
+  await expect(allow).toBeVisible();
+  await expect(decline).toBeVisible();
+  const appearance = await allow.evaluate(element => {
+    const style = getComputedStyle(element);
+    const reference = document.createElement('span');
+    reference.style.backgroundColor = 'var(--vscode-button-background)';
+    document.body.append(reference);
+    const themeBackground = getComputedStyle(reference).backgroundColor;
+    reference.remove();
+    return { background: style.backgroundColor, themeBackground, radius: style.borderRadius, height: element.getBoundingClientRect().height };
+  });
+  expect(appearance.background).toBe(appearance.themeBackground);
+  expect(appearance.radius).toBe('4px');
+  expect(appearance.height).toBeGreaterThanOrEqual(28);
+});

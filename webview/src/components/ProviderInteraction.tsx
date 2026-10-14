@@ -56,8 +56,8 @@ export function ProviderInteraction({ request }: { request: Interaction }) {
         <datalist id={`answers-${q.id}`}>{q.options.map(option => <option key={option} value={option} />)}</datalist>
       </label>)}
       <button type="submit">Submit answers</button>
-    </form> : <div>
-      {(request.options || ['accept', 'decline']).map(decision => <button key={decision} type="button" onClick={() => respond({ decision })}>{decision === 'accept' ? 'Allow once' : 'Decline'}</button>)}
+    </form> : <div className={styles.approvalActions}>
+      {(request.options || ['accept', 'decline']).map(decision => <button key={decision} className={[styles.approvalButton, decision === 'accept' ? styles.approvalAccept : styles.approvalDecline].join(' ')} type="button" onClick={() => respond({ decision })}>{decision === 'accept' ? 'Allow once' : 'Decline'}</button>)}
     </div>}
   </section>;
 }

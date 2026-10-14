@@ -3,13 +3,20 @@ import styles from './ShellIcon.module.css';
 
 const LABELS: Record<ShellKind, string> = {
   powershell: 'PowerShell', bash: 'Bash', cmd: 'Command Prompt',
-  zsh: 'Zsh', fish: 'Fish', sh: 'Shell',
+  zsh: 'Zsh', fish: 'Fish', sh: 'Shell', orchestrate: 'Orchestration',
 };
 
 export function ShellIcon({ shell, command, className }: { shell: ShellKind; command: string; className?: string }) {
   return (
     <span className={[styles.icon, styles[shell], className].filter(Boolean).join(' ')} role="img" aria-label={LABELS[shell]} title={command}>
-      {shell === 'powershell' ? (
+      {shell === 'orchestrate' ? (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 5v14m0-7h12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="6" cy="5" r="2" fill="currentColor" />
+          <circle cx="6" cy="19" r="2" fill="currentColor" />
+          <circle cx="18" cy="12" r="2" fill="currentColor" />
+        </svg>
+      ) : shell === 'powershell' ? (
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 3h18l-3 18H1z" fill="#2671be" />
           <path d="m6 8 4 4-5 4m8 0h5" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

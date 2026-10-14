@@ -158,7 +158,7 @@ async function runTurn(existing) {
       ws.addEventListener('message', onMessage);
       ws.addEventListener('close', () => { if (!completed) reject(new Error('Argus connection closed during turn')); }, { once: true });
     });
-    send(ws, { type: 'send', text: prompt(), mode: args.mode || 'edit' });
+    send(ws, { type: 'send', text: prompt(), mode: args.mode || 'full-access' });
     const status = await turn;
     completed = true;
     if (renamePending) await renamePending;

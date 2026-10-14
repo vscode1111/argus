@@ -1,4 +1,11 @@
 .row { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; }
+.approvalActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.approvalButton { min-height: 28px; padding: 5px 12px; border: 0; border-radius: 4px; font: inherit; font-weight: 600; cursor: pointer; }
+.approvalButton:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
+.approvalAccept { color: var(--vscode-button-foreground, #fff); background: var(--vscode-button-background, #0e639c); }
+.approvalAccept:hover { background: var(--vscode-button-hoverBackground, #1177bb); }
+.approvalDecline { color: var(--vscode-button-secondaryForeground, var(--fg)); background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2)); }
+.approvalDecline:hover { background: var(--vscode-button-secondaryHoverBackground, rgba(128,128,128,0.3)); }
 .pickerRow { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .selectWrap { position: relative; }
 .trigger { display: flex; align-items: center; gap: 8px; min-height: 29px; padding: 5px 8px; color: var(--vscode-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, #555); border-radius: 4px; font: inherit; cursor: pointer; }

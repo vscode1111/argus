@@ -14,3 +14,4 @@
 .zsh { color: #315d67; }
 .fish { color: #277d8b; }
 .sh { color: #555; }
+.orchestrate { color: var(--vscode-symbolIcon-functionForeground, #dcdcaa); }
