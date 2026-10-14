@@ -21,7 +21,7 @@ import { createErrorRetry, parseErrorRetryPatterns } from './errorRetry';
 import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
 import { type Channel, listActiveSessions, listOwnedProcs } from './channel';
-import { listCliProcesses, killCliProcess, cpuCoreCount } from './processes';
+import { listCliProcesses, killCliProcess, cpuCoreCount, invalidateProcessSamples } from './processes';
 import { type ClientInfo, type CloseClientResult } from './clients';
 import { readAuth, setPassword, clearPassword, dropAllSessions, sessionCount, MIN_PASSWORD_LENGTH } from './auth';
 import { broadcastBgTasks } from './cliHandler';
@@ -342,6 +342,7 @@ export function attachClientHandlers(
     } else if (msg.type === 'killAllCliProcesses') {
       const result = killAllCliProcesses();
       if (result.count > 0) resetCliLaunchCount();
+      await invalidateProcessSamples();
       ws.send(JSON.stringify({ type: 'killAllCliProcessesResult', ...result }));
     } else if (msg.type === 'listCliProcesses') {
       // Runs where the server runs, like killAllCliProcesses: the processes worth listing are
