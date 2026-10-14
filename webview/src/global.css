@@ -16,6 +16,7 @@
   --diff-added-bg: rgba(80, 200, 120, 0.15);
   --diff-removed-bg: rgba(255, 80, 80, 0.15);
   --user-msg-bg: #2ea04370;
+  --orchestrator-msg-bg: color-mix(in srgb, var(--vscode-symbolIcon-functionForeground, #d2a8ff) 38%, transparent);
   /* Unfilled part of a progress bar. Derived from the foreground, not from
      --input-bg: in some themes (Dark 2026) the input background is the exact same
      colour as the surface it sits on, so the track vanished and a 14% bar read as a
