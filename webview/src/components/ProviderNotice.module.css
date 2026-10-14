@@ -1,0 +1,44 @@
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  min-width: 0;
+  padding: 7px 12px;
+  border-left: 3px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--assistant-bg);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.error {
+  border-left-color: var(--error-fg);
+  background: color-mix(in srgb, var(--error-fg) 8%, var(--bg));
+}
+
+.message {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.dismiss:hover { background: color-mix(in srgb, var(--fg) 12%, transparent); }
+.dismiss:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
