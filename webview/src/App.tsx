@@ -20,6 +20,7 @@ import { basename } from './utils/path';
 import { type RateLimitInfo } from './utils/usage';
 import { fmtLineCount } from './utils/text';
 import { sessionActivity } from './utils/sessionActivity';
+import noticeStyles from './components/ProviderNotice.module.css';
 
 function playCompletionSound(): void {
   try {
@@ -78,7 +79,7 @@ function AppInner() {
   const [goalsOpen, setGoalsOpen] = React.useState(false);
   const [activityOpen, setActivityOpen] = React.useState(false);
   const activity = React.useMemo(() => sessionActivity(state.messages, state.streaming), [state.messages, state.streaming]);
-  const [providerNotice, setProviderNotice] = React.useState('');
+  const [providerNotice, setProviderNotice] = React.useState<{ message: string; error: boolean } | null>(null);
   const providerRef = React.useRef(state.providerId);
   providerRef.current = state.providerId;
   const [accountUsageTab, setAccountUsageTab] = React.useState<'usage' | 'models' | null>(null);
@@ -153,7 +154,7 @@ function AppInner() {
     ]);
     function handleMessage(event: MessageEvent) {
       const data = event.data;
-      if (data?.type === 'providerNotice') setProviderNotice(String(data.message || ''));
+      if (data?.type === 'providerNotice') setProviderNotice({ message: String(data.message || ''), error: data.error === true });
       if (data?.type === 'providerSelection') setProviderNotice('');
       if (data && typeof data.type === 'string' && VALID_TYPES.has(data.type)) {
         dispatch(data as AppAction);
@@ -579,7 +580,10 @@ function AppInner() {
 
   return (
     <div className="app">
-      {providerNotice && <div role="status"><span>{providerNotice}</span><button aria-label="Dismiss provider notice" onClick={() => setProviderNotice('')}>Close</button></div>}
+      {providerNotice?.message && <div className={[noticeStyles.notice, providerNotice.error ? noticeStyles.error : ''].filter(Boolean).join(' ')} role="status">
+        <span className={noticeStyles.message}>{providerNotice.message}</span>
+        <button className={noticeStyles.dismiss} type="button" aria-label="Dismiss provider notice" title="Dismiss notice" onClick={() => setProviderNotice(null)}>&times;</button>
+      </div>}
       {state.interaction && <ProviderInteraction key={state.interaction.id} request={state.interaction} />}
       {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} activeIds={activeIds} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
       {goalsOpen && <OrchestratorGoalsModal onOpenSession={resumeWorkspaceSession} onClose={() => setGoalsOpen(false)} />}
