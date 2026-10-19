@@ -15,3 +15,11 @@
 .fish { color: #277d8b; }
 .sh { color: #555; }
 .orchestrate { color: var(--vscode-symbolIcon-functionForeground, #dcdcaa); }
+.node { color: color-mix(in srgb, var(--fg) 35%, #68a063); }
+.git { color: color-mix(in srgb, var(--fg) 35%, #f05032); }
+.grep { color: color-mix(in srgb, var(--fg) 35%, #318bb3); }
+.rg { color: color-mix(in srgb, var(--fg) 35%, #b87623); }
+.sed { color: color-mix(in srgb, var(--fg) 35%, #9b63b8); }
+.cat { color: var(--fg); }
+.npm { color: color-mix(in srgb, var(--fg) 35%, #cb3837); }
+.yarn { color: color-mix(in srgb, var(--fg) 35%, #2c8ebb); }

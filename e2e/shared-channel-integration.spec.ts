@@ -294,10 +294,10 @@ test.describe('shared channel broadcast (integration)', () => {
     dir = makeTempDir('browsing-no-stream');
     [clientA, clientB] = await Promise.all([openClient(nonce, dir), openClient(nonce, dir)]);
 
-    clientA.send(JSON.stringify({ type: 'send', text: 'scub-ping: reply with the single word "scub-ok"' }));
-
     // Wait for thinking_start on A; B also receives it (shared broadcast, browsing mode not set yet).
-    await waitForType(clientA, 'thinking_start', 10000);
+    const started = waitForType(clientA, 'thinking_start', 10000);
+    clientA.send(JSON.stringify({ type: 'send', text: 'Explain the current status briefly.' }));
+    await started;
 
     // B switches to browsing mode before the turn produces text/done.
     const fakeId = '00000000-0000-0000-0000-000000000004';
@@ -315,8 +315,11 @@ test.describe('shared channel broadcast (integration)', () => {
     };
     clientB.on('message', listener);
 
-    // Let the turn complete on A; B must not receive any session-streaming events.
-    await waitForType(clientA, 'done', 60000);
+    // Stop from A after B starts browsing. A must receive completion, while B must
+    // not receive the same stream event. Attach before stop to avoid losing done.
+    const done = waitForType(clientA, 'done', 10000);
+    clientA.send(JSON.stringify({ type: 'stop' }));
+    await done;
     // Small grace period for any stray in-flight frames.
     await new Promise((r) => setTimeout(r, 300));
 

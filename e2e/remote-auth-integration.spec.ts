@@ -17,8 +17,24 @@ import * as path from 'path';
 // second machine (verified: it is classified remote and refused).
 
 const PORT = process.env.ARGUS_E2E_PORT ?? '3001';
-const LAN = '192.168.0.136';
 const ROOT = path.resolve(__dirname, '..');
+
+async function lanAddress(port: string | number): Promise<string> {
+  const addresses = Object.values(os.networkInterfaces()).flatMap((entries) =>
+    (entries ?? []).filter((entry) => entry.family === 'IPv4' && !entry.internal).map((entry) => entry.address),
+  );
+  const reachable = await Promise.all(addresses.map(async (address) => {
+    try {
+      await fetch(`http://${address}:${port}/nonce`, { signal: AbortSignal.timeout(1500) });
+      return address;
+    } catch {
+      return undefined;
+    }
+  }));
+  const address = reachable.find((candidate) => candidate !== undefined);
+  if (!address) throw new Error(`No reachable non-loopback address for test server on port ${port}`);
+  return address;
+}
 
 function connect(host: string, port: string | number, query: string): Promise<string> {
   return new Promise((resolve) => {
@@ -37,6 +53,7 @@ async function nonceStatus(host: string, port: string | number, token?: string):
 
 test.describe('remote access gate (integration)', () => {
   test('refuses a remote peer and leaves local untouched when no password is set', { tag: ["@shared"] }, async () => {
+    const LAN = await lanAddress(PORT);
     const localNonce = await nonceStatus('127.0.0.1', PORT);
     expect(localNonce).toBe(200);
     const nonce = await (await fetch(`http://127.0.0.1:${PORT}/nonce`)).text();
@@ -76,16 +93,16 @@ test.describe('remote access gate (integration)', () => {
     const port = 3095;
     const server = await startServer({ port });
 
-    const login = async (password: string) => {
-      const res = await fetch(`http://${LAN}:${port}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: 'scub', password }),
-      });
-      return { status: res.status, body: await res.json() as { token?: string; error?: string } };
-    };
-
     try {
+      const LAN = await lanAddress(port);
+      const login = async (password: string) => {
+        const res = await fetch(`http://${LAN}:${port}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: 'scub', password }),
+        });
+        return { status: res.status, body: await res.json() as { token?: string; error?: string } };
+      };
       const dir = encodeURIComponent(ROOT);
       // With nothing configured, /login says so rather than counting it as a failure -
       // "nobody can get in yet" is a different answer from "wrong password".

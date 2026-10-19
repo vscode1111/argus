@@ -21,9 +21,11 @@ test('file change opens the original patch for each changed file', async ({ page
     ]) window.dispatchEvent(new MessageEvent('message', { data }));
   });
 
-  const firstLink = page.getByRole('link', { name: 'fileChange' });
+  const firstLink = page.getByRole('link', { name: 'File changes' });
   const secondFile = page.getByRole('link', { name: 'D:/scub/two.ts' });
   await expect(firstLink).toBeVisible();
+  await expect(firstLink.locator('svg')).toBeVisible();
+  await expect(page.getByText('fileChange', { exact: true })).toHaveCount(0);
   await expect(secondFile).toBeVisible();
   await expect(firstLink.locator('..').locator('[class*="statsAdded"]')).toHaveText('+3');
   await expect(firstLink.locator('..').locator('[class*="statsRemoved"]')).toHaveText('-2');

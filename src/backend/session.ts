@@ -25,7 +25,7 @@ import { listCliProcesses, killCliProcess, cpuCoreCount, invalidateProcessSample
 import { type ClientInfo, type CloseClientResult } from './clients';
 import { readAuth, setPassword, clearPassword, dropAllSessions, sessionCount, MIN_PASSWORD_LENGTH } from './auth';
 import { broadcastBgTasks } from './cliHandler';
-import { listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage, codexSessionLineCount } from './sessions';
+import { listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage, codexSessionMeta } from './sessions';
 import { readServerVersion } from './version';
 import { buildWorkspaceInfo } from './workspaceInfo';
 import { searchFiles, type FileSearchResult } from './fileSearch';
@@ -538,7 +538,7 @@ export function attachClientHandlers(
     } else if (msg.type === 'listAllSessions') {
       const currentId = s.sessionId;
       listAllSessions().then(sessions => {
-        sessions.push(...records().filter(r => r.selection.providerId !== 'claude').map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, lines: codexSessionLineCount(r.id), workspacePath: r.cwd, workspaceName: path.basename(r.cwd) })));
+        sessions.push(...records().filter(r => r.selection.providerId !== 'claude').map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, ...codexSessionMeta(r.id), workspacePath: r.cwd, workspaceName: path.basename(r.cwd) })));
         sessions.sort((a, b) => b.updatedAt - a.updatedAt);
         try { ws.send(JSON.stringify({ type: 'allSessionList', sessions, currentId })); } catch {}
       }).catch(() => {});
@@ -609,7 +609,7 @@ function handleSend(s: SessionState, msg: TurnInput): void {
   void runtime(s).send(msg).catch(error => s.broadcast(JSON.stringify({ type: 'providerNotice', error: true, message: error instanceof Error ? error.message : 'Provider failed' })));
 }
 
-async function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, id: string) {
+export async function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, id: string) {
   // If this session is mid-turn in another entry (another panel, or the entry this client
   // detached from on a browsed send), join it instead of reading the transcript. The file
   // on disk stops at the last committed turn, so loading it would drop the turn in flight

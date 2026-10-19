@@ -20,7 +20,7 @@ test('file changes distinguish added, deleted, and edited paths', async ({ page 
     ]) window.dispatchEvent(new MessageEvent('message', { data }));
   });
 
-  const header = page.getByRole('link', { name: 'fileChange' }).locator('..');
+  const header = page.getByRole('link', { name: 'File changes' }).locator('..');
   const added = page.getByText('D:/scub/added.txt').locator('..');
   const deleted = page.getByText('D:/scub/deleted.txt').locator('..');
   const edited = page.getByRole('link', { name: 'D:/scub/edited.txt' }).locator('..');
@@ -36,7 +36,7 @@ test('file changes distinguish added, deleted, and edited paths', async ({ page 
   await expect(deleted.locator('[class*="fileChangePath"]')).toHaveCSS('text-decoration-line', 'line-through');
   await expect(edited.locator('[class*="statsAdded"]')).toHaveText('+1');
   await expect(edited.locator('[class*="statsRemoved"]')).toHaveText('-1');
-  await page.getByRole('link', { name: 'fileChange' }).click();
+  await page.getByRole('link', { name: 'File changes' }).click();
   await expect(page.getByRole('dialog', { name: 'Diff: D:/scub/edited.txt' })).toBeVisible();
   await page.getByRole('dialog', { name: 'Diff: D:/scub/edited.txt' }).getByRole('button', { name: 'Close' }).click();
   await edited.getByRole('link', { name: 'Diff' }).click();
@@ -59,11 +59,11 @@ test('a single new file with no patch has no empty diff controls', async ({ page
     ]) window.dispatchEvent(new MessageEvent('message', { data }));
   });
 
-  const name = page.getByText('fileChange', { exact: true });
+  const name = page.getByRole('img', { name: 'File changes' });
   const row = name.locator('..');
   const file = page.getByRole('link', { name: 'D:/scub/new.txt' });
   await expect(name).toBeVisible();
-  await expect(page.getByRole('link', { name: 'fileChange' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'File changes' })).toHaveCount(0);
   await expect(row.locator('[class*="statsAdded"], [class*="statsRemoved"]')).toHaveCount(0);
   await expect(row.getByRole('link', { name: 'Diff' })).toHaveCount(0);
   await expect(file).toHaveCSS('color', 'rgb(133, 232, 157)');

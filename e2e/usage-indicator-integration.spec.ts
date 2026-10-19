@@ -230,7 +230,9 @@ test.describe('daemon usage poller (integration)', () => {
   async function usageAge(ws: WebSocket): Promise<{ age: number; count: number }> {
     const reqAt = Date.now();
     ws.send(JSON.stringify({ type: 'getUsageLimits' }));
-    const msg = await waitForFrame(ws, 'usageLimits', 10_000);
+    // This reply follows the server's network fetch, so use the helper's 25s cap.
+    // The age assertion below still distinguishes a fresh reply from a snapshot.
+    const msg = await waitForFrame(ws, 'usageLimits');
     return { age: reqAt - (msg.fetchedAt as number), count: (msg.windows as unknown[]).length };
   }
 

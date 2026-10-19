@@ -44,6 +44,27 @@ test.describe('session history', () => {
     await expect(dialog.locator('[class*="rowCurrent"]')).toHaveCount(1);
   });
 
+  test('delegated sessions show a robot marker in both tabs without changing their titles', async ({ page }) => {
+    await openModal(page);
+    const delegated = { ...SESSIONS[0], title: 'scub-worker', lastPrompt: '🤖 scub-work', delegated: true };
+    await send(page, { type: 'sessionList', sessions: [delegated, SESSIONS[1]] });
+    const dialog = page.getByRole('dialog', { name: 'Session History' });
+    const workerRow = dialog.locator(`[data-session-id="${delegated.id}"]`);
+    await expect(workerRow.getByLabel('Delegated session')).toHaveText('🤖');
+    await expect(dialog.locator(`[data-session-id="${SESSIONS[1].id}"]`).getByLabel('Delegated session')).toHaveCount(0);
+    await workerRow.getByRole('button', { name: 'Rename session' }).click();
+    await expect(dialog.getByRole('textbox', { name: 'Rename session' })).toHaveValue('scub-worker');
+    await dialog.getByRole('textbox', { name: 'Rename session' }).press('Escape');
+
+    await dialog.getByRole('tab', { name: 'All workspaces' }).click();
+    await send(page, { type: 'allSessionList', sessions: [
+      { ...delegated, workspacePath: 'd:\\scub-work', workspaceName: 'scub-work' },
+      { ...SESSIONS[1], workspacePath: 'd:\\scub-work', workspaceName: 'scub-work' },
+    ] });
+    await expect(dialog.locator(`[data-session-id="${delegated.id}"]`).getByLabel('Delegated session')).toHaveText('🤖');
+    await expect(dialog.locator(`[data-session-id="${SESSIONS[1].id}"]`).getByLabel('Delegated session')).toHaveCount(0);
+  });
+
   test('search filters sessions by title and prompt', async ({ page }) => {
     await openModal(page);
     await send(page, { type: 'sessionList', sessions: SESSIONS, currentId: SESSIONS[1].id });

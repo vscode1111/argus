@@ -239,6 +239,9 @@ test.describe('account & usage', () => {
       await page.locator('[class*="slashMenuItem"]', { hasText: 'Account & usage' }).click();
       const button = page.getByRole('dialog', { name: 'Account' }).getByRole('button', { name: label });
       await expect(button).toBeVisible();
+      // Keep the destination site from redirecting the popup before we can check
+      // the URL opened by Argus (for example, an anti-bot challenge query string).
+      await page.context().route(`${new URL(url).origin}/**`, route => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
       const [popup] = await Promise.all([page.waitForEvent('popup'), button.click()]);
       await expect(popup).toHaveURL(url);
       await popup.close();

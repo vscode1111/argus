@@ -237,14 +237,14 @@ test.describe('connected client list (integration)', () => {
         return rows.find(r => r.workspacePath && path.resolve(r.workspacePath) === path.resolve(busyDir))?.sessionId;
       }, { timeout: 20_000 }).toMatch(/^(?:codex:)?[0-9a-f-]{36}$/i);
 
-      // And it stops being marked when the turn ends: "running" is a live reading, not
-      // a flag set once at send.
-      // This also waits for the real response, which can take over 10s. Polling the
-      // state avoids losing a done frame that arrived while we checked the id.
+      // End the turn explicitly so this checks the registry transition rather than
+      // waiting for a variable-length model reply. Polling also covers the case where
+      // the reply finished just before stop was sent.
+      busy.send(JSON.stringify({ type: 'stop' }));
       await expect.poll(async () => {
         const after = await listClients(idle);
         return after.find(r => r.workspacePath && path.resolve(r.workspacePath) === path.resolve(busyDir))?.running;
-      }, { timeout: 45_000 }).toBe(false);
+      }, { timeout: 10_000 }).toBe(false);
     } finally {
       await closeSocket(busy);
       await closeSocket(idle);

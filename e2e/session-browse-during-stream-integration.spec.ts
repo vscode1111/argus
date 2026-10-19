@@ -1,26 +1,13 @@
 import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
+import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 // All tests share the same :3001 backend channel (same workspace dir).
 // Serial mode prevents them from racing on s.sessionId / the session list.
 test.describe.configure({ mode: 'serial' });
-
-// Sends a prompt and waits for the turn to complete.
-async function sendAndWait(page: Page, text: string) {
-  const textarea = page.getByPlaceholder('Ask Argus');
-  await textarea.fill(text);
-  // Use exact:true so a session whose AI-generated title contains the word "Send"
-  // (e.g. "Send OK confirmation") does not make the header button ambiguous with
-  // the actual Send button (aria-label="Send").
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  const stopBtn = page.getByRole('button', { name: 'Stop' });
-  await expect(stopBtn).toBeVisible({ timeout: 10_000 });
-  // 20s was below what a turn actually costs here, so this cap - not the test timeout -
-  // was the binding constraint when it failed. A fresh session in this workspace starts at
-  // ~77k input tokens (CLAUDE.md + the CLI system prompt), so even `Reply with just "OK"`
-  // runs 5-20s. Raising a cap only extends the wait on the runs that need it.
-  await expect(stopBtn).toHaveCount(0, { timeout: 45_000 });
-}
 
 // Sends a prompt and returns as soon as the Stop button appears (CLI is live),
 // without waiting for the turn to finish.
@@ -30,23 +17,31 @@ async function startStreaming(page: Page, text: string) {
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible({ timeout: 15_000 });
 }
 
-// Establish a native session ID without waiting for a model response. The browse
-// tests need a finished session to navigate to, not a successful model turn.
-async function establishSession(page: Page, text: string): Promise<string> {
-  await startStreaming(page, text);
-  const dialog = await openHistoryModal(page);
-  const currentRow = dialog.locator('[class*="rowCurrent"]');
-  await expect(currentRow).toBeVisible({ timeout: 10_000 });
-  const id = await currentRow.getAttribute('data-session-id');
-  expect(id).toBeTruthy();
-  await page.keyboard.press('Escape');
-  const stop = page.getByRole('button', { name: 'Stop' });
-  if (await stop.isVisible()) {
-    try { await stop.click({ timeout: 1500 }); }
-    catch (error) { if (await stop.isVisible()) throw error; }
+const historyFixtures: string[] = [];
+test.afterEach(() => {
+  for (const file of historyFixtures.splice(0)) {
+    try { fs.unlinkSync(file); } catch { /* already removed */ }
   }
-  await expect(stop).toHaveCount(0, { timeout: 10_000 });
-  return id!;
+});
+
+// The older session is a finished transcript. Creating it directly keeps the
+// browse assertion independent of how long a provider takes to answer a turn.
+function createHistorySession(page: Page, title: string): string {
+  const workspace = new URL(page.url()).searchParams.get('dir');
+  if (!workspace) throw new Error('The test page has no isolated workspace');
+  const id = randomUUID();
+  const encodedDir = path.resolve(workspace).replace(/[^a-zA-Z0-9]/g, '-');
+  const projectDir = path.join(os.homedir(), '.claude', 'projects', encodedDir);
+  fs.mkdirSync(projectDir, { recursive: true });
+  const file = path.join(projectDir, `${id}.jsonl`);
+  fs.writeFileSync(file, [
+    JSON.stringify({ type: 'system', subtype: 'init', cwd: workspace, session_id: id }),
+    JSON.stringify({ type: 'custom-title', customTitle: title }),
+    JSON.stringify({ type: 'user', cwd: workspace, message: { role: 'user', content: title } }),
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Ready.' }] } }),
+  ].join('\n') + '\n');
+  historyFixtures.push(file);
+  return id;
 }
 
 // Opens the Session History modal and waits for the session list to load.
@@ -70,20 +65,6 @@ async function openHistoryModal(page: Page) {
   return dialog;
 }
 
-// Rename the current (green) session via the history modal and close it.
-async function renameCurrentSession(page: Page, newTitle: string) {
-  const dialog = await openHistoryModal(page);
-  const currentRow = dialog.locator('[class*="rowCurrent"]');
-  await expect(currentRow).toBeVisible({ timeout: 10_000 });
-  await currentRow.getByRole('button', { name: 'Rename session' }).click();
-  const input = dialog.getByRole('textbox', { name: 'Rename session' });
-  await input.fill(newTitle);
-  await input.press('Enter');
-  await expect(dialog.getByText(newTitle)).toBeVisible({ timeout: 5_000 });
-  await page.keyboard.press('Escape');
-  await expect(dialog).toHaveCount(0);
-}
-
 test.describe('browse past session during active streaming (integration)', () => {
   // Regression for: resumeSession while a CLI turn is streaming left s.sessionId
   // pointing at the live session (server deliberately skips the update to protect
@@ -95,9 +76,9 @@ test.describe('browse past session during active streaming (integration)', () =>
   test('header title updates to the browsed session', { tag: ["@shared"] }, async ({ page }) => {
     await waitForApp(page);
 
-    // 1. Create session A with a distinct title, then stop its turn.
-    const knownTitle = `scub-browse-a-${Date.now()}: Reply with just "OK".`;
-    const sessionAId = await establishSession(page, knownTitle);
+    // 1. Create a finished session A with a distinct title.
+    const knownTitle = `History entry ${Date.now()}`;
+    const sessionAId = createHistorySession(page, knownTitle);
 
     // 2. Open a new session (session B) and start streaming without waiting.
     await page.getByRole('button', { name: 'New chat' }).click();
@@ -129,7 +110,7 @@ test.describe('browse past session during active streaming (integration)', () =>
 
     // 1. Create session A and keep its stable id. A provider-side rename is not
     // needed to test which session receives the current-row highlight.
-    const sessionAId = await establishSession(page, 'scub-browse-b: Reply with just "OK".');
+    const sessionAId = createHistorySession(page, 'Previous conversation');
 
     // 2. Start a new session (session B) and begin streaming.
     await page.getByRole('button', { name: 'New chat' }).click();
@@ -153,7 +134,8 @@ test.describe('browse past session during active streaming (integration)', () =>
     await page.keyboard.press('Escape');
   });
 
-  test('token counts are non-zero after returning to a live session', { tag: ["@shared"] }, async ({ page }) => {
+  // This UI check needs a provider that publishes usage before its turn ends.
+  test('token counts are non-zero after returning to a live session', { tag: ["@claude", "@claude-live"] }, async ({ page }) => {
     // Regression for: replaySnapshot sent thinking_start which reset liveTokens to
     // undefined, but no token_update followed to restore the accumulated counts.
     // Returning to a streaming session showed "0 in / 0 out" (or nothing) in the
@@ -162,34 +144,21 @@ test.describe('browse past session during active streaming (integration)', () =>
     // the current completedOutputTokens + liveOutputChars/4 estimate immediately
     // after replaySnapshot so the StreamingTimer always shows non-zero values.
     //
-    // The one test that does not fit the global 30s budget: it needs three real CLI
-    // turns plus two rename round-trips before the assertion can even begin. Bounded
-    // exception here rather than raising the timeout for every test.
+    // The live provider must emit a measured token update before the browse check.
     test.setTimeout(60_000);
     await waitForApp(page);
 
-    // 1. Create and rename session A (a completed session to browse to).
-    await sendAndWait(page, 'Reply with just "OK".');
-    const titleA = `scub-tok-a-${Date.now()}`;
-    await renameCurrentSession(page, titleA);
+    // 1. Create a finished session A to browse to. Session B is the live turn.
+    const titleA = `Earlier session ${Date.now()}`;
+    const sessionAId = createHistorySession(page, titleA);
 
-    // 2. Open a new session (session B), establish it in history, then rename it.
-    await page.getByRole('button', { name: 'New chat' }).click();
-    await sendAndWait(page, 'Reply with just "OK".');
-    const titleB = `scub-tok-b-${Date.now()}`;
-    await renameCurrentSession(page, titleB);
+    // 2. A foreground tool call holds session B open for the browse round-trip.
+    // Native usage arrives at the tool boundary, before the sleep finishes.
+    await startStreaming(page, 'Run exactly `sleep 20` with the shell tool in the foreground, then reply DONE.');
+    await expect.poll(() => new URL(page.url()).searchParams.get('session'), { timeout: 30_000 }).toBeTruthy();
+    const sessionBId = new URL(page.url()).searchParams.get('session')!;
 
-    // 3. Start a long stream in session B so there is time to browse and return.
-    //    It has to outlive the browse round-trip: once the turn ends, the return path
-    //    replays the transcript from disk, and loadSession builds messages with only
-    //    `outcome: 'success'` - no responseTime and no token fields - so there is no
-    //    timer element to assert on at all (step 7 skips in that case). 1..3000 keeps
-    //    the CLI streaming well past the two modal round-trips even at --effort low.
-    // Native usage may arrive only after a model call completes. A tool boundary
-    // gives us measured usage before the following long answer, for either runtime.
-    await startStreaming(page, 'First run a shell command that prints scub-token-marker. Then write the numbers 1 to 3000, one per line, no other text.');
-
-    // 4. Wait until the live timer shows both token counts. StreamingTimer renders
+    // 3. Wait until the live timer shows both token counts. StreamingTimer renders
     //    "<n> in / <m> out" only when input AND output are non-zero, so this waits on
     //    exactly the precondition the test needs: s.liveInputTokens > 0 and
     //    s.liveOutputChars > 0 on the server before we browse away. (Waiting for a
@@ -198,33 +167,30 @@ test.describe('browse past session during active streaming (integration)', () =>
     const liveTimer = page.locator('[class*="responseTime"]').last();
     await expect(liveTimer).toContainText(/\d\s+in\s*\/\s*[\d,\s]+out/, { timeout: 30_000 });
 
-    // 5. Browse to session A while session B is still streaming.
+    // 4. Browse to session A while session B is still streaming.
     const hist1 = await openHistoryModal(page);
-    await expect(hist1.getByText(titleA, { exact: true })).toBeVisible({ timeout: 10_000 });
-    await hist1.getByText(titleA, { exact: true }).click();
+    const sessionARow = hist1.locator(`[data-session-id="${sessionAId}"]`);
+    await expect(sessionARow).toBeVisible({ timeout: 10_000 });
+    await sessionARow.click();
     await expect(hist1).toHaveCount(0);
     await expect(page.locator('button.sessionNameBtn')).toHaveText(titleA, { timeout: 10_000 });
 
-    // 6. Return to session B via the history modal.
+    // 5. Return to session B via the history modal.
     const hist2 = await openHistoryModal(page);
-    await expect(hist2.getByText(titleB, { exact: true })).toBeVisible({ timeout: 10_000 });
-    await hist2.getByText(titleB, { exact: true }).click();
+    const sessionBRow = hist2.locator(`[data-session-id="${sessionBId}"]`);
+    await expect(sessionBRow).toBeVisible({ timeout: 10_000 });
+    await sessionBRow.click();
     await expect(hist2).toHaveCount(0);
-    await expect(page.locator('button.sessionNameBtn')).toHaveText(titleB, { timeout: 10_000 });
+    await expect.poll(() => new URL(page.url()).searchParams.get('session')).toBe(sessionBId);
 
-    // 7. The regression is about returning to a LIVE session: replaySnapshot restores
+    // 6. The regression is about returning to a LIVE session: replaySnapshot restores
     //    the streaming state, and the token counts must come back with it. The Stop
     //    button is the app-owned signal that the entry is still streaming.
     const stopBtn = page.getByRole('button', { name: 'Stop' });
     const isLive = await stopBtn.waitFor({ state: 'visible', timeout: 5_000 })
       .then(() => true).catch(() => false);
 
-    // The model can finish 3000 lines faster than the two modal round-trips. Then the
-    // return path is a disk replay, and a replayed transcript has no timer element at
-    // all (loadSession sets only `outcome: 'success'`) - so there is nothing this
-    // regression could even be observed on. Skip loudly instead of asserting a
-    // condition the architecture cannot satisfy, which is what used to fail here.
-    test.skip(!isLive, 'stream finished during the browse round-trip: disk replay carries no token counts');
+    expect(isLive, 'the foreground command must keep the turn live through the browse').toBe(true);
 
     const timer = page.locator('[class*="responseTime"]').last();
     await expect(timer).toContainText('in /', { timeout: 15_000 });

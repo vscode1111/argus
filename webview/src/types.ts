@@ -77,6 +77,7 @@ export type SessionSummary = {
   id: string;
   title: string;
   lastPrompt: string;
+  delegated?: boolean;
   updatedAt: number; // epoch ms
   lines: number; // total lines of text/code across the transcript
 };
