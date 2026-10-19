@@ -19,6 +19,27 @@
   white-space: nowrap;
 }
 
+.toolNameJs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  padding: 2px 0;
+  flex-shrink: 0;
+}
+
+.fileChangeIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  color: var(--vscode-textLink-foreground);
+}
+
+.fileChangeIcon svg { width: 18px; height: 18px; }
+
 .toolNamePending {
   color: var(--vscode-testing-iconPassed, #73c991);
   animation: toolPulse 1.5s ease-in-out infinite;

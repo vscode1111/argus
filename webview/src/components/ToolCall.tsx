@@ -63,6 +63,15 @@ interface Props {
   sessionDone?: boolean;
 }
 
+function FileChangeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 2h9l5 5v15H5zM14 2v5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8 12h7m-3.5-3.5v7M8 19h7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function ToolCall({ call, sessionDone }: Props) {
   const { verboseTools, showOutput } = useSettings();
   const { input, result, error } = call;
@@ -393,13 +402,15 @@ export function ToolCall({ call, sessionDone }: Props) {
         {verboseTools ? (
           <pre className={styles.toolInput}>
             {firstFileDiff ? (
-              <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={e => { e.preventDefault(); openFileChange(firstFileDiff.path, firstFileDiff.diff); }}>{name}</a>
+              <a className={[styles.fileChangeIcon, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" aria-label="File changes" title="Open file diff" onClick={e => { e.preventDefault(); openFileChange(firstFileDiff.path, firstFileDiff.diff); }}><FileChangeIcon /></a>
+            ) : call.kind === 'fileChange' ? (
+              <span className={styles.fileChangeIcon} role="img" aria-label="File changes" title="File changes"><FileChangeIcon /></span>
             ) : shell ? (
                 <ShellIcon shell={shell.shell} command={bashCommand} className={pending ? styles.toolNamePending : undefined} />
             ) : isFile && fileViewerContent ? (
               <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={handleFileClick}>{name}</a>
             ) : (
-              <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
+              <span className={[styles.toolName, name === 'js' && styles.toolNameJs, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
             )}
             {fileChangeTotals.added > 0 && <> <span className={styles.statsAdded}>+{fileChangeTotals.added}</span></>}
             {fileChangeTotals.removed > 0 && <> <span className={styles.statsRemoved}>-{fileChangeTotals.removed}</span></>}
@@ -408,11 +419,13 @@ export function ToolCall({ call, sessionDone }: Props) {
         ) : (
           <div className={styles.toolHeader}>
             {firstFileDiff ? (
-              <a className={[styles.toolName, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" onClick={e => { e.preventDefault(); openFileChange(firstFileDiff.path, firstFileDiff.diff); }}>{name}</a>
+              <a className={[styles.fileChangeIcon, styles.toolFileLink, pending && styles.toolNamePending].filter(Boolean).join(' ')} href="#" aria-label="File changes" title="Open file diff" onClick={e => { e.preventDefault(); openFileChange(firstFileDiff.path, firstFileDiff.diff); }}><FileChangeIcon /></a>
+            ) : call.kind === 'fileChange' ? (
+              <span className={styles.fileChangeIcon} role="img" aria-label="File changes" title="File changes"><FileChangeIcon /></span>
             ) : shell ? (
                 <ShellIcon shell={shell.shell} command={bashCommand} className={pending ? styles.toolNamePending : undefined} />
             ) : (
-              <span className={[styles.toolName, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
+              <span className={[styles.toolName, name === 'js' && styles.toolNameJs, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
             )}
             {fileChanges.length > 0 && (
               fileChanges.length === 1 ? (

@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { AgentProvider, AgentSession, AgentEvent, TurnInput } from './types';
 import type { SessionState } from '../sessionState';
-import { codexSessionLineCount, type ReplayMessage } from '../sessions';
+import { codexSessionMeta, type ReplayMessage } from '../sessions';
 import type { RateLimitInfo } from '../accountUsage';
 import { AppServerRpc, object, array, string, type JsonObject } from './rpc';
 import { records, sessionRecord, saveSession, forgetSession, sameWorkspace } from './store';
@@ -192,6 +192,7 @@ export class CodexSession implements AgentSession {
   private interactions = new Map<string, { rpcId: string | number; method: string; params: JsonObject }>();
   private pendingInteractionIds: string[] = [];
   private pendingAsyncQuestion?: ProviderInteraction;
+  private outputTokenBaseline?: number;
   private idleTimer?: NodeJS.Timeout;
   get active(): boolean { return this.busy; }
   get pid(): number | undefined { return this.rpc.pid; }
@@ -239,6 +240,7 @@ export class CodexSession implements AgentSession {
     }
     if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
     this.busy = true; this.state.cliDone = false; this.deltas.clear();
+    this.outputTokenBaseline = undefined;
     this.state.liveInputTokens = 0; this.state.completedOutputTokens = 0; this.state.liveOutputChars = 0;
     this.state.lastMessage = { text: input.text || '', images: input.images, mode: input.mode };
     if (!input._silent) this.state.broadcast(JSON.stringify({ type: 'message', message: { id: randomUUID(), role: 'user', content: input.text || '', images: input.images } }));
@@ -398,11 +400,18 @@ export class CodexSession implements AgentSession {
       }
     } else if (method === 'thread/tokenUsage/updated') {
       const usage = object(params.tokenUsage); const last = object(usage.last);
-      const inputTokens = Number(last.inputTokens) || 0; const outputTokens = Number(last.outputTokens) || 0;
-      this.state.liveInputTokens = inputTokens; this.state.completedOutputTokens = outputTokens;
+      const inputTokens = Number(last.inputTokens) || 0;
+      const lastOutputTokens = Number(last.outputTokens) || 0;
+      const totalOutputTokens = object(usage.total).outputTokens;
+      if (typeof totalOutputTokens === 'number' && totalOutputTokens >= lastOutputTokens) {
+        this.outputTokenBaseline ??= totalOutputTokens - lastOutputTokens;
+        this.state.completedOutputTokens = totalOutputTokens - this.outputTokenBaseline;
+      } else this.state.completedOutputTokens += lastOutputTokens;
+      const outputTokens = this.state.completedOutputTokens;
+      this.state.liveInputTokens = inputTokens;
       this.emit({ type: 'token_update', inputTokens, outputTokens });
       if (typeof usage.modelContextWindow === 'number' && usage.modelContextWindow > 0)
-        this.emit({ type: 'contextUsage', percent: Math.min(100, inputTokens / usage.modelContextWindow * 100), inputTokens, outputTokens, contextWindow: usage.modelContextWindow });
+        this.emit({ type: 'contextUsage', percent: Math.min(100, inputTokens / usage.modelContextWindow * 100), inputTokens, outputTokens: lastOutputTokens, contextWindow: usage.modelContextWindow });
     } else if (method === 'turn/completed') {
       const turn = object(params.turn);
       if (this.turnId && turn.id !== this.turnId) return;
@@ -453,7 +462,7 @@ export const codexProvider: AgentProvider = {
   },
   async list(cwd) {
     return records().filter(r => r.selection.providerId === 'codex' && sameWorkspace(r.cwd, cwd))
-      .map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, lines: codexSessionLineCount(r.id), providerId: 'codex' }));
+      .map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, ...codexSessionMeta(r.id), providerId: 'codex' }));
   },
   async load(id, cwd) {
     if (!sessionRecord(id, cwd)) throw new Error('Conversation does not belong to this workspace');

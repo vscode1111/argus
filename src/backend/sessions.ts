@@ -17,6 +17,7 @@ export interface SessionSummary {
   id: string;
   title: string;
   lastPrompt: string;
+  delegated?: boolean;
   updatedAt: number; // mtime in ms
   lines: number; // total lines of text/code across the transcript
 }
@@ -130,13 +131,21 @@ function countMessageLines(content: unknown): number {
 // A user-set `custom-title` (written by the official client when you rename a
 // session) takes precedence over the AI-generated `ai-title`. All event types
 // may appear multiple times; the last of each title/prompt wins.
-function readSessionMeta(file: string): { title: string; lastPrompt: string; lines: number } {
+function isDelegatedPrompt(content: unknown): boolean {
+  if (typeof content === 'string') return /^🤖(?:\s|$)|^[/$][^\s]+\s+🤖(?:\s|$)/u.test(content);
+  if (!Array.isArray(content)) return false;
+  return content.some(block => !!block && typeof block === 'object' &&
+    (block.type === 'text' || block.type === 'input_text') && isDelegatedPrompt(block.text));
+}
+
+function readSessionMeta(file: string): { title: string; lastPrompt: string; lines: number; delegated: boolean } {
   let aiTitle = '';
   let customTitle = '';
   let lastPrompt = '';
   let lines = 0;
+  let delegated = false;
   let content: string;
-  try { content = fs.readFileSync(file, 'utf8'); } catch { return { title: '', lastPrompt, lines }; }
+  try { content = fs.readFileSync(file, 'utf8'); } catch { return { title: '', lastPrompt, lines, delegated }; }
   for (const line of content.split(/\r?\n/)) {
     if (!line) continue;
     let o: { type?: string; aiTitle?: unknown; customTitle?: unknown; lastPrompt?: unknown; message?: { content?: unknown } };
@@ -144,9 +153,12 @@ function readSessionMeta(file: string): { title: string; lastPrompt: string; lin
     if (o.type === 'custom-title' && typeof o.customTitle === 'string') customTitle = o.customTitle;
     else if (o.type === 'ai-title' && typeof o.aiTitle === 'string') aiTitle = o.aiTitle;
     else if (o.type === 'last-prompt' && typeof o.lastPrompt === 'string') lastPrompt = o.lastPrompt;
-    else if ((o.type === 'user' || o.type === 'assistant') && o.message) lines += countMessageLines(o.message.content);
+    else if ((o.type === 'user' || o.type === 'assistant') && o.message) {
+      lines += countMessageLines(o.message.content);
+      if (o.type === 'user' && isDelegatedPrompt(o.message.content)) delegated = true;
+    }
   }
-  return { title: customTitle || aiTitle, lastPrompt, lines };
+  return { title: customTitle || aiTitle, lastPrompt, lines, delegated };
 }
 
 // Absolute path of the transcript file backing a session, for display in the
@@ -174,32 +186,37 @@ function codexSessionFilePath(id: string): string | null {
   return null;
 }
 
-const codexLineCounts = new Map<string, { mtimeMs: number; size: number; lines: number }>();
+const codexSessionMetaCache = new Map<string, { mtimeMs: number; size: number; lines: number; delegated: boolean }>();
 
-export function codexSessionLineCount(sessionId: string): number {
+export function codexSessionMeta(sessionId: string): { lines: number; delegated: boolean } {
   const file = sessionFilePath(sessionId, '');
-  if (!file) return 0;
+  if (!file) return { lines: 0, delegated: false };
   let stat: fs.Stats;
-  try { stat = fs.statSync(file); } catch { return 0; }
-  const cached = codexLineCounts.get(file);
-  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.lines;
+  try { stat = fs.statSync(file); } catch { return { lines: 0, delegated: false }; }
+  const cached = codexSessionMetaCache.get(file);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size)
+    return { lines: cached.lines, delegated: cached.delegated };
 
   let lines = 0;
+  let delegated = false;
   let content: string;
-  try { content = fs.readFileSync(file, 'utf8'); } catch { return 0; }
+  try { content = fs.readFileSync(file, 'utf8'); } catch { return { lines: 0, delegated: false }; }
   for (const raw of content.split(/\r?\n/)) {
     if (!raw) continue;
     let record: { type?: string; payload?: { type?: string; role?: string; content?: unknown; summary?: unknown; input?: unknown; arguments?: unknown; output?: unknown } };
     try { record = JSON.parse(raw); } catch { continue; }
     if (record.type !== 'response_item' || !record.payload) continue;
     const item = record.payload;
-    if (item.type === 'message' && (item.role === 'user' || item.role === 'assistant')) lines += countCodexText(item.content);
+    if (item.type === 'message' && (item.role === 'user' || item.role === 'assistant')) {
+      lines += countCodexText(item.content);
+      if (item.role === 'user' && isDelegatedPrompt(item.content)) delegated = true;
+    }
     else if (item.type === 'reasoning') lines += countCodexText(item.summary);
     else if (item.type === 'custom_tool_call' || item.type === 'function_call') lines += countCodexText(item.input ?? item.arguments);
     else if (item.type === 'custom_tool_call_output' || item.type === 'function_call_output') lines += countCodexText(item.output);
   }
-  codexLineCounts.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, lines });
-  return lines;
+  codexSessionMetaCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, lines, delegated });
+  return { lines, delegated };
 }
 
 function countCodexText(value: unknown): number {
@@ -266,6 +283,7 @@ export function listSessions(workspaceDir: string): SessionSummary[] {
       id,
       title: meta.title || meta.lastPrompt || 'Untitled',
       lastPrompt: meta.lastPrompt,
+      delegated: meta.delegated,
       updatedAt: stat.mtimeMs,
       lines: meta.lines,
     });
@@ -367,6 +385,7 @@ export async function listAllSessions(): Promise<GlobalSessionSummary[]> {
       id: c.id,
       title: meta.title || meta.lastPrompt || 'Untitled',
       lastPrompt: meta.lastPrompt,
+      delegated: meta.delegated,
       updatedAt: c.mtime,
       lines: meta.lines,
       workspacePath: c.cwd,

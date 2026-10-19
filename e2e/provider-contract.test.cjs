@@ -199,6 +199,17 @@ test('usage snapshot survives reattachment and resets for the next turn', async 
   await runtime.stop();
 });
 
+test('output tokens accumulate across model calls in one turn', async () => {
+  const { state, events, runtime } = session();
+  await runtime.send({ text: 'scub-multi-usage' }); await until(() => !runtime.active);
+  assert.equal(state.liveInputTokens, 120);
+  assert.equal(state.completedOutputTokens, 13);
+  assert.equal(events.filter(event => event.type === 'token_update').at(-1).outputTokens, 13);
+  assert.equal(events.filter(event => event.type === 'contextUsage').at(-1).outputTokens, 5);
+  await runtime.send({ text: 'scub-multi-usage' }); await until(() => !runtime.active);
+  assert.equal(state.completedOutputTokens, 13);
+});
+
 test('stop settles before next turn and late old deltas cannot enter it', async () => {
   const { events, runtime } = session();
   await runtime.send({ text: 'scub-wait' });

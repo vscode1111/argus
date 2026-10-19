@@ -318,6 +318,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                     ) : (
                       <span className={styles.rowTitle}>
                         <ProviderIcon providerId={s.id.startsWith('codex:') ? 'codex' : 'claude'} label active={activeIds.has(s.id)} size={14} className={activeIds.has(s.id) ? styles.activeProviderIcon : undefined} />
+                        {s.delegated && <span aria-label="Delegated session">🤖</span>}
                         <span className={styles.titleText}>{s.title}</span>
                       </span>
                     )}
@@ -406,6 +407,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                   <div className={styles.allRowMain}>
                     <span className={styles.rowTitle}>
                       <ProviderIcon providerId={s.id.startsWith('codex:') ? 'codex' : 'claude'} label active={activeIds.has(s.id)} size={14} className={activeIds.has(s.id) ? styles.activeProviderIcon : undefined} />
+                      {s.delegated && <span aria-label="Delegated session">🤖</span>}
                       <span className={styles.titleText}>{s.title}</span>
                     </span>
                     <span className={styles.rowSub}>{s.workspaceName}</span>

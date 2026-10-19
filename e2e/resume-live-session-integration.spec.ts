@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 // Returning to a session that is streaming RIGHT NOW must land the client in the live
-// turn: the progress indicator comes back and further output keeps arriving.
+// turn: the progress indicator comes back and later live events still arrive.
 //
 // The bug: handleResumeSession only ever rebinds the client's OWN entry's sessionId and
 // replays that entry's snapshot. When the session is being streamed by a different entry
@@ -63,7 +63,7 @@ function record(ws: WebSocket): Msg[] {
   return seen;
 }
 
-async function waitForMsg(seen: Msg[], pred: (m: Msg) => boolean, timeoutMs: number, what: string): Promise<Msg> {
+async function waitForMsg(seen: Msg[], pred: (m: Msg, index: number) => boolean, timeoutMs: number, what: string): Promise<Msg> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const hit = seen.find(pred);
@@ -73,8 +73,6 @@ async function waitForMsg(seen: Msg[], pred: (m: Msg) => boolean, timeoutMs: num
   throw new Error(`timed out after ${timeoutMs}ms waiting for ${what}`);
 }
 
-const STREAM_FRAMES = new Set(['text_chunk', 'thinking_chunk', 'tool_start', 'tool_end', 'done']);
-
 function send(ws: WebSocket, msg: Msg): void {
   ws.send(JSON.stringify(msg));
 }
@@ -83,7 +81,7 @@ test.describe('resuming a session that is streaming elsewhere (integration)', ()
   // Two real CLI turns plus a live resume do not fit the flat 30s budget.
   test.setTimeout(90_000);
 
-  test('the resumed client gets the live indicator and keeps receiving output', { tag: ["@shared"] }, async () => {
+  test('the resumed client gets the live indicator and receives later completion', { tag: ["@shared"] }, async () => {
     const nonce = await getNonce();
     const dir = makeTempDir('attach');
     const streamer = await openClient(nonce, dir);
@@ -109,13 +107,16 @@ test.describe('resuming a session that is streaming elsewhere (integration)', ()
       // The live indicator: replaying an in-progress entry opens with thinking_start.
       await waitForMsg(seenViewer, m => m.type === 'thinking_start', 20_000, 'the progress indicator');
 
-      // And it must keep updating, not just paint one frame and freeze.
-      seenViewer.length = 0;
+      // A stop issued after the attach must reach the resumed client as a new
+      // completion event. This checks the live broadcast without relying on how
+      // quickly the provider chooses to stream another text chunk.
+      const beforeStop = seenViewer.length;
+      send(streamer, { type: 'stop' });
       await waitForMsg(
         seenViewer,
-        m => STREAM_FRAMES.has(String(m.type)),
-        25_000,
-        'continued streaming output after the resume',
+        (m, index) => index >= beforeStop && m.type === 'done',
+        10_000,
+        'the stop completion after the resume',
       );
     } finally {
       if (viewer) { send(viewer, { type: 'stop' }); await closeClient(viewer); }

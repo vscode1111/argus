@@ -68,7 +68,12 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     } else if (text !== 'scub-wait' && text !== 'scub-interrupt-race') {
       timer = setTimeout(() => {
         notify('item/agentMessage/delta', { turnId, itemId: 'scub-answer', delta: 'scub-ok' });
-        notify('thread/tokenUsage/updated', { tokenUsage: { last: { inputTokens: 120, outputTokens: 8 }, modelContextWindow: 1000 } });
+        if (text === 'scub-multi-usage') {
+          const previousOutput = 20 + (turn - 1) * 13;
+          notify('thread/tokenUsage/updated', { tokenUsage: { total: { outputTokens: previousOutput + 8 }, last: { inputTokens: 110, outputTokens: 8 }, modelContextWindow: 1000 } });
+          notify('thread/tokenUsage/updated', { tokenUsage: { total: { outputTokens: previousOutput + 13 }, last: { inputTokens: 120, outputTokens: 5 }, modelContextWindow: 1000 } });
+          notify('thread/tokenUsage/updated', { tokenUsage: { total: { outputTokens: previousOutput + 13 }, last: { inputTokens: 120, outputTokens: 5 }, modelContextWindow: 1000 } });
+        } else notify('thread/tokenUsage/updated', { tokenUsage: { last: { inputTokens: 120, outputTokens: 8 }, modelContextWindow: 1000 } });
         notify('item/completed', { turnId, item: { id: 'scub-answer', type: 'agentMessage', text: 'scub-ok' } });
         notify('turn/completed', { turn: { id: turnId, status: 'completed' } });
       }, 60);
