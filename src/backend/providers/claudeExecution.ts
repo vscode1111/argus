@@ -39,7 +39,7 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
     // waiting on this answer, so it must ring on completion. This branch returns before the
     // reset block below that normally clears the flag.
     s.autonomousTurn = false;
-    s.broadcast(JSON.stringify({ type: 'user_inject', text }));
+    s.broadcast(JSON.stringify({ type: 'user_inject', text, images }));
     return;
   }
 

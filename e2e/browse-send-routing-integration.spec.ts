@@ -99,8 +99,8 @@ function send(ws: WebSocket, msg: Msg): void {
 }
 
 test.describe('send while browsing another session (integration)', () => {
-  // Three real CLI turns (a short one to create the second session, a long one to browse
-  // away from, and the turn the browsed send must start) do not fit the flat 30s budget.
+  // Starting two sessions and resuming one while another turn runs can exceed the
+  // integration project's 60s budget.
   test.setTimeout(90_000);
 
   test('the send starts a turn on the browsed session instead of injecting into the live one', { tag: ["@shared"] }, async () => {
@@ -110,11 +110,12 @@ test.describe('send while browsing another session (integration)', () => {
     const seen = record(ws);
 
     try {
-      // 1. A short turn, so the workspace has a second session on disk to browse to.
+      // 1. Create a session on disk, then stop its turn. Its reply is irrelevant to routing.
       send(ws, { type: 'send', text: 'Reply with exactly: ok' });
       const firstId = await waitForMsg(seen, m => m.type === 'sessionId' && !!m.id, 30_000, 'the first session id');
       const browsedId = String(firstId.id);
-      await waitForMsg(seen, m => m.type === 'done', 45_000, 'the first turn to finish');
+      send(ws, { type: 'stop' });
+      await waitForMsg(seen, m => m.type === 'done', 15_000, 'the first turn to stop');
 
       // 2. A fresh session, then a long turn that will still be streaming below.
       send(ws, { type: 'newSession' });
@@ -162,7 +163,8 @@ test.describe('send while browsing another session (integration)', () => {
       send(browser, { type: 'send', text: 'Reply with exactly: ok' });
       const firstId = await waitForMsg(seenBrowser, m => m.type === 'sessionId' && !!m.id, 30_000, 'the first session id');
       const browsedId = String(firstId.id);
-      await waitForMsg(seenBrowser, m => m.type === 'done', 45_000, 'the first turn to finish');
+      send(browser, { type: 'stop' });
+      await waitForMsg(seenBrowser, m => m.type === 'done', 15_000, 'the first turn to stop');
 
       send(browser, { type: 'newSession' });
       seenBrowser.length = 0;

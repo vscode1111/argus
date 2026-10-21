@@ -266,6 +266,15 @@ test('an async choice can be answered while the turn continues', async () => {
   assert.equal(events.some(event => event.type === 'user_inject' && event.text === 'scub-green'), true);
 });
 
+test('a steered image remains in the inline request event', async () => {
+  const { state, events, runtime } = session();
+  await runtime.send({ text: 'pause-for-image' });
+  await until(() => !!state.interaction?.async);
+  const image = { data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/XioAAAAASUVORK5CYII=', mediaType: 'image/png' };
+  await runtime.send({ text: 'Inspect this diagram', images: [image] });
+  assert.deepEqual(events.find(event => event.type === 'user_inject'), { type: 'user_inject', text: 'Inspect this diagram', images: [image] });
+});
+
 test('unknown permission requests are rejected, not silently approved', async () => {
   const { events, runtime } = session(); await runtime.send({ text: 'scub-unknown-request' });
   await until(() => !runtime.active);

@@ -101,6 +101,12 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
         setLoading(false);
         setRefreshing(false);
         wsCache = { path: currentPath, sessions: list, currentId: cid };
+      } else if (e.data?.type === 'sessionRenamed' && typeof e.data.id === 'string' && typeof e.data.title === 'string') {
+        const update = <T extends SessionSummary>(sessions: T[]) => sessions.map(session => session.id === e.data.id ? { ...session, title: e.data.title } : session);
+        setSessions(update);
+        setAllSessions(update);
+        if (wsCache?.path === currentPath) wsCache = { ...wsCache, sessions: update(wsCache.sessions) };
+        if (allCache) allCache = { ...allCache, sessions: update(allCache.sessions) };
       } else if (e.data?.type === 'allSessionList') {
         const list: GlobalSessionSummary[] = Array.isArray(e.data.sessions) ? e.data.sessions : [];
         const cid = typeof e.data.currentId === 'string' ? e.data.currentId : undefined;

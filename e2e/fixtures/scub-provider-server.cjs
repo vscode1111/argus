@@ -56,6 +56,9 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       notify('item/completed', { turnId, item: { id: 'scub-ask', type: 'agentMessage', text: 'scub-choice', delivery: 'async',
         questions: [{ title: 'scub-choice', options: ['scub-blue', 'scub-green'] }] } });
       notify('turn/completed', { turn: { id: turnId, status: 'completed' } });
+    } else if (text === 'pause-for-image') {
+      notify('item/completed', { turnId, item: { id: 'image-question', type: 'agentMessage', text: 'More detail?', delivery: 'async',
+        questions: [{ title: 'Additional detail', options: ['Continue', 'Stop'] }] } });
     } else if (text === 'scub-async-question-live') {
       notify('item/completed', { turnId, item: { id: 'scub-ask-live', type: 'agentMessage', text: 'scub-choice', delivery: 'async',
         questions: [{ title: 'scub-choice', options: ['scub-blue', 'scub-green'] }] } });
@@ -90,7 +93,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     setTimeout(() => notify('item/agentMessage/delta', { turnId: params.turnId, itemId: 'scub-late', delta: 'scub-stale' }), 100);
   } else if (method === 'turn/steer') {
     emit({ id, result: { turnId: params.expectedTurnId } });
-    if (params.input?.[0]?.text === 'scub-green') notify('turn/completed', { turn: { id: params.expectedTurnId, status: 'completed' } });
+    if (params.input?.[0]?.text === 'scub-green' || params.input?.[0]?.text === 'Inspect this diagram') notify('turn/completed', { turn: { id: params.expectedTurnId, status: 'completed' } });
   }
   else if (id === 100 && !method) {
     if (message.result?.answers?.['scub-choice']?.answers?.[0] !== 'scub-blue') process.exit(2);

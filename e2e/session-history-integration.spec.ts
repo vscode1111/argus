@@ -103,6 +103,9 @@ test.describe('session history (integration)', () => {
     // title text, so we target it by its global class, not by role/name).
     const nameBtn = page.locator('button.sessionNameBtn');
     await expect(nameBtn).toBeVisible({ timeout: 20_000 });
+    // The session ID makes the button visible before the asynchronous list supplies
+    // its title. Wait for that title before testing whether Escape preserves it.
+    await expect(nameBtn).not.toHaveText('Untitled', { timeout: 20_000 });
     const original = (await nameBtn.textContent())?.trim() ?? '';
 
     // 2. Escape must cancel: open the inline editor, type, press Escape, and the

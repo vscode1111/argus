@@ -235,7 +235,7 @@ export class CodexSession implements AgentSession {
       if (!this.turnId || this.interactions.size) throw new Error('Answer the pending question or wait for the turn to start');
       await this.rpc.request('turn/steer', { threadId: this.threadId, expectedTurnId: this.turnId, input: content });
       if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
-      this.emit({ type: 'user_inject', text: input.text || '' });
+      this.emit({ type: 'user_inject', text: input.text || '', ...(input.images?.length ? { images: input.images } : {}) });
       return;
     }
     if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
@@ -455,9 +455,13 @@ export const codexProvider: AgentProvider = {
   async skills(cwd) {
     return withRpc(async rpc => {
       const result = await rpc.request('skills/list', { cwds: [cwd] });
-      return array(result.data).flatMap(d => array(object(d).skills)).map(value => {
-        const s = object(value); return { name: string(s.name), description: string(s.description), path: string(s.path), kind: 'skill', scope: 'provider' };
-      });
+      const seen = new Set<string>();
+      return array(result.data).flatMap(d => array(object(d).skills)).map(object).filter(s => {
+        const name = string(s.name);
+        if (!name || s.enabled === false || typeof s.path !== 'string' || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      }).map(s => ({ name: string(s.name), description: string(s.description), path: string(s.path), kind: 'skill', scope: 'provider' }));
     });
   },
   async list(cwd) {
