@@ -93,6 +93,8 @@ function AppInner() {
   const loadTimer = React.useRef<number | null>(null);
   const [sessionTitle, setSessionTitle] = React.useState('');
   const [sessionId, setSessionId] = React.useState<string | null>(null);
+  const sessionIdRef = React.useRef(sessionId);
+  sessionIdRef.current = sessionId;
   const previousActivitySessionId = React.useRef(sessionId);
   useEffect(() => {
     if (previousActivitySessionId.current && previousActivitySessionId.current !== sessionId) setActivityOpen(false);
@@ -268,21 +270,27 @@ function AppInner() {
         const effectiveId = loadedSessionId.current ?? (e.data.currentId as string | undefined);
         const cur = (e.data.sessions as SessionSummary[]).find(s => s.id === effectiveId);
         setSessionTitle(cur?.title ?? '');
+        sessionIdRef.current = effectiveId ?? null;
         setSessionId(effectiveId ?? null);
         setSessionLines(cur?.lines ?? 0);
         endSessionLoad(); // a fresh list means a workspace reconnect finished
       } else if (t === 'sessionLoaded') {
         if (typeof e.data.id === 'string') {
           loadedSessionId.current = e.data.id;
+          sessionIdRef.current = e.data.id;
           setSessionId(e.data.id); // update immediately; title set when sessionList arrives
         }
         postMessage({ type: 'listSessions' });
         endSessionLoad(); // the resumed transcript has been replayed
       } else if (t === 'sessionId' && typeof e.data.id === 'string') {
         loadedSessionId.current = null;
+        sessionIdRef.current = e.data.id;
         setSessionId(e.data.id);
+      } else if (t === 'sessionRenamed' && e.data.id === sessionIdRef.current && typeof e.data.title === 'string') {
+        setSessionTitle(e.data.title);
       } else if (t === 'clear') {
         loadedSessionId.current = null;
+        sessionIdRef.current = null;
         setSessionTitle('');
         setSessionId(null);
         setSessionLines(0);
@@ -428,6 +436,7 @@ function AppInner() {
     dispatch({ type: 'clear' });
     dispatch({ type: 'workspaceInfo', path });
     setSessionTitle('');
+    sessionIdRef.current = null;
     setSessionId(null);
     setEditingName(false);
     postMessage({ type: 'switchWorkspace', dir: path });
@@ -448,6 +457,7 @@ function AppInner() {
     dispatch({ type: 'clear' });
     dispatch({ type: 'workspaceInfo', path });
     setSessionTitle('');
+    sessionIdRef.current = null;
     setSessionId(null);
     setEditingName(false);
     postMessage({ type: 'switchWorkspace', dir: path });

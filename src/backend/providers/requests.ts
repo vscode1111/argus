@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws';
 import type { Channel } from '../channel';
-import { listActiveSessions } from '../channel';
+import { broadcastToWorkspace, listActiveSessions } from '../channel';
 import type { SessionState } from '../sessionState';
 import { provider, providers, runtime, persistSelection, selectionMessage, providerForSession } from './registry';
 import { defaultSelection, selectionFor, forgetSession } from './store';
@@ -99,9 +99,13 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       reply({ type: 'loginResult', success: false, message: 'Run codex login on the server, then reopen this dialog.' });
     } else {
       const id = string(msg.id);
+      let renamed = false;
       if (type !== 'listSessions') {
         const owner = providerForSession(id);
-        if (type === 'renameSession') await owner.rename(id, state.workspaceDir, string(msg.title));
+        if (type === 'renameSession') {
+          await owner.rename(id, state.workspaceDir, string(msg.title));
+          renamed = true;
+        }
         else {
           if (listActiveSessions().some(s => s.id === id)) throw new Error('Stop the conversation before deleting it');
           await owner.remove(id, state.workspaceDir); forgetSession(id);
@@ -109,7 +113,12 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
         }
       }
       const lists = await Promise.all(providers().map(p => p.list(state.workspaceDir)));
-      reply({ type: 'sessionList', sessions: lists.flat().sort((a, b) => b.updatedAt - a.updatedAt), currentId: viewing || state.sessionId });
+      const sessions = lists.flat().sort((a, b) => b.updatedAt - a.updatedAt);
+      if (renamed) {
+        const title = sessions.find(session => session.id === id)?.title;
+        if (title) broadcastToWorkspace(state.workspaceDir, JSON.stringify({ type: 'sessionRenamed', id, title }));
+      }
+      reply({ type: 'sessionList', sessions, currentId: viewing || state.sessionId });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Provider request failed';

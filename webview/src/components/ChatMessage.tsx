@@ -164,7 +164,7 @@ export function ChatMessage({ message, login }: Props) {
           return null;
         }
         if (block.type === 'tool') return <ToolCall key={block.call.id} call={block.call} sessionDone={sessionDone} />;
-        if (block.type === 'user_inject') return <UserInjectBlock key={`inject-${i}`} text={block.text} />;
+        if (block.type === 'user_inject') return <UserInjectBlock key={`inject-${i}`} text={block.text} images={block.images} />;
         if (block.type === 'bg_notice') return <BackgroundNoticeBlock key={`notice-${i}`} notice={block.notice} />;
         return <div key={`text-${i}`} className={msg.messageContent}>
           <Markdown>{block.text}</Markdown>

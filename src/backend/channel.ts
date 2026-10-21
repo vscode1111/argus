@@ -2,6 +2,7 @@ import { selectionFor } from './providers/store';
 import type { WebSocket } from 'ws';
 import { createSessionState, type SessionState } from './sessionState';
 import { killProc } from './cli';
+import type { ReplayMessage } from './sessions';
 
 const MAX_HISTORY = 200;
 
@@ -16,6 +17,7 @@ interface ChannelTool {
 interface ChannelBlock {
   type: 'text' | 'tool' | 'user_inject' | 'bg_notice';
   text?: string;
+  images?: ChannelMessage['images'];
   call?: ChannelTool;
   notice?: Record<string, unknown>;
 }
@@ -128,13 +130,12 @@ export interface Channel {
    *  in-progress snapshot so the live turn (and its progress indicator) is restored.
    *  Undefined when no OTHER entry is mid-turn on that session - including when the
    *  client is already in it, which the caller handles as an ordinary resume. */
-  attachToLiveSession(ws: WebSocket, sessionId: string): SessionState | undefined;
+  attachToLiveSession(ws: WebSocket, sessionId: string, skipReplay?: boolean): SessionState | undefined;
   /** Replay the in-progress streaming snapshot to this client (from its current entry). */
   replaySnapshot(ws: WebSocket): void;
-  /** Replay the client's entry history + streaming snapshot (deep-link initial sync). */
   /** Replay this client's entry (history + streaming snapshot). Returns false when the
    *  entry has nothing to replay, so the caller can fall back to loading from disk. */
-  replayHistory(ws: WebSocket): boolean;
+  replayHistory(ws: WebSocket, stored?: ReplayMessage[]): boolean;
 }
 
 const registry = new Map<string, ChannelData>();
@@ -152,6 +153,18 @@ export function broadcastToAllChannels(msg: string): void {
           try { ws.send(msg); } catch { /* closing */ }
           sent.add(ws);
         }
+      }
+    }
+  }
+}
+
+export function broadcastToWorkspace(workspaceDir: string, msg: string): void {
+  const channel = registry.get(workspaceKey(workspaceDir));
+  if (!channel) return;
+  for (const entry of channel.entries.values()) {
+    for (const ws of entry.clients) {
+      if (ws.readyState === 1) {
+        try { ws.send(msg); } catch { /* closing */ }
       }
     }
   }
@@ -433,7 +446,7 @@ function applyMsg(entry: SessionEntry, p: Record<string, unknown>): void {
       break;
     }
     case 'user_inject':
-      if (entry.snapshot) entry.snapshot.blocks.push({ type: 'user_inject', text: String(p.text ?? '') });
+      if (entry.snapshot) entry.snapshot.blocks.push({ type: 'user_inject', text: String(p.text ?? ''), images: p.images as ChannelMessage['images'] });
       break;
     case 'retry_status': {
       if (!entry.snapshot || (typeof p.autoRetry !== 'number' && p.errorRetry !== true) || p.timedOut === true) break;
@@ -553,7 +566,7 @@ function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
           ws.send(JSON.stringify({ type: 'tool_end', call: block.call }));
         }
       } else if (block.type === 'user_inject') {
-        ws.send(JSON.stringify({ type: 'user_inject', text: block.text ?? '' }));
+        ws.send(JSON.stringify({ type: 'user_inject', text: block.text ?? '', images: block.images }));
       }
     } catch { return; }
   }
@@ -562,9 +575,19 @@ function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
   }
 }
 
-function replayToClient(entry: SessionEntry, ws: WebSocket): void {
+function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[]): Array<ReplayMessage | ChannelMessage> {
+  let overlap = Math.min(stored.length, recent.length);
+  while (overlap > 0 && !recent.slice(0, overlap).every((message, index) => {
+    const saved = stored[stored.length - overlap + index];
+    return saved.role === message.role && saved.content === message.content;
+  })) overlap--;
+  return [...stored, ...recent.slice(overlap)];
+}
+
+function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessage[]): void {
   try { ws.send(JSON.stringify({ type: 'providerSelection', ...entry.state.selection })); } catch { return; }
-  try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages: entry.history })); } catch { return; }
+  const messages = stored ? mergeHistory(stored, entry.history) : entry.history;
+  try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages })); } catch { return; }
   replaySnapshotToClient(entry, ws);
   if (entry.state.interaction) ws.send(JSON.stringify({ type: 'interaction', request: entry.state.interaction }));
 }
@@ -748,7 +771,7 @@ export function getOrCreateChannel(dir: string): Channel {
       _cd.clientViewing.delete(ws);
       return entry.state;
     },
-    attachToLiveSession(ws, sessionId) {
+    attachToLiveSession(ws, sessionId, skipReplay = false) {
       const current = _cd.clientEntry.get(ws);
       for (const entry of _cd.entries.values()) {
         // Already in it: an ordinary return-to-live resume, which the caller replays
@@ -758,7 +781,7 @@ export function getOrCreateChannel(dir: string): Channel {
         if (st.sessionId === sessionId && (st.runtime?.active || st.currentProc && !st.cliDone)) {
           // joinEntry replays this entry's history and streaming snapshot, which is what
           // brings the progress indicator back and resumes the flow of output.
-          joinEntry(_cd, ws, entry);
+          joinEntry(_cd, ws, entry, skipReplay);
           _cd.clientViewing.delete(ws);
           return st;
         }
@@ -769,15 +792,15 @@ export function getOrCreateChannel(dir: string): Channel {
       const entry = _cd.clientEntry.get(ws);
       if (entry) { replaySnapshotToClient(entry, ws); if (entry.state.interaction) ws.send(JSON.stringify({ type: 'interaction', request: entry.state.interaction })); }
     },
-    replayHistory(ws) {
+    replayHistory(ws, stored) {
       const entry = _cd.clientEntry.get(ws);
       if (!entry) return false;
       // An entry can be bound to a session without ever having streamed it: opening a
       // finished session by deep link loads it from disk, leaving the entry's in-memory
       // history empty. Replaying that empty history would clear the client's view, so
       // report "nothing to replay" and let the caller read the transcript instead.
-      if (entry.history.length === 0 && !entry.snapshot) return false;
-      replayToClient(entry, ws);
+      if (entry.history.length === 0 && !entry.snapshot && !stored?.length) return false;
+      replayToClient(entry, ws, stored);
       return true;
     },
   };

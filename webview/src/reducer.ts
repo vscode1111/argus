@@ -1,5 +1,5 @@
 import type { ProviderInteraction } from '../../src/shared/provider';
-import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState, RetryStatus, TaskNotice } from './types';
+import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState, RetryStatus, TaskNotice, ImageAttachment } from './types';
 
 export type ContextUsage = { percent: number; inputTokens: number; outputTokens: number; contextWindow?: number };
 
@@ -65,7 +65,7 @@ export type AppAction =
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number; contextWindow?: number }
   | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; errorRetry?: boolean; timedOut?: boolean }
   | { type: 'retry_clean' }
-  | { type: 'user_inject'; text: string }
+  | { type: 'user_inject'; text: string; images?: ImageAttachment[] }
   | { type: 'sessionLoaded'; id: string; messages: UIMessage[] }
   | { type: 'modelChanged'; model: string }
   | { type: 'effortChanged'; effort: string }
@@ -150,7 +150,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
 
     case 'user_inject':
       if (!state.streaming) return state;
-      return { ...state, streaming: { ...state.streaming, blocks: [...state.streaming.blocks, { type: 'user_inject', text: action.text }], lastEventTime: Date.now() } };
+      return { ...state, streaming: { ...state.streaming, blocks: [...state.streaming.blocks, { type: 'user_inject', text: action.text, images: action.images }], lastEventTime: Date.now() } };
 
     case 'tool_start':
       if (!state.streaming) return state;

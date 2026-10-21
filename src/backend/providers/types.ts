@@ -22,7 +22,7 @@ export type AgentEvent =
   | { type: 'token_update'; inputTokens: number; outputTokens: number }
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number; contextWindow: number }
   | { type: 'interaction'; request: ProviderInteraction | null }
-  | { type: 'user_inject'; text: string };
+  | { type: 'user_inject'; text: string; images?: TurnInput['images'] };
 
 export interface AgentSession {
   readonly active: boolean;

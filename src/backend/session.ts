@@ -92,6 +92,16 @@ export interface ConnectionHooks {
   panelId?: string;
 }
 
+async function replayStoredSession(ws: WebSocket, channel: Channel, id: string, workspaceDir: string): Promise<void> {
+  try {
+    const messages = await providerForSession(id).load(id, workspaceDir);
+    if (!channel.replayHistory(ws, messages)) ws.send(JSON.stringify({ type: 'sessionLoaded', id, messages }));
+  } catch (error) {
+    // A live turn remains viewable if its provider cannot read the stored thread.
+    if (!channel.replayHistory(ws)) throw error;
+  }
+}
+
 // Initialises per-session state: logging, stale-timer, watchdog, synthetic-send
 // mechanism (watchdog retry + AskUserQuestion follow-ups), and the follow-up flush.
 // Called once per SessionEntry (on first client join or on moveToNewSession).
@@ -245,7 +255,9 @@ export function attachClientHandlers(
         // history was never streamed (it came from disk). replayHistory reports that,
         // and we read the transcript instead of leaving the page blank.
         const isLive = liveAttach || ((s.runtime?.active || !!s.currentProc && !s.cliDone) && s.sessionId === hooks.sessionId);
-        if (!isLive || !channel.replayHistory(ws)) {
+        if (isLive) {
+          await replayStoredSession(ws, channel, hooks.sessionId, s.workspaceDir);
+        } else {
           const messages = await providerForSession(hooks.sessionId).load(hooks.sessionId, s.workspaceDir);
           s.sendLog('info', `Deep link replay of ${hooks.sessionId} (${plural(messages.length, 'message')})`);
           try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: hooks.sessionId, messages })); } catch {}
@@ -255,10 +267,8 @@ export function attachClientHandlers(
         // replay for the same mount-timing reason, so restore its conversation here.
         // Same disk fallback as the deep link: the entry may be bound to a session it
         // never streamed itself (it was resumed from history before the reconnect).
-        if (!channel.replayHistory(ws) && s.sessionId) {
-          const messages = await providerForSession(s.sessionId).load(s.sessionId, s.workspaceDir);
-          try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: s.sessionId, messages })); } catch {}
-        }
+        if (s.sessionId) await replayStoredSession(ws, channel, s.sessionId, s.workspaceDir);
+        else channel.replayHistory(ws);
       }
     } else if (msg.type === 'send' && msg.text?.trim() === '/clear') {
       channel.setBrowsing(ws, false);
@@ -611,11 +621,15 @@ function handleSend(s: SessionState, msg: TurnInput): void {
 
 export async function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, id: string) {
   // If this session is mid-turn in another entry (another panel, or the entry this client
-  // detached from on a browsed send), join it instead of reading the transcript. The file
-  // on disk stops at the last committed turn, so loading it would drop the turn in flight
-  // and leave the client with no progress indicator and no further output.
-  const live = channel.attachToLiveSession(ws, id);
+  // detached from on a browsed send), read its stored history before joining. Its
+  // in-memory entry may contain only the current turn of a resumed conversation.
+  let messages: Awaited<ReturnType<ReturnType<typeof providerForSession>['load']>> | undefined;
+  let loadError: unknown;
+  try { messages = await providerForSession(id).load(id, s.workspaceDir); }
+  catch (error) { loadError = error; }
+  const live = channel.attachToLiveSession(ws, id, messages !== undefined);
   if (live) {
+    if (messages) channel.replayHistory(ws, messages);
     ws.send(JSON.stringify(selectionMessage(live)));
     live.sendLog('info', `Joined session ${id}, turn already in progress`);
     // The snapshot replay restores the blocks but not the counters behind the timer.
@@ -623,6 +637,7 @@ export async function handleResumeSession(s: SessionState, ws: WebSocket, channe
     try { ws.send(JSON.stringify({ type: 'token_update', inputTokens: live.liveInputTokens, outputTokens })); } catch {}
     return;
   }
+  if (!messages) throw loadError;
   // Don't kill currentProc - the active CLI turn belongs to the whole entry, not this client.
   const procRunning = s.runtime?.active || !!s.currentProc && !s.cliDone;
   // isBrowsing: proc is active AND the user is viewing a session other than the one being streamed.
@@ -635,7 +650,6 @@ export async function handleResumeSession(s: SessionState, ws: WebSocket, channe
   // session, so without this a send from here has no way back to the session the user is
   // actually looking at, and lands in the running turn instead.
   channel.setBrowsing(ws, isBrowsing, isBrowsing ? id : undefined);
-  const messages = await providerForSession(id).load(id, s.workspaceDir);
   if ((channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId) !== id) return;
   ws.send(JSON.stringify({ type: 'providerSelection', ...selectionFor(id, s.workspaceDir) }));
   s.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);

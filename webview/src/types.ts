@@ -45,7 +45,7 @@ export type TaskNotice = {
 export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool'; call: ToolCallData }
-  | { type: 'user_inject'; text: string }
+  | { type: 'user_inject'; text: string; images?: ImageAttachment[] }
   | { type: 'bg_notice'; notice: TaskNotice };
 
 export type UIMessage = {
