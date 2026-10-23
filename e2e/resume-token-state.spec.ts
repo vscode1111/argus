@@ -47,3 +47,43 @@ test('returning to a live session restores its token counts after snapshot repla
     fs.rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('joining a live session receives token counts with its snapshot', () => {
+  const { getOrCreateChannel, destroyChannel } = require('../out/backend/channel') as typeof import('../src/backend/channel');
+  const workspace = path.join(os.tmpdir(), `argus-token-join-${randomUUID()}`);
+  const channel = getOrCreateChannel(workspace);
+  const origin = { readyState: 1, send() {} } as unknown as WebSocket;
+  const frames: Record<string, unknown>[] = [];
+  const viewer = { readyState: 1, send: (frame: string) => frames.push(JSON.parse(frame)) } as unknown as WebSocket;
+  try {
+    channel.addClient(origin, true);
+    const state = channel.getClientState(origin);
+    state.sessionId = randomUUID();
+    state.currentProc = {} as typeof state.currentProc;
+    state.cliDone = false;
+    state.broadcast(JSON.stringify({ type: 'thinking_start' }));
+    state.liveInputTokens = 123;
+    state.completedOutputTokens = 7;
+    state.liveOutputChars = 20;
+    state.broadcast(JSON.stringify({ type: 'token_update', inputTokens: 123, outputTokens: 12 }));
+
+    channel.addClient(viewer);
+    expect(frames.some(frame => frame.type === 'thinking_start')).toBe(true);
+    expect(frames.find(frame => frame.type === 'token_update')).toMatchObject({ inputTokens: 123, outputTokens: 12 });
+
+    const linkedFrames: Record<string, unknown>[] = [];
+    const linkedViewer = { readyState: 1, send: (frame: string) => linkedFrames.push(JSON.parse(frame)) } as unknown as WebSocket;
+    channel.addClient(linkedViewer, false, state.sessionId);
+    channel.replayHistory(linkedViewer);
+    expect(linkedFrames.find(frame => frame.type === 'token_update')).toMatchObject({ inputTokens: 123, outputTokens: 12 });
+
+    state.cliDone = true;
+    state.broadcast(JSON.stringify({ type: 'done' }));
+    const idleFrames: Record<string, unknown>[] = [];
+    const idleViewer = { readyState: 1, send: (frame: string) => idleFrames.push(JSON.parse(frame)) } as unknown as WebSocket;
+    channel.addClient(idleViewer);
+    expect(idleFrames.some(frame => frame.type === 'token_update')).toBe(false);
+  } finally {
+    destroyChannel(workspace);
+  }
+});

@@ -7,6 +7,7 @@ import { AppServerRpc, object, array, string, type JsonObject } from './rpc';
 import { records, sessionRecord, saveSession, forgetSession, sameWorkspace } from './store';
 import type { ProviderInteraction, ProviderModel, ProviderSelection } from '../../shared/provider';
 import { readConfig } from '../config';
+import { noteCodexUsage } from '../sessionStats';
 
 function nativeId(id: string): string {
   if (!/^codex:[a-zA-Z0-9_-]{1,128}$/.test(id)) throw new Error('Invalid conversation id');
@@ -193,8 +194,12 @@ export class CodexSession implements AgentSession {
   private pendingInteractionIds: string[] = [];
   private pendingAsyncQuestion?: ProviderInteraction;
   private outputTokenBaseline?: number;
+  private inputTokenBaseline?: number;
+  private measuredInputTokens = 0;
+  private lastUsageOutputTotal?: number;
   private idleTimer?: NodeJS.Timeout;
   get active(): boolean { return this.busy; }
+  get activeTurnId(): string | undefined { return this.turnId; }
   get pid(): number | undefined { return this.rpc.pid; }
   get reconnectNeeded(): boolean { return this.closed; }
 
@@ -241,6 +246,9 @@ export class CodexSession implements AgentSession {
     if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
     this.busy = true; this.state.cliDone = false; this.deltas.clear();
     this.outputTokenBaseline = undefined;
+    this.inputTokenBaseline = undefined;
+    this.measuredInputTokens = 0;
+    this.lastUsageOutputTotal = undefined;
     this.state.liveInputTokens = 0; this.state.completedOutputTokens = 0; this.state.liveOutputChars = 0;
     this.state.lastMessage = { text: input.text || '', images: input.images, mode: input.mode };
     if (!input._silent) this.state.broadcast(JSON.stringify({ type: 'message', message: { id: randomUUID(), role: 'user', content: input.text || '', images: input.images } }));
@@ -403,12 +411,24 @@ export class CodexSession implements AgentSession {
       const inputTokens = Number(last.inputTokens) || 0;
       const lastOutputTokens = Number(last.outputTokens) || 0;
       const totalOutputTokens = object(usage.total).outputTokens;
+      const totalInputTokens = object(usage.total).inputTokens;
+      if (typeof totalOutputTokens === 'number') {
+        const outputDelta = this.lastUsageOutputTotal === undefined ? lastOutputTokens : totalOutputTokens - this.lastUsageOutputTotal;
+        if (outputDelta === lastOutputTokens && outputDelta > 0) this.measuredInputTokens += inputTokens;
+        this.lastUsageOutputTotal = totalOutputTokens;
+      } else this.measuredInputTokens = Math.max(this.measuredInputTokens, inputTokens);
+      let requestInputTokens = this.measuredInputTokens;
+      if (typeof totalInputTokens === 'number' && totalInputTokens >= inputTokens) {
+        this.inputTokenBaseline ??= totalInputTokens - inputTokens;
+        requestInputTokens = totalInputTokens - this.inputTokenBaseline;
+      }
       if (typeof totalOutputTokens === 'number' && totalOutputTokens >= lastOutputTokens) {
         this.outputTokenBaseline ??= totalOutputTokens - lastOutputTokens;
         this.state.completedOutputTokens = totalOutputTokens - this.outputTokenBaseline;
       } else this.state.completedOutputTokens += lastOutputTokens;
       const outputTokens = this.state.completedOutputTokens;
       this.state.liveInputTokens = inputTokens;
+      noteCodexUsage(this.state, requestInputTokens, outputTokens);
       this.emit({ type: 'token_update', inputTokens, outputTokens });
       if (typeof usage.modelContextWindow === 'number' && usage.modelContextWindow > 0)
         this.emit({ type: 'contextUsage', percent: Math.min(100, inputTokens / usage.modelContextWindow * 100), inputTokens, outputTokens: lastOutputTokens, contextWindow: usage.modelContextWindow });

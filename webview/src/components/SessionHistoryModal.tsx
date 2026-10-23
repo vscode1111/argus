@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { postMessage, isVsCode } from '../vscode';
 import { DIALOG_LAYOUT_RESET_EVENT, getDialogState, patchDialogState } from '../utils/dialogState';
 import { SessionSummary, GlobalSessionSummary } from '../types';
@@ -8,6 +8,7 @@ import { useWebviewMessage } from '../hooks/useWebviewMessage';
 import { relativeTime } from '../utils/time';
 import { fmtLineCount } from '../utils/text';
 import { ProviderIcon } from './shared/ProviderIcon';
+import { SessionStatsModal } from './SessionStatsModal';
 import shell from './shared/centeredModal.module.css';
 import styles from './SessionHistoryModal.module.css';
 
@@ -36,6 +37,11 @@ type Tab = 'workspace' | 'all';
 // that reply is in flight. Page-scoped, never written to storage.
 let wsCache: { path: string; sessions: SessionSummary[]; currentId?: string } | null = null;
 let allCache: { sessions: GlobalSessionSummary[]; currentId?: string } | null = null;
+
+function sortWorkingFirst<T extends SessionSummary>(sessions: T[], activeIds: Set<string>): T[] {
+  return [...sessions].sort((a, b) =>
+    Number(activeIds.has(b.id)) - Number(activeIds.has(a.id)) || b.updatedAt - a.updatedAt);
+}
 
 // Write text to the clipboard, falling back to a hidden textarea + execCommand
 // when the async Clipboard API is unavailable (plain-http LAN pages are not a
@@ -82,6 +88,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
   // spins the refresh icon instead of blanking the list.
   const [refreshing, setRefreshing] = useState(() => !!cached);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [statsSession, setStatsSession] = useState<{ id: string; title: string } | null>(null);
 
   // All-workspaces tab state (global, lazy-loaded on first visit)
   const [allSessions, setAllSessions] = useState<GlobalSessionSummary[]>(() => allCache?.sessions ?? []);
@@ -224,25 +231,35 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
     setEditingId(null);
   }
 
+  function updateTaskKey(id: string, taskKey: string | null) {
+    const update = <T extends SessionSummary>(items: T[]) => items.map(item => item.id === id ? { ...item, taskKey } : item);
+    setSessions(update);
+    setAllSessions(update);
+    if (wsCache?.path === currentPath) wsCache = { ...wsCache, sessions: update(wsCache.sessions) };
+    if (allCache) allCache = { ...allCache, sessions: update(allCache.sessions) };
+  }
+
   // Use the override from App (which reflects the actually-viewed session during
   // browsing) if present; fall back to the id reported by the server.
   const effectiveCurrentId = currentIdOverride ?? currentId;
 
   const q = query.trim().toLowerCase();
-  const filtered = q
-    ? sessions.filter(s => s.title.toLowerCase().includes(q) || s.lastPrompt.toLowerCase().includes(q))
-    : sessions;
+  const filtered = useMemo(() => sortWorkingFirst(q
+    ? sessions.filter(s => s.title.toLowerCase().includes(q) || s.lastPrompt.toLowerCase().includes(q) || s.taskKey?.toLowerCase().includes(q))
+    : sessions, activeIds), [sessions, q, activeIds]);
 
   const aq = allQuery.trim().toLowerCase();
-  const filteredAll = aq
+  const filteredAll = useMemo(() => sortWorkingFirst(aq
     ? allSessions.filter(s =>
         s.title.toLowerCase().includes(aq) ||
         s.lastPrompt.toLowerCase().includes(aq) ||
+        s.taskKey?.toLowerCase().includes(aq) ||
         s.workspaceName.toLowerCase().includes(aq) ||
         s.workspacePath.toLowerCase().includes(aq))
-    : allSessions;
+    : allSessions, activeIds), [allSessions, aq, activeIds]);
 
   return (
+    <>
     <Modal
       title="Session History"
       ariaLabel="Session History"
@@ -326,6 +343,7 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                         <ProviderIcon providerId={s.id.startsWith('codex:') ? 'codex' : 'claude'} label active={activeIds.has(s.id)} size={14} className={activeIds.has(s.id) ? styles.activeProviderIcon : undefined} />
                         {s.delegated && <span aria-label="Delegated session">🤖</span>}
                         <span className={styles.titleText}>{s.title}</span>
+                        {s.taskKey && <span className={styles.taskKey}>{s.taskKey}</span>}
                       </span>
                     )}
                   </div>
@@ -352,6 +370,16 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                           )}
                         </button>
                       )}
+                      <button
+                        className={styles.statsBtn}
+                        onClick={e => { e.stopPropagation(); setStatsSession({ id: s.id, title: s.title }); }}
+                        aria-label="Session statistics"
+                        title="Session statistics"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M4 20V12m6 8V4m6 16v-9m4 9V7" />
+                        </svg>
+                      </button>
                       <button
                         className={styles.editBtn}
                         onClick={e => startEdit(e, s)}
@@ -415,11 +443,18 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
                       <ProviderIcon providerId={s.id.startsWith('codex:') ? 'codex' : 'claude'} label active={activeIds.has(s.id)} size={14} className={activeIds.has(s.id) ? styles.activeProviderIcon : undefined} />
                       {s.delegated && <span aria-label="Delegated session">🤖</span>}
                       <span className={styles.titleText}>{s.title}</span>
+                      {s.taskKey && <span className={styles.taskKey}>{s.taskKey}</span>}
                     </span>
                     <span className={styles.rowSub}>{s.workspaceName}</span>
                   </div>
                   <span className={styles.rowCount}>{s.lines > 0 ? fmtLineCount(s.lines) : ''}</span>
                   <span className={styles.rowTimeStatic}>{relativeTime(s.updatedAt)}</span>
+                  <button className={styles.allStatsBtn} onClick={e => { e.stopPropagation(); setStatsSession({ id: s.id, title: s.title }); }}
+                    aria-label="Session statistics" title="Session statistics">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 20V12m6 8V4m6 16v-9m4 9V7" />
+                    </svg>
+                  </button>
                 </div>
               ))
             )}
@@ -427,5 +462,8 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
         </>
       )}
     </Modal>
+    {statsSession && <SessionStatsModal sessionId={statsSession.id} title={statsSession.title}
+      onTaskKeyChange={taskKey => updateTaskKey(statsSession.id, taskKey)} onClose={() => setStatsSession(null)} />}
+    </>
   );
 }

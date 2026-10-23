@@ -270,5 +270,5 @@ export function handleStop(s: SessionState) {
     killProc(proc);
   }
   s.cliDone = true;
-  s.broadcast(JSON.stringify({ type: 'done' }));
+  s.broadcast(JSON.stringify({ type: 'done', interrupted: true }));
 }

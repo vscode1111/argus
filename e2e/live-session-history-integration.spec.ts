@@ -38,6 +38,9 @@ test('opening a running session shows its earlier conversation and live turn', {
     await expect(viewer.locator('[class*="messageContent"]').filter({ hasText: earlier })).toBeVisible();
     await expect(viewer.locator('[class*="messageContent"]').filter({ hasText: current })).toBeVisible();
     await expect(viewer.getByRole('button', { name: 'Stop' })).toBeVisible();
+    await viewer.getByRole('button', { name: 'Stop' }).click();
+    await expect(viewer.getByRole('button', { name: 'Stop' })).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0, { timeout: 15_000 });
   } finally {
     if (await page.getByRole('button', { name: 'Stop' }).isVisible().catch(() => false)) {
       await page.getByRole('button', { name: 'Stop' }).click();

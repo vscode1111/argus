@@ -71,7 +71,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     } else if (text !== 'scub-wait' && text !== 'scub-interrupt-race') {
       timer = setTimeout(() => {
         notify('item/agentMessage/delta', { turnId, itemId: 'scub-answer', delta: 'scub-ok' });
-        if (text === 'scub-multi-usage') {
+        if (text === 'scub-multi-usage' || text === 'multi-usage') {
           const previousOutput = 20 + (turn - 1) * 13;
           notify('thread/tokenUsage/updated', { tokenUsage: { total: { outputTokens: previousOutput + 8 }, last: { inputTokens: 110, outputTokens: 8 }, modelContextWindow: 1000 } });
           notify('thread/tokenUsage/updated', { tokenUsage: { total: { outputTokens: previousOutput + 13 }, last: { inputTokens: 120, outputTokens: 5 }, modelContextWindow: 1000 } });

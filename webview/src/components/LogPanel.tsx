@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { LogEntry } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import styles from './LogPanel.module.css';
@@ -69,7 +69,7 @@ export function LogPanel({ logs, onClear, onClose }: LogPanelProps) {
     bottomRef.current?.scrollIntoView({ behavior: 'auto' });
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = listRef.current;
     if (!el) return;
     // Autoscroll as long as the user hasn't deliberately scrolled up. We gate on

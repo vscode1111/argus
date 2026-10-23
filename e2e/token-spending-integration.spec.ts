@@ -1,4 +1,4 @@
-import { test, expect } from './provider-fixtures';
+import { test, expect, type Page } from './provider-fixtures';
 import { waitForApp } from './helpers';
 
 // Integration tests for realtime token spending:
@@ -22,6 +22,27 @@ test.setTimeout(90_000);
 
 const PROMPT = 'Reply with the single word "ok" and nothing else.';
 
+// A provider turn can end before producing an assistant item (captured in the
+// native transcript during the 2026-10-23 full run). That turn supplies no
+// token behavior to assert. Repeat only this empty setup turn, once, in a fresh
+// chat; a reply with missing or wrong token data still reaches the assertions.
+async function sendAndWaitForOutput(page: Page, prompt: string, beforeRetry?: () => void) {
+  const reply = page.locator('[class*="assistant"] [class*="messageContent"]');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) {
+      await page.getByRole('button', { name: 'New chat' }).click();
+      beforeRetry?.();
+    }
+    await page.getByPlaceholder('Ask Argus').fill(prompt);
+    await page.getByRole('button', { name: 'Send' }).click();
+    const stopBtn = page.getByRole('button', { name: 'Stop' });
+    await expect(stopBtn).toBeVisible({ timeout: 10_000 });
+    await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
+    if (await reply.count()) return;
+  }
+  await expect(reply, 'provider ended two turns without an assistant reply').not.toHaveCount(0);
+}
+
 // Tests that intercept raw WS frames must register page.on('websocket') BEFORE
 // the WS connection is created, so they reload the page themselves after mounting
 // the listener. Other tests use beforeEach for isolation via "New chat".
@@ -43,12 +64,7 @@ test.describe('ws-frame tests', () => {
 
     await waitForApp(page);
     await page.getByRole('button', { name: 'New chat' }).click();
-    await page.getByPlaceholder('Ask Argus').fill(PROMPT);
-    await page.getByRole('button', { name: 'Send' }).click();
-
-    const stopBtn = page.getByRole('button', { name: 'Stop' });
-    await expect(stopBtn).toBeVisible({ timeout: 10_000 });
-    await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
+    await sendAndWaitForOutput(page, PROMPT, () => { tokenUpdates.length = 0; });
     await page.waitForTimeout(300);
 
     // message_start fires at turn start and sends inputTokens
@@ -88,12 +104,7 @@ test.describe('ws-frame tests', () => {
 
     await waitForApp(page);
     await page.getByRole('button', { name: 'New chat' }).click();
-    await page.getByPlaceholder('Ask Argus').fill(PROMPT);
-    await page.getByRole('button', { name: 'Send' }).click();
-
-    const stopBtn = page.getByRole('button', { name: 'Stop' });
-    await expect(stopBtn).toBeVisible({ timeout: 10_000 });
-    await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
+    await sendAndWaitForOutput(page, PROMPT, () => { outputValues.length = 0; });
     await page.waitForTimeout(300);
 
     expect(outputValues.length).toBeGreaterThan(0);
@@ -112,12 +123,7 @@ test.describe('ui tests', () => {
   });
 
   test('completed message timer shows final token counts', { tag: ["@shared"] }, async ({ page }) => {
-    await page.getByPlaceholder('Ask Argus').fill(PROMPT);
-    await page.getByRole('button', { name: 'Send' }).click();
-
-    const stopBtn = page.getByRole('button', { name: 'Stop' });
-    await expect(stopBtn).toBeVisible({ timeout: 10_000 });
-    await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
+    await sendAndWaitForOutput(page, PROMPT);
 
     // The success timer on the completed message should include "in /" and "out"
     const timer = page.locator('[class*="responseTimeSuccess"]');
@@ -148,12 +154,7 @@ test.describe('ui tests', () => {
     // covers the chars/4 approximation error (~10-20%).  With the bug the estimate
     // doubled so for a thinking-heavy prompt it would easily exceed 1.5x output.
     // Short reply maximises the thinking-to-output ratio, making doubling obvious.
-    await page.getByPlaceholder('Ask Argus').fill('Reply with just the single word "yes".');
-    await page.getByRole('button', { name: 'Send' }).click();
-
-    const stopBtn = page.getByRole('button', { name: 'Stop' });
-    await expect(stopBtn).toBeVisible({ timeout: 15_000 });
-    await expect(stopBtn).toHaveCount(0, { timeout: 90_000 });
+    await sendAndWaitForOutput(page, 'Reply with just the single word "yes".');
 
     const timer = page.locator('[class*="responseTimeSuccess"]');
     await expect(timer).toBeVisible({ timeout: 5_000 });

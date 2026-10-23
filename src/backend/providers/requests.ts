@@ -7,6 +7,7 @@ import { defaultSelection, selectionFor, forgetSession } from './store';
 import { string } from './rpc';
 import { readConfig, writeConfig } from '../config';
 import type { ProviderSelection } from '../../shared/provider';
+import { deleteSessionStats, readSessionTaskKeys } from '../sessionStats';
 
 function saveDefaultSelection(selection: ProviderSelection): void {
   const config = readConfig();
@@ -109,6 +110,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
         else {
           if (listActiveSessions().some(s => s.id === id)) throw new Error('Stop the conversation before deleting it');
           await owner.remove(id, state.workspaceDir); forgetSession(id);
+          deleteSessionStats(id);
           if (state.sessionId === id) { state.runtime?.dispose(); state.runtime = undefined; state.sessionId = undefined; }
         }
       }
@@ -118,7 +120,8 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
         const title = sessions.find(session => session.id === id)?.title;
         if (title) broadcastToWorkspace(state.workspaceDir, JSON.stringify({ type: 'sessionRenamed', id, title }));
       }
-      reply({ type: 'sessionList', sessions, currentId: viewing || state.sessionId });
+      const taskKeys = readSessionTaskKeys();
+      reply({ type: 'sessionList', sessions: sessions.map(session => ({ ...session, taskKey: taskKeys[session.id] ?? null })), currentId: viewing || state.sessionId });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Provider request failed';
