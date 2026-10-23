@@ -75,11 +75,26 @@ export type Outcome = 'success' | 'stopped' | 'error' | 'retried' | 'background_
 
 export type SessionSummary = {
   id: string;
+  taskKey?: string | null;
   title: string;
   lastPrompt: string;
   delegated?: boolean;
   updatedAt: number; // epoch ms
   lines: number; // total lines of text/code across the transcript
+};
+
+export type RequestStat = {
+  id: string;
+  sessionId: string;
+  workspacePath: string;
+  providerId: string;
+  model: string;
+  startedAt: number;
+  endedAt: number;
+  durationMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  outcome: 'success' | 'error' | 'stopped';
 };
 
 export type WorkspaceSummary = {

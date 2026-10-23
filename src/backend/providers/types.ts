@@ -26,6 +26,7 @@ export type AgentEvent =
 
 export interface AgentSession {
   readonly active: boolean;
+  readonly activeTurnId?: string;
   readonly pid?: number;
   readonly reconnectNeeded?: boolean;
   send(input: TurnInput): Promise<void>;

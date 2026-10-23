@@ -3,6 +3,7 @@ import * as path from 'path';
 
 const e2eConfig = path.resolve(__dirname, 'e2e', 'argus.json');
 const e2eAuthFile = path.resolve(__dirname, 'e2e', 'argus-auth.e2e.json');
+const e2eStatsFile = path.resolve(__dirname, 'e2e', 'argus-stats.e2e.jsonl');
 
 // Propagate ARGUS_CONFIG to test worker processes. Workers inherit this from the
 // main process, so integration tests that read/write the config file use the same
@@ -14,6 +15,7 @@ process.env['ARGUS_CONFIG'] = e2eConfig;
 // would read - and a careless spec would overwrite - the developer's real
 // ~/.argus/auth.json. Nothing creates this path, so specs see "no password set".
 process.env['ARGUS_AUTH_FILE'] = e2eAuthFile;
+process.env['ARGUS_STATS_FILE'] = e2eStatsFile;
 
 const chromiumOptions = {
   browserName: 'chromium' as const,
@@ -82,6 +84,6 @@ export default defineConfig({
     // never read - let alone overwrite - the real remote-access credential in
     // ~/.argus/auth.json. Nothing creates this path, so the shared dev server
     // runs with no password, which is the state the gate tests assert against.
-    env: { ARGUS_CONFIG: e2eConfig, ARGUS_USAGE_POLL: '0', ARGUS_AUTH_FILE: e2eAuthFile },
+    env: { ARGUS_CONFIG: e2eConfig, ARGUS_USAGE_POLL: '0', ARGUS_AUTH_FILE: e2eAuthFile, ARGUS_STATS_FILE: e2eStatsFile },
   },
 });

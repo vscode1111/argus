@@ -3,6 +3,7 @@ import type { WebSocket } from 'ws';
 import { createSessionState, type SessionState } from './sessionState';
 import { killProc } from './cli';
 import type { ReplayMessage } from './sessions';
+import { noteRequestEvent } from './sessionStats';
 
 const MAX_HISTORY = 200;
 
@@ -521,7 +522,10 @@ function createBroadcastForEntry(entry: SessionEntry): (msg: string) => void {
   return function broadcast(msg: string): void {
     let parsed: Record<string, unknown> | undefined;
     try { parsed = JSON.parse(msg) as Record<string, unknown>; } catch {}
-    if (parsed) applyMsg(entry, parsed);
+    if (parsed) {
+      noteRequestEvent(entry.state, parsed);
+      applyMsg(entry, parsed);
+    }
     if (parsed?.type === 'contextUsage') entry.lastContextUsage = { sessionId: entry.state.sessionId, frame: msg };
     if (parsed?.type === 'clear') entry.lastContextUsage = null;
     if (parsed && ACTIVITY_EVENTS.has(parsed.type as string)) notifyActiveSessions();
@@ -575,20 +579,38 @@ function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
   }
 }
 
-function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[]): Array<ReplayMessage | ChannelMessage> {
-  let overlap = Math.min(stored.length, recent.length);
+function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[], activeTurnId?: string): Array<ReplayMessage | ChannelMessage> {
+  let savedMessages = stored;
+  if (activeTurnId) {
+    const currentUser = [...recent].reverse().find(message => message.role === 'user');
+    let userIndex = -1;
+    if (currentUser) for (let i = stored.length - 1; i >= 0; i--) {
+      if (stored[i].role === 'user' && stored[i].content === currentUser.content) { userIndex = i; break; }
+    }
+    const last = stored[stored.length - 1];
+    const replyPrefix = `reply-${activeTurnId}-`;
+    if (userIndex >= 0 && last?.role === 'assistant' && last.id.startsWith(replyPrefix)
+      && /^\d+$/.test(last.id.slice(replyPrefix.length))) {
+      savedMessages = stored.slice(0, userIndex + 1);
+    }
+  }
+  let overlap = Math.min(savedMessages.length, recent.length);
   while (overlap > 0 && !recent.slice(0, overlap).every((message, index) => {
-    const saved = stored[stored.length - overlap + index];
+    const saved = savedMessages[savedMessages.length - overlap + index];
     return saved.role === message.role && saved.content === message.content;
   })) overlap--;
-  return [...stored, ...recent.slice(overlap)];
+  return [...savedMessages, ...recent.slice(overlap)];
 }
 
 function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessage[]): void {
   try { ws.send(JSON.stringify({ type: 'providerSelection', ...entry.state.selection })); } catch { return; }
-  const messages = stored ? mergeHistory(stored, entry.history) : entry.history;
+  const messages = stored ? mergeHistory(stored, entry.history, entry.snapshot ? entry.state.runtime?.activeTurnId : undefined) : entry.history;
   try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages })); } catch { return; }
   replaySnapshotToClient(entry, ws);
+  if (entry.snapshot) {
+    const outputTokens = entry.state.completedOutputTokens + Math.ceil(entry.state.liveOutputChars / 4);
+    try { ws.send(JSON.stringify({ type: 'token_update', inputTokens: entry.state.liveInputTokens, outputTokens })); } catch { /* closing */ }
+  }
   if (entry.state.interaction) ws.send(JSON.stringify({ type: 'interaction', request: entry.state.interaction }));
 }
 

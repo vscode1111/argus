@@ -7,6 +7,7 @@ const { randomUUID } = require('node:crypto');
 const { getOrCreateChannel, destroyChannel } = require('../out/backend/channel');
 const { handleResumeSession } = require('../out/backend/session');
 const { loadSession } = require('../out/backend/sessions');
+const { replayThread } = require('../out/backend/providers/codex');
 
 async function openStoredSession(shouldBeLive, storeCurrent = true) {
   const cwd = path.join(os.tmpdir(), `argus-live-history-${randomUUID()}`);
@@ -72,4 +73,80 @@ test('opening a running session keeps a current request absent from the stored t
   const opened = frames.find(frame => frame.type === 'sessionLoaded');
   assert.deepEqual(opened.messages.map(message => message.content), ['Earlier question', 'Earlier answer', 'Current question']);
   assert.equal(frames.some(frame => frame.type === 'thinking_start'), true);
+});
+
+test('live history shows one copy of an in-progress turn already in the stored replay', () => {
+  const cwd = path.join(os.tmpdir(), `history-overlap-${randomUUID()}`);
+  const frames = [];
+  const streamer = { readyState: 1, send() {} };
+  const viewer = { readyState: 1, send(frame) { frames.push(JSON.parse(frame)); } };
+  const currentPrompt = 'Continue the report';
+  const currentAnswer = 'I am checking the latest figures.';
+  const command = 'find reports -maxdepth 2';
+
+  try {
+    const channel = getOrCreateChannel(cwd);
+    channel.addClient(streamer, true);
+    const live = channel.getClientState(streamer);
+    live.sessionId = `codex:${randomUUID()}`;
+    live.runtime = { activeTurnId: 'current-turn' };
+    live.broadcast(JSON.stringify({ type: 'message', message: { id: 'live-user', role: 'user', content: currentPrompt } }));
+    live.broadcast(JSON.stringify({ type: 'thinking_start' }));
+    live.broadcast(JSON.stringify({ type: 'text_chunk', text: currentAnswer }));
+    live.broadcast(JSON.stringify({ type: 'tool_start', call: { id: 'live-command', name: 'commandExecution', input: { command } } }));
+
+    const stored = replayThread({ turns: [
+      { id: 'earlier-turn', items: [
+        { id: 'earlier-user', type: 'userMessage', content: [{ type: 'text', text: 'First request' }] },
+        { id: 'earlier-answer', type: 'agentMessage', text: 'First result' },
+      ] },
+      { id: 'current-turn', items: [
+        { id: 'stored-user', type: 'userMessage', content: [{ type: 'text', text: currentPrompt }] },
+        { id: 'stored-answer', type: 'agentMessage', text: currentAnswer },
+        { id: 'stored-command', type: 'commandExecution', command, status: 'inProgress' },
+      ] },
+    ] });
+    channel.addClient(viewer);
+    frames.length = 0;
+    channel.replayHistory(viewer, stored);
+
+    const loaded = frames.find(frame => frame.type === 'sessionLoaded');
+    assert.equal(loaded.messages.filter(message => message.content === 'First result').length, 1);
+    assert.equal(loaded.messages.filter(message => message.role === 'user' && message.content === currentPrompt).length, 1);
+    assert.equal(loaded.messages.filter(message => message.role === 'assistant' && message.content === currentAnswer).length
+      + frames.filter(frame => frame.type === 'text_chunk' && frame.text === currentAnswer).length, 1);
+    assert.equal(loaded.messages.flatMap(message => message.blocks || []).filter(block => block.type === 'tool').length
+      + frames.filter(frame => frame.type === 'tool_start').length, 1);
+  } finally {
+    destroyChannel(cwd);
+  }
+});
+
+test('live history keeps an earlier turn when the new prompt and answer repeat', () => {
+  const cwd = path.join(os.tmpdir(), `history-repeat-${randomUUID()}`);
+  const frames = [];
+  const streamer = { readyState: 1, send() {} };
+  const viewer = { readyState: 1, send(frame) { frames.push(JSON.parse(frame)); } };
+  try {
+    const channel = getOrCreateChannel(cwd);
+    channel.addClient(streamer, true);
+    const live = channel.getClientState(streamer);
+    live.sessionId = `codex:${randomUUID()}`;
+    live.runtime = { activeTurnId: 'new-turn' };
+    live.broadcast(JSON.stringify({ type: 'message', message: { id: 'new-user', role: 'user', content: 'Review the report' } }));
+    live.broadcast(JSON.stringify({ type: 'thinking_start' }));
+    live.broadcast(JSON.stringify({ type: 'text_chunk', text: 'New result' }));
+    const stored = replayThread({ turns: [{ id: 'earlier-turn', items: [
+      { id: 'earlier-user', type: 'userMessage', content: [{ type: 'text', text: 'Review the report' }] },
+      { id: 'earlier-answer', type: 'agentMessage', text: 'New result' },
+    ] }] });
+    channel.addClient(viewer);
+    frames.length = 0;
+    channel.replayHistory(viewer, stored);
+    const loaded = frames.find(frame => frame.type === 'sessionLoaded');
+    assert.equal(loaded.messages.filter(message => message.role === 'assistant' && message.content === 'New result').length, 1);
+    assert.equal(frames.filter(frame => frame.type === 'text_chunk' && frame.text === 'New result').length, 1);
+  } finally {
+    destroyChannel(cwd);
+  }
 });

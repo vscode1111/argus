@@ -21,6 +21,9 @@ test.describe('session history (integration)', () => {
   });
 
   test('creates a session, lists it, resumes it, and continues context', { tag: ["@shared"] }, async ({ page }) => {
+    // This checks two real provider turns plus a history scan and replay. The
+    // project's 60-second single-turn budget can expire during the second turn.
+    test.setTimeout(120_000);
     // 1. Establish a fact in a fresh session. The unique city name lets us prove later
     //    that the resumed session still carries the earlier context.
     await sendAndWait(page, 'Remember this fictional city name for later: scub-harbor-7731. Reply with just "OK".');

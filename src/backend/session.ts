@@ -25,12 +25,13 @@ import { listCliProcesses, killCliProcess, cpuCoreCount, invalidateProcessSample
 import { type ClientInfo, type CloseClientResult } from './clients';
 import { readAuth, setPassword, clearPassword, dropAllSessions, sessionCount, MIN_PASSWORD_LENGTH } from './auth';
 import { broadcastBgTasks } from './cliHandler';
-import { listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage, codexSessionMeta } from './sessions';
+import { listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage, codexSessionMeta, MAX_GLOBAL_SESSIONS } from './sessions';
 import { readServerVersion } from './version';
 import { buildWorkspaceInfo } from './workspaceInfo';
 import { searchFiles, type FileSearchResult } from './fileSearch';
 import { workspaceChanges } from './workspaceChanges';
 import { listOrchestratorGoals } from './orchestratorGoals';
+import { beginRequest, readRequestStats, readSessionTaskKey, readSessionTaskKeys, setSessionTaskKey } from './sessionStats';
 
 export { getCliLaunchCount } from './providers/claudeExecution';
 
@@ -231,6 +232,7 @@ export function attachClientHandlers(
       childId?: string;
       toolUseId?: string;
       title?: string;
+      taskKey?: string;
       query?: string;
     };
     try { msg = JSON.parse(data.toString()); } catch {
@@ -462,6 +464,7 @@ export function attachClientHandlers(
       if (s.lastMessage) {
         s.sendLog('info', 'Retrying last message');
         s.broadcast(JSON.stringify({ type: 'retry_clean' }));
+        beginRequest(s);
         handleSend(s, { type: 'send', text: s.lastMessage.text, images: s.lastMessage.images, mode: s.lastMessage.mode, _silent: true });
       }
     } else if (msg.type === 'forceError') {
@@ -511,6 +514,18 @@ export function attachClientHandlers(
           ? readFilePreview(String(msg.path), s.workspaceDir)
           : { path: '', content: 'Error: no image recorded for this tool call' };
       ws.send(JSON.stringify({ type: 'toolImage', toolUseId: msg.toolUseId, ...reply }));
+    } else if (msg.type === 'getSessionStats') {
+      const id = typeof msg.id === 'string' && msg.id.length <= 128 ? msg.id : '';
+      ws.send(JSON.stringify({ type: 'sessionStats', id, taskKey: id ? readSessionTaskKey(id) : null, requests: id ? readRequestStats(id) : [] }));
+    } else if (msg.type === 'setSessionTaskKey') {
+      const id = typeof msg.id === 'string' ? msg.id : '';
+      try {
+        if (typeof msg.taskKey !== 'string') throw new Error('Invalid issue key');
+        const taskKey = setSessionTaskKey(id, msg.taskKey);
+        ws.send(JSON.stringify({ type: 'sessionTaskKey', id, taskKey }));
+      } catch (error) {
+        ws.send(JSON.stringify({ type: 'sessionTaskKey', id, error: (error as Error).message }));
+      }
     } else if (msg.type === 'getUsageInsights') {
       collectUsageInsights(msg.force).then((insights) => {
         ws.send(JSON.stringify({ type: 'usageInsights', day: insights.day, week: insights.week }));
@@ -547,10 +562,12 @@ export function attachClientHandlers(
       }).catch(() => {});
     } else if (msg.type === 'listAllSessions') {
       const currentId = s.sessionId;
-      listAllSessions().then(sessions => {
-        sessions.push(...records().filter(r => r.selection.providerId !== 'claude').map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, ...codexSessionMeta(r.id), workspacePath: r.cwd, workspaceName: path.basename(r.cwd) })));
+      const taskKeys = readSessionTaskKeys();
+      listAllSessions(new Set(Object.keys(taskKeys))).then(sessions => {
+        const providerRecords = records().filter(r => r.selection.providerId !== 'claude').sort((a, b) => b.updatedAt - a.updatedAt);
+        sessions.push(...providerRecords.filter((r, index) => index < MAX_GLOBAL_SESSIONS || taskKeys[r.id]).map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, ...codexSessionMeta(r.id), workspacePath: r.cwd, workspaceName: path.basename(r.cwd) })));
         sessions.sort((a, b) => b.updatedAt - a.updatedAt);
-        try { ws.send(JSON.stringify({ type: 'allSessionList', sessions, currentId })); } catch {}
+        try { ws.send(JSON.stringify({ type: 'allSessionList', sessions: sessions.map(session => ({ ...session, taskKey: taskKeys[session.id] ?? null })), currentId })); } catch {}
       }).catch(() => {});
     } else if (msg.type === 'getActiveSessions') {
       // Initial sync for a client that just connected; later changes arrive as
@@ -632,9 +649,6 @@ export async function handleResumeSession(s: SessionState, ws: WebSocket, channe
     if (messages) channel.replayHistory(ws, messages);
     ws.send(JSON.stringify(selectionMessage(live)));
     live.sendLog('info', `Joined session ${id}, turn already in progress`);
-    // The snapshot replay restores the blocks but not the counters behind the timer.
-    const outputTokens = live.completedOutputTokens + Math.ceil(live.liveOutputChars / 4);
-    try { ws.send(JSON.stringify({ type: 'token_update', inputTokens: live.liveInputTokens, outputTokens })); } catch {}
     return;
   }
   if (!messages) throw loadError;

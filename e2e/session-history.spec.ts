@@ -277,6 +277,36 @@ test.describe('session history', () => {
     await expect(marks).toHaveCount(0);
   });
 
+  test('working sessions precede idle sessions in both history tabs', async ({ page }) => {
+    const rows = [
+      { id: '11111111-1111-1111-1111-111111111111', title: 'Recent idle', lastPrompt: 'Recent work', updatedAt: NOW - 60_000, lines: 3 },
+      { id: '22222222-2222-2222-2222-222222222222', title: 'Older working', lastPrompt: 'Long task', updatedAt: NOW - 3_600_000, lines: 3 },
+      { id: '33333333-3333-3333-3333-333333333333', title: 'Oldest idle', lastPrompt: 'Earlier work', updatedAt: NOW - 86_400_000, lines: 3 },
+    ];
+    const order = async () => page.getByRole('dialog', { name: 'Session History' })
+      .locator('[data-session-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-session-id')));
+
+    await openModal(page);
+    await send(page, { type: 'sessionList', sessions: rows });
+    await expect.poll(order).toEqual(rows.map(row => row.id));
+
+    await send(page, { type: 'activeSessions', sessions: [{ id: rows[1].id, workspacePath: 'd:\\work', startedAt: NOW }] });
+    await expect(page.getByRole('dialog', { name: 'Session History' })
+      .locator(`[data-session-id="${rows[1].id}"]`).getByRole('img', { name: /working now/i })).toHaveCount(1);
+    await expect.poll(order).toEqual([rows[1].id, rows[0].id, rows[2].id]);
+
+    await send(page, { type: 'activeSessions', sessions: [rows[1], rows[2]].map(row => ({ id: row.id, workspacePath: 'd:\\work', startedAt: NOW })) });
+    await expect.poll(order).toEqual([rows[1].id, rows[2].id, rows[0].id]);
+
+    const dialog = page.getByRole('dialog', { name: 'Session History' });
+    await dialog.getByRole('tab', { name: 'All workspaces' }).click();
+    await send(page, { type: 'allSessionList', sessions: rows.map(row => ({ ...row, workspacePath: 'd:\\work', workspaceName: 'work' })) });
+    await expect.poll(order).toEqual([rows[1].id, rows[2].id, rows[0].id]);
+
+    await send(page, { type: 'activeSessions', sessions: [] });
+    await expect.poll(order).toEqual(rows.map(row => row.id));
+  });
+
   test('Escape closes the modal', async ({ page }) => {
     await openModal(page);
     await page.keyboard.press('Escape');

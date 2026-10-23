@@ -7,6 +7,7 @@ import { contextWindowFor } from './modelData';
 import { stringifyToolResult } from './toolResult';
 import { noticeFromSystemEvent, noticeLabel } from './taskNotification';
 import type { SessionState } from './sessionState';
+import { noteClaudeUsage } from './sessionStats';
 
 // The pending set is the only live inventory of background tasks anywhere in Argus, and
 // until now it was read once per turn, on `done`. A watch session runs for hours between
@@ -260,6 +261,8 @@ function handleAssistant(s: SessionState, event: Record<string, unknown>): void 
   if (usage) {
     const newInput = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
     const newOutput = usage.output_tokens ?? 0;
+    const messageId = (event.message as { id?: string }).id ?? (typeof event.uuid === 'string' ? event.uuid : '');
+    if (messageId) noteClaudeUsage(s, messageId, newInput, newOutput);
     if (newInput > 0 || newOutput > 0) {
       s.turnInputTokens = newInput;
       s.turnOutputTokens = newOutput;

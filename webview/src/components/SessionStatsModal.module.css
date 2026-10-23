@@ -1,0 +1,88 @@
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.summary strong {
+  font-size: 1.15em;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary span,
+.meta {
+  color: var(--thinking-fg);
+  font-size: 0.85em;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+}
+
+.table th,
+.table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+}
+
+@media (min-width: 640px) {
+  .summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.taskRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+}
+
+.taskRow input {
+  min-width: 0;
+  flex: 1;
+  background: var(--input-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.taskRow button {
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.taskRow [role='alert'] {
+  flex-basis: 100%;
+  color: var(--vscode-errorForeground, #f48771);
+}

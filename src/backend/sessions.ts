@@ -332,7 +332,7 @@ export async function listWorkspaces(): Promise<WorkspaceSummary[]> {
 // Cap the global "Recent sessions" scan: reading each transcript fully for its
 // title/last-prompt is the expensive part, so we only do it for the N most-recent
 // sessions across all projects (after the cheap stat-based sort).
-const MAX_GLOBAL_SESSIONS = 200;
+export const MAX_GLOBAL_SESSIONS = 200;
 
 // Enumerate recent sessions across every project the CLI has run in, newest first.
 // Like listWorkspaces, the real cwd is recovered from the transcript records (the
@@ -341,7 +341,7 @@ const MAX_GLOBAL_SESSIONS = 200;
 // exists are dropped. To keep this responsive, sessions are first sorted by mtime
 // from stat() alone, then only the MAX_GLOBAL_SESSIONS most recent are read for
 // their title/last-prompt metadata.
-export async function listAllSessions(): Promise<GlobalSessionSummary[]> {
+export async function listAllSessions(includedIds: ReadonlySet<string> = new Set()): Promise<GlobalSessionSummary[]> {
   const root = projectsRoot();
   let names: string[];
   try { names = fs.readdirSync(root); } catch { return []; }
@@ -379,7 +379,7 @@ export async function listAllSessions(): Promise<GlobalSessionSummary[]> {
   }
   candidates.sort((a, b) => b.mtime - a.mtime);
   const out: GlobalSessionSummary[] = [];
-  for (const c of candidates.slice(0, MAX_GLOBAL_SESSIONS)) {
+  for (const c of candidates.filter((candidate, index) => index < MAX_GLOBAL_SESSIONS || includedIds.has(candidate.id))) {
     const meta = readSessionMeta(c.full);
     out.push({
       id: c.id,
