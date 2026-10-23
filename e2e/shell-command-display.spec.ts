@@ -167,6 +167,29 @@ test('Node.js code keeps quotes around separate arguments', async ({ page }) => 
   await expect(page.getByText("'console.log(1)' 'sample'", { exact: true })).toBeVisible();
 });
 
+test('shell serialized quote fragments do not appear in command captions', async ({ page }) => {
+  await waitForApp(page);
+  const commands = [
+    { id: 'quoted-file', command: String.raw`"C:\Program Files\Git\bin\bash.exe" -c "cat '"'/reports/current report.md'"'"` },
+    { id: 'quoted-range', command: String.raw`"C:\Program Files\Git\bin\bash.exe" -c "sed -n '1,10p' '"'/reports/current report.md'"'"` },
+    { id: 'quoted-check', command: String.raw`"C:\Program Files\Git\bin\bash.exe" -c "node --check '"'/reports/current report.js'"'"` },
+  ];
+  await page.evaluate(commands => {
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'thinking_start' } }));
+    for (const item of commands) {
+      const call = { id: item.id, name: 'commandExecution', kind: 'command', input: { command: item.command }, result: 'report content' };
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'tool_start', call } }));
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'tool_end', call } }));
+    }
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'done' } }));
+  }, commands);
+
+  await expect(page.getByRole('img', { name: 'cat' })).toHaveAttribute('title', commands[0].command);
+  await expect(page.getByText('/reports/current report.md', { exact: true })).toBeVisible();
+  await expect(page.getByText("-n '1,10p' '/reports/current report.md'", { exact: true })).toBeVisible();
+  await expect(page.getByText("--check '/reports/current report.js'", { exact: true })).toBeVisible();
+});
+
 test('orchestration rows replace the repeated controller command with an icon and worker action', async ({ page }) => {
   await waitForApp(page);
   const command = 'node C:/scub/orchestrate/scripts/control.js respond --company scub-company --key scub-task --id scub-request';

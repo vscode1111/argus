@@ -54,6 +54,8 @@ function orchestratorCommand(command: string): ShellCommand | null {
 }
 
 export function shellCommand(command: string): ShellCommand {
+  const normalized = command.replaceAll(`'"'`, `'`);
+  if (normalized !== command) return shellCommand(normalized);
   const orchestrator = orchestratorCommand(command);
   if (orchestrator) return orchestrator;
   const match = /^\s*(?:"([^"]+)"|'([^']+)'|(\S+))\s+([\s\S]+)$/.exec(command);
