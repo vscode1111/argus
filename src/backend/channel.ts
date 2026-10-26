@@ -3,6 +3,7 @@ import type { WebSocket } from 'ws';
 import { createSessionState, type SessionState } from './sessionState';
 import { killProc } from './cli';
 import type { ReplayMessage } from './sessions';
+import { displaySegments, latestPage } from './sessionPages';
 import { noteRequestEvent } from './sessionStats';
 
 const MAX_HISTORY = 200;
@@ -604,8 +605,10 @@ function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[], activeT
 
 function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessage[]): void {
   try { ws.send(JSON.stringify({ type: 'providerSelection', ...entry.state.selection })); } catch { return; }
-  const messages = stored ? mergeHistory(stored, entry.history, entry.snapshot ? entry.state.runtime?.activeTurnId : undefined) : entry.history;
-  try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages })); } catch { return; }
+  const merged = stored ? mergeHistory(stored, entry.history, entry.snapshot ? entry.state.runtime?.activeTurnId : undefined) : undefined;
+  const page = merged ? latestPage(merged) : undefined;
+  const before = stored && page ? Math.min(page.before, displaySegments(stored).length) : 0;
+  try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages: page?.messages ?? entry.history, before, hasMore: before > 0 })); } catch { return; }
   replaySnapshotToClient(entry, ws);
   if (entry.snapshot) {
     const outputTokens = entry.state.completedOutputTokens + Math.ceil(entry.state.liveOutputChars / 4);
