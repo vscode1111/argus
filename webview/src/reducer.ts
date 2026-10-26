@@ -7,6 +7,9 @@ export type AppState = {
   providerId: string;
   interaction: ProviderInteraction | null;
   messages: UIMessage[];
+  historySessionId: string | null;
+  historyBefore: number;
+  historyRevision: number;
   streaming: StreamingState | null;
   isStreaming: boolean;
   prefill: string;
@@ -66,7 +69,8 @@ export type AppAction =
   | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; errorRetry?: boolean; timedOut?: boolean }
   | { type: 'retry_clean' }
   | { type: 'user_inject'; text: string; images?: ImageAttachment[] }
-  | { type: 'sessionLoaded'; id: string; messages: UIMessage[] }
+  | { type: 'sessionLoaded'; id: string; messages: UIMessage[]; before?: number }
+  | { type: 'historyPage'; id: string; messages: UIMessage[]; before: number; revision?: number; error?: string }
   | { type: 'modelChanged'; model: string }
   | { type: 'effortChanged'; effort: string }
   | { type: 'thinkingChanged'; thinking: boolean }
@@ -313,7 +317,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'clear':
-      return { ...state, messages: [], interaction: null, streaming: null, isStreaming: false, logs: [], contextUsage: null, bgTasks: 0, pendingNotice: null };
+      return { ...state, messages: [], historySessionId: null, historyBefore: 0, historyRevision: state.historyRevision + 1, interaction: null, streaming: null, isStreaming: false, logs: [], contextUsage: null, bgTasks: 0, pendingNotice: null };
 
     case 'bgTasks':
       return { ...state, bgTasks: action.count };
@@ -321,7 +325,11 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'sessionLoaded':
       // Replace the conversation with the replayed transcript and drop any
       // in-flight streaming/usage state from the previous session.
-      return { ...state, interaction: pendingReplayQuestion(action.messages), messages: action.messages, streaming: null, isStreaming: false, contextUsage: null, bgTasks: 0, pendingNotice: null };
+      return { ...state, interaction: pendingReplayQuestion(action.messages), messages: action.messages, historySessionId: action.id, historyBefore: action.before ?? 0, historyRevision: state.historyRevision + 1, streaming: null, isStreaming: false, contextUsage: null, bgTasks: 0, pendingNotice: null };
+
+    case 'historyPage':
+      if (action.id !== state.historySessionId || action.revision !== state.historyRevision || action.error) return state;
+      return { ...state, messages: [...action.messages, ...state.messages], historyBefore: action.before };
 
     case 'prefill':
       return { ...state, prefill: action.text + '\x00' + Date.now() };
@@ -476,6 +484,9 @@ export const initialState: AppState = {
   providerId: 'claude',
   interaction: null,
   messages: [],
+  historySessionId: null,
+  historyBefore: 0,
+  historyRevision: 0,
   streaming: null,
   isStreaming: false,
   prefill: '',

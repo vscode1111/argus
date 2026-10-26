@@ -20,6 +20,17 @@
 .messages::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)); border-radius: 3px; }
 .messages::-webkit-scrollbar-track { background: transparent; }
 
+.olderLoading {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+  text-align: center;
+  font-size: 12px;
+}
+
 .scrollBtn {
   position: absolute;
   bottom: 8px;

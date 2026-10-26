@@ -149,7 +149,7 @@ function AppInner() {
   useEffect(() => {
     const VALID_TYPES = new Set<AppAction['type']>([
       'providerSelection', 'interaction', 'message', 'thinking_start', 'thinking_chunk', 'text_chunk',
-      'tool_start', 'tool_end', 'done', 'error', 'clear', 'user_inject', 'sessionLoaded',
+      'tool_start', 'tool_end', 'done', 'error', 'clear', 'user_inject', 'sessionLoaded', 'historyPage',
       'prefill', 'workspaceInfo', 'log', 'clearLogs',
       'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'token_update', 'retry_status', 'retry_clean', 'ws_status', 'modelChanged', 'effortChanged', 'thinkingChanged',
       'bgTasks', 'bg_notice', 'auth_required',
@@ -609,7 +609,7 @@ function AppInner() {
         )}
         <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
           {topRightActions}
-          <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} />
+          <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} historySessionId={state.historySessionId} historyBefore={state.historyBefore} historyRevision={state.historyRevision} onLoadEarlier={(id, before, revision) => postMessage({ type: 'loadEarlier', id, before, revision })} />
           <InputArea providerId={state.providerId} isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
           {loadingSession && (
             <div className="sessionLoader" role="status" aria-live="polite" aria-busy="true" aria-label="Loading session">

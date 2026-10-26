@@ -32,6 +32,7 @@ import { searchFiles, type FileSearchResult } from './fileSearch';
 import { workspaceChanges } from './workspaceChanges';
 import { listOrchestratorGoals } from './orchestratorGoals';
 import { beginRequest, readRequestStats, readSessionTaskKey, readSessionTaskKeys, setSessionTaskKey } from './sessionStats';
+import { sendInitialPage, sendEarlierPage } from './sessionPages';
 
 export { getCliLaunchCount } from './providers/claudeExecution';
 
@@ -96,7 +97,7 @@ export interface ConnectionHooks {
 async function replayStoredSession(ws: WebSocket, channel: Channel, id: string, workspaceDir: string): Promise<void> {
   try {
     const messages = await providerForSession(id).load(id, workspaceDir);
-    if (!channel.replayHistory(ws, messages)) ws.send(JSON.stringify({ type: 'sessionLoaded', id, messages }));
+    if (!channel.replayHistory(ws, messages)) sendInitialPage(ws, id, messages);
   } catch (error) {
     // A live turn remains viewable if its provider cannot read the stored thread.
     if (!channel.replayHistory(ws)) throw error;
@@ -230,6 +231,8 @@ export function attachClientHandlers(
       force?: boolean;
       id?: string;
       childId?: string;
+      before?: number;
+      revision?: number;
       toolUseId?: string;
       title?: string;
       taskKey?: string;
@@ -262,7 +265,7 @@ export function attachClientHandlers(
         } else {
           const messages = await providerForSession(hooks.sessionId).load(hooks.sessionId, s.workspaceDir);
           s.sendLog('info', `Deep link replay of ${hooks.sessionId} (${plural(messages.length, 'message')})`);
-          try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: hooks.sessionId, messages })); } catch {}
+          try { sendInitialPage(ws, hooks.sessionId, messages); } catch {}
         }
       } else if (panelRejoin) {
         // Reconnecting panel (?panel= matched an existing entry): addClient skipped the
@@ -550,6 +553,15 @@ export function attachClientHandlers(
       newState.broadcast(JSON.stringify(selectionMessage(newState)));
     } else if (msg.type === 'resumeSession' && msg.id) {
       await handleResumeSession(s, ws, channel, msg.id);
+    } else if (msg.type === 'loadEarlier' && typeof msg.id === 'string' && typeof msg.before === 'number' && Number.isSafeInteger(msg.before) && msg.before > 0 && typeof msg.revision === 'number' && Number.isSafeInteger(msg.revision) && msg.revision >= 0) {
+      const viewed = channel.getViewingSessionId(ws) ?? channel.getClientState(ws).sessionId;
+      if (msg.id !== viewed) return;
+      try {
+        const messages = await providerForSession(msg.id).load(msg.id, s.workspaceDir);
+        if (msg.id === (channel.getViewingSessionId(ws) ?? channel.getClientState(ws).sessionId)) sendEarlierPage(ws, msg.id, messages, msg.before, msg.revision);
+      } catch (error) {
+        ws.send(JSON.stringify({ type: 'historyPage', id: msg.id, messages: [], before: msg.before, revision: msg.revision, error: error instanceof Error ? error.message : String(error) }));
+      }
     } else if (msg.type === 'listWorkspaces') {
       const currentPath = s.workspaceDir;
       listWorkspaces().then(workspaces => {
@@ -667,7 +679,7 @@ export async function handleResumeSession(s: SessionState, ws: WebSocket, channe
   if ((channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId) !== id) return;
   ws.send(JSON.stringify({ type: 'providerSelection', ...selectionFor(id, s.workspaceDir) }));
   s.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);
-  ws.send(JSON.stringify({ type: 'sessionLoaded', id, messages }));
+  sendInitialPage(ws, id, messages);
   if (!isBrowsing) {
     channel.replaySnapshot(ws);
     // Restore live token counts lost when sessionLoaded cleared the streaming state.
