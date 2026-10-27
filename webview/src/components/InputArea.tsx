@@ -107,6 +107,7 @@ interface Props {
 
 export function InputArea({ providerId = 'claude', isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, wsCloseReason = null, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
   const [history, setHistory] = useState<string[]>([]);
@@ -296,6 +297,21 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
     return 'unsupported';
   }
 
+  function addAttachment(file: File, kind: 'image' | 'pdf' | 'text') {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const match = dataUrl.match(/^data:([^;]*);base64,(.+)$/);
+      if (!match) return;
+      // Normalize text-file media type when the OS reports it as empty
+      const detectedType = match[1];
+      const mediaType = kind === 'text' && !detectedType.startsWith('text/') ? 'text/plain' : detectedType;
+      setImages(prev => [...prev, { data: match[2], mediaType, name: file.name }]);
+    };
+    reader.onerror = () => showPasteError(`Could not read ${file.name || 'attachment'}.`);
+    reader.readAsDataURL(file);
+  }
+
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     const items = e.clipboardData.items;
     const accepted: { kind: 'image' | 'pdf' | 'text'; file: File }[] = [];
@@ -319,19 +335,15 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
       showPasteError(`Unsupported file type: ${list}. Supported types: images (PNG, JPG, GIF, WebP), text files, and PDFs.`);
     }
 
-    for (const { kind, file } of accepted) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        const match = dataUrl.match(/^data:([^;]*);base64,(.+)$/);
-        if (!match) return;
-        // Normalize text-file media type when the OS reports it as empty
-        const detectedType = match[1];
-        const mediaType = kind === 'text' && !detectedType.startsWith('text/') ? 'text/plain' : detectedType;
-        setImages(prev => [...prev, { data: match[2], mediaType, name: file.name }]);
-      };
-      reader.readAsDataURL(file);
+    for (const { kind, file } of accepted) addAttachment(file, kind);
+  }
+
+  function handleImageSelection(e: React.ChangeEvent<HTMLInputElement>) {
+    for (const file of Array.from(e.currentTarget.files ?? [])) {
+      if (classifyPastedFile(file) === 'image') addAttachment(file, 'image');
+      else showPasteError(`Unsupported file type: ${file.name || file.type || 'unknown'}. Choose an image.`);
     }
+    e.currentTarget.value = '';
   }
 
   function getSlashContext(): { query: string; slashIndex: number } | null {
@@ -1033,6 +1045,22 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
           </div>
         </div>
         <div className={styles.sendRow}>
+          <input
+            ref={imageInputRef}
+            className={styles.imageInput}
+            type="file"
+            accept="image/*"
+            multiple
+            tabIndex={-1}
+            onChange={handleImageSelection}
+          />
+          <button className={styles.btnAttach} type="button" onClick={() => imageInputRef.current?.click()} title="Attach image" aria-label="Attach image">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="m3 17 6-6 4 4 3-3 5 5" />
+            </svg>
+          </button>
           <button className={styles.btnSend} onClick={send} title="Send" aria-label="Send">
             <svg width="16" height="20" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path d="M8 17V3M8 3L3.5 7.5M8 3L12.5 7.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>

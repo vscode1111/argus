@@ -548,6 +548,28 @@
   align-self: stretch;
 }
 
+.imageInput { display: none; }
+
+.btnAttach {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+.btnAttach:hover { background: var(--btn-hover); }
+.btnAttach:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
+
+@media (pointer: coarse) {
+  .btnAttach { display: flex; }
+}
+
 .btnSend {
   background: var(--btn-bg);
   color: var(--btn-fg);
