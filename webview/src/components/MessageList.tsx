@@ -21,6 +21,7 @@ interface Props {
 
 const SCROLL_THRESHOLD = 80;
 const HISTORY_THRESHOLD = 100;
+const segmentOrigin = (id: string) => /^(.*):block:\d+$/.exec(id)?.[1];
 
 export const MessageList = forwardRef<MessageListHandle, Props>(function MessageList({ messages, streaming, login, logCount, historySessionId, historyBefore, historyRevision, onLoadEarlier }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -107,8 +108,11 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
             Load earlier messages
           </button>
         )}
-        {messages.map(msg => (
-          <ChatMessage key={msg.id} message={msg} login={msg.role === 'error' && msg.errorKind === 'auth' ? login : undefined} />
+        {messages.map((msg, index) => (
+          <ChatMessage key={msg.id} message={msg}
+            compact={msg.role === 'assistant' && index > 0 && messages[index - 1].role === 'assistant' && !!segmentOrigin(msg.id)
+              && segmentOrigin(msg.id) === segmentOrigin(messages[index - 1].id)}
+            login={msg.role === 'error' && msg.errorKind === 'auth' ? login : undefined} />
         ))}
         {streaming && <StreamingMessage streaming={streaming} logCount={logCount} />}
         <div ref={bottomRef} />

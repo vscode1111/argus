@@ -20,6 +20,8 @@
   padding: 0;
 }
 
+.segmentContinuation { margin-top: calc(-1 * var(--message-list-gap)); }
+
 .streaming { opacity: 0.9; }
 .streaming.empty { padding: 0; background: none; }
 

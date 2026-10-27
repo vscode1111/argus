@@ -23,6 +23,7 @@ function dispatchLocal(data: object) {
 interface Props {
   message: UIMessage;
   login?: LoginState;
+  compact?: boolean;
 }
 
 const ERROR_HINTS: Record<ErrorKind, { title: string; hint: string }> = {
@@ -135,7 +136,7 @@ function ErrorMessage({ message, login }: Props) {
   );
 }
 
-export function ChatMessage({ message, login }: Props) {
+export function ChatMessage({ message, login, compact }: Props) {
   const { role, content, thinking, blocks, responseTime } = message;
   const [retryHidden, setRetryHidden] = useState(false);
   const { showTimer } = useSettings();
@@ -158,7 +159,7 @@ export function ChatMessage({ message, login }: Props) {
   const sessionDone = message.outcome != null && message.outcome !== 'background_waiting' && message.outcome !== 'background_done';
 
   return (
-    <div className={[msg.message, msg.assistant].join(' ')}>
+    <div className={[msg.message, msg.assistant, compact ? msg.segmentContinuation : ''].filter(Boolean).join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
       {blocks ? blocks.map((block, i) => {
         if (firstPendingAskIdx >= 0 && i > firstPendingAskIdx && block.type === 'text') {
