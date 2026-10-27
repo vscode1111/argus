@@ -719,6 +719,11 @@ export function getOrCreateChannel(dir: string): Channel {
       if (panelId) {
         for (const entry of _cd.entries.values()) {
           if (entry.owner === panelId) {
+            if (sessionId && entry.state.sessionId !== sessionId) {
+              // An explicit deep link takes precedence over this panel's last session.
+              entry.owner = undefined;
+              break;
+            }
             // Reconnect of a known panel (reload, daemon restart): rejoin its own entry.
             // Replay is deferred to webviewReady - the socket opens while the React
             // bundle is still evaluating, so an immediate replay would be dispatched
@@ -736,7 +741,7 @@ export function getOrCreateChannel(dir: string): Channel {
         // entry has none), which is fine: the client's own view of the old transcript
         // is still on screen from before the disconnect.
         const fresh = createEntry(_cd, panelId);
-        const lastSession = _cd.ownerLastSession.get(panelId);
+        const lastSession = sessionId ? undefined : _cd.ownerLastSession.get(panelId);
         if (lastSession) { fresh.state.sessionId = lastSession; fresh.state.selection = selectionFor(lastSession, dir); }
         joinEntry(_cd, ws, fresh);
         return false;
