@@ -12,6 +12,7 @@ import { ImageViewerModal } from './ImageViewerModal';
 import { useSettings } from '../contexts/SettingsContext';
 import { postMessage } from '../vscode';
 import { isOrchestratorPrompt } from '../utils/orchestratorMarker';
+import { copyTextToClipboard } from '../utils/clipboard';
 import msg from './shared/message.module.css';
 import styles from './ChatMessage.module.css';
 
@@ -58,7 +59,7 @@ function LoginPanel({ login }: { login: LoginState }) {
         <div className={styles.loginHint}>If the browser didn't open, visit this URL:</div>
         <div className={styles.loginUrlRow}>
           <input className={styles.loginUrlInput} value={login.url} readOnly onClick={e => (e.target as HTMLInputElement).select()} />
-          <button className={styles.loginCopyBtn} onClick={() => navigator.clipboard.writeText(login.url)} title="Copy URL">&#128203;</button>
+          <button className={styles.loginCopyBtn} onClick={() => { void copyTextToClipboard(login.url); }} title="Copy URL">&#128203;</button>
           <button className={styles.loginCopyBtn} onClick={() => { postMessage({ type: 'openUrl', url: login.url }); window.open(login.url, '_blank'); }} title="Open in browser">&#8599;</button>
         </div>
         <div className={styles.loginHint}>Or, paste your authorization code manually:</div>
@@ -213,7 +214,8 @@ export function ChatMessage({ message, login }: Props) {
 function MessageCopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(text).then(() => {
+    copyTextToClipboard(text).then(copiedSuccessfully => {
+      if (!copiedSuccessfully) return;
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });

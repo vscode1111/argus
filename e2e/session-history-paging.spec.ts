@@ -36,3 +36,24 @@ test('ignores an older page from a previous replay of the same session', async (
   await expect(page.getByText('Refreshed entry')).toBeVisible();
   await expect(page.getByText('Stale entry')).toHaveCount(0);
 });
+
+test('a short recent page exposes older messages without scrolling', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('console', message => {
+    if (message.text() === '[mock] suppressed loadEarlier') requests.push(message.text());
+  });
+  await waitForApp(page);
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: {
+    type: 'sessionLoaded', id: 'short-page-session',
+    messages: [{ id: 'recent-entry', role: 'assistant', content: 'Recent summary' }], before: 30,
+  } })));
+  await expect(page.getByText('Recent summary')).toBeVisible();
+  await page.getByRole('button', { name: 'Load earlier messages' }).click();
+  await expect.poll(() => requests.length).toBe(1);
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: {
+    type: 'historyPage', id: 'short-page-session', revision: 1, before: 0,
+    messages: [{ id: 'older-entry', role: 'user', content: 'Older detail' }],
+  } })));
+  await expect(page.getByText('Older detail')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
+});

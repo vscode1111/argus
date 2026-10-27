@@ -4,12 +4,14 @@ import { isOrchestratorPrompt } from '../utils/orchestratorMarker';
 import { ImageViewerModal } from './ImageViewerModal';
 import type { ImageAttachment } from '../types';
 import styles from './ChatMessage.module.css';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 export function UserInjectBlock({ text, images }: { text: string; images?: ImageAttachment[] }) {
   const [copied, setCopied] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(text).then(() => {
+    copyTextToClipboard(text).then(copiedSuccessfully => {
+      if (!copiedSuccessfully) return;
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });

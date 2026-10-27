@@ -73,6 +73,25 @@ test('streamed text is not duplicated by the completed item; binding survives re
   assert.equal(selectionFor(state.sessionId, dir).providerId, 'codex');
 });
 
+test('background notices and stale turns do not extend the active turn watchdog', () => {
+  const state = createSessionState(dir); state.broadcast = () => {};
+  const runtime = new CodexSession(state, { dispose() {} });
+  runtime.threadId = 'current-thread'; runtime.turnId = 'current-turn'; runtime.busy = true;
+  try {
+    runtime.armIdleTimer();
+    const firstTimer = runtime.idleTimer;
+    runtime.receive('account/rateLimits/updated', { threadId: 'current-thread' });
+    assert.equal(runtime.idleTimer, firstTimer);
+    runtime.receive('item/started', { threadId: 'current-thread', turnId: 'old-turn', item: { id: 'old-item', type: 'commandExecution' } });
+    assert.equal(runtime.idleTimer, firstTimer);
+    runtime.receive('turn/started', { threadId: 'current-thread', turn: { id: 'old-turn' } });
+    assert.equal(runtime.idleTimer, firstTimer);
+    assert.equal(runtime.turnId, 'current-turn');
+    runtime.receive('item/agentMessage/delta', { threadId: 'current-thread', turnId: 'current-turn', itemId: 'reply', delta: 'Working' });
+    assert.notEqual(runtime.idleTimer, firstTimer);
+  } finally { runtime.dispose(); }
+});
+
 test('capacity failures retry the same request and finish after recovery', async () => {
   writeConfig({ ...DEFAULT_CONFIG, errorRetryMaxRetries: 3, errorRetryDelay: 1 });
   const { events, runtime } = session();

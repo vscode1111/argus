@@ -7,6 +7,7 @@ import { RefreshButton } from './shared/RefreshButton';
 import { useWebviewMessage } from '../hooks/useWebviewMessage';
 import { relativeTime } from '../utils/time';
 import { fmtLineCount } from '../utils/text';
+import { copyTextToClipboard } from '../utils/clipboard';
 import { ProviderIcon } from './shared/ProviderIcon';
 import { SessionStatsModal } from './SessionStatsModal';
 import shell from './shared/centeredModal.module.css';
@@ -41,27 +42,6 @@ let allCache: { sessions: GlobalSessionSummary[]; currentId?: string } | null = 
 function sortWorkingFirst<T extends SessionSummary>(sessions: T[], activeIds: Set<string>): T[] {
   return [...sessions].sort((a, b) =>
     Number(activeIds.has(b.id)) - Number(activeIds.has(a.id)) || b.updatedAt - a.updatedAt);
-}
-
-// Write text to the clipboard, falling back to a hidden textarea + execCommand
-// when the async Clipboard API is unavailable (plain-http LAN pages are not a
-// secure context, so navigator.clipboard is undefined there).
-function copyToClipboard(text: string): void {
-  if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
-  } else {
-    fallbackCopy(text);
-  }
-}
-function fallbackCopy(text: string): void {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  try { document.execCommand('copy'); } catch {}
-  document.body.removeChild(ta);
 }
 
 export function SessionHistoryModal({ currentPath, currentId: currentIdOverride, activeIds, onResumeWorkspaceSession, onClose }: Props) {
@@ -206,9 +186,11 @@ export function SessionHistoryModal({ currentPath, currentId: currentIdOverride,
   // Browser-hosted pages only: a vscode-webview: origin would make a useless URL.
   function copyLink(e: React.MouseEvent, id: string) {
     e.stopPropagation();
-    copyToClipboard(`${location.origin}${location.pathname}?session=${id}`);
-    setCopiedId(id);
-    window.setTimeout(() => setCopiedId(prev => (prev === id ? null : prev)), 1500);
+    void copyTextToClipboard(`${location.origin}${location.pathname}?session=${id}`).then(copiedSuccessfully => {
+      if (!copiedSuccessfully) return;
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(prev => (prev === id ? null : prev)), 1500);
+    });
   }
 
   function startEdit(e: React.MouseEvent, s: SessionSummary) {

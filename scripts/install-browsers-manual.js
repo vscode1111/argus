@@ -5,7 +5,7 @@
 // Background: the normal installer downloads each component zip fine (reaches
 // 100%), then its bundled yauzl extractor deadlocks while unzipping - Windows
 // Defender locks D3DCompiler_47.dll mid-write and the write-stream callback never
-// returns. See .claude/researches/playwright-install-hang.md for the full analysis.
+// returns. See .agents/researches/playwright-install-hang.md for the full analysis.
 //
 // This script does what the installer would, but extracts with PowerShell
 // Expand-Archive (which does not deadlock): for each component it downloads the

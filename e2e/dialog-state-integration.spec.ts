@@ -185,9 +185,10 @@ test.describe('dialog state persistence (integration)', () => {
     // localStorage survives a refresh, so the resized width persists.
     await waitForApp(page);
     dialog = await openAccount();
-    const afterRefresh = await dialog.boundingBox();
-    if (!afterRefresh) throw new Error('no box');
-    expect(Math.abs(afterRefresh.width - 560)).toBeLessThan(3);
+    await expect.poll(async () => {
+      const box = await dialog.boundingBox();
+      return box ? Math.abs(box.width - 560) : Infinity;
+    }).toBeLessThan(3);
   });
 
   test('Settings: tab and geometry both survive a refresh, and "Reset layout" clears them', { tag: ["@shared"] }, async ({ page }) => {

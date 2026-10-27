@@ -28,7 +28,7 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
   const userScrolledUp = useRef(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
-  const pendingPage = useRef<{ id: string; before: number; revision: number; height: number; top: number } | null>(null);
+  const pendingPage = useRef<{ id: string; before: number; revision: number; height: number; top: number; manual: boolean } | null>(null);
 
   useEffect(() => {
     pendingPage.current = null;
@@ -50,8 +50,13 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
     const pending = pendingPage.current;
     const el = containerRef.current;
     if (!pending || !el || pending.id !== historySessionId || pending.revision !== historyRevision || historyBefore >= pending.before) return;
-    el.scrollTop = pending.top + el.scrollHeight - pending.height;
-    pendingPage.current = null;
+    if (pending.manual) {
+      el.scrollTop = 0;
+      requestAnimationFrame(() => { if (pendingPage.current === pending) pendingPage.current = null; });
+    } else {
+      el.scrollTop = pending.top + el.scrollHeight - pending.height;
+      pendingPage.current = null;
+    }
     setLoadingEarlier(false);
   }, [messages, historyBefore, historySessionId, historyRevision]);
 
@@ -69,17 +74,23 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
     },
   }));
 
+  function loadEarlier(manual: boolean) {
+    const el = containerRef.current;
+    if (!el || !historySessionId || historyBefore <= 0 || pendingPage.current) return;
+    pendingPage.current = { id: historySessionId, before: historyBefore, revision: historyRevision,
+      height: el.scrollHeight, top: el.scrollTop, manual };
+    if (manual) userScrolledUp.current = true;
+    setLoadingEarlier(true);
+    onLoadEarlier(historySessionId, historyBefore, historyRevision);
+  }
+
   function handleScroll() {
     const el = containerRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     userScrolledUp.current = distanceFromBottom > SCROLL_THRESHOLD;
     setShowScrollBtn(distanceFromBottom > SCROLL_THRESHOLD);
-    if (historySessionId && historyBefore > 0 && el.scrollTop < HISTORY_THRESHOLD && !pendingPage.current) {
-      pendingPage.current = { id: historySessionId, before: historyBefore, revision: historyRevision, height: el.scrollHeight, top: el.scrollTop };
-      setLoadingEarlier(true);
-      onLoadEarlier(historySessionId, historyBefore, historyRevision);
-    }
+    if (el.scrollTop < HISTORY_THRESHOLD) loadEarlier(false);
   }
 
   useEffect(() => {
@@ -91,6 +102,11 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
   return (
     <div className={styles.wrapper}>
       <div className={styles.messages} ref={containerRef} onScroll={handleScroll}>
+        {historySessionId && historyBefore > 0 && (
+          <button type="button" className={styles.loadEarlierBtn} onClick={() => loadEarlier(true)} disabled={loadingEarlier}>
+            Load earlier messages
+          </button>
+        )}
         {messages.map(msg => (
           <ChatMessage key={msg.id} message={msg} login={msg.role === 'error' && msg.errorKind === 'auth' ? login : undefined} />
         ))}

@@ -5,6 +5,7 @@ import { clearDialogState } from '../utils/dialogState';
 import { useSettings } from '../contexts/SettingsContext';
 import { postMessage, isVsCode } from '../vscode';
 import { plural } from '../utils/text';
+import { copyTextToClipboard } from '../utils/clipboard';
 import { CliProcessesModal } from './CliProcessesModal';
 import { ClientsModal } from './ClientsModal';
 import { PasswordInput } from './shared/PasswordInput';
@@ -404,7 +405,11 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
     if (!isVsCode && typeof window !== 'undefined') window.open(url, '_blank');
   }
   function copyText(text: string, key: string): void {
-    try { navigator.clipboard?.writeText(text); setCopiedKey(key); setTimeout(() => setCopiedKey(null), 1200); } catch { /* */ }
+    void copyTextToClipboard(text).then(copiedSuccessfully => {
+      if (!copiedSuccessfully) return;
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1200);
+    });
   }
   // Only a genuine disagreement counts: either side can be unknown (the browser dev
   // host passes no version, and an old daemon sends no serverVersion at all). Which

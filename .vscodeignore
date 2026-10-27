@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 .claude/**
+.agents/**
 **/!notes/**
 .playwright-mcp/**
 test-results/**

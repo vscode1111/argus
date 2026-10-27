@@ -5,7 +5,7 @@
 // INSTALLATION_COMPLETE marker so Playwright treats the browser as installed.
 //
 // Component dirs/URLs are read live from the Playwright registry so nothing is
-// hardcoded to a version. Run: node .claude/researches/scripts/pw-install.js
+// hardcoded to a version. Run: node .agents/researches/scripts/pw-install.js
 
 const fs = require('fs');
 const path = require('path');

@@ -20,6 +20,19 @@
 .messages::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4)); border-radius: 3px; }
 .messages::-webkit-scrollbar-track { background: transparent; }
 
+.loadEarlierBtn {
+  align-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--vscode-textLink-foreground, #3794ff);
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 8px;
+}
+.loadEarlierBtn:hover { text-decoration: underline; }
+.loadEarlierBtn:focus-visible { outline: 1px solid var(--vscode-focusBorder, #007fd4); }
+.loadEarlierBtn:disabled { cursor: default; opacity: 0.6; }
+
 .olderLoading {
   position: absolute;
   top: 4px;
