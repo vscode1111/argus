@@ -12,6 +12,7 @@ test('a joining client receives the image in a streaming request', () => {
     const channel = getOrCreateChannel(workspace);
     channel.addClient(owner, true);
     const state = channel.getClientState(owner);
+    state.runtime = { active: true };
     state.broadcast(JSON.stringify({ type: 'thinking_start' }));
     state.broadcast(JSON.stringify({ type: 'user_inject', text: 'Inspect this diagram', images: [image] }));
     channel.addClient(viewer);

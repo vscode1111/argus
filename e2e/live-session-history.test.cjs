@@ -89,7 +89,7 @@ test('live history shows one copy of an in-progress turn already in the stored r
     channel.addClient(streamer, true);
     const live = channel.getClientState(streamer);
     live.sessionId = `codex:${randomUUID()}`;
-    live.runtime = { activeTurnId: 'current-turn' };
+    live.runtime = { active: true, activeTurnId: 'current-turn' };
     live.broadcast(JSON.stringify({ type: 'message', message: { id: 'live-user', role: 'user', content: currentPrompt } }));
     live.broadcast(JSON.stringify({ type: 'thinking_start' }));
     live.broadcast(JSON.stringify({ type: 'text_chunk', text: currentAnswer }));
@@ -132,7 +132,7 @@ test('live history keeps an earlier turn when the new prompt and answer repeat',
     channel.addClient(streamer, true);
     const live = channel.getClientState(streamer);
     live.sessionId = `codex:${randomUUID()}`;
-    live.runtime = { activeTurnId: 'new-turn' };
+    live.runtime = { active: true, activeTurnId: 'new-turn' };
     live.broadcast(JSON.stringify({ type: 'message', message: { id: 'new-user', role: 'user', content: 'Review the report' } }));
     live.broadcast(JSON.stringify({ type: 'thinking_start' }));
     live.broadcast(JSON.stringify({ type: 'text_chunk', text: 'New result' }));
@@ -146,6 +146,39 @@ test('live history keeps an earlier turn when the new prompt and answer repeat',
     const loaded = frames.find(frame => frame.type === 'sessionLoaded');
     assert.equal(loaded.messages.filter(message => message.role === 'assistant' && message.content === 'New result').length, 1);
     assert.equal(frames.filter(frame => frame.type === 'text_chunk' && frame.text === 'New result').length, 1);
+  } finally {
+    destroyChannel(cwd);
+  }
+});
+
+test('opening an idle entry does not replay an abandoned streaming snapshot', () => {
+  const cwd = path.join(os.tmpdir(), `history-idle-snapshot-${randomUUID()}`);
+  const frames = [];
+  const streamer = { readyState: 1, send() {} };
+  const viewer = { readyState: 1, send(frame) { frames.push(JSON.parse(frame)); } };
+  const prompt = 'Check the report status';
+  const answer = 'The report is still being checked.';
+  try {
+    const channel = getOrCreateChannel(cwd);
+    channel.addClient(streamer, true);
+    const idle = channel.getClientState(streamer);
+    idle.sessionId = `codex:${randomUUID()}`;
+    idle.cliDone = true;
+    idle.broadcast(JSON.stringify({ type: 'message', message: { id: 'status-request', role: 'user', content: prompt } }));
+    idle.broadcast(JSON.stringify({ type: 'thinking_start' }));
+    idle.broadcast(JSON.stringify({ type: 'text_chunk', text: answer }));
+    const stored = replayThread({ turns: [{ id: 'status-turn', items: [
+      { id: 'stored-request', type: 'userMessage', content: [{ type: 'text', text: prompt }] },
+      { id: 'stored-reply', type: 'agentMessage', text: answer },
+    ] }] });
+    channel.addClient(viewer);
+    frames.length = 0;
+    channel.replayHistory(viewer, stored);
+    const loaded = frames.find(frame => frame.type === 'sessionLoaded');
+    assert.equal(loaded.messages.flatMap(message => message.blocks || [])
+      .filter(block => block.type === 'text' && block.text === answer).length, 1);
+    assert.equal(frames.filter(frame => frame.type === 'text_chunk' && frame.text === answer).length, 0);
+    assert.equal(frames.filter(frame => frame.type === 'thinking_start').length, 0);
   } finally {
     destroyChannel(cwd);
   }

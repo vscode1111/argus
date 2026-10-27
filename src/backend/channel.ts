@@ -557,8 +557,12 @@ function createEntry(cd: ChannelData, owner?: string): SessionEntry {
   return entry;
 }
 
+function hasActiveTurn(entry: SessionEntry): boolean {
+  return !!(entry.state.runtime?.active || entry.state.currentProc && !entry.state.cliDone);
+}
+
 function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
-  if (!entry.snapshot) return;
+  if (!entry.snapshot || !hasActiveTurn(entry)) return;
   try { ws.send(JSON.stringify({ type: 'thinking_start', reused: true, startedAt: entry.snapshotStartedAt ?? undefined })); } catch { return; }
   if (entry.snapshot.thinking) { try { ws.send(JSON.stringify({ type: 'thinking_chunk', text: entry.snapshot.thinking })); } catch { return; } }
   for (const block of entry.snapshot.blocks) {
@@ -610,7 +614,7 @@ function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessa
   const before = stored && page ? Math.min(page.before, displaySegments(stored).length) : 0;
   try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages: page?.messages ?? entry.history, before, hasMore: before > 0 })); } catch { return; }
   replaySnapshotToClient(entry, ws);
-  if (entry.snapshot) {
+  if (entry.snapshot && hasActiveTurn(entry)) {
     const outputTokens = entry.state.completedOutputTokens + Math.ceil(entry.state.liveOutputChars / 4);
     try { ws.send(JSON.stringify({ type: 'token_update', inputTokens: entry.state.liveInputTokens, outputTokens })); } catch { /* closing */ }
   }
@@ -824,7 +828,7 @@ export function getOrCreateChannel(dir: string): Channel {
       // finished session by deep link loads it from disk, leaving the entry's in-memory
       // history empty. Replaying that empty history would clear the client's view, so
       // report "nothing to replay" and let the caller read the transcript instead.
-      if (entry.history.length === 0 && !entry.snapshot && !stored?.length) return false;
+      if (entry.history.length === 0 && !(entry.snapshot && hasActiveTurn(entry)) && !stored?.length) return false;
       replayToClient(entry, ws, stored);
       return true;
     },
