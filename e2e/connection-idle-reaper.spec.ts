@@ -175,6 +175,46 @@ test.describe('idle connection reaper', () => {
 // ownerLastSession is what keeps a much-later reconnect resumable, the same guarantee
 // reapIdleCliProcs already makes for a killed process, one layer up.
 test.describe('session id survives full entry eviction (ownerLastSession)', () => {
+  test('an explicit session does not rejoin a panel entry for another session', () => {
+    const dir = uniqueDir('deep-link-panel');
+    const ch = mod.getOrCreateChannel(dir);
+    const existing = fakeWs();
+    ch.addClient(existing, false, undefined, 'panel-context');
+    const oldState = ch.getClientState(existing);
+    oldState.sessionId = 'session-review';
+
+    const requested = fakeWs();
+    const attached = ch.addClient(requested, false, 'session-work', 'panel-context');
+    expect(attached).toBe(false);
+    expect(ch.getClientState(requested)).not.toBe(oldState);
+    expect(oldState.sessionId).toBe('session-review');
+
+    ch.getClientState(requested).sessionId = 'session-work';
+    const rejoined = fakeWs();
+    expect(ch.addClient(rejoined, false, undefined, 'panel-context')).toBe(true);
+    expect(ch.getClientState(rejoined).sessionId).toBe('session-work');
+    ch.removeClient(existing);
+    ch.removeClient(requested);
+    ch.removeClient(rejoined);
+    mod.destroyChannel(dir);
+  });
+
+  test('an explicit session does not inherit an evicted panel session', async () => {
+    const dir = uniqueDir('deep-link-evicted');
+    const ch = mod.getOrCreateChannel(dir);
+    const previous = fakeWs();
+    ch.addClient(previous, false, undefined, 'panel-context');
+    ch.getClientState(previous).sessionId = 'session-review';
+    ch.removeClient(previous);
+    await settle(700);
+
+    const requested = fakeWs();
+    expect(ch.addClient(requested, false, 'session-work', 'panel-context')).toBe(false);
+    expect(ch.getClientState(requested).sessionId).toBeUndefined();
+    ch.removeClient(requested);
+    mod.destroyChannel(dir);
+  });
+
   test('a quick reconnect (within the grace window) still finds the live entry', async () => {
     // The ordinary, common-case path - not what this describe block is about, but the
     // control that makes the next test meaningful: without it, a build that always
