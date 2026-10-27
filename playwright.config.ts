@@ -19,6 +19,7 @@ process.env['ARGUS_STATS_FILE'] = e2eStatsFile;
 
 const chromiumOptions = {
   browserName: 'chromium' as const,
+  ...(process.env['ARGUS_E2E_SYSTEM_CHROME'] === '1' ? { channel: 'chrome' as const } : {}),
   launchOptions: {
     args: ['--disable-gpu', '--disable-dev-shm-usage', '--no-sandbox'],
   },

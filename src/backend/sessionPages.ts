@@ -3,6 +3,8 @@ import type { ReplayMessage } from './sessions';
 
 export const SESSION_PAGE_SIZE = 30;
 const SESSION_PAGE_BYTES = 128 * 1024;
+const INITIAL_PAGE_MIN_SEGMENTS = 3;
+const INITIAL_PAGE_MAX_BYTES = 512 * 1024;
 
 type Segmentable = {
   id: string;
@@ -33,12 +35,13 @@ export function displaySegments<T extends Segmentable>(messages: T[]): T[] {
   });
 }
 
-function pageBefore<T extends Segmentable>(segments: T[], end: number): number {
+function pageBefore<T extends Segmentable>(segments: T[], end: number, minimum = 0, maxBytes = SESSION_PAGE_BYTES): number {
   let start = end;
   let bytes = 0;
   while (start > 0 && end - start < SESSION_PAGE_SIZE) {
     const size = Buffer.byteLength(JSON.stringify(segments[start - 1]));
-    if (bytes && bytes + size > SESSION_PAGE_BYTES) break;
+    if (bytes && bytes + size > maxBytes) break;
+    if (bytes && bytes + size > SESSION_PAGE_BYTES && end - start >= minimum) break;
     bytes += size;
     start--;
   }
@@ -47,7 +50,7 @@ function pageBefore<T extends Segmentable>(segments: T[], end: number): number {
 
 export function latestPage<T extends Segmentable>(messages: T[]) {
   const segments = displaySegments(messages);
-  const before = pageBefore(segments, segments.length);
+  const before = pageBefore(segments, segments.length, INITIAL_PAGE_MIN_SEGMENTS, INITIAL_PAGE_MAX_BYTES);
   return { messages: segments.slice(before), before, hasMore: before > 0 };
 }
 

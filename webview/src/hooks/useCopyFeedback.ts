@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 /**
  * Copy-to-clipboard with transient "copied" feedback. `copied` holds the key of
@@ -10,7 +11,8 @@ export function useCopyFeedback(timeout = 1500) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const copy = useCallback((text: string, key = 'default') => {
-    navigator.clipboard.writeText(text).then(() => {
+    copyTextToClipboard(text).then(copiedSuccessfully => {
+      if (!copiedSuccessfully) return;
       setCopied(key);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), timeout);

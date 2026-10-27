@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { withLinkedPaths, linkifyInlineCode, PATH_CH, PATH_SEG, PATH_FINAL } from './filePath';
 import { openExternal } from './url';
+import { copyTextToClipboard } from './clipboard';
 import { usePreviewNav } from '../contexts/PreviewNavContext';
 
 // Escape backslashes in Windows file paths so the markdown parser preserves them.
@@ -78,7 +79,8 @@ function extractText(node: React.ReactNode): string {
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(text).then(() => {
+    copyTextToClipboard(text).then(copiedSuccessfully => {
+      if (!copiedSuccessfully) return;
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });

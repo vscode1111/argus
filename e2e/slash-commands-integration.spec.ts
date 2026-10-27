@@ -1,9 +1,31 @@
 import { test, expect } from './provider-fixtures';
-import { waitForApp } from './helpers';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 test.describe('slash commands (integration)', () => {
+  let workspace: string;
+
   test.beforeEach(async ({ page }) => {
-    await waitForApp(page);
+    workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'argus-slash-'));
+    const commands = path.join(workspace, '.claude', 'commands');
+    const skill = path.join(workspace, '.claude', 'skills', 'frontend');
+    fs.mkdirSync(commands, { recursive: true });
+    fs.mkdirSync(skill, { recursive: true });
+    for (const [name, description] of [
+      ['bump', 'Bump the version in package.json'],
+      ['dev', 'Control the dev environment'],
+      ['e2e', 'Run Playwright e2e tests'],
+    ]) {
+      fs.writeFileSync(path.join(commands, `${name}.md`), `---\ndescription: ${description}\n---\n`);
+    }
+    fs.writeFileSync(path.join(skill, 'SKILL.md'), '---\ndescription: Frontend development skill\n---\n');
+    await page.goto('/?dir=' + encodeURIComponent(workspace), { waitUntil: 'domcontentloaded' });
+    await expect(page.getByPlaceholder('Ask Argus')).toBeVisible();
+  });
+
+  test.afterEach(() => {
+    if (workspace) fs.rmSync(workspace, { recursive: true, force: true });
   });
 
   test('typing "/" loads real skills from server', { tag: ["@claude"] }, async ({ page }) => {

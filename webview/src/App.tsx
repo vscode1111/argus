@@ -615,7 +615,7 @@ function AppInner() {
             <div className="sessionLoader" role="status" aria-live="polite" aria-busy="true" aria-label="Loading session">
               <div className="sessionSpinner" />
               {loadSize > 0 && (
-                <div className="sessionLoaderText">Loading… {fmtLineCount(loadSize)} lines</div>
+                <div className="sessionLoaderText">Loading recent messages… {fmtLineCount(loadSize)} lines in full transcript</div>
               )}
             </div>
           )}

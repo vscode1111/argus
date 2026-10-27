@@ -26,7 +26,7 @@ test.describe('send while streaming', () => {
     const textarea = page.getByPlaceholder('Ask Argus');
 
     // Send a task long enough to leave room for a mid-turn inject.
-    await textarea.fill('Write the numbers 1 through 200, one per line. Do not use tools.');
+    await textarea.fill('Write the numbers 1 through 10, one per line. Do not use tools.');
     await page.getByRole('button', { name: 'Send' }).click();
 
     // Gate on the Stop button, not on a tool call: whether the model actually calls a
@@ -58,7 +58,7 @@ test.describe('send while streaming', () => {
     const textarea = page.getByPlaceholder('Ask Argus');
 
     // First: a task with tool calls
-    await textarea.fill('Write the numbers 1 through 200, one per line. Do not use tools.');
+    await textarea.fill('Write the numbers 1 through 10, one per line. Do not use tools.');
     await page.getByRole('button', { name: 'Send' }).click();
 
     // Gate on the Stop button rather than a tool call - see the note in the test above:

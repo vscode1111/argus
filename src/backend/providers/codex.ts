@@ -390,9 +390,15 @@ export class CodexSession implements AgentSession {
       return;
     }
     if (!this.busy) return;
-    this.armIdleTimer();
-    if (method === 'turn/started') { this.turnId = string(object(params.turn).id); return; }
+    if (method === 'turn/started') {
+      const startedTurnId = string(object(params.turn).id);
+      if (!startedTurnId || (this.turnId && startedTurnId !== this.turnId)) return;
+      this.turnId = startedTurnId; this.armIdleTimer(); return;
+    }
     if (params.turnId && this.turnId && params.turnId !== this.turnId) return;
+    if ((method === 'item/agentMessage/delta' || method === 'item/reasoning/summaryTextDelta'
+      || method === 'item/commandExecution/outputDelta') && string(params.delta)) this.armIdleTimer();
+    else if (method === 'item/started' || method === 'item/completed') this.armIdleTimer();
     if (method === 'item/agentMessage/delta' || method === 'item/reasoning/summaryTextDelta') {
       this.deltas.add(`${method}:${string(params.itemId)}`);
       this.emit({ type: method === 'item/agentMessage/delta' ? 'text_chunk' : 'thinking_chunk', text: string(params.delta) });
@@ -407,6 +413,8 @@ export class CodexSession implements AgentSession {
         this.emit({ type: done ? 'tool_end' : 'tool_start', call: tool(item) });
       }
     } else if (method === 'thread/tokenUsage/updated') {
+      const previousInputTokens = this.state.liveInputTokens;
+      const previousOutputTokens = this.state.completedOutputTokens;
       const usage = object(params.tokenUsage); const last = object(usage.last);
       const inputTokens = Number(last.inputTokens) || 0;
       const lastOutputTokens = Number(last.outputTokens) || 0;
@@ -428,6 +436,7 @@ export class CodexSession implements AgentSession {
       } else this.state.completedOutputTokens += lastOutputTokens;
       const outputTokens = this.state.completedOutputTokens;
       this.state.liveInputTokens = inputTokens;
+      if (inputTokens > previousInputTokens || outputTokens > previousOutputTokens) this.armIdleTimer();
       noteCodexUsage(this.state, requestInputTokens, outputTokens);
       this.emit({ type: 'token_update', inputTokens, outputTokens });
       if (typeof usage.modelContextWindow === 'number' && usage.modelContextWindow > 0)
