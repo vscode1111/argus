@@ -58,9 +58,9 @@ export function sendInitialPage(ws: WebSocket, id: string | undefined, messages:
   ws.send(JSON.stringify({ type: 'sessionLoaded', id, ...latestPage(messages) }));
 }
 
-export function sendEarlierPage(ws: WebSocket, id: string, messages: ReplayMessage[], before: number, revision?: number): void {
+export function sendEarlierPage(ws: WebSocket, id: string, messages: ReplayMessage[], before: number, revision?: number, prefetch = false): void {
   const segments = displaySegments(messages);
   const end = Math.min(before, segments.length);
   const start = pageBefore(segments, end);
-  ws.send(JSON.stringify({ type: 'historyPage', id, messages: segments.slice(start, end), before: start, revision }));
+  ws.send(JSON.stringify({ type: 'historyPage', id, messages: segments.slice(start, end), before: start, revision, ...(prefetch ? { prefetch: true } : {}) }));
 }

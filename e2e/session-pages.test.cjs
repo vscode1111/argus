@@ -15,6 +15,10 @@ test('initial page includes recent context around a large attachment', () => {
   const replies = [];
   sendEarlierPage({ send: data => replies.push(JSON.parse(data)) }, 'history-session', messages, first.before);
   assert.deepEqual(replies[0].messages.map(message => message.id), ['earlier']);
+  sendEarlierPage({ send: data => replies.push(JSON.parse(data)) }, 'history-session', messages, first.before, 7, true);
+  assert.equal(replies[1].prefetch, true);
+  assert.equal(replies[1].revision, 7);
+  assert.deepEqual(replies[1].messages.map(message => message.id), ['earlier']);
 });
 
 test('initial page keeps the transfer bounded when an attachment exceeds the ceiling', () => {

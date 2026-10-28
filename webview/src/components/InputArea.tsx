@@ -111,6 +111,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
   const [history, setHistory] = useState<string[]>([]);
+  const [historyPosition, setHistoryPosition] = useState(-1);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [pasteError, setPasteError] = useState<string | null>(null);
@@ -268,6 +269,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
     setAttachmentError('');
     if (text) setHistory(prev => [text, ...prev]);
     historyIndex.current = -1;
+    setHistoryPosition(-1);
     savedDraft.current = '';
     el.value = '';
     el.style.height = 'auto';
@@ -605,6 +607,21 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
     setSlashQuery(null);
   }
 
+  function navigateHistory(direction: 'older' | 'newer') {
+    const el = textareaRef.current;
+    if (!el || slashQuery !== null) return;
+    const next = direction === 'older'
+      ? Math.min(historyIndex.current + 1, history.length - 1)
+      : Math.max(historyIndex.current - 1, -1);
+    if (next === historyIndex.current) return;
+    if (historyIndex.current === -1) savedDraft.current = el.value;
+    historyIndex.current = next;
+    setHistoryPosition(next);
+    el.value = next === -1 ? savedDraft.current : history[next];
+    el.selectionStart = el.selectionEnd = el.value.length;
+    adjustHeight();
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     // Checked before the slash menu: both can never be open at once (the triggers are
     // different characters), but the "@" query may contain "/" from a path, so ordering
@@ -678,10 +695,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
         && el.value.lastIndexOf('\n', el.selectionStart - 1) === -1;
       if (!cursorOnFirstLine) return;
       e.preventDefault();
-      if (historyIndex.current === -1) savedDraft.current = el.value;
-      historyIndex.current = Math.min(historyIndex.current + 1, history.length - 1);
-      el.value = history[historyIndex.current];
-      adjustHeight();
+      navigateHistory('older');
     } else if (e.key === 'ArrowDown' && historyIndex.current !== -1 && slashQuery === null) {
       const el = textareaRef.current;
       if (!el) return;
@@ -689,9 +703,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
         && el.value.indexOf('\n', el.selectionStart) === -1;
       if (!cursorOnLastLine) return;
       e.preventDefault();
-      historyIndex.current--;
-      el.value = historyIndex.current === -1 ? savedDraft.current : history[historyIndex.current];
-      adjustHeight();
+      navigateHistory('newer');
     }
   }
 
@@ -928,6 +940,18 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
             title={wsConnected ? 'Connected' : 'Disconnected, reconnecting...'}
           />
         )}
+      </div>
+      <div className={styles.historyControls}>
+        <button type="button" className={styles.historyButton} aria-label="Previous input" title="Previous input"
+          disabled={history.length === 0 || historyPosition >= history.length - 1 || slashQuery !== null}
+          onClick={() => navigateHistory('older')}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 9 4-4 4 4" /></svg>
+        </button>
+        <button type="button" className={styles.historyButton} aria-label="Next input" title="Next input"
+          disabled={historyPosition === -1 || slashQuery !== null}
+          onClick={() => navigateHistory('newer')}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 5 4 4 4-4" /></svg>
+        </button>
       </div>
       {/* A connection closed from another panel's client list, or closed by the server
           for sitting idle, never comes back on its own via the ordinary retry loop - so

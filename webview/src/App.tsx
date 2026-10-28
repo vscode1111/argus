@@ -90,11 +90,13 @@ function AppInner() {
   // Known content size (line count) of the session being resumed, shown beside the
   // spinner (e.g. "Loading… 17k lines"); 0 when unknown (a plain workspace switch).
   const [loadSize, setLoadSize] = React.useState(0);
+  const [loadTimedOut, setLoadTimedOut] = React.useState(false);
   const loadTimer = React.useRef<number | null>(null);
   const [sessionTitle, setSessionTitle] = React.useState('');
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const sessionIdRef = React.useRef(sessionId);
   sessionIdRef.current = sessionId;
+  const pendingSessionId = React.useRef<string | null>(null);
   const previousActivitySessionId = React.useRef(sessionId);
   useEffect(() => {
     if (previousActivitySessionId.current && previousActivitySessionId.current !== sessionId) setActivityOpen(false);
@@ -158,6 +160,8 @@ function AppInner() {
       const data = event.data;
       if (data?.type === 'providerNotice') setProviderNotice({ message: String(data.message || ''), error: data.error === true });
       if (data?.type === 'providerSelection') setProviderNotice(null);
+      if (data?.type === 'sessionLoaded' && pendingSessionId.current && data.id !== pendingSessionId.current) return;
+      if (data?.type === 'historyPage' && data.prefetch === true) return;
       if (data && typeof data.type === 'string' && VALID_TYPES.has(data.type)) {
         dispatch(data as AppAction);
       }
@@ -265,6 +269,7 @@ function AppInner() {
     function onSessionMsg(e: MessageEvent) {
       const t = e.data?.type;
       if (t === 'sessionList' && Array.isArray(e.data.sessions)) {
+        if (pendingSessionId.current) return;
         // While browsing a past session during a live stream, loadedSessionId holds
         // the viewed session id (the server's currentId still points to the live one).
         const effectiveId = loadedSessionId.current ?? (e.data.currentId as string | undefined);
@@ -275,6 +280,8 @@ function AppInner() {
         setSessionLines(cur?.lines ?? 0);
         endSessionLoad(); // a fresh list means a workspace reconnect finished
       } else if (t === 'sessionLoaded') {
+        if (pendingSessionId.current && e.data.id !== pendingSessionId.current) return;
+        pendingSessionId.current = null;
         if (typeof e.data.id === 'string') {
           loadedSessionId.current = e.data.id;
           sessionIdRef.current = e.data.id;
@@ -413,15 +420,17 @@ function AppInner() {
     setEditingName(false);
   }
 
-  // Show the spinner overlay until the resumed transcript / new workspace lands.
-  // `size` is the session's known line count (0 = unknown, e.g. a workspace switch),
-  // shown as a label beside the spinner. A safety timeout clears it so the spinner
-  // can never get permanently stuck.
+  // Show the overlay until the selected transcript or new workspace lands.
+  // A slow transcript keeps the old conversation covered and offers a retry.
   function beginSessionLoad(size = 0) {
     setLoadingSession(true);
+    setLoadTimedOut(false);
     setLoadSize(size);
     if (loadTimer.current) window.clearTimeout(loadTimer.current);
-    loadTimer.current = window.setTimeout(() => setLoadingSession(false), 30_000);
+    loadTimer.current = window.setTimeout(() => {
+      if (pendingSessionId.current) setLoadTimedOut(true);
+      else setLoadingSession(false);
+    }, 30_000);
   }
   function endSessionLoad() {
     setLoadingSession(false);
@@ -432,6 +441,7 @@ function AppInner() {
   // slate, point the header at the new path, then have the WS bridge tear down the
   // socket and reopen it with the new ?dir= (a fresh server-side session).
   function switchWorkspace(path: string) {
+    pendingSessionId.current = null;
     beginSessionLoad();
     dispatch({ type: 'clear' });
     dispatch({ type: 'workspaceInfo', path });
@@ -449,6 +459,7 @@ function AppInner() {
   // flushes `resumeSession` to the new connection, whose workspaceDir matches the
   // session, so the transcript replays and the next send spawns with `--resume`.
   function resumeWorkspaceSession(path: string, id: string, lines = 0) {
+    pendingSessionId.current = id;
     beginSessionLoad(lines);
     if (path === state.workspacePath) {
       postMessage({ type: 'resumeSession', id });
@@ -498,6 +509,11 @@ function AppInner() {
             <span className="sessionName" title={sessionTitle}>{sessionTitle}</span>
           ) : null}
           </div>
+        </>
+      )}
+      <div className="headerControls">
+      {showSessionBar && (
+        <>
           <button
             className="btn-icon"
             title="New chat"
@@ -515,7 +531,7 @@ function AppInner() {
             title="Refresh current session"
             aria-label="Refresh current session"
             disabled={!sessionId}
-            onClick={() => { if (sessionId) { beginSessionLoad(sessionLines); postMessage({ type: 'resumeSession', id: sessionId }); } }}
+            onClick={() => { if (sessionId) { pendingSessionId.current = sessionId; beginSessionLoad(sessionLines); postMessage({ type: 'resumeSession', id: sessionId }); } }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 3v5h5" />
@@ -571,7 +587,7 @@ function AppInner() {
         </>
       )}
       <button
-        className="btn-icon"
+        className="btn-icon sessionBarToggle"
         title={showSessionBar ? 'Hide session bar' : 'Show session bar'}
         aria-label={showSessionBar ? 'Hide session bar' : 'Show session bar'}
         onClick={() => setShowSessionBar(v => !v)}
@@ -581,6 +597,7 @@ function AppInner() {
           {showSessionBar ? <polyline points="6 17 11 12 6 7" /> : <polyline points="18 17 13 12 18 7" />}
         </svg>
       </button>
+      </div>
     </div>
   );
 
@@ -609,12 +626,22 @@ function AppInner() {
         )}
         <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
           {topRightActions}
-          <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} historySessionId={state.historySessionId} historyBefore={state.historyBefore} historyRevision={state.historyRevision} onLoadEarlier={(id, before, revision) => postMessage({ type: 'loadEarlier', id, before, revision })} />
+          <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} historySessionId={state.historySessionId} historyBefore={state.historyBefore} historyRevision={state.historyRevision} onLoadEarlier={(id, before, revision, prefetch) => postMessage({ type: 'loadEarlier', id, before, revision, prefetch })} />
           <InputArea providerId={state.providerId} isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
           {loadingSession && (
-            <div className="sessionLoader" role="status" aria-live="polite" aria-busy="true" aria-label="Loading session">
-              <div className="sessionSpinner" />
-              {loadSize > 0 && (
+            <div className="sessionLoader" role="status" aria-live="polite" aria-busy={!loadTimedOut} aria-label="Loading session">
+              {loadTimedOut ? (
+                <>
+                  <div className="sessionLoaderText">The selected conversation has not loaded.</div>
+                  <button type="button" onClick={() => {
+                    if (!pendingSessionId.current) return;
+                    const id = pendingSessionId.current;
+                    beginSessionLoad(loadSize);
+                    postMessage({ type: 'resumeSession', id });
+                  }}>Retry loading</button>
+                </>
+              ) : <div className="sessionSpinner" />}
+              {!loadTimedOut && loadSize > 0 && (
                 <div className="sessionLoaderText">Loading recent messages… {fmtLineCount(loadSize)} lines in full transcript</div>
               )}
             </div>
