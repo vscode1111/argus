@@ -671,14 +671,18 @@ export async function handleResumeSession(s: SessionState, ws: WebSocket, channe
   const isBrowsing = procRunning && id !== s.sessionId;
   // Only update the session pointer when the proc is idle or the user is returning to the live session.
   // Updating it while browsing a different session would corrupt the --resume arg for the next spawn.
-  if (!isBrowsing) restoreSelection(s, id);
+  // An idle entry may still hold the previous session's in-memory history. Give a
+  // different session its own entry so reconnect replay cannot merge both histories.
+  const target = !isBrowsing && id !== s.sessionId ? channel.moveToNewSession(ws) : s;
+  if (!target.sendLog) initChannelSession(target, s.serverDefaultModel);
+  if (!isBrowsing) restoreSelection(target, id);
   // Record what this client now has on screen. The entry keeps pointing at the streaming
   // session, so without this a send from here has no way back to the session the user is
   // actually looking at, and lands in the running turn instead.
   channel.setBrowsing(ws, isBrowsing, isBrowsing ? id : undefined);
   if ((channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId) !== id) return;
   ws.send(JSON.stringify({ type: 'providerSelection', ...selectionFor(id, s.workspaceDir) }));
-  s.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);
+  target.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);
   sendInitialPage(ws, id, messages);
   if (!isBrowsing) {
     channel.replaySnapshot(ws);
@@ -686,7 +690,7 @@ export async function handleResumeSession(s: SessionState, ws: WebSocket, channe
     // Always send the update when returning to a live session - the frontend needs to
     // know the current counts (even if zero) to correctly render the "in / out" timer.
     // This fixes a regression where browsing away and back would lose the input count.
-    const outputTokens = s.completedOutputTokens + Math.ceil(s.liveOutputChars / 4);
-    ws.send(JSON.stringify({ type: 'token_update', inputTokens: s.liveInputTokens, outputTokens }));
+    const outputTokens = target.completedOutputTokens + Math.ceil(target.liveOutputChars / 4);
+    ws.send(JSON.stringify({ type: 'token_update', inputTokens: target.liveInputTokens, outputTokens }));
   }
 }

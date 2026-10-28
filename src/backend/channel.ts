@@ -60,7 +60,7 @@ interface SessionEntry {
   // Panel that owns this entry (extension clients pass a stable per-panel id). A
   // reconnecting panel rejoins its own entry instead of the channel default, so two
   // panels in one workspace stay isolated while a reload keeps its conversation.
-  owner?: string;
+  owners: Set<string>;
   state: SessionState;
   clients: Set<WebSocket>;
   browsingClients: Set<WebSocket>; // within this entry: clients viewing a different transcript
@@ -80,13 +80,15 @@ interface ChannelData {
   readonly dir: string;
   entries: Map<string, SessionEntry>;
   clientEntry: Map<WebSocket, SessionEntry>;
+  clientPanelId: Map<WebSocket, string>;
   // Session a browsing client actually has on screen. Its entry keeps pointing at the
   // session being streamed (so the live turn's --resume arg stays correct), which makes
   // this the only record of what the user is looking at - and the only way a send from
   // that client can be routed to the session it belongs to instead of injected into
   // the turn it walked away from.
   clientViewing: Map<WebSocket, string>;
-  // The last sessionId a given panel's entry held, kept across full entry eviction.
+  // The last sessionId a given panel viewed, kept across full entry eviction or
+  // disconnection while browsing away from a running entry.
   // A panel-owned entry is normally the ONLY reconnect target for that panel (addClient
   // rejoins by owner), so once it is evicted (idle-closed connection, or a manual
   // disconnect nobody clicked Reconnect on within the 30s grace window) a later
@@ -105,7 +107,7 @@ export interface Channel {
    *  Pass fresh=true to create an isolated new entry instead (used for browser clients).
    *  When sessionId names a session live in an entry right now, the client attaches to
    *  that entry (deep link) - overriding fresh; returns true only for such an attach.
-   *  panelId binds the client to its own entry (see SessionEntry.owner): an unknown id
+   *  panelId binds the client to its own entry (see SessionEntry.owners): an unknown id
    *  creates one, a known id rejoins it. Returns true for such a rejoin as well, since
    *  like a deep-link attach it defers the replay to webviewReady. */
   addClient(ws: WebSocket, fresh?: boolean, sessionId?: string, panelId?: string): boolean;
@@ -539,10 +541,10 @@ function createBroadcastForEntry(entry: SessionEntry): (msg: string) => void {
   };
 }
 
-function createEntry(cd: ChannelData, owner?: string): SessionEntry {
+function createEntry(cd: ChannelData): SessionEntry {
   const entry: SessionEntry = {
     key: nextEntryKey(),
-    owner,
+    owners: new Set(),
     state: createSessionState(cd.dir),
     clients: new Set(),
     browsingClients: new Set(),
@@ -638,6 +640,11 @@ function defaultEntry(cd: ChannelData): SessionEntry {
 // registers its message listener and would be lost).
 function joinEntry(cd: ChannelData, ws: WebSocket, target: SessionEntry, skipReplay = false): void {
   const prev = cd.clientEntry.get(ws);
+  const panelId = cd.clientPanelId.get(ws);
+  if (panelId) {
+    for (const entry of cd.entries.values()) entry.owners.delete(panelId);
+    target.owners.add(panelId);
+  }
   if (prev && prev !== target) {
     prev.clients.delete(ws);
     prev.browsingClients.delete(ws);
@@ -667,9 +674,9 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
       // an entry with no sessionId (e.g. "New chat" clicked, then abandoned before
       // anything was sent) must clear a stale mapping too, or a much-later reconnect
       // would resurrect a conversation the user explicitly moved on from.
-      if (entry.owner) {
-        if (entry.state.sessionId) cd.ownerLastSession.set(entry.owner, entry.state.sessionId);
-        else cd.ownerLastSession.delete(entry.owner);
+      for (const owner of entry.owners) {
+        if (entry.state.sessionId) cd.ownerLastSession.set(owner, entry.state.sessionId);
+        else cd.ownerLastSession.delete(owner);
       }
       if (entry.state.runtime?.active || entry.state.currentProc && !entry.state.cliDone) { scheduleEntryCleanup(cd, entry); return; }
       cd.entries.delete(entry.key);
@@ -699,13 +706,14 @@ export function getOrCreateChannel(dir: string): Channel {
   const key = workspaceKey(dir);
   let cd = registry.get(key);
   if (!cd) {
-    cd = { dir, entries: new Map(), clientEntry: new Map(), clientViewing: new Map(), ownerLastSession: new Map() };
+    cd = { dir, entries: new Map(), clientEntry: new Map(), clientPanelId: new Map(), clientViewing: new Map(), ownerLastSession: new Map() };
     registry.set(key, cd);
   }
   const _cd = cd;
 
   return {
     addClient(ws, fresh, sessionId, panelId) {
+      if (panelId) _cd.clientPanelId.set(ws, panelId);
       if (sessionId) {
         for (const entry of _cd.entries.values()) {
           if (entry.state.sessionId === sessionId) {
@@ -718,10 +726,10 @@ export function getOrCreateChannel(dir: string): Channel {
       }
       if (panelId) {
         for (const entry of _cd.entries.values()) {
-          if (entry.owner === panelId) {
+          if (entry.owners.has(panelId)) {
             if (sessionId && entry.state.sessionId !== sessionId) {
               // An explicit deep link takes precedence over this panel's last session.
-              entry.owner = undefined;
+              entry.owners.delete(panelId);
               break;
             }
             // Reconnect of a known panel (reload, daemon restart): rejoin its own entry.
@@ -740,7 +748,7 @@ export function getOrCreateChannel(dir: string): Channel {
         // --resume instead of silently starting over. No history to replay (a fresh
         // entry has none), which is fine: the client's own view of the old transcript
         // is still on screen from before the disconnect.
-        const fresh = createEntry(_cd, panelId);
+        const fresh = createEntry(_cd);
         const lastSession = sessionId ? undefined : _cd.ownerLastSession.get(panelId);
         if (lastSession) { fresh.state.sessionId = lastSession; fresh.state.selection = selectionFor(lastSession, dir); }
         joinEntry(_cd, ws, fresh);
@@ -751,7 +759,17 @@ export function getOrCreateChannel(dir: string): Channel {
     },
     removeClient(ws) {
       const entry = _cd.clientEntry.get(ws);
+      const viewed = _cd.clientViewing.get(ws);
+      const panelId = _cd.clientPanelId.get(ws);
+      if (entry && panelId && viewed) {
+        // The entry still belongs to the running session, but this panel was
+        // showing another one. Rejoining the old owner would route its next send
+        // into the wrong conversation after a reload.
+        _cd.ownerLastSession.set(panelId, viewed);
+        entry.owners.delete(panelId);
+      }
       _cd.clientEntry.delete(ws);
+      _cd.clientPanelId.delete(ws);
       _cd.clientViewing.delete(ws);
       if (!entry) return;
       entry.clients.delete(ws);
@@ -765,10 +783,9 @@ export function getOrCreateChannel(dir: string): Channel {
       // Hand the panel's ownership to the new entry, so a later reconnect rejoins the
       // new session rather than the abandoned one. The old entry keeps running for any
       // other clients, but is no longer any panel's reconnect target.
-      const prev = _cd.clientEntry.get(ws);
-      const owner = prev?.owner;
-      if (prev) prev.owner = undefined;
-      const newEntry = createEntry(_cd, owner);
+      const owner = _cd.clientPanelId.get(ws);
+      if (owner) _cd.ownerLastSession.delete(owner);
+      const newEntry = createEntry(_cd);
       joinEntry(_cd, ws, newEntry);
       _cd.clientViewing.delete(ws);
       return newEntry.state;
@@ -792,10 +809,7 @@ export function getOrCreateChannel(dir: string): Channel {
       if (!viewing) return undefined;
       // Ownership follows the client, exactly as in moveToNewSession: a later reconnect
       // must rejoin the session the user is actually in, not the one it walked away from.
-      const prev = _cd.clientEntry.get(ws);
-      const owner = prev?.owner;
-      if (prev) prev.owner = undefined;
-      const entry = createEntry(_cd, owner);
+      const entry = createEntry(_cd);
       // joinEntry drops the client from the old entry's browsingClients, and the new
       // entry is empty, so it replays nothing - the client already has this transcript
       // on screen from the sessionLoaded that put it into browsing mode.
