@@ -233,6 +233,7 @@ export function attachClientHandlers(
       childId?: string;
       before?: number;
       revision?: number;
+      prefetch?: boolean;
       toolUseId?: string;
       title?: string;
       taskKey?: string;
@@ -558,9 +559,9 @@ export function attachClientHandlers(
       if (msg.id !== viewed) return;
       try {
         const messages = await providerForSession(msg.id).load(msg.id, s.workspaceDir);
-        if (msg.id === (channel.getViewingSessionId(ws) ?? channel.getClientState(ws).sessionId)) sendEarlierPage(ws, msg.id, messages, msg.before, msg.revision);
+        if (msg.id === (channel.getViewingSessionId(ws) ?? channel.getClientState(ws).sessionId)) sendEarlierPage(ws, msg.id, messages, msg.before, msg.revision, msg.prefetch === true);
       } catch (error) {
-        ws.send(JSON.stringify({ type: 'historyPage', id: msg.id, messages: [], before: msg.before, revision: msg.revision, error: error instanceof Error ? error.message : String(error) }));
+        ws.send(JSON.stringify({ type: 'historyPage', id: msg.id, messages: [], before: msg.before, revision: msg.revision, ...(msg.prefetch === true ? { prefetch: true } : {}), error: error instanceof Error ? error.message : String(error) }));
       }
     } else if (msg.type === 'listWorkspaces') {
       const currentPath = s.workspaceDir;

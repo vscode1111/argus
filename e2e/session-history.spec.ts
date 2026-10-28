@@ -28,6 +28,37 @@ test.describe('session history', () => {
     await waitForApp(page);
   });
 
+  test('a session list cannot finish a pending switch before its transcript arrives', async ({ page }) => {
+    const current = { id: '44444444-4444-4444-4444-444444444444', title: 'Current conversation', updatedAt: NOW };
+    const chosen = { id: '55555555-5555-5555-5555-555555555555', title: 'Chosen conversation', updatedAt: NOW - 1000 };
+    await page.clock.install();
+    await send(page, { type: 'sessionLoaded', id: current.id, messages: [{ id: 'current-message', role: 'user', content: 'Current request' }] });
+    await openModal(page);
+    await send(page, { type: 'sessionList', sessions: [current, chosen], currentId: current.id });
+    await page.getByRole('dialog', { name: 'Session History' }).locator(`[data-session-id="${chosen.id}"]`).click();
+    await expect(page.getByRole('status', { name: 'Loading session' })).toBeVisible();
+
+    await send(page, { type: 'sessionList', sessions: [current, chosen], currentId: chosen.id });
+    await expect(page.getByRole('status', { name: 'Loading session' })).toBeVisible();
+    await expect(page.getByText('Current request')).toBeVisible();
+
+    await send(page, { type: 'sessionLoaded', id: current.id, messages: [{ id: 'stale-message', role: 'user', content: 'Stale replay' }] });
+    await expect(page.getByRole('status', { name: 'Loading session' })).toBeVisible();
+    await expect(page.getByText('Stale replay')).toHaveCount(0);
+
+    await page.clock.fastForward(30_000);
+    await expect(page.getByRole('status', { name: 'Loading session' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry loading' })).toBeVisible();
+    await page.getByRole('button', { name: 'Retry loading' }).click();
+    await expect(page.getByRole('status', { name: 'Loading session' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry loading' })).toHaveCount(0);
+
+    await send(page, { type: 'sessionLoaded', id: chosen.id, messages: [{ id: 'chosen-message', role: 'user', content: 'Chosen request' }] });
+    await expect(page.getByRole('status', { name: 'Loading session' })).toHaveCount(0);
+    await expect(page.getByText('Chosen request')).toBeVisible();
+    await expect(page.getByText('Current request')).toHaveCount(0);
+  });
+
   test('history button opens the modal and lists sessions with the current one marked', async ({ page }) => {
     await openModal(page);
     await send(page, { type: 'sessionList', sessions: SESSIONS, currentId: SESSIONS[1].id });

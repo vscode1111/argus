@@ -292,6 +292,40 @@
 }
 .inputWrapper:focus-within { border-color: var(--vscode-focusBorder); }
 
+.historyControls {
+  display: none;
+}
+
+.historyButton {
+  flex: 1;
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--fg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.historyButton:hover:not(:disabled) { background: var(--btn-hover); }
+.historyButton:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
+.historyButton:disabled { opacity: 0.4; cursor: default; }
+
+@media (max-width: 639px) {
+  .inputArea {
+    gap: 4px;
+  }
+  .historyControls {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-self: stretch;
+    width: 18px;
+    gap: 2px;
+  }
+}
+
 /* Overlay editor: a backdrop div renders the same text with @-mentions colored,
    sitting behind a transparent-glyph textarea so the colored tokens show through. */
 .editorStack {
