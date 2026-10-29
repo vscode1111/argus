@@ -289,6 +289,15 @@ function AppInner() {
         }
         postMessage({ type: 'listSessions' });
         endSessionLoad(); // the resumed transcript has been replayed
+      } else if (t === 'sessionRefreshRejected' && e.data.requestedId === pendingSessionId.current) {
+        pendingSessionId.current = null;
+        setProviderNotice({ message: 'The open conversation changed. Select the one you want in Session History.', error: true });
+        const currentId = typeof e.data.currentId === 'string' ? e.data.currentId : null;
+        loadedSessionId.current = currentId;
+        sessionIdRef.current = currentId;
+        setSessionId(currentId);
+        postMessage({ type: 'listSessions' });
+        endSessionLoad();
       } else if (t === 'sessionId' && typeof e.data.id === 'string') {
         loadedSessionId.current = null;
         sessionIdRef.current = e.data.id;
@@ -531,7 +540,7 @@ function AppInner() {
             title="Refresh current session"
             aria-label="Refresh current session"
             disabled={!sessionId}
-            onClick={() => { if (sessionId) { pendingSessionId.current = sessionId; beginSessionLoad(sessionLines); postMessage({ type: 'resumeSession', id: sessionId }); } }}
+            onClick={() => { if (sessionId) { pendingSessionId.current = sessionId; beginSessionLoad(sessionLines); postMessage({ type: 'refreshSession', id: sessionId }); } }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 3v5h5" />

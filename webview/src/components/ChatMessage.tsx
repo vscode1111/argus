@@ -188,6 +188,9 @@ export function ChatMessage({ message, login, compact }: Props) {
           </div>
         </div>
       )}
+      {message.outcome === 'stopped' && responseTime === undefined && (
+        <div className={styles.errorBlock} role="status">Turn interrupted. Send a message to continue.</div>
+      )}
       {responseTime !== undefined && (showTimer || message.outcome === 'retried') && (
         <div className={
           message.outcome === 'error' ? msg.responseTimeError

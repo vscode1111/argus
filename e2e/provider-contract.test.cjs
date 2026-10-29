@@ -387,6 +387,20 @@ test('live subagent events retain their identities', async () => {
   assert.equal(calls[0].input.agentThreadId, 'scub-child');
 });
 
+test('replay identifies an interrupted turn with an unfinished tool', () => {
+  const messages = replayThread({ turns: [{ id: 'turn-one', status: 'interrupted', items: [
+    { id: 'request-one', type: 'userMessage', content: [{ type: 'text', text: 'Check the status' }] },
+    { id: 'reply-one', type: 'agentMessage', text: 'Checking now.' },
+    { id: 'tool-one', type: 'commandExecution', command: 'status', status: 'inProgress' },
+  ] }] });
+  assert.equal(messages.at(-1).outcome, 'stopped');
+  const completed = replayThread({ turns: [{ id: 'turn-two', status: 'completed', items: [
+    { id: 'request-two', type: 'userMessage', content: [{ type: 'text', text: 'Check the status' }] },
+    { id: 'reply-two', type: 'agentMessage', text: 'All clear.' },
+  ] }] });
+  assert.equal(completed.at(-1).outcome, undefined);
+});
+
 test('a provider process launch increments the shared count once across reused turns', async () => {
   const before = getCliLaunchCount();
   const { runtime } = session();

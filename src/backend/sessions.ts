@@ -55,7 +55,7 @@ export interface ReplayMessage {
   thinking?: string;
   blocks?: ReplayBlock[];
   interaction?: import('../shared/provider').ProviderInteraction;
-  outcome?: 'success';
+  outcome?: 'success' | 'stopped';
 }
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;

@@ -213,7 +213,7 @@ export function attachClientHandlers(
   });
 
   let mutations = Promise.resolve();
-  const ordered = new Set(['send', 'stop', 'newSession', 'resumeSession', 'switchProvider', 'configureSession', 'switchModel', 'switchEffort', 'switchThinking', 'saveProviderDefault', 'providerResponse', 'toolAnswer']);
+  const ordered = new Set(['send', 'stop', 'newSession', 'resumeSession', 'refreshSession', 'switchProvider', 'configureSession', 'switchModel', 'switchEffort', 'switchThinking', 'saveProviderDefault', 'providerResponse', 'toolAnswer']);
   ws.on('message', (data: Buffer) => {
     const handle = async () => {
     // Resolve the session state fresh on every message so that after moveToNewSession
@@ -552,6 +552,13 @@ export function attachClientHandlers(
       broadcastBgTasks(newState);
       newState.broadcast(JSON.stringify({ type: 'clear' }));
       newState.broadcast(JSON.stringify(selectionMessage(newState)));
+    } else if (msg.type === 'refreshSession' && msg.id) {
+      const currentId = channel.getViewingSessionId(ws) ?? s.sessionId;
+      if (msg.id !== currentId) {
+        ws.send(JSON.stringify({ type: 'sessionRefreshRejected', requestedId: msg.id, currentId: currentId ?? null }));
+      } else {
+        await handleResumeSession(s, ws, channel, msg.id);
+      }
     } else if (msg.type === 'resumeSession' && msg.id) {
       await handleResumeSession(s, ws, channel, msg.id);
     } else if (msg.type === 'loadEarlier' && typeof msg.id === 'string' && typeof msg.before === 'number' && Number.isSafeInteger(msg.before) && msg.before > 0 && typeof msg.revision === 'number' && Number.isSafeInteger(msg.revision) && msg.revision >= 0) {

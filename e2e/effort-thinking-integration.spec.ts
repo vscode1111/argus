@@ -91,11 +91,14 @@ test.describe('effort and thinking (integration)', () => {
 
   test.afterEach(async ({ page }) => {
     await writeTestConfig(CONFIG_PATH, original);
+    const logList = page.locator(LOG_LIST);
+    const spawnedClaude = (await logList.innerText()).includes('Spawning claude:');
     const close = page.getByRole('button', { name: 'Close', exact: true });
     if (await close.isVisible()) await close.click();
     await page.getByPlaceholder('Ask Argus').fill('/clear');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+    if (spawnedClaude) await expect(logList).toContainText('claude exited with code');
     await page.close();
     await fs.promises.rm(workspace, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   });
