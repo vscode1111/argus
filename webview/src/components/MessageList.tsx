@@ -52,7 +52,10 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
     lastScrollTop.current = 0;
     setShowScrollBtn(false);
     setLoadingEarlier(false);
-    if (historySessionId && historyBefore > 0) prefetch(historyBefore);
+    if (historySessionId && historyBefore > 0) {
+      prefetch(historyBefore);
+      if (containerRef.current && containerRef.current.scrollHeight <= containerRef.current.clientHeight) loadEarlier(false);
+    }
   }, [historyRevision]);
 
   useEffect(() => {
@@ -68,6 +71,8 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
           waitingForPrefetch.current = null;
           if (event.data.error) setLoadingEarlier(false);
           else loadEarlier(manual);
+        } else if (!event.data.error && containerRef.current && containerRef.current.scrollHeight <= containerRef.current.clientHeight) {
+          loadEarlier(false);
         }
         if (!event.data.error) prefetch(event.data.before);
         return;
@@ -94,6 +99,7 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
     }
     setLoadingEarlier(false);
     prefetch(historyBefore);
+    if (!pending.manual && el.scrollHeight <= el.clientHeight && historyBefore > 0) loadEarlier(false);
   }, [messages, historyBefore, historySessionId, historyRevision]);
 
   function scrollToBottom() {
@@ -169,7 +175,7 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
         {streaming && <StreamingMessage streaming={streaming} logCount={logCount} />}
         <div ref={bottomRef} />
       </div>
-      {loadingEarlier && <div className={styles.olderLoading} role="status">Loading older messages…</div>}
+      {loadingEarlier && <div className={styles.olderLoading} role="status">Loading earlier messages…</div>}
       {showScrollBtn && (
         <button className={styles.scrollBtn} onClick={scrollToBottom} aria-label="Scroll to bottom">↓</button>
       )}

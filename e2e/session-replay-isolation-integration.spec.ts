@@ -11,6 +11,13 @@ test('refresh after choosing another idle session shows only that session', { ta
   const transcript = path.join(projectDir, `${secondId}.jsonl`);
   const firstRequest = 'Inspect the first account and reply ready.';
   const secondRequest = 'Inspect the second account.';
+  const refreshIds: string[] = [];
+  page.on('websocket', socket => socket.on('framesent', frame => {
+    try {
+      const message = JSON.parse(frame.payload.toString());
+      if (message.type === 'refreshSession') refreshIds.push(message.id);
+    } catch { return; }
+  }));
 
   try {
     await page.goto('/?dir=' + encodeURIComponent(workspace));
@@ -35,6 +42,7 @@ test('refresh after choosing another idle session shows only that session', { ta
     await second.click();
     await expect(page.locator('[class*="messageContent"]').filter({ hasText: secondRequest })).toBeVisible();
     await page.getByRole('button', { name: 'Refresh current session' }).click();
+    await expect.poll(() => refreshIds.at(-1)).toBe(secondId);
     await expect(page.locator('[class*="messageContent"]').filter({ hasText: secondRequest })).toBeVisible();
     await expect(page.locator('[class*="messageContent"]').filter({ hasText: firstRequest })).toHaveCount(0);
   } finally {

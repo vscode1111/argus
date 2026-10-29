@@ -13,7 +13,7 @@ test('keeps three older pages ready before the reader reaches them', async ({ pa
   const pageOf = (prefix: string) => Array.from({ length: 30 }, (_, index) => ({ id: `${prefix}-${index}`, role: 'user', content: `${prefix} ${index}: ${'detail '.repeat(20)}` }));
   await send({ type: 'sessionLoaded', id, messages: pageOf('Recent'), before: 120 });
   await expect.poll(() => requests.length).toBe(1);
-  await expect(page.getByText('Loading older messages…')).toHaveCount(0);
+  await expect(page.getByText('Loading earlier messages…')).toHaveCount(0);
   await send({ type: 'historyPage', id, revision: 1, prefetch: true, before: 90, messages: pageOf('Page one') });
   await expect.poll(() => requests.length).toBe(2);
   await send({ type: 'historyPage', id, revision: 1, prefetch: true, before: 60, messages: pageOf('Page two') });
@@ -77,12 +77,12 @@ test('ignores an older page from a previous replay of the same session', async (
   await expect(page.getByText('Stale entry')).toHaveCount(0);
   await expect(page.getByText('Stale buffered entry')).toHaveCount(0);
   await send({ type: 'historyPage', id, messages: [{ id: 'current-older', role: 'user', content: 'Current older entry' }], before: 0, revision: 2, prefetch: true });
-  await page.getByRole('button', { name: 'Load earlier messages' }).click();
   await expect(page.getByText('Current older entry')).toBeVisible();
   await expect(page.getByText('Stale buffered entry')).toHaveCount(0);
 });
 
-test('a short recent page exposes older messages without scrolling', async ({ page }) => {
+test('a scrollable recent page keeps the manual older-message button', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const requests: string[] = [];
   page.on('console', message => {
     if (message.text() === '[mock] suppressed loadEarlier') requests.push(message.text());
@@ -90,17 +90,36 @@ test('a short recent page exposes older messages without scrolling', async ({ pa
   await waitForApp(page);
   await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: {
     type: 'sessionLoaded', id: 'short-page-session',
-    messages: [{ id: 'recent-entry', role: 'assistant', content: 'Recent summary' }], before: 30,
+    messages: [{ id: 'recent-entry', role: 'assistant', content: `Recent summary ${'detail '.repeat(500)}` }], before: 30,
   } })));
   await expect(page.getByText('Recent summary')).toBeVisible();
+  await expect.poll(() => page.locator('[class*="_messages_"]').evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
   await page.getByRole('button', { name: 'Load earlier messages' }).click();
   await expect.poll(() => requests.length).toBe(1);
-  await expect(page.getByText('Loading older messages…')).toBeVisible();
+  await expect(page.getByText('Loading earlier messages…')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
   await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: {
     type: 'historyPage', id: 'short-page-session', revision: 1, prefetch: true, before: 0,
     messages: [{ id: 'older-entry', role: 'user', content: 'Older detail' }],
   } })));
   await expect(page.getByText('Older detail')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
+});
+
+test('a short recent page fills the visible window from prefetched history', async ({ page }) => {
+  await page.setViewportSize({ width: 1540, height: 500 });
+  await waitForApp(page);
+  const id = 'short-window-session';
+  const send = (data: object) => page.evaluate(value => window.dispatchEvent(new MessageEvent('message', { data: value })), data);
+  await send({ type: 'sessionLoaded', id, messages: [{ id: 'recent-summary', role: 'assistant', content: 'Recent summary' }], before: 30 });
+  await expect(page.getByText('Recent summary')).toBeVisible();
+  await expect(page.getByText('Loading earlier messages…')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
+  await send({ type: 'historyPage', id, revision: 1, prefetch: true, before: 20,
+    messages: [{ id: 'older-detail', role: 'user', content: 'Earlier detail' }] });
+  await expect(page.getByText('Earlier detail')).toBeVisible();
+  await send({ type: 'historyPage', id, revision: 1, prefetch: true, before: 0,
+    messages: [{ id: 'oldest-detail', role: 'user', content: 'Oldest detail' }] });
+  await expect(page.getByText('Oldest detail')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
 });

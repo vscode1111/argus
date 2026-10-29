@@ -154,6 +154,7 @@ export function replayThread(thread: JsonObject): ReplayMessage[] {
         } else if (item.type !== 'contextCompaction') assistant.blocks!.push({ type: 'tool', call: tool(item) });
       }
     }
+    if (assistant && turn.status === 'interrupted') assistant.outcome = 'stopped';
   }
   return messages;
 }
