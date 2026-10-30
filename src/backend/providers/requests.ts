@@ -121,7 +121,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
         if (title) broadcastToWorkspace(state.workspaceDir, JSON.stringify({ type: 'sessionRenamed', id, title }));
       }
       const taskKeys = readSessionTaskKeys();
-      reply({ type: 'sessionList', sessions: sessions.map(session => ({ ...session, taskKey: taskKeys[session.id] ?? null })), currentId: viewing || state.sessionId });
+      reply({ type: 'sessionList', sessions: sessions.map(session => ({ ...session, taskKey: taskKeys[session.id] ?? null })), currentId: channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Provider request failed';

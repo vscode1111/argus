@@ -581,13 +581,12 @@ export function attachClientHandlers(
         try { ws.send(JSON.stringify({ type: 'workspaceList', workspaces, currentPath })); } catch {}
       }).catch(() => {});
     } else if (msg.type === 'listAllSessions') {
-      const currentId = s.sessionId;
       const taskKeys = readSessionTaskKeys();
       listAllSessions(new Set(Object.keys(taskKeys))).then(sessions => {
         const providerRecords = records().filter(r => r.selection.providerId !== 'claude').sort((a, b) => b.updatedAt - a.updatedAt);
         sessions.push(...providerRecords.filter((r, index) => index < MAX_GLOBAL_SESSIONS || taskKeys[r.id]).map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, ...codexSessionMeta(r.id), workspacePath: r.cwd, workspaceName: path.basename(r.cwd) })));
         sessions.sort((a, b) => b.updatedAt - a.updatedAt);
-        try { ws.send(JSON.stringify({ type: 'allSessionList', sessions: sessions.map(session => ({ ...session, taskKey: taskKeys[session.id] ?? null })), currentId })); } catch {}
+        try { ws.send(JSON.stringify({ type: 'allSessionList', sessions: sessions.map(session => ({ ...session, taskKey: taskKeys[session.id] ?? null })), currentId: channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId })); } catch {}
       }).catch(() => {});
     } else if (msg.type === 'getActiveSessions') {
       // Initial sync for a client that just connected; later changes arrive as
