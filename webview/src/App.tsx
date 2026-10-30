@@ -96,6 +96,9 @@ function AppInner() {
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const sessionIdRef = React.useRef(sessionId);
   sessionIdRef.current = sessionId;
+  const isStreamingRef = React.useRef(state.isStreaming);
+  isStreamingRef.current = state.isStreaming;
+  const routeRecoveryId = React.useRef<string | null>(null);
   const pendingSessionId = React.useRef<string | null>(null);
   const previousActivitySessionId = React.useRef(sessionId);
   useEffect(() => {
@@ -270,6 +273,15 @@ function AppInner() {
       const t = e.data?.type;
       if (t === 'sessionList' && Array.isArray(e.data.sessions)) {
         if (pendingSessionId.current) return;
+        const listedId = e.data.currentId as string | undefined;
+        if (isStreamingRef.current && sessionIdRef.current && listedId && listedId !== sessionIdRef.current) {
+          if (routeRecoveryId.current !== sessionIdRef.current) {
+            routeRecoveryId.current = sessionIdRef.current;
+            postMessage({ type: 'resumeSession', id: sessionIdRef.current });
+          }
+          return;
+        }
+        routeRecoveryId.current = null;
         // While browsing a past session during a live stream, loadedSessionId holds
         // the viewed session id (the server's currentId still points to the live one).
         const effectiveId = loadedSessionId.current ?? (e.data.currentId as string | undefined);
@@ -299,12 +311,14 @@ function AppInner() {
         postMessage({ type: 'listSessions' });
         endSessionLoad();
       } else if (t === 'sessionId' && typeof e.data.id === 'string') {
+        routeRecoveryId.current = null;
         loadedSessionId.current = null;
         sessionIdRef.current = e.data.id;
         setSessionId(e.data.id);
       } else if (t === 'sessionRenamed' && e.data.id === sessionIdRef.current && typeof e.data.title === 'string') {
         setSessionTitle(e.data.title);
       } else if (t === 'clear') {
+        routeRecoveryId.current = null;
         loadedSessionId.current = null;
         sessionIdRef.current = null;
         setSessionTitle('');

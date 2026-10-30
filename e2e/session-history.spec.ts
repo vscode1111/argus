@@ -59,6 +59,27 @@ test.describe('session history', () => {
     await expect(page.getByText('Current request')).toHaveCount(0);
   });
 
+  test('history listing restores a live conversation when the server reports another current session', async ({ page }) => {
+    const current = { id: '66666666-6666-4666-8666-666666666666', title: 'Current review', updatedAt: NOW };
+    const previous = { id: '77777777-7777-4777-8777-777777777777', title: 'Previous review', updatedAt: NOW - 1000 };
+    const requests: string[] = [];
+    page.on('console', message => {
+      if (message.text().includes('[mock] suppressed resumeSession')) requests.push(message.text());
+    });
+
+    await send(page, { type: 'sessionLoaded', id: current.id, messages: [{ id: 'current-request', role: 'user', content: 'Review the current changes' }] });
+    await send(page, { type: 'sessionList', sessions: [current, previous], currentId: current.id });
+    await expect(page.locator('button.sessionNameBtn')).toHaveText(current.title);
+    await send(page, { type: 'thinking_start' });
+    await openModal(page);
+    await send(page, { type: 'sessionList', sessions: [current, previous], currentId: previous.id });
+    await send(page, { type: 'sessionList', sessions: [current, previous], currentId: previous.id });
+
+    await expect(page.locator('button.sessionNameBtn')).toHaveText(current.title);
+    await expect(page.getByText('Review the current changes')).toBeVisible();
+    await expect.poll(() => requests.length).toBe(1);
+  });
+
   test('history button opens the modal and lists sessions with the current one marked', async ({ page }) => {
     await openModal(page);
     await send(page, { type: 'sessionList', sessions: SESSIONS, currentId: SESSIONS[1].id });
