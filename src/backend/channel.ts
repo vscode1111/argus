@@ -754,7 +754,7 @@ export function getOrCreateChannel(dir: string): Channel {
         joinEntry(_cd, ws, fresh);
         return false;
       }
-      joinEntry(_cd, ws, fresh ? createEntry(_cd) : defaultEntry(_cd));
+      joinEntry(_cd, ws, fresh || sessionId ? createEntry(_cd) : defaultEntry(_cd));
       return false;
     },
     removeClient(ws) {
