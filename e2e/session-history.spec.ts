@@ -255,21 +255,26 @@ test.describe('session history', () => {
   });
 
   test('an optimistic delete survives a close and reopen', async ({ page }) => {
+    const suppressedDeletes: string[] = [];
+    page.on('console', message => {
+      if (message.text().includes('[mock] suppressed deleteSession')) suppressedDeletes.push(message.text());
+    });
     await openModal(page);
-    const fake = { id: '00000000-0000-0000-0000-000000000098', title: 'scub-cache-delete-me', lastPrompt: 'remove me', updatedAt: NOW - 5_000 };
+    const fake = { id: '00000000-0000-0000-0000-000000000098', title: 'Archived maintenance request', lastPrompt: 'remove me', updatedAt: NOW - 5_000 };
     await send(page, { type: 'sessionList', sessions: [...SESSIONS, fake], currentId: SESSIONS[1].id });
 
     const dialog = page.getByRole('dialog', { name: 'Session History' });
-    await dialog.getByRole('textbox', { name: 'Search sessions' }).fill('cache-delete');
+    await dialog.getByRole('textbox', { name: 'Search sessions' }).fill(fake.title);
     await dialog.getByRole('button', { name: 'Delete session' }).click();
-    await expect(dialog.getByText('scub-cache-delete-me')).toHaveCount(0);
+    await expect.poll(() => suppressedDeletes.length).toBe(1);
+    await expect(dialog.getByText(fake.title)).toHaveCount(0);
 
     await page.keyboard.press('Escape');
     await openModal(page);
 
     // The write-through keeps the deleted row out of the cache; the other rows stay.
     await expect(dialog.getByText('scub-newest-session')).toBeVisible();
-    await expect(dialog.getByText('scub-cache-delete-me')).toHaveCount(0);
+    await expect(dialog.getByText(fake.title)).toHaveCount(0);
   });
 
   test('the All workspaces tab is cached across a reopen', async ({ page }) => {

@@ -136,7 +136,7 @@ function ErrorMessage({ message, login }: Props) {
   );
 }
 
-export function ChatMessage({ message, login, compact }: Props) {
+export const ChatMessage = React.memo(function ChatMessage({ message, login, compact }: Props) {
   const { role, content, thinking, blocks, responseTime } = message;
   const [retryHidden, setRetryHidden] = useState(false);
   const { showTimer } = useSettings();
@@ -213,7 +213,7 @@ export function ChatMessage({ message, login, compact }: Props) {
       )}
     </div>
   );
-}
+});
 
 function MessageCopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);

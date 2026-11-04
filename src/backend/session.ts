@@ -32,7 +32,7 @@ import { searchFiles, type FileSearchResult } from './fileSearch';
 import { workspaceChanges } from './workspaceChanges';
 import { listOrchestratorGoals } from './orchestratorGoals';
 import { beginRequest, readRequestStats, readSessionTaskKey, readSessionTaskKeys, setSessionTaskKey } from './sessionStats';
-import { sendInitialPage, sendEarlierPage } from './sessionPages';
+import { sendInitialPage, sendEarlierPage, sendCachedEarlierPage } from './sessionPages';
 
 export { getCliLaunchCount } from './providers/claudeExecution';
 
@@ -565,6 +565,7 @@ export function attachClientHandlers(
       const viewed = channel.getViewingSessionId(ws) ?? channel.getClientState(ws).sessionId;
       if (msg.id !== viewed) return;
       try {
+        if (sendCachedEarlierPage(ws, msg.id, msg.before, msg.revision, msg.prefetch === true)) return;
         const messages = await providerForSession(msg.id).load(msg.id, s.workspaceDir);
         if (msg.id === (channel.getViewingSessionId(ws) ?? channel.getClientState(ws).sessionId)) sendEarlierPage(ws, msg.id, messages, msg.before, msg.revision, msg.prefetch === true);
       } catch (error) {

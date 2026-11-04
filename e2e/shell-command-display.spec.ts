@@ -216,3 +216,31 @@ test('orchestration rows replace the repeated controller command with an icon an
   await expect(page.getByText('C:/scub/other/scripts/control.js respond --key scub-other', { exact: true })).toBeVisible();
   expect(await page.locator('body').innerText()).not.toContain('C:/scub/orchestrate/scripts/control.js');
 });
+
+test('orchestration captions distinguish worker keys within the same goal', async ({ page }) => {
+  await waitForApp(page);
+  const controller = 'node C:/tools/orchestrate/scripts/control.js';
+  const commands = [
+    `${controller} inspect --company operations --goal ORDER-42 --key implementation`,
+    `"C:\\Program Files\\Git\\bin\\bash.exe" -c "${controller} inspect --company operations --goal ORDER-42 --key review"`,
+    `${controller} inspect --key "secondary review" --goal 'ORDER-42'`,
+    `${controller} status --goal ORDER-42`,
+    `${controller} status`,
+  ];
+  await page.evaluate(commands => {
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'thinking_start' } }));
+    commands.forEach((command, index) => {
+      const call = { id: `worker-command-${index}`, name: 'commandExecution', kind: 'command', input: { command }, result: 'Complete' };
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'tool_start', call } }));
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'tool_end', call } }));
+    });
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'done' } }));
+  }, commands);
+
+  await expect(page.getByText('inspect ORDER-42 --key implementation', { exact: true })).toBeVisible();
+  await expect(page.getByText('inspect ORDER-42 --key review', { exact: true })).toBeVisible();
+  await expect(page.getByText('inspect ORDER-42 --key secondary review', { exact: true })).toBeVisible();
+  await expect(page.getByText('status ORDER-42', { exact: true })).toBeVisible();
+  await expect(page.getByText('status', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Orchestration' }).nth(1)).toHaveAttribute('title', commands[1]);
+});

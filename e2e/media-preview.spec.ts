@@ -273,9 +273,10 @@ test.describe('media preview', () => {
     // showed the card for everything would pass the assertions above.
     await viewer(page).locator('[aria-label="Close"]').click();
     await emitPathMessage(page, txtFixture);
-    await page.locator('.file-path-link').last().click();
+    await page.getByText(txtFixture, { exact: true }).click();
     await expect(page.locator('[data-testid="preview-info"]')).toHaveCount(0);
     await expect(page.locator('[data-line]').first()).toBeVisible();
+    await expect(viewer(page)).toContainText('second line');
   });
 });
 
