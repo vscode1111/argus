@@ -1,6 +1,43 @@
 import { test, expect } from '@playwright/test';
 import { waitForApp } from './helpers';
 
+test('a new request paints promptly beside a large completed history', async ({ page }) => {
+  await waitForApp(page);
+  await page.evaluate(() => {
+    const messages = Array.from({ length: 60 }, (_, index) => ({
+      id: `delivery-history-${index}`, role: 'assistant', content: '', outcome: 'success',
+      blocks: Array.from({ length: 12 }, (_, section) => ({ type: 'text',
+        text: `### Delivery ${index}, section ${section}\n\n| Parcel | Status |\n| --- | --- |\n| North warehouse | Dispatched |\n\nThe delivery record is complete. Review the next shipment when ready.`,
+      })),
+    }));
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'sessionLoaded', id: 'delivery-history', messages } }));
+  });
+  await page.getByRole('heading', { name: 'Delivery 59, section 11', exact: true }).waitFor({ state: 'attached' });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+  const elapsedMs = await page.evaluate(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const started = performance.now();
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'message', message: {
+      id: 'delivery-status-request', role: 'user', content: 'Check the next delivery',
+    } } }));
+    await new Promise<void>(resolve => {
+      const observer = new MutationObserver(() => {
+        if (document.getElementById('root')?.textContent?.includes('Check the next delivery')) {
+          observer.disconnect(); resolve();
+        }
+      });
+      observer.observe(document.getElementById('root')!, { childList: true, subtree: true });
+    });
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return performance.now() - started;
+  });
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  expect(elapsedMs).toBeLessThan(500);
+  await expect(page.getByText('Check the next delivery', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Delivery 59, section 11', exact: true })).toHaveCount(1);
+});
+
 test('keeps three older pages ready before the reader reaches them', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const requests: string[] = [];

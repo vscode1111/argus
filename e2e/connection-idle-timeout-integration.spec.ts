@@ -8,13 +8,9 @@ import {
 } from './daemonHelpers';
 
 // The client-side half of the idle-connection timeout: once the server closes a real
-// browser connection for being idle (channel.ts CLOSE_CODE_IDLE), the page must not
-// silently reconnect via the ordinary backoff loop - closing it again next sweep would
-// achieve nothing, since simply rejoining does not touch the server's idle clock. But
-// unlike a manual "disconnect me" from Connected Clients, it SHOULD come back on its own
-// the moment the tab is looked at again, with no click needed - that automatic path is
-// the whole reason this feature exists as a *timeout* rather than a second copy of the
-// disconnect button.
+// browser connection for being idle (channel.ts CLOSE_CODE_IDLE), a hidden page stays
+// disconnected until viewed again. A visible page retries without requiring a new
+// visibility event. A deliberate disconnect from Connected Clients stays manual.
 //
 // One daemon for the whole file, configured with a short connectionIdleTimeoutSec and a
 // fast sweep interval (ARGUS_REAP_SWEEP_MS) so the wait is seconds, not minutes.
@@ -81,6 +77,8 @@ test('an idle-closed page stays down while hidden, and reconnects on its own onc
   await gotoDaemon(page, dir);
   await expect(page.locator('[title="Connected"]')).toBeVisible({ timeout: 10_000 });
 
+  await setHidden(page, true);
+
   // Nothing else touches this connection, so the real sweep (300ms) closes it once it
   // has sat past the configured 1s idle limit - no server-side trigger needed, this is
   // the real reaper running on its real timer against a real socket.
@@ -88,9 +86,7 @@ test('an idle-closed page stays down while hidden, and reconnects on its own onc
   await expect(reconnectBtn).toBeVisible({ timeout: 10_000 });
   await expect(reconnectBtn).toHaveAttribute('title', /reconnects automatically/i);
 
-  // Simulate the tab being backgrounded - it must stay down. No click, no visibility
-  // change yet, so nothing should bring it back on its own.
-  await setHidden(page, true);
+  // The tab remains backgrounded, so nothing should bring it back on its own.
   await page.waitForTimeout(1500);
   await expect(reconnectBtn).toBeVisible();
   await expect(page.locator('[title="Connected"]')).toHaveCount(0);
@@ -100,6 +96,15 @@ test('an idle-closed page stays down while hidden, and reconnects on its own onc
   await setHidden(page, false);
   await expect(page.locator('[title="Connected"]')).toBeVisible({ timeout: 10_000 });
   await expect(reconnectBtn).toHaveCount(0);
+});
+
+test('an idle-closed visible page reconnects without a click or visibility change', { tag: ["@shared"] }, async ({ page }) => {
+  const dir = makeTempDir('visible');
+  await gotoDaemon(page, dir);
+  await expect(page.locator('[title="Connected"]')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('ws-reconnect')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('[title="Connected"]')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('ws-reconnect')).toHaveCount(0);
 });
 
 test('a peer-style disconnect does not auto-reconnect on the same visibility trigger', { tag: ["@shared"] }, async ({ page }) => {

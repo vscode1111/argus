@@ -5,6 +5,19 @@ export const SESSION_PAGE_SIZE = 30;
 const SESSION_PAGE_BYTES = 128 * 1024;
 const INITIAL_PAGE_MIN_SEGMENTS = 3;
 const INITIAL_PAGE_MAX_BYTES = 512 * 1024;
+const clientReplays = new WeakMap<WebSocket, { id: string; segments: ReplayMessage[] }>();
+
+export function rememberSessionReplay(ws: WebSocket, id: string | undefined, messages: ReplayMessage[]): void {
+  clientReplays.delete(ws);
+  if (id) clientReplays.set(ws, { id, segments: displaySegments(messages) });
+}
+
+export function sendCachedEarlierPage(ws: WebSocket, id: string, before: number, revision?: number, prefetch = false): boolean {
+  const replay = clientReplays.get(ws);
+  if (!replay || replay.id !== id) return false;
+  sendSegmentPage(ws, id, replay.segments, before, revision, prefetch);
+  return true;
+}
 
 type Segmentable = {
   id: string;
@@ -55,11 +68,16 @@ export function latestPage<T extends Segmentable>(messages: T[]) {
 }
 
 export function sendInitialPage(ws: WebSocket, id: string | undefined, messages: ReplayMessage[]): void {
+  rememberSessionReplay(ws, id, messages);
   ws.send(JSON.stringify({ type: 'sessionLoaded', id, ...latestPage(messages) }));
 }
 
 export function sendEarlierPage(ws: WebSocket, id: string, messages: ReplayMessage[], before: number, revision?: number, prefetch = false): void {
-  const segments = displaySegments(messages);
+  rememberSessionReplay(ws, id, messages);
+  sendCachedEarlierPage(ws, id, before, revision, prefetch);
+}
+
+function sendSegmentPage(ws: WebSocket, id: string, segments: ReplayMessage[], before: number, revision?: number, prefetch = false): void {
   const end = Math.min(before, segments.length);
   const start = pageBefore(segments, end);
   ws.send(JSON.stringify({ type: 'historyPage', id, messages: segments.slice(start, end), before: start, revision, ...(prefetch ? { prefetch: true } : {}) }));

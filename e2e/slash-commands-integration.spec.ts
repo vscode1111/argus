@@ -2,9 +2,40 @@ import { test, expect } from './provider-fixtures';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { ensureBuilt, ensureCompiled } from './daemonHelpers';
+import type { ArgusServer } from '../src/backend';
 
 test.describe('slash commands (integration)', () => {
   let workspace: string;
+  let fixtureHome: string;
+  let server: ArgusServer;
+  const homeVariable = process.platform === 'win32' ? 'USERPROFILE' : 'HOME';
+  const priorHome = process.env[homeVariable];
+  const priorUsagePoll = process.env.ARGUS_USAGE_POLL;
+
+  test.beforeAll(async () => {
+    fixtureHome = fs.mkdtempSync(path.join(os.tmpdir(), 'argus-slash-home-'));
+    const commands = path.join(fixtureHome, '.claude', 'commands');
+    const skill = path.join(fixtureHome, '.claude', 'skills', 'quality-check');
+    fs.mkdirSync(commands, { recursive: true });
+    fs.mkdirSync(skill, { recursive: true });
+    fs.writeFileSync(path.join(commands, 'release-guide.md'), '---\ndescription: Prepare release instructions\n---\n');
+    fs.writeFileSync(path.join(skill, 'SKILL.md'), '---\nname: quality-check\ndescription: Check release quality\n---\n');
+    // The private backend discovers global fixtures through its temporary home.
+    process.env[homeVariable] = fixtureHome;
+    process.env.ARGUS_USAGE_POLL = '0';
+    ensureCompiled();
+    ensureBuilt();
+    const { startServer } = require('../out/backend') as typeof import('../src/backend');
+    server = await startServer({ port: 0 });
+  });
+
+  test.afterAll(() => {
+    server?.close();
+    if (priorHome === undefined) delete process.env[homeVariable]; else process.env[homeVariable] = priorHome;
+    if (priorUsagePoll === undefined) delete process.env.ARGUS_USAGE_POLL; else process.env.ARGUS_USAGE_POLL = priorUsagePoll;
+    if (fixtureHome) fs.rmSync(fixtureHome, { recursive: true, force: true });
+  });
 
   test.beforeEach(async ({ page }) => {
     workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'argus-slash-'));
@@ -20,7 +51,7 @@ test.describe('slash commands (integration)', () => {
       fs.writeFileSync(path.join(commands, `${name}.md`), `---\ndescription: ${description}\n---\n`);
     }
     fs.writeFileSync(path.join(skill, 'SKILL.md'), '---\ndescription: Frontend development skill\n---\n');
-    await page.goto('/?dir=' + encodeURIComponent(workspace), { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://localhost:${server.port}/?dir=` + encodeURIComponent(workspace), { waitUntil: 'domcontentloaded' });
     await expect(page.getByPlaceholder('Ask Argus')).toBeVisible();
   });
 
@@ -92,7 +123,7 @@ test.describe('slash commands (integration)', () => {
   test('global command shows "global" badge', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
-    await textarea.pressSequentially('/company');
+    await textarea.pressSequentially('/release-guide');
 
     const items = page.locator('[class*="slashMenuItem"]');
     await expect(async () => {
@@ -101,14 +132,14 @@ test.describe('slash commands (integration)', () => {
     }).toPass({ timeout: 5_000 });
 
     const item = items.first();
-    await expect(item.locator('[class*="slashMenuName"]')).toHaveText('/company');
+    await expect(item.locator('[class*="slashMenuName"]')).toHaveText('/release-guide');
     await expect(item.locator('[class*="slashMenuScope"]')).toHaveText('global');
   });
 
   test('global skills show "global" badge', { tag: ["@claude"] }, async ({ page }) => {
     const textarea = page.getByPlaceholder('Ask Argus');
     await textarea.focus();
-    await textarea.pressSequentially('/git-commit');
+    await textarea.pressSequentially('/quality-check');
 
     const items = page.locator('[class*="slashMenuItem"]');
     await expect(async () => {
@@ -117,7 +148,7 @@ test.describe('slash commands (integration)', () => {
     }).toPass({ timeout: 5_000 });
 
     const item = items.first();
-    await expect(item.locator('[class*="slashMenuName"]')).toHaveText('/git-commit');
+    await expect(item.locator('[class*="slashMenuName"]')).toHaveText('/quality-check');
     await expect(item.locator('[class*="slashMenuScope"]')).toHaveText('global');
   });
 

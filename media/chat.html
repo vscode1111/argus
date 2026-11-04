@@ -105,17 +105,19 @@
       // the reconnect loop would bring it straight back and the button would look like
       // a no-op. Cleared by Retry, the explicit "bring it back".
       var userStopped = false;
+      var panelVisible = {{panelVisible}};
 
       var bridge = window.createArgusBridge({
         nextUrl: function () { return WS_URL || null; },
+        isVisible: function () { return panelVisible; },
         onStatus: function (connected, closeReason) {
           if (connected) { showDaemonDown(false); return; }
           // Closed on purpose - either another panel's client list disconnected this
           // one, or the server closed it for sitting idle. Either way the daemon is
           // fine, so no overlay - and above all no requestWsUrl, which reconnects (and
           // can even spawn a daemon) and would undo the very thing that was asked for.
-          // An idle close still comes back on its own via panelVisible below; a peer
-          // close waits for the manual Reconnect click.
+          // The bridge retries a visible idle client; panelVisible restores hidden
+          // clients when viewed again. A peer close waits for a manual click.
           if (closeReason) { showDaemonDown(false); return; }
           if (userStopped) { showDaemonDown(true); return; }
           // Disconnected: ask the extension for a fresh URL (covers daemon restart /
@@ -144,14 +146,15 @@
           // message (daemonRestarting) and must still auto-reconnect.
           userStopped = true;
         } else if (data.type === 'panelVisible') {
-          // Posted by ChatPanel.ts's onDidChangeViewState when this panel becomes
-          // visible again. A VS Code webview has no reliable document.hidden of its own
+          panelVisible = data.visible !== false;
+          // Posted by ChatPanel.ts's onDidChangeViewState when panel visibility changes.
+          // A VS Code webview has no reliable document.hidden of its own
           // (retainContextWhenHidden keeps the script running regardless of tab
           // visibility), so this is the only signal this host has for "someone is
           // looking at this panel now" - the browser hosts get the equivalent for free
           // via ws-bridge.js's own visibilitychange listener. No-ops unless the
           // connection is currently down for being idle.
-          bridge.reconnectIfIdle();
+          if (panelVisible) bridge.reconnectIfIdle();
         }
       });
 

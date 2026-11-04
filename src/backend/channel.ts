@@ -3,7 +3,7 @@ import type { WebSocket } from 'ws';
 import { createSessionState, type SessionState } from './sessionState';
 import { killProc } from './cli';
 import type { ReplayMessage } from './sessions';
-import { displaySegments, latestPage } from './sessionPages';
+import { displaySegments, latestPage, rememberSessionReplay } from './sessionPages';
 import { noteRequestEvent } from './sessionStats';
 
 const MAX_HISTORY = 200;
@@ -339,11 +339,9 @@ export interface ReapedClient {
 // this one reclaims the connection (and, once the existing 30s grace timer runs out with
 // no reconnect, the entry itself - history, snapshot, any lingering process).
 //
-// The closed socket does not silently reconnect (see CLOSE_CODE_IDLE) - if it did, the
-// very next sweep would see the same still-idle entry and close it again, since simply
-// rejoining does not touch lastActivityAt. It comes back only when the client decides to
-// (panel/tab looked at again, or a manual Reconnect), at which point the ownerLastSession
-// map (below, in scheduleEntryCleanup and addClient) is what keeps the conversation
+// Hidden clients stay disconnected; visible clients recover automatically. Rejoining
+// refreshes the idle clock so the next sweep does not immediately close them again.
+// The ownerLastSession map (below, in scheduleEntryCleanup and addClient) keeps the conversation
 // resumable even if the entry itself already evicted by then.
 export function reapIdleClients(idleMs: number, now: number = Date.now()): ReapedClient[] {
   const reaped: ReapedClient[] = [];
@@ -613,6 +611,7 @@ function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessa
   try { ws.send(JSON.stringify({ type: 'providerSelection', ...entry.state.selection })); } catch { return; }
   const merged = stored ? mergeHistory(stored, entry.history, entry.snapshot ? entry.state.runtime?.activeTurnId : undefined) : undefined;
   const page = merged ? latestPage(merged) : undefined;
+  rememberSessionReplay(ws, entry.state.sessionId, stored ?? []);
   const before = stored && page ? Math.min(page.before, displaySegments(stored).length) : 0;
   try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages: page?.messages ?? entry.history, before, hasMore: before > 0 })); } catch { return; }
   replaySnapshotToClient(entry, ws);
@@ -652,6 +651,7 @@ function joinEntry(cd: ChannelData, ws: WebSocket, target: SessionEntry, skipRep
   }
   const needsReplay = !skipReplay && (target.clients.size > 0 || target.history.length > 0 || target.snapshot !== null);
   target.clients.add(ws);
+  target.lastActivityAt = Date.now();
   cd.clientEntry.set(ws, target);
   if (needsReplay) replayToClient(target, ws);
 }

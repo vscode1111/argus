@@ -16,20 +16,18 @@
   //                                                        connect/disconnect; reason is
   //                                                        'peer' | 'idle' | undefined
   //   opts.acceptMessage(data)         -> boolean      : optional server-frame filter
+  //   opts.isVisible()                 -> boolean      : optional host visibility override
   // Close codes the server uses for a close it does NOT want the bridge to silently
   // retry (an ordinary drop - network blip, daemon restart - keeps the normal backoff
-  // loop). Both stay down until something explicit brings them back, but they differ in
-  // what counts as "explicit":
+  // loop). Deliberate disconnects and hidden idle clients stay down:
   //  - CLOSED_BY_PEER (4001): another panel's Connected Clients list disconnected this
   //    one on purpose. Reconnecting on its own would hand the connection straight back
   //    and make that button look like a no-op, so only a manual Reconnect click (or the
   //    same bargain chat.html strikes for "Stop daemon" via its own userStopped flag)
   //    brings it back.
   //  - CLOSED_IDLE (4002): the server closed it for sitting unused too long. Retrying it
-  //    blindly on the usual timer would just get it closed again next sweep (rejoining
-  //    does not touch the server's idle clock), so it still needs to stay down while
-  //    nobody is looking - but unlike a peer close, "the panel/tab is looked at again" is
-  //    itself a legitimate, automatic way back, on top of the same manual click.
+  //    while hidden would waste resources. Visible clients retry automatically;
+  //    hidden clients recover when viewed again or manually reconnected.
   var CLOSED_BY_PEER = 4001;
   var CLOSED_IDLE = 4002;
 
@@ -106,7 +104,12 @@
       reconnectTimer = setTimeout(connect, delay);
     }
 
+    function isVisible() {
+      return opts.isVisible ? opts.isVisible() : !document.hidden;
+    }
+
     function connect() {
+      if (stoppedReason === 'idle' && !isVisible()) return;
       ready = false;
       if (ws) {
         ws.onopen = ws.onclose = ws.onmessage = ws.onerror = null;
@@ -118,6 +121,7 @@
 
       ws.onopen = function () {
         ready = true;
+        stoppedReason = null;
         attempt = 0;
         setStatus(true);
         queue.splice(0).forEach(function (m) { ws.send(JSON.stringify(m)); });
@@ -134,6 +138,7 @@
           stoppedReason = code === CLOSED_IDLE ? 'idle' : 'peer';
           console.warn('[argus-ws] ' + (stoppedReason === 'idle' ? 'closed for being idle' : 'disconnected from another panel') + ' - staying down until ' + (stoppedReason === 'idle' ? 'viewed again or Reconnect' : 'Reconnect'));
           setStatus(false, stoppedReason);
+          if (stoppedReason === 'idle' && isVisible()) scheduleReconnect();
           return;
         }
         setStatus(false, null);
@@ -163,7 +168,7 @@
     // Reconnect when the tab becomes visible again (catches sleep/resume, and now also
     // an idle close) - but not after a peer close, or merely switching tabs would undo it.
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden || ready) return;
+      if (!isVisible() || ready) return;
       if (!stoppedReason || stoppedReason === 'idle') reconnectNow();
     });
 

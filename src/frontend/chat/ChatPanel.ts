@@ -55,9 +55,9 @@ export class ChatPanel {
       // document.hidden/visibilitychange do not reflect the panel's real visibility the
       // way they do for an ordinary browser tab. `visible` (not `active`) on purpose - a
       // panel showing in a split view the user is not focused on is still worth
-      // reconnecting, unlike one hidden behind another tab entirely. No-ops in chat.html
-      // unless the connection is currently down for being idle.
-      if (e.webviewPanel.visible) this.post({ type: 'panelVisible' });
+      // reconnecting, unlike one hidden behind another tab entirely. Send both states
+      // so the bridge also knows whether to retry an idle close without a transition.
+      this.post({ type: 'panelVisible', visible: e.webviewPanel.visible });
     }, null, this.disposables);
     captureForegroundWindow();
   }
@@ -279,7 +279,8 @@ export class ChatPanel {
       .replace('{{jsUri}}', jsUri.toString())
       .replace('{{wsBridgeUri}}', wsBridgeUri.toString())
       .replace('{{cspSource}}', webview.cspSource)
-      .replace('{{wsUrl}}', wsUrl);
+      .replace('{{wsUrl}}', wsUrl)
+      .replace('{{panelVisible}}', String(this.panel.visible));
     return html;
   }
 
