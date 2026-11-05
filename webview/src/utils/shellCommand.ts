@@ -53,7 +53,11 @@ function orchestratorCommand(command: string): ShellCommand | null {
   const key = /(?:^|\s)--key\s+(?:"([^"]+)"|'([^']+)'|(\S+))/.exec(args);
   const target = goal || key;
   const display = target ? `${action} ${target[1] || target[2] || target[3]}` : action;
-  return { shell: 'orchestrate', display: goal && key ? `${display} --key ${key[1] || key[2] || key[3]}` : display };
+  const selectors = goal && key ? `${display} --key ${key[1] || key[2] || key[3]}` : display;
+  let remaining = args;
+  if (goal) remaining = remaining.replace(goal[0], '');
+  if (key) remaining = remaining.replace(key[0], '');
+  return { shell: 'orchestrate', display: [selectors, remaining.trim()].filter(Boolean).join(' ') };
 }
 
 export function shellCommand(command: string): ShellCommand {
