@@ -1,6 +1,31 @@
 import { test, expect } from '@playwright/test';
 import { waitForApp } from './helpers';
 
+test('orchestration captions retain action arguments beyond goal and key', async ({ page }) => {
+  await waitForApp(page);
+  const rows = [
+    { command: 'node /workspace/orchestrate/scripts/control.js rename-self --title "[0] ORDER-35"', caption: 'rename-self --title "[0] ORDER-35"' },
+    { command: 'bash -c "node /workspace/orchestrate/scripts/control.js work --goal ORDER-35 --key implementation --resume --limit 5"', caption: 'work ORDER-35 --key implementation --resume --limit 5' },
+    { command: "node /workspace/orchestrate/scripts/control.js work --message 'Check the delivery status'", caption: "work --message 'Check the delivery status'" },
+  ];
+  await page.evaluate(rows => {
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'thinking_start' } }));
+    rows.forEach(({ command }, index) => {
+      const call = { id: `delivery-command-${index}`, name: 'commandExecution', kind: 'command', input: { command }, result: 'Complete' };
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'tool_start', call } }));
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'tool_end', call } }));
+    });
+  }, rows);
+  for (const row of rows) await expect(page.getByText(row.caption, { exact: true })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: { type: 'done' } })));
+  for (const width of [320, 768, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const row of rows) await expect(page.getByText(row.caption, { exact: true })).toBeVisible();
+  }
+  for (let index = 0; index < rows.length; index++)
+    await expect(page.getByRole('img', { name: 'Orchestration' }).nth(index)).toHaveAttribute('title', rows[index].command);
+});
+
 test('JavaScript tool badge matches the Bash background width', async ({ page }) => {
   await waitForApp(page);
   await page.evaluate(() => {
@@ -209,8 +234,8 @@ test('orchestration rows replace the repeated controller command with an icon an
   }, command);
 
   await expect(page.getByRole('img', { name: 'Orchestration' })).toHaveCount(2);
-  await expect(page.getByText('respond scub-task', { exact: true })).toBeVisible();
-  await expect(page.getByText('send scub-task', { exact: true })).toBeVisible();
+  await expect(page.getByText('respond scub-task --company scub-company --id scub-request', { exact: true })).toBeVisible();
+  await expect(page.getByText('send scub-task --company scub-company', { exact: true })).toBeVisible();
   await expect(page.getByRole('img', { name: 'Orchestration' }).first()).toHaveAttribute('title', command);
   await expect(page.getByRole('img', { name: 'Node.js' })).toBeVisible();
   await expect(page.getByText('C:/scub/other/scripts/control.js respond --key scub-other', { exact: true })).toBeVisible();
@@ -237,8 +262,8 @@ test('orchestration captions distinguish worker keys within the same goal', asyn
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'done' } }));
   }, commands);
 
-  await expect(page.getByText('inspect ORDER-42 --key implementation', { exact: true })).toBeVisible();
-  await expect(page.getByText('inspect ORDER-42 --key review', { exact: true })).toBeVisible();
+  await expect(page.getByText('inspect ORDER-42 --key implementation --company operations', { exact: true })).toBeVisible();
+  await expect(page.getByText('inspect ORDER-42 --key review --company operations', { exact: true })).toBeVisible();
   await expect(page.getByText('inspect ORDER-42 --key secondary review', { exact: true })).toBeVisible();
   await expect(page.getByText('status ORDER-42', { exact: true })).toBeVisible();
   await expect(page.getByText('status', { exact: true })).toBeVisible();
