@@ -94,8 +94,7 @@ function CopyButton({ text }: { text: string }) {
         position: 'absolute',
         top: 4,
         right: 4,
-        // Opaque, matching the block: the button now sits over code that scrolls
-        // beneath it, so a transparent background would overlap the text.
+        // Keep wrapped text from showing through the copy button.
         background: 'var(--tool-bg)',
         border: 'none',
         color: 'var(--fg)',
@@ -166,7 +165,7 @@ export function Markdown({ children, breaks }: { children: string; breaks?: bool
           // long line was scrolled. The wrapper does not scroll.
           return (
             <div className="code-block-wrapper" style={{ position: 'relative', margin: '6px 0', width: 'fit-content', maxWidth: '100%' }}>
-              <pre style={{ background: 'var(--tool-bg)', borderRadius: 4, padding: '8px 10px', overflowX: 'auto', margin: 0 }}>
+              <pre style={{ background: 'var(--tool-bg)', borderRadius: 4, padding: '8px 10px', overflowX: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', margin: 0 }}>
                 {children}
               </pre>
               <CopyButton text={text} />

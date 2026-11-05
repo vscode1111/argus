@@ -8,6 +8,74 @@ const { getOrCreateChannel, destroyChannel } = require('../out/backend/channel')
 const { handleResumeSession } = require('../out/backend/session');
 const { loadSession } = require('../out/backend/sessions');
 const { replayThread } = require('../out/backend/providers/codex');
+const { sendProviderEarlierPage } = require('../out/backend/sessionPages');
+
+test('five initial batches retain older turns without duplicating the live turn', async () => {
+  const cwd = path.join(os.tmpdir(), `paged-history-${randomUUID()}`);
+  const frames = [];
+  const socket = { readyState: 1, send: raw => frames.push(JSON.parse(raw)) };
+  try {
+    const channel = getOrCreateChannel(cwd);
+    channel.addClient(socket, true);
+    const live = channel.getClientState(socket);
+    live.sessionId = `codex:${randomUUID()}`;
+    live.runtime = { active: true, activeTurnId: 'current-turn' };
+    live.broadcast(JSON.stringify({ type: 'message', message: { id: 'request', role: 'user', content: 'Current request' } }));
+    live.broadcast(JSON.stringify({ type: 'thinking_start' }));
+    live.broadcast(JSON.stringify({ type: 'text_chunk', text: 'Current progress' }));
+    const prior = [{ id: 'prior', role: 'assistant', content: 'Prior result' }];
+    let requested;
+    frames.length = 0;
+    channel.replayHistory(socket, [...prior, { id: 'reply-current-turn-0:page-tail', role: 'assistant', content: 'Current progress' }], {
+      cursor: 'older-items', cursorTurnId: 'prior-turn', turnId: 'current-turn', previousTurnCursor: 'prior-turn-start', previousTurnMessages: prior,
+      load: async cursor => { requested = cursor; return { messages: [{ id: 'oldest', role: 'user', content: 'Oldest request' }] }; },
+    });
+    const opened = frames.find(frame => frame.type === 'sessionLoaded');
+    assert.deepEqual(opened.messages.map(message => message.content), ['Prior result', 'Current request']);
+    assert.equal(frames.filter(frame => frame.type === 'text_chunk').length, 1);
+    await sendProviderEarlierPage(socket, live.sessionId, opened.before, 1);
+    assert.equal(requested, 'older-items');
+    assert.deepEqual(frames.at(-1).messages.map(message => message.id), ['oldest']);
+  } finally { destroyChannel(cwd); }
+});
+
+test('paged live replay skips native items already covered by the streaming snapshot', async () => {
+  const cwd = path.join(os.tmpdir(), `paged-history-${randomUUID()}`);
+  const frames = [];
+  const streamer = { readyState: 1, send() {} };
+  const viewer = { readyState: 1, send: raw => frames.push(JSON.parse(raw)) };
+  try {
+    const channel = getOrCreateChannel(cwd);
+    channel.addClient(streamer, true);
+    const live = channel.getClientState(streamer);
+    live.sessionId = `codex:${randomUUID()}`;
+    live.runtime = { active: true, activeTurnId: 'current-turn' };
+    live.broadcast(JSON.stringify({ type: 'message', message: { id: 'earlier-request', role: 'user', content: 'Earlier request' } }));
+    live.broadcast(JSON.stringify({ type: 'message', message: { id: 'earlier-reply', role: 'assistant', content: 'Earlier reply' } }));
+    live.broadcast(JSON.stringify({ type: 'message', message: { id: 'request', role: 'user', content: 'Current request' } }));
+    live.broadcast(JSON.stringify({ type: 'thinking_start' }));
+    live.broadcast(JSON.stringify({ type: 'text_chunk', text: 'Current progress' }));
+    channel.addClient(viewer);
+    frames.length = 0;
+    const cursors = [];
+    channel.replayHistory(viewer, [
+      { id: 'saved-request', role: 'user', content: 'Current request' },
+      { id: 'reply-current-turn-1:page-tail', role: 'assistant', content: 'Current progress' },
+    ], {
+      cursor: 'more-current-items', turnId: 'current-turn', previousTurnCursor: 'older-turns',
+      load: async cursor => { cursors.push(cursor); return { messages: [{ id: 'older', role: 'user', content: 'Previous request' }] }; },
+    });
+    const opened = frames.find(frame => frame.type === 'sessionLoaded');
+    assert.equal(opened.messages.some(message => message.content === 'Current progress'), false);
+    assert.equal(opened.messages.filter(message => message.content === 'Current request').length, 1);
+    assert.equal(opened.messages.some(message => message.content === 'Earlier request'), false);
+    assert.equal(frames.filter(frame => frame.type === 'text_chunk').length, 1);
+    assert.equal(opened.hasMore, true);
+    await sendProviderEarlierPage(viewer, live.sessionId, opened.before, 1);
+    assert.deepEqual(cursors, ['older-turns']);
+    assert.deepEqual(frames.at(-1).messages.map(message => message.id), ['older']);
+  } finally { destroyChannel(cwd); }
+});
 
 async function openStoredSession(shouldBeLive, storeCurrent = true) {
   const cwd = path.join(os.tmpdir(), `argus-live-history-${randomUUID()}`);

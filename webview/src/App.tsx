@@ -70,6 +70,10 @@ function fireNotification(title: string, body: string): void {
 
 function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const [initialSessionId] = React.useState(() => {
+    const id = new URLSearchParams(window.location.search).get('session');
+    return id && /^(?:codex:[A-Za-z0-9_-]{1,128}|[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})$/.test(id) ? id : null;
+  });
   const { showLogs, setShowLogs, soundOnComplete, notifyOnComplete } = useSettings();
   const messageListRef = useRef<MessageListHandle>(null);
   const prevTurnCompletions = React.useRef(0);
@@ -84,9 +88,9 @@ function AppInner() {
   providerRef.current = state.providerId;
   const [accountUsageTab, setAccountUsageTab] = React.useState<'usage' | 'models' | null>(null);
   const [initialFile, setInitialFile] = React.useState<string | null>(null);
-  // Spinner overlay shown while a session resume or workspace switch is in flight
+  // Spinner overlay shown while an initial load, session resume or workspace switch is in flight
   // (a big transcript replay or a WS reconnect can take a few seconds).
-  const [loadingSession, setLoadingSession] = React.useState(false);
+  const [loadingSession, setLoadingSession] = React.useState(!!initialSessionId);
   // Known content size (line count) of the session being resumed, shown beside the
   // spinner (e.g. "Loading… 17k lines"); 0 when unknown (a plain workspace switch).
   const [loadSize, setLoadSize] = React.useState(0);
@@ -99,7 +103,7 @@ function AppInner() {
   const isStreamingRef = React.useRef(state.isStreaming);
   isStreamingRef.current = state.isStreaming;
   const routeRecoveryId = React.useRef<string | null>(null);
-  const pendingSessionId = React.useRef<string | null>(null);
+  const pendingSessionId = React.useRef<string | null>(initialSessionId);
   const previousActivitySessionId = React.useRef(sessionId);
   useEffect(() => {
     if (previousActivitySessionId.current && previousActivitySessionId.current !== sessionId) setActivityOpen(false);
@@ -174,10 +178,14 @@ function AppInner() {
     // an `auth_required` raised then was dispatched to nobody. Read the state directly
     // once, now that the listener above is in place.
     if (window.argusAuthRequired?.()) dispatch({ type: 'auth_required', required: true });
+    if (initialSessionId) beginSessionLoad();
     postMessage({ type: 'webviewReady' });
     postMessage({ type: 'getInfo' });
     postMessage({ type: 'getProviders' });
-    return () => window.removeEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      if (loadTimer.current) { window.clearTimeout(loadTimer.current); loadTimer.current = null; }
+    };
   }, []);
 
   useEffect(() => {
@@ -272,7 +280,17 @@ function AppInner() {
     function onSessionMsg(e: MessageEvent) {
       const t = e.data?.type;
       if (t === 'sessionList' && Array.isArray(e.data.sessions)) {
-        if (pendingSessionId.current) return;
+        if (pendingSessionId.current) {
+          if (pendingSessionId.current === initialSessionId && !loadedSessionId.current) {
+            const selected = (e.data.sessions as SessionSummary[]).find(session => session.id === initialSessionId);
+            if (selected) {
+              setSessionTitle(selected.title);
+              setSessionLines(selected.lines ?? 0);
+              setLoadSize(selected.lines ?? 0);
+            }
+          }
+          return;
+        }
         const listedId = e.data.currentId as string | undefined;
         if (isStreamingRef.current && sessionIdRef.current && listedId && listedId !== sessionIdRef.current) {
           if (routeRecoveryId.current !== sessionIdRef.current) {

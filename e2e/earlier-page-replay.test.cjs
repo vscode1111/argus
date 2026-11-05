@@ -5,12 +5,12 @@ const { randomUUID } = require('node:crypto');
 const { getOrCreateChannel, destroyChannel } = require('../out/backend/channel');
 const { attachClientHandlers } = require('../out/backend/session');
 const { providerForSession } = require('../out/backend/providers/registry');
-const { sendInitialPage } = require('../out/backend/sessionPages');
+const { sendInitialPage, SESSION_PAGE_SIZE, INITIAL_HISTORY_BATCHES } = require('../out/backend/sessionPages');
 
 test('earlier pages reuse the client replay, including after refresh and live attach', async () => {
   const dir = `D:/sessions/${randomUUID()}`;
   const id = randomUUID();
-  const messages = Array.from({ length: 100 }, (_, index) => ({ id: `message-${index}`, role: 'user', content: `Entry ${index}` }));
+  const messages = Array.from({ length: SESSION_PAGE_SIZE * (INITIAL_HISTORY_BATCHES + 2) }, (_, index) => ({ id: `message-${index}`, role: 'user', content: `Entry ${index}` }));
   const channel = getOrCreateChannel(dir);
   const socket = new EventEmitter();
   const otherSocket = new EventEmitter();

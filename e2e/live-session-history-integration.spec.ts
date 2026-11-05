@@ -7,7 +7,7 @@ test('opening a running session shows its earlier conversation and live turn', {
   test.setTimeout(120_000);
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'argus-live-history-ui-'));
   const earlier = 'Which season follows spring? Reply with one word.';
-  const current = 'List the integers from 1 to 2000, one per line.';
+  const current = 'Run node -e "setTimeout(() => {}, 20000)" in the foreground. Wait for it to finish before replying with "Finished waiting".';
   const otherContext = await browser.newContext();
   const viewer = await otherContext.newPage();
   let sessionId: string | null = null;

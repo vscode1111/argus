@@ -3,7 +3,7 @@ import type { WebSocket } from 'ws';
 import { createSessionState, type SessionState } from './sessionState';
 import { killProc } from './cli';
 import type { ReplayMessage } from './sessions';
-import { displaySegments, latestPage, rememberSessionReplay } from './sessionPages';
+import { displaySegments, latestPage, rememberSessionReplay, replayPageBefore, type HistoryPageSource } from './sessionPages';
 import { noteRequestEvent } from './sessionStats';
 
 const MAX_HISTORY = 200;
@@ -139,7 +139,7 @@ export interface Channel {
   replaySnapshot(ws: WebSocket): void;
   /** Replay this client's entry (history + streaming snapshot). Returns false when the
    *  entry has nothing to replay, so the caller can fall back to loading from disk. */
-  replayHistory(ws: WebSocket, stored?: ReplayMessage[]): boolean;
+  replayHistory(ws: WebSocket, stored?: ReplayMessage[], source?: HistoryPageSource): boolean;
 }
 
 const registry = new Map<string, ChannelData>();
@@ -584,7 +584,12 @@ function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
   }
 }
 
-function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[], activeTurnId?: string): Array<ReplayMessage | ChannelMessage> {
+function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[], activeTurnId?: string, pagedActiveTurn = false, previousTurns: ReplayMessage[] = []): Array<ReplayMessage | ChannelMessage> {
+  if (pagedActiveTurn) {
+    let currentUser = recent.length - 1;
+    while (currentUser > 0 && recent[currentUser].role !== 'user') currentUser--;
+    return [...previousTurns, ...recent.slice(Math.max(0, currentUser))];
+  }
   let savedMessages = stored;
   if (activeTurnId) {
     const currentUser = [...recent].reverse().find(message => message.role === 'user');
@@ -595,8 +600,10 @@ function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[], activeT
     const last = stored[stored.length - 1];
     const replyPrefix = `reply-${activeTurnId}-`;
     if (userIndex >= 0 && last?.role === 'assistant' && last.id.startsWith(replyPrefix)
-      && /^\d+$/.test(last.id.slice(replyPrefix.length))) {
+      && /^\d+(?::page-.+)?$/.test(last.id.slice(replyPrefix.length))) {
       savedMessages = stored.slice(0, userIndex + 1);
+    } else if (last?.role === 'assistant' && last.id.startsWith(replyPrefix) && last.id.includes(':page-')) {
+      savedMessages = stored.filter(message => message.role !== 'assistant' || !message.id.startsWith(replyPrefix));
     }
   }
   let overlap = Math.min(savedMessages.length, recent.length);
@@ -607,12 +614,18 @@ function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[], activeT
   return [...savedMessages, ...recent.slice(overlap)];
 }
 
-function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessage[]): void {
+function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessage[], source?: HistoryPageSource): void {
   try { ws.send(JSON.stringify({ type: 'providerSelection', ...entry.state.selection })); } catch { return; }
-  const merged = stored ? mergeHistory(stored, entry.history, entry.snapshot ? entry.state.runtime?.activeTurnId : undefined) : undefined;
+  if (entry.snapshot && hasActiveTurn(entry) && source?.cursor !== undefined && source.turnId && (source.cursorTurnId ?? source.turnId) === entry.state.runtime?.activeTurnId) {
+    source = { ...source, cursor: source.previousTurnCursor };
+  }
+  const activeTurnId = entry.snapshot ? entry.state.runtime?.activeTurnId : undefined;
+  const pagedActiveTurn = !!activeTurnId && source?.turnId === activeTurnId;
+  const merged = stored ? mergeHistory(stored, entry.history, activeTurnId, pagedActiveTurn, source?.previousTurnMessages) : undefined;
   const page = merged ? latestPage(merged) : undefined;
-  rememberSessionReplay(ws, entry.state.sessionId, stored ?? []);
-  const before = stored && page ? Math.min(page.before, displaySegments(stored).length) : 0;
+  const cached = pagedActiveTurn ? source?.previousTurnMessages ?? [] : stored ?? [];
+  rememberSessionReplay(ws, entry.state.sessionId, cached, source);
+  const before = replayPageBefore(ws, stored && page ? Math.min(page.before, displaySegments(cached).length) : 0);
   try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages: page?.messages ?? entry.history, before, hasMore: before > 0 })); } catch { return; }
   replaySnapshotToClient(entry, ws);
   if (entry.snapshot && hasActiveTurn(entry)) {
@@ -840,7 +853,7 @@ export function getOrCreateChannel(dir: string): Channel {
       const entry = _cd.clientEntry.get(ws);
       if (entry) { replaySnapshotToClient(entry, ws); if (entry.state.interaction) ws.send(JSON.stringify({ type: 'interaction', request: entry.state.interaction })); }
     },
-    replayHistory(ws, stored) {
+    replayHistory(ws, stored, source) {
       const entry = _cd.clientEntry.get(ws);
       if (!entry) return false;
       // An entry can be bound to a session without ever having streamed it: opening a
@@ -848,7 +861,7 @@ export function getOrCreateChannel(dir: string): Channel {
       // history empty. Replaying that empty history would clear the client's view, so
       // report "nothing to replay" and let the caller read the transcript instead.
       if (entry.history.length === 0 && !(entry.snapshot && hasActiveTurn(entry)) && !stored?.length) return false;
-      replayToClient(entry, ws, stored);
+      replayToClient(entry, ws, stored, source);
       return true;
     },
   };

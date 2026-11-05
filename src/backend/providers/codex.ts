@@ -3,22 +3,23 @@ import type { AgentProvider, AgentSession, AgentEvent, TurnInput } from './types
 import type { SessionState } from '../sessionState';
 import { codexSessionMeta, type ReplayMessage } from '../sessions';
 import type { RateLimitInfo } from '../accountUsage';
-import { AppServerRpc, object, array, string, type JsonObject } from './rpc';
+import { AppServerRpc, ProviderRequestError, object, array, string, type JsonObject } from './rpc';
 import { records, sessionRecord, saveSession, forgetSession, sameWorkspace } from './store';
 import type { ProviderInteraction, ProviderModel, ProviderSelection } from '../../shared/provider';
 import { readConfig } from '../config';
 import { noteCodexUsage } from '../sessionStats';
+import { readHistoryItems } from './codexHistory';
 
 function nativeId(id: string): string {
   if (!/^codex:[a-zA-Z0-9_-]{1,128}$/.test(id)) throw new Error('Invalid conversation id');
   return id.slice(6);
 }
 
-async function withRpc<T>(action: (rpc: AppServerRpc) => Promise<T>): Promise<T> {
+async function withRpc<T>(action: (rpc: AppServerRpc) => Promise<T>, nonBlockingCleanup = false): Promise<T> {
   const rpc = new AppServerRpc();
   rpc.onMessage = (_method, _params, id) => { if (id !== undefined) rpc.reject(id); };
   try { await rpc.start(); return await action(rpc); }
-  finally { rpc.dispose(); }
+  finally { rpc.dispose(nonBlockingCleanup); }
 }
 
 let catalog: { models: ProviderModel[]; runtimeDefaultModel?: string } | undefined;
@@ -473,6 +474,21 @@ export class CodexSession implements AgentSession {
   }
 }
 
+async function readHistoryPage(rpc: AppServerRpc, id: string, cursor?: unknown) {
+  try {
+    const page = await readHistoryItems(rpc, nativeId(id), cursor);
+    const messages = replayThread({ turns: [page.turn] });
+    return { messages: messages.map(message => message.role === 'assistant'
+      ? { ...message, id: `${message.id}:page-${page.anchor}` } : message), cursor: page.cursor,
+      turnId: string(page.turn.id), previousTurnCursor: page.previousTurnCursor };
+  } catch (error) {
+    const unsupported = error instanceof ProviderRequestError && (error.code === -32601
+      || error.code === -32600 && /unknown variant.*thread\/(?:turns|items)\/list/i.test(error.message));
+    if (cursor !== undefined || !unsupported) throw error;
+    return { messages: replayThread(object((await rpc.request('thread/read', { threadId: nativeId(id), includeTurns: true })).thread)) };
+  }
+}
+
 export const codexProvider: AgentProvider = {
   descriptor: { id: 'codex', label: 'Codex', thinkingToggle: false, efforts: [], inputKinds: ['text', 'image'] },
   createSession: state => new CodexSession(state), models, account,
@@ -501,6 +517,14 @@ export const codexProvider: AgentProvider = {
   async load(id, cwd) {
     if (!sessionRecord(id, cwd)) throw new Error('Conversation does not belong to this workspace');
     return withRpc(async rpc => replayThread(object((await rpc.request('thread/read', { threadId: nativeId(id), includeTurns: true })).thread)));
+  },
+  async loadPage(id, cwd, cursor) {
+    if (!sessionRecord(id, cwd)) throw new Error('Conversation does not belong to this workspace');
+    return withRpc(rpc => readHistoryPage(rpc, id, cursor), true);
+  },
+  async withHistoryReader(id, cwd, action) {
+    if (!sessionRecord(id, cwd)) throw new Error('Conversation does not belong to this workspace');
+    return withRpc(rpc => action(cursor => readHistoryPage(rpc, id, cursor)), true);
   },
   async loadSubagents(id, cwd) {
     if (!sessionRecord(id, cwd)) throw new Error('Conversation does not belong to this workspace');
