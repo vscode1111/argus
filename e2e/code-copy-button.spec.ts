@@ -1,10 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import { waitForApp } from './helpers';
 
-// One line long enough to overflow any viewport, so the block scrolls horizontally.
-const LONG_LINE = `const scub = [${Array.from({ length: 40 }, (_, i) => `'scub-value-${i}'`).join(', ')}];`;
-const SHORT_LINE = "const y = 'scub-short';";
-const MARKDOWN = ['Here is the code:', '', '```ts', LONG_LINE, SHORT_LINE, '```'].join('\n');
+const LONG_LINE = `const warehouses = [${Array.from({ length: 40 }, (_, i) => `'warehouse-${i}'`).join(', ')}];`;
+const SHORT_LINE = "  const status = 'ready';";
+const TOKEN_LINE = `const trackingCode = '${'shipment'.repeat(80)}';`;
+const MARKDOWN = ['Here is the code:', '', '```ts', LONG_LINE, SHORT_LINE, TOKEN_LINE, '```'].join('\n');
 
 function emitCodeBlock(page: Page, text: string) {
   return page.evaluate((md) => {
@@ -20,7 +20,7 @@ function emitCodeBlock(page: Page, text: string) {
 test.describe('code block copy button', () => {
   // Located by content, not by the wrapper/pre nesting, so the assertions below
   // fail on the behavior they describe rather than on a changed DOM shape.
-  const codeBlock = (page: Page) => page.locator('pre').filter({ hasText: 'scub-value-0' }).first();
+  const codeBlock = (page: Page) => page.locator('pre').filter({ hasText: 'warehouse-0' }).first();
   const copyBtn = (page: Page) => page.getByRole('button', { name: 'Copy to clipboard' });
 
   test.beforeEach(async ({ page }) => {
@@ -28,18 +28,16 @@ test.describe('code block copy button', () => {
     await emitCodeBlock(page, MARKDOWN);
   });
 
-  // The copy button used to live inside the scrolling <pre>. An absolutely
-  // positioned child of a scroll container is laid out against the padding box
-  // at scroll origin and then scrolls with the content, so the button looked
-  // right only at scrollLeft 0 and slid left across the block (~3700px on this
-  // fixture) once a long line was scrolled. The post-scroll comparison is what
-  // catches that; the unscrolled one passed even when broken.
-  test('stays in the visible right corner while the block scrolls', async ({ page }) => {
+  test('wraps long lines and keeps the copy button in the visible corner', async ({ page }) => {
     const block = codeBlock(page);
     await expect(block).toBeVisible({ timeout: 5_000 });
 
-    const dims = await block.evaluate(el => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
-    expect(dims.scrollWidth).toBeGreaterThan(dims.clientWidth);
+    for (const width of [320, 780, 1280]) {
+      await page.setViewportSize({ width, height: 700 });
+      const dims = await block.evaluate(el => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, height: el.clientHeight }));
+      expect(dims.scrollWidth).toBeLessThanOrEqual(dims.clientWidth + 1);
+      expect(dims.height).toBeGreaterThan(60);
+    }
 
     await block.hover();
     const btn = copyBtn(page);
@@ -50,18 +48,14 @@ test.describe('code block copy button', () => {
     expect(before.x + before.width).toBeGreaterThan(blockBox.x + blockBox.width - 30);
 
     await block.evaluate(el => { el.scrollLeft = el.scrollWidth; });
-    await expect.poll(() => block.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+    await expect.poll(() => block.evaluate(el => el.scrollLeft)).toBe(0);
 
     const after = (await btn.boundingBox())!;
     expect(Math.abs(after.x - before.x)).toBeLessThan(1);
     expect(Math.abs(after.y - before.y)).toBeLessThan(1);
   });
 
-  // Not a regression test for the drift (Playwright scrolls a target into view
-  // before clicking, so this passed against the broken layout too): it guards
-  // the fix itself - the button now lives outside the <pre> it copies, so the
-  // text it hands to the clipboard has to keep coming from the code element.
-  test('copies the code after the block has been scrolled', async ({ page, context }) => {
+  test('copies the original whitespace and lines after visual wrapping', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
     const block = codeBlock(page);
@@ -80,7 +74,6 @@ test.describe('code block copy button', () => {
     await expect(btn).toHaveText('✓', { timeout: 5_000 });
 
     const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
-    expect(clipboardText).toContain(LONG_LINE);
-    expect(clipboardText).toContain(SHORT_LINE);
+    expect(clipboardText.replace(/\r\n/g, '\n')).toBe([LONG_LINE, SHORT_LINE, TOKEN_LINE].join('\n'));
   });
 });

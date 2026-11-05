@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type WebSocketRoute } from '@playwright/test';
 import { waitForApp } from './helpers';
 
 function send(page: Page, data: object) {
@@ -8,6 +8,28 @@ function send(page: Page, data: object) {
 }
 
 const NOW = Date.now();
+
+test('a cold session link shows the loader until its matching replay arrives', async ({ page }) => {
+  const id = '99999999-9999-4999-8999-999999999999';
+  let socket: WebSocketRoute | undefined;
+  await page.routeWebSocket(/\/agent(?:\?|$)/, route => {
+    socket = route;
+    route.onMessage(raw => {
+      if (JSON.parse(String(raw)).type === 'webviewReady') route.send(JSON.stringify({
+        type: 'sessionList', sessions: [{ id, title: 'Delivery history', updatedAt: NOW }], currentId: id,
+      }));
+    });
+  });
+  await page.goto(`/?mock=1&session=${id}`);
+  await expect(page.getByRole('status', { name: 'Loading session' })).toBeVisible();
+  await expect.poll(() => !!socket).toBe(true);
+  socket!.send(JSON.stringify({ type: 'sessionLoaded', id: 'other-history', messages: [{ id: 'other', role: 'user', content: 'Other delivery' }] }));
+  await expect(page.getByRole('status', { name: 'Loading session' })).toBeVisible();
+  await expect(page.getByText('Other delivery', { exact: true })).toHaveCount(0);
+  socket!.send(JSON.stringify({ type: 'sessionLoaded', id, before: 0, messages: [{ id: 'delivery', role: 'user', content: 'Delivery ready' }] }));
+  await expect(page.getByRole('status', { name: 'Loading session' })).toHaveCount(0);
+  await expect(page.getByText('Delivery ready', { exact: true })).toBeVisible();
+});
 
 const SESSIONS = [
   { id: '11111111-1111-1111-1111-111111111111', title: 'scub-newest-session', lastPrompt: 'do the newest thing', updatedAt: NOW - 60_000 },

@@ -21,7 +21,7 @@ interface Props {
 
 const SCROLL_THRESHOLD = 80;
 const HISTORY_THRESHOLD = 100;
-const PREFETCH_PAGES = 3;
+const PREFETCH_PAGES = 5;
 const segmentOrigin = (id: string) => /^(.*):block:\d+$/.exec(id)?.[1];
 
 export const MessageList = forwardRef<MessageListHandle, Props>(function MessageList({ messages, streaming, login, logCount, historySessionId, historyBefore, historyRevision, onLoadEarlier }, ref) {
@@ -36,6 +36,31 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
   const waitingForPrefetch = useRef<boolean | null>(null);
   const lastScrollTop = useRef(0);
 
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    userScrolledUp.current = false;
+    el.scrollTop = el.scrollHeight;
+    lastScrollTop.current = el.scrollTop;
+    const followBottom = () => {
+      if (!userScrolledUp.current) {
+        el.scrollTop = el.scrollHeight;
+        lastScrollTop.current = el.scrollTop;
+      }
+    };
+    const resize = new ResizeObserver(followBottom);
+    resize.observe(el);
+    for (const child of el.children) resize.observe(child);
+    const children = new MutationObserver(records => {
+      for (const record of records) {
+        for (const node of record.removedNodes) if (node instanceof Element) resize.unobserve(node);
+        for (const node of record.addedNodes) if (node instanceof Element) resize.observe(node);
+      }
+    });
+    children.observe(el, { childList: true });
+    return () => { children.disconnect(); resize.disconnect(); };
+  }, [historyRevision]);
+
   function prefetch(afterBefore: number) {
     const before = prefetchedPages.current.at(-1)?.before ?? afterBefore;
     if (!historySessionId || before <= 0 || prefetchPending.current || prefetchedPages.current.length >= PREFETCH_PAGES) return;
@@ -48,8 +73,6 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
     prefetchedPages.current = [];
     prefetchPending.current = null;
     waitingForPrefetch.current = null;
-    userScrolledUp.current = false;
-    lastScrollTop.current = 0;
     setShowScrollBtn(false);
     setLoadingEarlier(false);
     if (historySessionId && historyBefore > 0) {

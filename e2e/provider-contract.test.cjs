@@ -6,6 +6,7 @@ const path = require('node:path');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scub-providers-'));
 process.env.ARGUS_CONFIG = path.join(dir, 'settings.json');
 const { AppServerRpc } = require('../out/backend/providers/rpc');
+const { readHistoryItems } = require('../out/backend/providers/codexHistory');
 const { resolveCodexBinary } = require('../out/backend/providers/executable');
 const { CodexSession, replayThread, linksSubagent, subagentsInThread, rateLimits } = require('../out/backend/providers/codex');
 const { createSessionState } = require('../out/backend/sessionState');
@@ -410,4 +411,48 @@ test('a provider process launch increments the shared count once across reused t
   assert.equal(getCliLaunchCount(), before + 1);
   resetCliLaunchCount();
   assert.equal(getCliLaunchCount(), 0);
+});
+
+test('large conversation history survives the provider transport', async () => {
+  const chars = 34 * 1024 * 1024;
+  const server = String.raw`require('node:readline').createInterface({input:process.stdin}).on('line', line => {
+    const message = JSON.parse(line);
+    if (message.id) process.stdout.write(JSON.stringify({id:message.id,result:message.method === 'initialize' ? {} : {history:'x'.repeat(${chars})}}) + '\n');
+  })`;
+  const rpc = new AppServerRpc(process.execPath, ['-e', server]);
+  const failures = [];
+  rpc.onFailure = error => failures.push(error.message);
+  try {
+    await rpc.start();
+    const result = await rpc.request('thread/read', { threadId: 'large-history', includeTurns: true });
+    assert.equal(result.history.length, chars);
+    assert.deepEqual(failures, []);
+    assert.deepEqual(await rpc.request('initialize'), {});
+  } finally { rpc.dispose(); }
+});
+
+test('history fetches newest items and carries turn status across reverse pages', async () => {
+  const requests = [];
+  const responses = [
+    { data: [{ id: 'recent-turn', status: 'interrupted' }], nextCursor: 'older-turns' },
+    { data: [{ item: { id: 'last-item', type: 'agentMessage', text: 'Latest' } }, { item: { id: 'middle-item', type: 'agentMessage', text: 'Middle' } }], nextCursor: 'earlier-items' },
+    { data: [{ item: { id: 'first-item', type: 'userMessage', content: [] } }], nextCursor: null },
+    { data: [{ id: 'older-turn', status: 'completed' }], nextCursor: null },
+    { data: [], nextCursor: null },
+  ];
+  const rpc = { request: async (method, params) => { requests.push({ method, params }); return responses.shift(); } };
+  const recent = await readHistoryItems(rpc, 'history-thread');
+  assert.deepEqual(recent.turn.items.map(item => item.id), ['middle-item', 'last-item']);
+  assert.equal(recent.turn.status, 'interrupted');
+  const earlier = await readHistoryItems(rpc, 'history-thread', recent.cursor);
+  assert.deepEqual(earlier.turn.items.map(item => item.id), ['first-item']);
+  assert.equal(earlier.turn.status, undefined, 'the stopped marker belongs only to the newest slice of a turn');
+  const oldest = await readHistoryItems(rpc, 'history-thread', earlier.cursor);
+  assert.equal(oldest.cursor, undefined);
+  assert.deepEqual(requests.map(request => request.method), ['thread/turns/list', 'thread/items/list', 'thread/items/list', 'thread/turns/list', 'thread/items/list']);
+  assert.equal(requests[0].params.itemsView, 'notLoaded');
+  assert.equal(requests[1].params.sortDirection, 'desc');
+  assert.equal(requests[1].params.limit, 30);
+  assert.equal(requests[2].params.cursor, 'earlier-items');
+  assert.equal(requests[3].params.cursor, 'older-turns');
 });

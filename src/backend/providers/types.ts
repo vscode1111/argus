@@ -35,6 +35,13 @@ export interface AgentSession {
   dispose(): void;
 }
 
+export interface ProviderHistoryPage {
+  messages: ReplayMessage[];
+  cursor?: unknown;
+  turnId?: string;
+  previousTurnCursor?: unknown;
+}
+
 export interface AgentProvider {
   readonly descriptor: ProviderDescriptor;
   createSession(state: SessionState): AgentSession;
@@ -43,6 +50,8 @@ export interface AgentProvider {
   skills(cwd: string): Promise<Array<{ name: string; scope: string; kind?: string; description?: string; path?: string }>>;
   list(cwd: string): Promise<SessionSummary[]>;
   load(id: string, cwd: string): Promise<ReplayMessage[]>;
+  loadPage?(id: string, cwd: string, cursor?: unknown): Promise<ProviderHistoryPage>;
+  withHistoryReader?<T>(id: string, cwd: string, action: (read: (cursor?: unknown) => Promise<ProviderHistoryPage>) => Promise<T>): Promise<T>;
   loadSubagents?(id: string, cwd: string): Promise<Array<{ id: string; path: string; active: boolean }>>;
   loadSubagent?(parentId: string, childId: string, cwd: string): Promise<ReplayMessage[]>;
   rename(id: string, cwd: string, title: string): Promise<void>;

@@ -32,7 +32,8 @@ import { searchFiles, type FileSearchResult } from './fileSearch';
 import { workspaceChanges } from './workspaceChanges';
 import { listOrchestratorGoals } from './orchestratorGoals';
 import { beginRequest, readRequestStats, readSessionTaskKey, readSessionTaskKeys, setSessionTaskKey } from './sessionStats';
-import { sendInitialPage, sendEarlierPage, sendCachedEarlierPage } from './sessionPages';
+import { sendInitialPage, sendEarlierPage, sendCachedEarlierPage, sendProviderEarlierPage } from './sessionPages';
+import { loadSessionHistory } from './sessionHistory';
 
 export { getCliLaunchCount } from './providers/claudeExecution';
 
@@ -96,8 +97,8 @@ export interface ConnectionHooks {
 
 async function replayStoredSession(ws: WebSocket, channel: Channel, id: string, workspaceDir: string): Promise<void> {
   try {
-    const messages = await providerForSession(id).load(id, workspaceDir);
-    if (!channel.replayHistory(ws, messages)) sendInitialPage(ws, id, messages);
+    const { messages, source } = await loadSessionHistory(id, workspaceDir);
+    if (!channel.replayHistory(ws, messages, source)) sendInitialPage(ws, id, messages, source);
   } catch (error) {
     // A live turn remains viewable if its provider cannot read the stored thread.
     if (!channel.replayHistory(ws)) throw error;
@@ -264,9 +265,9 @@ export function attachClientHandlers(
         if (isLive) {
           await replayStoredSession(ws, channel, hooks.sessionId, s.workspaceDir);
         } else {
-          const messages = await providerForSession(hooks.sessionId).load(hooks.sessionId, s.workspaceDir);
+          const { messages, source } = await loadSessionHistory(hooks.sessionId, s.workspaceDir);
           s.sendLog('info', `Deep link replay of ${hooks.sessionId} (${plural(messages.length, 'message')})`);
-          try { sendInitialPage(ws, hooks.sessionId, messages); } catch {}
+          try { sendInitialPage(ws, hooks.sessionId, messages, source); } catch {}
         }
       } else if (panelRejoin) {
         // Reconnecting panel (?panel= matched an existing entry): addClient skipped the
@@ -566,6 +567,7 @@ export function attachClientHandlers(
       if (msg.id !== viewed) return;
       try {
         if (sendCachedEarlierPage(ws, msg.id, msg.before, msg.revision, msg.prefetch === true)) return;
+        if (await sendProviderEarlierPage(ws, msg.id, msg.before, msg.revision, msg.prefetch === true)) return;
         const messages = await providerForSession(msg.id).load(msg.id, s.workspaceDir);
         if (msg.id === (channel.getViewingSessionId(ws) ?? channel.getClientState(ws).sessionId)) sendEarlierPage(ws, msg.id, messages, msg.before, msg.revision, msg.prefetch === true);
       } catch (error) {
@@ -661,12 +663,13 @@ export async function handleResumeSession(s: SessionState, ws: WebSocket, channe
   // detached from on a browsed send), read its stored history before joining. Its
   // in-memory entry may contain only the current turn of a resumed conversation.
   let messages: Awaited<ReturnType<ReturnType<typeof providerForSession>['load']>> | undefined;
+  let source: Awaited<ReturnType<typeof loadSessionHistory>>['source'];
   let loadError: unknown;
-  try { messages = await providerForSession(id).load(id, s.workspaceDir); }
+  try { ({ messages, source } = await loadSessionHistory(id, s.workspaceDir)); }
   catch (error) { loadError = error; }
   const live = channel.attachToLiveSession(ws, id, messages !== undefined);
   if (live) {
-    if (messages) channel.replayHistory(ws, messages);
+    if (messages) channel.replayHistory(ws, messages, source);
     ws.send(JSON.stringify(selectionMessage(live)));
     live.sendLog('info', `Joined session ${id}, turn already in progress`);
     return;
@@ -691,7 +694,8 @@ export async function handleResumeSession(s: SessionState, ws: WebSocket, channe
   if ((channel.getViewingSessionId(ws) || channel.getClientState(ws).sessionId) !== id) return;
   ws.send(JSON.stringify({ type: 'providerSelection', ...selectionFor(id, s.workspaceDir) }));
   target.sendLog('info', `Resuming session ${id} (${plural(messages.length, 'message')})`);
-  sendInitialPage(ws, id, messages);
+  if (source && !isBrowsing && procRunning && channel.replayHistory(ws, messages, source)) return;
+  sendInitialPage(ws, id, messages, source);
   if (!isBrowsing) {
     channel.replaySnapshot(ws);
     // Restore live token counts lost when sessionLoaded cleared the streaming state.

@@ -1,9 +1,16 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { existsSync } from 'fs';
 import { win32 as path } from 'path';
 import { killProc } from '../cli';
 import { resolveCodexBinary } from './executable';
 import { noteCliLaunch } from '../cliLaunchCount';
+
+// Full conversation replies include tool output and can exceed 32 MiB.
+const MAX_PROVIDER_FRAME_CHARS = 128 * 1024 * 1024;
+
+export class ProviderRequestError extends Error {
+  constructor(message: string, readonly code?: number) { super(message); }
+}
 
 export type JsonObject = Record<string, unknown>;
 export function object(value: unknown): JsonObject {
@@ -47,15 +54,16 @@ export class AppServerRpc {
     this.proc.stdout.setEncoding('utf8');
     this.proc.stdout.on('data', (chunk: string) => {
       this.buffer += chunk;
-      if (this.buffer.length > 32 * 1024 * 1024) return this.fail(new Error('Provider frame exceeds the size limit'));
       let end: number;
       while ((end = this.buffer.indexOf('\n')) >= 0) {
+        if (end > MAX_PROVIDER_FRAME_CHARS) return this.fail(new Error('Provider frame exceeds the size limit'));
         const line = this.buffer.slice(0, end);
         this.buffer = this.buffer.slice(end + 1);
         if (!line.trim()) continue;
         try { this.receive(object(JSON.parse(line))); }
         catch { this.fail(new Error('Invalid provider protocol message')); break; }
       }
+      if (this.buffer.length > MAX_PROVIDER_FRAME_CHARS) this.fail(new Error('Provider frame exceeds the size limit'));
     });
     // Never relay raw stderr: runtimes may include private configuration in diagnostics.
     this.proc.stderr.resume();
@@ -98,7 +106,10 @@ export class AppServerRpc {
     if (!pending) return;
     clearTimeout(pending.timer);
     this.pending.delete(message.id);
-    if (message.error) pending.reject(new Error(string(object(message.error).message) || 'Provider request failed'));
+    if (message.error) {
+      const error = object(message.error);
+      pending.reject(new ProviderRequestError(string(error.message) || 'Provider request failed', typeof error.code === 'number' ? error.code : undefined));
+    }
     else pending.resolve(object(message.result));
   }
 
@@ -108,11 +119,15 @@ export class AppServerRpc {
     this.onFailure(error);
   }
 
-  dispose(): void {
+  dispose(nonBlocking = false): void {
     if (this.closed) return;
     this.closed = true;
     for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error('Provider connection closed')); }
     this.pending.clear();
-    if (this.proc) killProc(this.proc);
+    if (this.proc) {
+      if (nonBlocking && process.platform === 'win32' && this.proc.pid)
+        execFile('taskkill', ['/T', '/F', '/PID', String(this.proc.pid)], { windowsHide: true }, () => {});
+      else killProc(this.proc);
+    }
   }
 }
