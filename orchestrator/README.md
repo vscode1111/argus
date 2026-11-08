@@ -1,6 +1,6 @@
 # Orchestrate a company goal
 
-Repository source for the globally installed `$orchestrate` skill. The active skill lives under `~/.agents/skills/orchestrate/`, so it is available from every company workspace. Keep this guide and its controller script aligned with the installed copy.
+This directory contains the earlier orchestration client and its workflow. The active global `$orchestrate` skill lives under `~/.agents/skills/orchestrate/` and has evolved separately. Its controller now owns normal/important profiles and deferred coordinator configuration; its `scripts/control.test.js` tests those contracts. The repository's `e2e/orchestrator-client.test.cjs` covers the earlier client below, while the backend control and wire tests cover the new Argus protocol. Reconcile both client versions and their tests before installing this older repository copy over the global skill.
 
 Use this workflow when the user asks for an overall company outcome that may require several issue, PR, or review conversations. The current conversation is the coordinator. Delegate each identified task to a separate Argus conversation through the controller, then control that conversation from here. An internal subagent or work performed in this coordinator conversation does not satisfy the separate-session requirement.
 

@@ -1,6 +1,35 @@
 import { test, expect } from '@playwright/test';
 import { waitForApp } from './helpers';
 
+test('a delayed scroll event after live content growth keeps following the newest messages', async ({ page }) => {
+  await waitForApp(page);
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'sessionLoaded', id: 'delivery-history', messages:
+      Array.from({ length: 30 }, (_, index) => ({ id: `delivery-${index}`, role: 'user', content: `Delivery ${index}: ${'Details. '.repeat(50)}` })) } }));
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'thinking_start' } }));
+  });
+  const list = page.locator('[class*="_messages_"]');
+  const gap = () => list.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight);
+  await expect.poll(gap).toBeLessThanOrEqual(2);
+  await list.evaluate(el => {
+    const tail = document.createElement('div');
+    tail.style.height = '1200px';
+    tail.style.flexShrink = '0';
+    tail.dataset.deliveryGrowth = 'true';
+    el.insertBefore(tail, el.lastElementChild);
+    el.dispatchEvent(new Event('scroll'));
+  });
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: { type: 'text_chunk', text: 'The latest delivery status is ready.' } })));
+  await expect.poll(gap).toBeLessThanOrEqual(2);
+  await list.evaluate(el => el.querySelector('[data-delivery-growth]')?.remove());
+  await expect.poll(gap).toBeLessThanOrEqual(2);
+  await list.evaluate(el => { el.scrollTop -= 300; el.dispatchEvent(new Event('scroll')); });
+  const position = await list.evaluate(el => el.scrollTop);
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { data: { type: 'text_chunk', text: '\n\nAdditional delivery information.' } })));
+  await expect.poll(() => list.evaluate(el => el.scrollTop)).toBe(position);
+  await expect(page.getByRole('button', { name: 'Scroll to bottom' })).toBeVisible();
+});
+
 test('opening recent history stays at the bottom as its content finishes loading', async ({ page }) => {
   await waitForApp(page);
   const replay = () => page.evaluate(() => {

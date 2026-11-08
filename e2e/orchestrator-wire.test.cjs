@@ -25,15 +25,15 @@ test('Argus serves goals and configures a worker without changing defaults', asy
   const ws = new WebSocket(url);
   try {
     await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
-    const request = (message, type) => new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { ws.off('message', receive); reject(new Error('scub-reply-timeout')); }, 5000);
+    const request = (message, type, socket = ws) => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { socket.off('message', receive); reject(new Error('scub-reply-timeout')); }, 5000);
       const receive = raw => {
         const value = JSON.parse(raw.toString());
         if (value.type !== type) return;
-        clearTimeout(timer); ws.off('message', receive); resolve(value);
+        clearTimeout(timer); socket.off('message', receive); resolve(value);
       };
-      ws.on('message', receive);
-      ws.send(JSON.stringify(message));
+      socket.on('message', receive);
+      socket.send(JSON.stringify(message));
     });
     const goals = await request({ type: 'getOrchestratorGoals' }, 'orchestratorGoals');
     assert.equal(goals.goals[0].title, 'scub-goal-title');
@@ -42,10 +42,84 @@ test('Argus serves goals and configures a worker without changing defaults', asy
     assert.equal(selected.selection.model, 'scub-model');
     assert.equal(selected.requestId, 'scub-choice');
     assert.deepEqual(readConfig(), defaults);
+
+    const { CodexSession } = require('../out/backend/providers/codex');
+    const { randomUUID } = require('node:crypto');
+    const nativeProvider = providers().find(p => p.descriptor.id === 'codex');
+    const previousCreate = nativeProvider.createSession;
+    const previousValidate = nativeProvider.validate;
+    const turns = [];
+    const threadId = randomUUID();
+    let activeRuntime;
+    let queueSocket;
+    const rpc = {
+      start: async () => {}, dispose: () => {},
+      request: async (method, input) => {
+        if (method === 'thread/start') return { thread: { id: threadId } };
+        if (method === 'turn/start') {
+          turns.push(input);
+          return { turn: { id: `catalog-turn-${turns.length}` } };
+        }
+        throw new Error(`Unexpected native request: ${method}`);
+      },
+    };
+    nativeProvider.validate = async () => {};
+    nativeProvider.createSession = state => (activeRuntime = new CodexSession(state, rpc, nativeProvider.validate));
+    const waitFor = async predicate => {
+      const deadline = Date.now() + 3000;
+      while (!predicate()) {
+        assert.ok(Date.now() < deadline, 'Expected conversation transition');
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    };
+    try {
+      await request({ type: 'configureSession', providerId: nativeProvider.descriptor.id, model: 'catalog-engine', effort: 'low' }, 'sessionConfigured');
+      ws.send(JSON.stringify({ type: 'send', text: 'Inspect the catalog.', mode: 'plan' }));
+      await waitFor(() => activeRuntime?.activeTurnId === 'catalog-turn-1');
+      const current = await request({ type: 'getSessionControl', requestId: 'catalog-control' }, 'sessionControl');
+      assert.equal(current.requestId, 'catalog-control');
+      assert.equal(current.capabilities.configureAfterTurn, true);
+      assert.equal(current.activeSelection.model, 'catalog-engine');
+      const controllerUrl = new URL(url);
+      controllerUrl.searchParams.set('session', current.sessionId);
+      controllerUrl.searchParams.delete('panel');
+      queueSocket = new WebSocket(controllerUrl);
+      await new Promise((resolve, reject) => { queueSocket.once('open', resolve); queueSocket.once('error', reject); });
+      const queuedRequest = { type: 'queueSessionConfiguration', operationId: 'catalog-switch', expectedTurnId: current.activeTurnId,
+        model: 'catalog-review-engine', effort: 'high', continuation: 'Continue the catalog audit.', mode: 'full-access' };
+      const queued = await request(queuedRequest, 'sessionConfigurationQueued', queueSocket);
+      assert.equal(queued.configuration.status, 'queued');
+      const duplicate = await request(queuedRequest, 'sessionConfigurationQueued', queueSocket);
+      assert.deepEqual(duplicate.configuration, queued.configuration);
+      assert.equal(turns.length, 1);
+      await new Promise(resolve => { queueSocket.once('close', resolve); queueSocket.close(); });
+      activeRuntime.receive('turn/completed', { threadId, turn: { id: current.activeTurnId, status: 'completed' } });
+      await waitFor(() => activeRuntime.activeTurnId === 'catalog-turn-2');
+      const resumed = await request({ type: 'getSessionControl' }, 'sessionControl');
+      assert.equal(resumed.sessionId, current.sessionId);
+      assert.equal(resumed.configuration.status, 'started');
+      assert.equal(resumed.activeSelection.model, queuedRequest.model);
+      assert.equal(resumed.activeSelection.effort, queuedRequest.effort);
+      assert.equal(turns.length, 2);
+      assert.equal(turns[1].threadId, turns[0].threadId);
+      assert.deepEqual(turns[1].input, [{ type: 'text', text: queuedRequest.continuation }]);
+      assert.equal(turns[1].approvalPolicy, turns[0].approvalPolicy);
+      assert.deepEqual(turns[1].sandboxPolicy, { type: 'readOnly' });
+      assert.deepEqual(readConfig(), defaults);
+      activeRuntime.receive('turn/completed', { threadId, turn: { id: resumed.activeTurnId, status: 'completed' } });
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(turns.length, 2);
+    } finally {
+      queueSocket?.terminate();
+      activeRuntime?.dispose();
+      nativeProvider.createSession = previousCreate;
+      nativeProvider.validate = previousValidate;
+    }
   } finally {
     ws.close();
     await new Promise(resolve => { ws.once('close', resolve); setTimeout(resolve, 1000); });
     server.close();
+    require('../out/backend/sessionStats').closeStatsDatabase();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

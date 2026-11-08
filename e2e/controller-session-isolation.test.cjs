@@ -40,3 +40,60 @@ for (const active of [true, false]) {
     }
   });
 }
+
+for (const active of [true, false]) {
+  test(`history selection reuses a ${active ? 'running' : 'finished'} conversation runtime`, async () => {
+    const dir = `D:/sessions/${randomUUID()}`;
+    const channel = getOrCreateChannel(dir);
+    const owner = socket(), viewer = socket();
+    let sends = 0;
+    try {
+      attachClientHandlers(owner, channel, 'default', { panelId: 'owner-panel' });
+      const original = channel.getClientState(owner);
+      const id = `codex:${randomUUID()}`;
+      original.sessionId = id;
+      original.cliDone = !active;
+      original.runtime = { active, async send() { sends++; }, dispose() {} };
+      attachClientHandlers(viewer, channel, 'default', { panelId: 'viewer-panel' });
+      assert.equal(channel.attachToLiveSession(viewer, id, true), original);
+      viewer.emit('message', Buffer.from(JSON.stringify({ type: 'send', text: 'Check the inventory totals.' })));
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(sends, 1, 'follow-up must use the existing provider runtime');
+      assert.equal(channel.getClientState(viewer), original);
+    } finally {
+      owner.emit('close'); viewer.emit('close'); destroyChannel(dir);
+    }
+  });
+}
+
+test('a browsed send rejoins the finished target without replacing either runtime', async () => {
+  const dir = `D:/sessions/${randomUUID()}`;
+  const channel = getOrCreateChannel(dir);
+  const owner = socket(), viewer = socket();
+  let sends = 0;
+  let disposals = 0;
+  try {
+    attachClientHandlers(owner, channel, 'default', { panelId: 'target-panel' });
+    const target = channel.getClientState(owner);
+    const targetId = `codex:${randomUUID()}`;
+    target.sessionId = targetId;
+    target.cliDone = true;
+    target.runtime = { active: false, async send() { sends++; }, dispose() { disposals++; } };
+    attachClientHandlers(viewer, channel, 'default', { panelId: 'source-panel' });
+    const source = channel.getClientState(viewer);
+    const sourceId = `codex:${randomUUID()}`;
+    source.sessionId = sourceId;
+    source.runtime = { active: true, dispose() { disposals++; } };
+    channel.setBrowsing(viewer, true, targetId);
+    viewer.emit('message', Buffer.from(JSON.stringify({ type: 'send', text: 'Review the warehouse balance.' })));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(channel.getClientState(viewer), target, 'browsed target already owns its native writer');
+    assert.equal(sends, 1);
+    assert.equal(source.sessionId, sourceId);
+    assert.equal(source.runtime.active, true);
+    assert.equal(disposals, 0);
+    assert.equal(channel.getViewingSessionId(viewer), undefined);
+  } finally {
+    owner.emit('close'); viewer.emit('close'); destroyChannel(dir);
+  }
+});
