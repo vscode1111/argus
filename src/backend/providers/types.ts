@@ -12,6 +12,27 @@ export interface TurnInput {
   _askResume?: boolean;
 }
 
+export interface DeferredConfigurationRequest {
+  operationId: string;
+  expectedTurnId: string;
+  selection: ProviderSelection;
+  continuation: string;
+}
+
+export interface DeferredConfigurationStatus {
+  operationId: string;
+  sourceTurnId: string;
+  status: 'queued' | 'applied' | 'started' | 'cancelled' | 'failed';
+  selection: ProviderSelection;
+  reason?: string;
+}
+
+export interface SessionControl {
+  activeTurnId?: string;
+  activeSelection?: ProviderSelection;
+  configuration?: DeferredConfigurationStatus;
+}
+
 export type AgentEvent =
   | { type: 'thinking_start' }
   | { type: 'text_chunk' | 'thinking_chunk'; text: string }
@@ -29,6 +50,9 @@ export interface AgentSession {
   readonly activeTurnId?: string;
   readonly pid?: number;
   readonly reconnectNeeded?: boolean;
+  getSessionControl?(): SessionControl;
+  queueConfiguration?(request: DeferredConfigurationRequest, isCurrent: () => boolean): Promise<DeferredConfigurationStatus>;
+  cancelConfiguration?(reason: string): void;
   send(input: TurnInput): Promise<void>;
   stop(): Promise<void>;
   respond(id: string, response: unknown): void;

@@ -130,10 +130,9 @@ export interface Channel {
    *  start a turn on the session that is on screen instead of being injected into the
    *  stdin of the turn still running in the entry the client left. */
   detachToBrowsedSession(ws: WebSocket): SessionState | undefined;
-  /** Join the entry that is streaming this session right now, replaying its history and
-   *  in-progress snapshot so the live turn (and its progress indicator) is restored.
-   *  Undefined when no OTHER entry is mid-turn on that session - including when the
-   *  client is already in it, which the caller handles as an ordinary resume. */
+  /** Join another entry bound to this session, reusing its runtime even between turns.
+   *  The caller can skip replay when it already has the displayed history.
+   *  Undefined when no other entry owns the session, including when already joined. */
   attachToLiveSession(ws: WebSocket, sessionId: string, skipReplay?: boolean): SessionState | undefined;
   /** Replay the in-progress streaming snapshot to this client (from its current entry). */
   replaySnapshot(ws: WebSocket): void;
@@ -820,6 +819,8 @@ export function getOrCreateChannel(dir: string): Channel {
     detachToBrowsedSession(ws) {
       const viewing = _cd.clientViewing.get(ws);
       if (!viewing) return undefined;
+      const existing = this.attachToLiveSession(ws, viewing, true);
+      if (existing) return existing;
       // Ownership follows the client, exactly as in moveToNewSession: a later reconnect
       // must rejoin the session the user is actually in, not the one it walked away from.
       const entry = createEntry(_cd);
@@ -835,13 +836,12 @@ export function getOrCreateChannel(dir: string): Channel {
     attachToLiveSession(ws, sessionId, skipReplay = false) {
       const current = _cd.clientEntry.get(ws);
       for (const entry of _cd.entries.values()) {
-        // Already in it: an ordinary return-to-live resume, which the caller replays
-        // itself. Only a session running in a DIFFERENT entry needs a move.
+        // The caller handles replay when this client already belongs to the entry.
         if (entry === current) continue;
         const st = entry.state;
-        if (st.sessionId === sessionId && (st.runtime?.active || st.currentProc && !st.cliDone)) {
-          // joinEntry replays this entry's history and streaming snapshot, which is what
-          // brings the progress indicator back and resumes the flow of output.
+        if (st.sessionId === sessionId) {
+          // An idle provider still owns its transcript writer until disposal.
+          // joinEntry can replay this entry's history and any active snapshot.
           joinEntry(_cd, ws, entry, skipReplay);
           _cd.clientViewing.delete(ws);
           return st;

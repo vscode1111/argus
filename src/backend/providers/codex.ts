@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { AgentProvider, AgentSession, AgentEvent, TurnInput } from './types';
+import type { AgentProvider, AgentSession, AgentEvent, TurnInput, DeferredConfigurationRequest, DeferredConfigurationStatus, SessionControl } from './types';
 import type { SessionState } from '../sessionState';
 import { codexSessionMeta, type ReplayMessage } from '../sessions';
 import type { RateLimitInfo } from '../accountUsage';
@@ -183,6 +183,25 @@ export function subagentsInThread(thread: JsonObject): Array<{ id: string; path:
   return [...agents.values()];
 }
 
+interface ConfigurationOperation {
+  request: DeferredConfigurationRequest;
+  status: DeferredConfigurationStatus;
+  sourceSelection: ProviderSelection;
+  sessionId: string;
+  inputRevision: number;
+  mode?: string;
+  isCurrent?: () => boolean;
+  validation?: Promise<DeferredConfigurationStatus>;
+  validated: boolean;
+  submitted: boolean;
+}
+
+function sameSelection(a: ProviderSelection, b: ProviderSelection): boolean {
+  return a.providerId === b.providerId && a.model === b.model && a.effort === b.effort && a.thinking === b.thinking;
+}
+
+const CONFIGURATION_HISTORY_LIMIT = 64;
+
 export class CodexSession implements AgentSession {
   private threadId?: string;
   private turnId?: string;
@@ -200,6 +219,14 @@ export class CodexSession implements AgentSession {
   private measuredInputTokens = 0;
   private lastUsageOutputTotal?: number;
   private idleTimer?: NodeJS.Timeout;
+  private activeSelection?: ProviderSelection;
+  private activeMode?: string;
+  private inputRevision = 0;
+  private configurations = new Map<string, ConfigurationOperation>();
+  private configuration?: ConfigurationOperation;
+  private pendingConfiguration?: ConfigurationOperation;
+  private configurationDispatch?: ConfigurationOperation;
+  private startingConfiguration?: ConfigurationOperation;
   get active(): boolean { return this.busy; }
   get activeTurnId(): string | undefined { return this.turnId; }
   get pid(): number | undefined { return this.rpc.pid; }
@@ -209,6 +236,111 @@ export class CodexSession implements AgentSession {
     this.pendingAsyncQuestion = state.interaction?.async ? state.interaction : undefined;
     this.rpc.onMessage = (method, params, id) => this.receive(method, params, id);
     this.rpc.onFailure = error => { if (!this.closed) { if (this.busy) this.fail(error); else this.dispose(); } };
+  }
+
+  getSessionControl(): SessionControl {
+    return { activeTurnId: this.turnId, activeSelection: this.activeSelection && { ...this.activeSelection },
+      configuration: this.configuration && this.configurationStatus(this.configuration) };
+  }
+
+  private configurationStatus(operation: ConfigurationOperation): DeferredConfigurationStatus {
+    return { ...operation.status, selection: { ...operation.status.selection } };
+  }
+
+  private updateConfiguration(operation: ConfigurationOperation, status: DeferredConfigurationStatus['status'], reason?: string): void {
+    operation.status = { ...operation.status, status, ...(reason ? { reason } : {}) };
+    if (status !== 'queued' && status !== 'applied' && this.pendingConfiguration === operation) this.pendingConfiguration = undefined;
+    if (!this.closed) this.state.broadcast(JSON.stringify({ type: 'sessionConfiguration', configuration: this.configurationStatus(operation) }));
+  }
+
+  cancelConfiguration(reason: string): void {
+    const operation = this.pendingConfiguration;
+    if (operation?.submitted) return;
+    if (operation) this.updateConfiguration(operation, 'cancelled', reason);
+    this.configurationDispatch = undefined;
+    this.startingConfiguration = undefined;
+  }
+
+  async queueConfiguration(request: DeferredConfigurationRequest, isCurrent: () => boolean): Promise<DeferredConfigurationStatus> {
+    const previous = this.configurations.get(request.operationId);
+    if (previous) {
+      if (previous.request.expectedTurnId !== request.expectedTurnId || previous.request.continuation !== request.continuation
+        || !sameSelection(previous.request.selection, request.selection)) throw new Error('Operation id already belongs to a different configuration');
+      return previous.validation ? await previous.validation : this.configurationStatus(previous);
+    }
+    if (this.pendingConfiguration) throw new Error('A configuration is already queued');
+    if (this.closed || this.state.runtime !== this || !this.busy || !this.turnId || this.turnId !== request.expectedTurnId
+      || !this.state.sessionId || this.stopping || this.interactions.size || this.state.interaction || !this.activeSelection
+      || !sameSelection(this.activeSelection, this.state.selection) || !isCurrent()) throw new Error('The source turn is no longer available for configuration');
+    if (!request.operationId || !request.continuation.trim() || request.selection.providerId !== 'codex') throw new Error('Invalid deferred configuration');
+    if (this.configurations.size >= CONFIGURATION_HISTORY_LIMIT) {
+      const oldest = this.configurations.values().next().value as ConfigurationOperation;
+      if (oldest.request.expectedTurnId === this.turnId) throw new Error('Too many configuration operations for this turn');
+      this.configurations.delete(oldest.request.operationId);
+    }
+    const operation: ConfigurationOperation = {
+      request: { ...request, selection: { ...request.selection } },
+      status: { operationId: request.operationId, sourceTurnId: request.expectedTurnId, status: 'queued', selection: { ...request.selection } },
+      sourceSelection: { ...this.state.selection }, sessionId: this.state.sessionId, inputRevision: this.inputRevision,
+      mode: this.activeMode, isCurrent, validated: false, submitted: false,
+    };
+    this.configurations.set(request.operationId, operation);
+    this.configuration = this.pendingConfiguration = operation;
+    operation.validation = this.validateConfiguration(operation);
+    try { return await operation.validation; }
+    finally { operation.validation = undefined; operation.isCurrent = undefined; }
+  }
+
+  private configurationCurrent(operation: ConfigurationOperation, active: boolean): boolean {
+    return this.pendingConfiguration === operation && !this.closed && !this.stopping && this.state.runtime === this
+      && this.state.sessionId === operation.sessionId && this.inputRevision === operation.inputRevision
+      && !this.interactions.size && !this.state.interaction && sameSelection(this.state.selection, operation.sourceSelection)
+      && (active ? this.busy && this.turnId === operation.request.expectedTurnId : !this.busy && !this.turnId && !this.startPending)
+      && (!active || operation.isCurrent?.() === true);
+  }
+
+  private async validateConfiguration(operation: ConfigurationOperation): Promise<DeferredConfigurationStatus> {
+    try {
+      await this.validate({ ...operation.request.selection });
+      if (!this.configurationCurrent(operation, true)) {
+        if (this.pendingConfiguration === operation) this.cancelConfiguration('The source turn changed during validation');
+      } else {
+        operation.validated = true;
+        this.updateConfiguration(operation, 'queued');
+      }
+      return this.configurationStatus(operation);
+    } catch (error) {
+      if (this.pendingConfiguration === operation) this.updateConfiguration(operation, 'failed', (error as Error).message);
+      throw error;
+    }
+  }
+
+  private continueConfiguration(operation: ConfigurationOperation): void {
+    try {
+      if (!operation.validated || !this.configurationCurrent(operation, false)) {
+        if (this.pendingConfiguration === operation) this.cancelConfiguration('The conversation changed before continuation');
+        return;
+      }
+      const selection = { ...operation.request.selection };
+      const old = sessionRecord(operation.sessionId, this.state.workspaceDir);
+      if (!old) throw new Error('The source conversation is no longer available');
+      saveSession({ ...old, selection, updatedAt: Date.now() });
+      this.state.selection = selection;
+      this.state.broadcast(JSON.stringify({ type: 'providerSelection', ...selection }));
+      this.updateConfiguration(operation, 'applied');
+      this.configurationDispatch = operation;
+      this.state.emitSyntheticSend(JSON.stringify({ type: 'send', text: operation.request.continuation, mode: operation.mode }));
+      if (this.configurationDispatch) throw new Error('The continuation was not accepted by the session');
+    } catch (error) {
+      if (this.pendingConfiguration === operation) this.updateConfiguration(operation, 'failed', (error as Error).message);
+    } finally { this.configurationDispatch = undefined; }
+  }
+
+  private configurationStarted(): void {
+    const operation = this.startingConfiguration;
+    if (!operation || !this.turnId || this.pendingConfiguration !== operation) return;
+    this.startingConfiguration = undefined;
+    this.updateConfiguration(operation, 'started');
   }
 
   private armIdleTimer(): void {
@@ -222,11 +354,19 @@ export class CodexSession implements AgentSession {
   }
 
   private emit(event: AgentEvent): void {
-    if (event.type === 'interaction') this.state.interaction = event.request;
+    if (event.type === 'interaction') {
+      this.state.interaction = event.request;
+      if (event.request) this.cancelConfiguration('The turn requires user input');
+    }
     if (!this.closed) this.state.broadcast(JSON.stringify(event));
   }
 
   async send(input: TurnInput): Promise<void> {
+    const continuation = this.configurationDispatch;
+    this.configurationDispatch = undefined;
+    if (continuation && continuation === this.pendingConfiguration && input.text === continuation.request.continuation
+      && input.mode === continuation.mode && !input.images?.length) this.startingConfiguration = continuation;
+    else { this.cancelConfiguration('New input was received'); this.inputRevision++; }
     const selection = { ...this.state.selection };
     if (this.closed) throw new Error('Reopen the conversation to reconnect the provider');
     if (this.stopping) await this.stopping;
@@ -247,6 +387,7 @@ export class CodexSession implements AgentSession {
     }
     if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
     this.busy = true; this.state.cliDone = false; this.deltas.clear();
+    this.activeSelection = { ...selection }; this.activeMode = input.mode;
     this.outputTokenBaseline = undefined;
     this.inputTokenBaseline = undefined;
     this.measuredInputTokens = 0;
@@ -256,13 +397,13 @@ export class CodexSession implements AgentSession {
     if (!input._silent) this.state.broadcast(JSON.stringify({ type: 'message', message: { id: randomUUID(), role: 'user', content: input.text || '', images: input.images } }));
     this.emit({ type: 'thinking_start' });
     this.armIdleTimer();
-    this.startPending = this.startTurn(input, content, selection);
+    this.startPending = this.startTurn(input, content, selection, this.startingConfiguration);
     try { await this.startPending; }
     catch (error) { this.fail(error as Error); }
     finally { this.startPending = undefined; }
   }
 
-  private async startTurn(input: TurnInput, content: JsonObject[], selection: ProviderSelection): Promise<void> {
+  private async startTurn(input: TurnInput, content: JsonObject[], selection: ProviderSelection, configuration?: ConfigurationOperation): Promise<void> {
     await this.rpc.start();
     await this.validate(selection);
     const fullAccess = input.mode === 'full-access';
@@ -294,17 +435,26 @@ export class CodexSession implements AgentSession {
       this.state.sessionId = `codex:${this.threadId}`;
       this.emit({ type: 'sessionId', id: this.state.sessionId });
     }
+    if (configuration && (this.pendingConfiguration !== configuration || this.closed || this.state.runtime !== this
+      || this.state.sessionId !== configuration.sessionId || this.inputRevision !== configuration.inputRevision
+      || this.state.interaction || !sameSelection(this.state.selection, configuration.request.selection))) {
+      this.cancelConfiguration('The conversation changed before the continuation started');
+      if (!this.closed && this.state.runtime === this) this.finish(true);
+      return;
+    }
     const old = sessionRecord(this.state.sessionId!);
     saveSession({ id: this.state.sessionId!, cwd: this.state.workspaceDir, selection: { ...this.state.selection },
       title: old?.title || (input.text || 'New conversation').slice(0, 100), updatedAt: Date.now() });
+    if (configuration) configuration.submitted = true;
     const response = await this.rpc.request('turn/start', { threadId: this.threadId, input: content,
       ...(selection.model ? { model: selection.model } : {}), ...(selection.effort ? { effort: selection.effort } : {}),
       approvalPolicy, sandboxPolicy,
     });
-    if (this.busy) this.turnId = string(object(response.turn).id) || this.turnId;
+    if (this.busy) { this.turnId = string(object(response.turn).id) || this.turnId; this.configurationStarted(); }
   }
 
   async stop(): Promise<void> {
+    this.cancelConfiguration('The turn was stopped');
     if (this.stopping) return this.stopping;
     this.stopping = (async () => {
       if (this.startPending) await this.startPending.catch(() => {});
@@ -392,10 +542,12 @@ export class CodexSession implements AgentSession {
       return;
     }
     if (!this.busy) return;
+    if (this.startingConfiguration && params.turnId === this.startingConfiguration.request.expectedTurnId) return;
     if (method === 'turn/started') {
       const startedTurnId = string(object(params.turn).id);
+      if (startedTurnId === this.startingConfiguration?.request.expectedTurnId) return;
       if (!startedTurnId || (this.turnId && startedTurnId !== this.turnId)) return;
-      this.turnId = startedTurnId; this.armIdleTimer(); return;
+      this.turnId = startedTurnId; this.configurationStarted(); this.armIdleTimer(); return;
     }
     if (params.turnId && this.turnId && params.turnId !== this.turnId) return;
     if ((method === 'item/agentMessage/delta' || method === 'item/reasoning/summaryTextDelta'
@@ -445,16 +597,25 @@ export class CodexSession implements AgentSession {
         this.emit({ type: 'contextUsage', percent: Math.min(100, inputTokens / usage.modelContextWindow * 100), inputTokens, outputTokens: lastOutputTokens, contextWindow: usage.modelContextWindow });
     } else if (method === 'turn/completed') {
       const turn = object(params.turn);
+      if (this.startingConfiguration && turn.id === this.startingConfiguration.request.expectedTurnId) return;
       if (this.turnId && turn.id !== this.turnId) return;
+      if (this.startingConfiguration && string(turn.id)) { this.turnId = string(turn.id); this.configurationStarted(); }
       const error = turn.error ? string(object(turn.error).message) || 'Provider turn failed' : '';
+      const configuration = this.pendingConfiguration?.status.status === 'queued'
+        && this.pendingConfiguration.request.expectedTurnId === turn.id ? this.pendingConfiguration : undefined;
+      const completed = turn.status === 'completed' && !error;
+      if (!completed) this.cancelConfiguration(error || 'The source turn did not complete normally');
       if (error) this.emit({ type: 'error', text: error });
       this.finish(turn.status === 'interrupted');
+      if (completed && configuration && this.pendingConfiguration === configuration)
+        setImmediate(() => this.continueConfiguration(configuration));
     }
   }
 
   private finish(interrupted = false): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.busy = false; this.state.cliDone = true; this.turnId = undefined;
+    this.activeSelection = undefined; this.activeMode = undefined;
     this.interactions.clear(); this.pendingInteractionIds = [];
     this.showInteraction();
     this.emit({ type: 'done', interrupted });
@@ -462,14 +623,18 @@ export class CodexSession implements AgentSession {
   }
 
   private fail(error: Error): void {
+    if (this.pendingConfiguration) this.updateConfiguration(this.pendingConfiguration, 'failed', error.message);
     this.emit({ type: 'error', text: error.message });
     if (this.busy) this.finish();
     this.dispose();
   }
 
   dispose(): void {
+    if (this.pendingConfiguration?.submitted) this.updateConfiguration(this.pendingConfiguration, 'cancelled', 'The provider session was closed');
+    this.cancelConfiguration('The provider session was closed');
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.closed = true; this.busy = false; this.state.cliDone = true;
+    this.turnId = undefined; this.activeSelection = undefined; this.activeMode = undefined;
     this.interruptSettled?.(); this.interactions.clear(); this.rpc.dispose();
   }
 }

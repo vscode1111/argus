@@ -15,7 +15,7 @@ function saveDefaultSelection(selection: ProviderSelection): void {
     providerDefaults: { ...config.providerDefaults, [selection.providerId]: { ...selection } } });
 }
 
-const handled = new Set(['getProviders', 'switchProvider', 'configureSession', 'saveProviderDefault', 'switchModel', 'switchEffort', 'switchThinking',
+const handled = new Set(['getProviders', 'getSessionControl', 'queueSessionConfiguration', 'switchProvider', 'configureSession', 'saveProviderDefault', 'switchModel', 'switchEffort', 'switchThinking',
   'getModels', 'getAccountUsage', 'getSkills', 'listSessions', 'renameSession', 'deleteSession', 'providerResponse']);
 
 export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg: Record<string, unknown>, init: (s: SessionState) => void): Promise<boolean> {
@@ -30,6 +30,28 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
     if (type === 'getProviders') {
       reply({ type: 'providers', providers: providers().map(p => p.descriptor) });
       reply({ type: 'providerSelection', ...selection });
+    } else if (type === 'getSessionControl') {
+      if (viewing) throw new Error('Return to the active conversation before inspecting its control state');
+      reply({ type: 'sessionControl', sessionId: state.sessionId, selection: state.selection,
+        active: !!state.runtime?.active || !!state.currentProc && !state.cliDone,
+        ...state.runtime?.getSessionControl?.(),
+        capabilities: { configureAfterTurn: !!state.runtime?.queueConfiguration } });
+    } else if (type === 'queueSessionConfiguration') {
+      if (viewing) throw new Error('Return to the active conversation before configuring it');
+      const current = state.runtime;
+      if (!current?.queueConfiguration) throw new Error('This session does not support configuration after a turn');
+      if (msg.providerId !== undefined && msg.providerId !== state.selection.providerId) throw new Error('An existing conversation cannot change provider');
+      for (const key of ['operationId', 'expectedTurnId', 'model', 'effort', 'continuation']) {
+        const value = msg[key];
+        if (typeof value !== 'string' || !value.trim() || value.length > (key === 'continuation' ? 65536 : 200))
+          throw new Error(`Invalid ${key}`);
+      }
+      const configuration = await current.queueConfiguration({
+        operationId: string(msg.operationId), expectedTurnId: string(msg.expectedTurnId),
+        selection: { ...state.selection, model: string(msg.model), effort: string(msg.effort) },
+        continuation: string(msg.continuation),
+      }, () => ws.readyState === 1 && channel.getClientState(ws) === state && !channel.getViewingSessionId(ws));
+      reply({ type: 'sessionConfigurationQueued', configuration });
     } else if (type === 'configureSession') {
       if (viewing || state.runtime?.active || state.currentProc && !state.cliDone) throw new Error('Wait for the active turn before configuring this conversation');
       if (msg.providerId !== undefined && typeof msg.providerId !== 'string') throw new Error('Invalid provider');
@@ -48,6 +70,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       if (next.thinking !== base.thinking && !target.descriptor.thinkingToggle) throw new Error('This provider does not support a thinking toggle');
       await target.validate(next);
       if (channel.getClientState(ws) !== state || channel.getViewingSessionId(ws)) throw new Error('Conversation changed; try again');
+      if (state.runtime?.active || state.currentProc && !state.cliDone) throw new Error('Wait for the active turn before configuring this conversation');
       state.runtime?.dispose(); state.runtime = undefined;
       state.selection = next; persistSelection(state);
       state.broadcast(JSON.stringify(selectionMessage(state)));
@@ -76,6 +99,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
         if (!p.descriptor.thinkingToggle) throw new Error('This provider does not support a thinking toggle');
         next.thinking = msg.thinking !== false;
       }
+      if (!viewing) state.runtime?.cancelConfiguration?.('Session selection changed');
       await p.validate(next);
       if (channel.getClientState(ws) !== state || (channel.getViewingSessionId(ws) || undefined) !== viewing) throw new Error('Conversation changed; try again');
       const detached = channel.detachToBrowsedSession(ws);

@@ -214,7 +214,7 @@ export function attachClientHandlers(
   });
 
   let mutations = Promise.resolve();
-  const ordered = new Set(['send', 'stop', 'newSession', 'resumeSession', 'refreshSession', 'switchProvider', 'configureSession', 'switchModel', 'switchEffort', 'switchThinking', 'saveProviderDefault', 'providerResponse', 'toolAnswer']);
+  const ordered = new Set(['send', 'stop', 'newSession', 'resumeSession', 'refreshSession', 'switchProvider', 'configureSession', 'queueSessionConfiguration', 'switchModel', 'switchEffort', 'switchThinking', 'saveProviderDefault', 'providerResponse', 'toolAnswer']);
   ws.on('message', (data: Buffer) => {
     const handle = async () => {
     // Resolve the session state fresh on every message so that after moveToNewSession
@@ -538,6 +538,7 @@ export function attachClientHandlers(
         ws.send(JSON.stringify({ type: 'usageInsights', error: (err as Error).message ?? String(err) }));
       });
     } else if (msg.type === 'stop') {
+      s.runtime?.cancelConfiguration?.('Conversation stopped');
       if (!s.errorRetry?.cancel(true)) await runtime(s).stop();
     } else if (msg.type === 'newSession') {
       // Create a fresh isolated session entry for this client only.
@@ -659,9 +660,8 @@ function handleSend(s: SessionState, msg: TurnInput): void {
 }
 
 export async function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, id: string) {
-  // If this session is mid-turn in another entry (another panel, or the entry this client
-  // detached from on a browsed send), read its stored history before joining. Its
-  // in-memory entry may contain only the current turn of a resumed conversation.
+  // Read stored history before joining an existing entry. Its in-memory history
+  // may contain only the latest turn of a resumed conversation.
   let messages: Awaited<ReturnType<ReturnType<typeof providerForSession>['load']>> | undefined;
   let source: Awaited<ReturnType<typeof loadSessionHistory>>['source'];
   let loadError: unknown;
@@ -671,7 +671,7 @@ export async function handleResumeSession(s: SessionState, ws: WebSocket, channe
   if (live) {
     if (messages) channel.replayHistory(ws, messages, source);
     ws.send(JSON.stringify(selectionMessage(live)));
-    live.sendLog('info', `Joined session ${id}, turn already in progress`);
+    live.sendLog('info', `Joined existing session ${id}`);
     return;
   }
   if (!messages) throw loadError;

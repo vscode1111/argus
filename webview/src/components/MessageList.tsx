@@ -169,7 +169,8 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
     const el = containerRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    userScrolledUp.current = distanceFromBottom > SCROLL_THRESHOLD;
+    if (distanceFromBottom <= SCROLL_THRESHOLD) userScrolledUp.current = false;
+    else if (el.scrollTop < lastScrollTop.current) userScrolledUp.current = true;
     setShowScrollBtn(distanceFromBottom > SCROLL_THRESHOLD);
     if (el.scrollTop < HISTORY_THRESHOLD && el.scrollTop < lastScrollTop.current) loadEarlier(false);
     lastScrollTop.current = el.scrollTop;
