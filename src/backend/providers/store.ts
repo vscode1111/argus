@@ -54,13 +54,20 @@ export function saveSession(record: SessionRecord): void {
 
 export function forgetSession(id: string): void { write(records().filter(r => r.id !== id)); }
 
+// First-run model for a provider that has no saved default yet. Keyed per provider
+// on purpose: an unlisted provider defers to its own default (every adapter reads an
+// empty model as "send no model") rather than inheriting another provider's id.
+// A Map, not an object: a provider id reaching here from a session id must not be
+// able to resolve an inherited Object.prototype member as a model.
+const FIRST_RUN_MODEL = new Map([['codex', 'gpt-6-luna']]);
+
 export function defaultSelection(providerId?: string): ProviderSelection {
   const cfg = readConfig();
   providerId ??= cfg.defaultProvider || 'codex';
   const saved = cfg.providerDefaults?.[providerId];
   if (saved && saved.providerId === providerId && typeof saved.model === 'string' && typeof saved.effort === 'string' && typeof saved.thinking === 'boolean') return { ...saved };
   if (providerId === 'claude') return { providerId, model: cfg.model, effort: cfg.effort, thinking: cfg.thinking };
-  return { providerId, model: 'gpt-6-luna', effort: '', thinking: true };
+  return { providerId, model: FIRST_RUN_MODEL.get(providerId) ?? '', effort: '', thinking: true };
 }
 
 export function selectionFor(id: string | undefined, cwd: string): ProviderSelection {

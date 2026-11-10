@@ -88,11 +88,27 @@ test('deferred configuration acknowledges a queue without applying it or changin
   } };
   await handleProviderRequest(ws, channel, requested, () => {});
   assert.deepEqual(received, { operationId: requested.operationId, expectedTurnId: requested.expectedTurnId,
-    selection: configuration.selection, continuation: requested.continuation });
+    selection: configuration.selection, continuation: `🤖 ${requested.continuation}` });
   assert.deepEqual(frames.at(-1), { providerId: original.providerId, requestId: requested.requestId,
     type: 'sessionConfigurationQueued', configuration });
   assert.deepEqual(state.selection, original);
   assert.deepEqual(readConfig(), defaults);
+});
+
+test('automatic continuations preserve skill commands and existing markers', async () => {
+  for (const [continuation, expected] of [
+    ['/audit Review the catalog.', '/audit 🤖 Review the catalog.'],
+    ['$audit Review the catalog.', '$audit 🤖 Review the catalog.'],
+    ['🤖 Continue the catalog audit.', '🤖 Continue the catalog audit.'],
+    ['/audit 🤖 Review the catalog.', '/audit 🤖 Review the catalog.'],
+  ]) {
+    const { ws, state, channel } = fixture();
+    let received;
+    state.runtime = { queueConfiguration: async input => { received = input; return {}; } };
+    await handleProviderRequest(ws, channel, { type: 'queueSessionConfiguration', operationId: 'catalog-switch',
+      expectedTurnId: 'catalog-turn', model: 'catalog-engine', effort: 'high', continuation }, () => {});
+    assert.equal(received.continuation, expected);
+  }
 });
 
 test('deferred configuration rejects malformed, unsupported and browsed requests', async () => {

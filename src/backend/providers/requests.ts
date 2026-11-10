@@ -46,10 +46,17 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
         if (typeof value !== 'string' || !value.trim() || value.length > (key === 'continuation' ? 65536 : 200))
           throw new Error(`Invalid ${key}`);
       }
+      let continuation = string(msg.continuation).trim();
+      if (!/^🤖(?:\s|$)|^[/$][^\s]+\s+🤖(?:\s|$)/u.test(continuation)) {
+        const command = continuation.match(/^([/$][^\s]+)(\s+|$)/u);
+        continuation = command
+          ? `${command[1]} 🤖 ${continuation.slice(command[0].length)}`.trimEnd()
+          : `🤖 ${continuation}`;
+      }
       const configuration = await current.queueConfiguration({
         operationId: string(msg.operationId), expectedTurnId: string(msg.expectedTurnId),
         selection: { ...state.selection, model: string(msg.model), effort: string(msg.effort) },
-        continuation: string(msg.continuation),
+        continuation,
       }, () => ws.readyState === 1 && channel.getClientState(ws) === state && !channel.getViewingSessionId(ws));
       reply({ type: 'sessionConfigurationQueued', configuration });
     } else if (type === 'configureSession') {

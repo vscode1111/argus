@@ -327,9 +327,18 @@ export function reducer(state: AppState, action: AppAction): AppState {
       // in-flight streaming/usage state from the previous session.
       return { ...state, interaction: pendingReplayQuestion(action.messages), messages: action.messages, historySessionId: action.id, historyBefore: action.before ?? 0, historyRevision: state.historyRevision + 1, streaming: null, isStreaming: false, contextUsage: null, bgTasks: 0, pendingNotice: null };
 
-    case 'historyPage':
+    case 'historyPage': {
       if (action.id !== state.historySessionId || action.revision !== state.historyRevision || action.error) return state;
-      return { ...state, messages: [...action.messages, ...state.messages], historyBefore: action.before };
+      // Prepending is only ever correct for a page that moves the cursor further
+      // back. A page that does not advance it covers segments already on screen,
+      // so applying it a second time (a re-delivered frame, a buffered prefetch
+      // raced by its own live reply) would repeat a whole turn in the list.
+      if (action.before >= state.historyBefore) return state;
+      // Partial overlap: keep only segments the conversation does not already hold.
+      const known = new Set(state.messages.map(message => message.id));
+      const fresh = action.messages.filter(message => !known.has(message.id));
+      return { ...state, messages: [...fresh, ...state.messages], historyBefore: action.before };
+    }
 
     case 'prefill':
       return { ...state, prefill: action.text + '\x00' + Date.now() };
