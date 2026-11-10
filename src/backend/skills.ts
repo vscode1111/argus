@@ -15,10 +15,19 @@ function readSkillDescription(skillDir: string): string | undefined {
   return undefined;
 }
 
+// A skill folder may be a junction or symlink (for example one linked in from a
+// shared ~/.agents/skills). Dirent reports those as links rather than directories,
+// so resolve the target. A folder without SKILL.md, such as the CLI's own synced/
+// bucket, is not a skill; a link whose target is gone is skipped.
+function isSkillDir(skillDir: string): boolean {
+  try { return fs.statSync(skillDir).isDirectory() && fs.statSync(path.join(skillDir, 'SKILL.md')).isFile(); }
+  catch { return false; }
+}
+
 function readSkillsDir(dir: string, scope: 'global' | 'project') {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true })
-    .filter(e => e.isDirectory())
+    .filter(e => (e.isDirectory() || e.isSymbolicLink()) && isSkillDir(path.join(dir, e.name)))
     .map(e => ({ name: e.name, scope, kind: 'skill' as const, description: readSkillDescription(path.join(dir, e.name)) }));
 }
 

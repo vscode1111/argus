@@ -102,7 +102,7 @@ test('Argus serves goals and configures a worker without changing defaults', asy
       assert.equal(resumed.activeSelection.effort, queuedRequest.effort);
       assert.equal(turns.length, 2);
       assert.equal(turns[1].threadId, turns[0].threadId);
-      assert.deepEqual(turns[1].input, [{ type: 'text', text: queuedRequest.continuation }]);
+      assert.deepEqual(turns[1].input, [{ type: 'text', text: `🤖 ${queuedRequest.continuation}` }]);
       assert.equal(turns[1].approvalPolicy, turns[0].approvalPolicy);
       assert.deepEqual(turns[1].sandboxPolicy, { type: 'readOnly' });
       assert.deepEqual(readConfig(), defaults);

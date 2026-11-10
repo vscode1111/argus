@@ -9,9 +9,13 @@ test('saved native session reports its text lines in the workspace list', async 
   const previousHome = process.env.CODEX_HOME;
   const previousConfig = process.env.ARGUS_CONFIG;
   const previousPoll = process.env.ARGUS_USAGE_POLL;
+  const previousBin = process.env.ARGUS_CODEX_BIN;
   process.env.CODEX_HOME = root;
   process.env.ARGUS_CONFIG = path.join(root, 'scub-settings.json');
   process.env.ARGUS_USAGE_POLL = '0';
+  // Line counts come from the rollout files. Page load also asks the app-server for
+  // models, account and skills; a real Codex would keep CODEX_HOME open past cleanup.
+  process.env.ARGUS_CODEX_BIN = path.join(root, 'scub-missing-codex.exe');
   let server;
   let browser;
   try {
@@ -53,9 +57,12 @@ test('saved native session reports its text lines in the workspace list', async 
   } finally {
     await browser?.close();
     server?.close();
+    // The server opens session-stats.sqlite beside ARGUS_CONFIG; Windows will not delete an open database.
+    require('../out/backend/sessionStats').closeStatsDatabase();
     if (previousHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previousHome;
     if (previousConfig === undefined) delete process.env.ARGUS_CONFIG; else process.env.ARGUS_CONFIG = previousConfig;
     if (previousPoll === undefined) delete process.env.ARGUS_USAGE_POLL; else process.env.ARGUS_USAGE_POLL = previousPoll;
+    if (previousBin === undefined) delete process.env.ARGUS_CODEX_BIN; else process.env.ARGUS_CODEX_BIN = previousBin;
     fs.rmSync(root, { recursive: true, force: true });
   }
 });

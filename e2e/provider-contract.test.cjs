@@ -308,6 +308,9 @@ test('deferred configuration bounds operation history without replaying a retire
 test('new conversations default to Codex and GPT-6-Luna without a saved selection', () => {
   assert.deepEqual(defaultSelection(), { providerId: 'codex', model: 'gpt-6-luna', effort: '', thinking: true });
   assert.deepEqual(selectionFor(undefined, dir), defaultSelection());
+  // A provider with no first-run model of its own defers to that provider's default
+  // instead of inheriting another provider's model id.
+  assert.deepEqual(defaultSelection('scub-provider'), { providerId: 'scub-provider', model: '', effort: '', thinking: true });
 });
 
 test('ordinary Windows PATH can find the installed desktop executable', () => {

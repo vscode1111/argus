@@ -94,6 +94,8 @@ async function openStoredSession(shouldBeLive, storeCurrent = true) {
       { type: 'user', cwd, message: { role: 'user', content: 'Earlier question' } },
       { type: 'assistant', message: { id: 'earlier-answer', content: [{ type: 'text', text: 'Earlier answer' }] } },
       ...(storeCurrent ? [{ type: 'user', cwd, message: { role: 'user', content: 'Current question' } }] : []),
+      // A finished turn's reply is already in the transcript: the CLI writes it before `done`.
+      ...(!shouldBeLive ? [{ type: 'assistant', message: { id: 'current-answer', content: [{ type: 'text', text: 'Working on the current question' }] } }] : []),
     ].map(line => JSON.stringify(line)).join('\n') + '\n');
 
     const channel = getOrCreateChannel(cwd);
@@ -132,6 +134,7 @@ test('opening a running session includes stored history and live progress', asyn
 test('opening a finished session includes stored history without live progress', async () => {
   const { frames, stored } = await openStoredSession(false);
   const opened = frames.find(frame => frame.type === 'sessionLoaded');
+  assert.equal(stored.length, 4);
   assert.deepEqual(opened.messages.map(message => message.content), stored.map(message => message.content));
   assert.equal(frames.some(frame => frame.type === 'thinking_start'), false);
 });

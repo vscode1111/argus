@@ -1,9 +1,10 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { existsSync } from 'fs';
-import { win32 as path } from 'path';
+import * as path from 'path';
 import { killProc } from '../cli';
 import { resolveCodexBinary } from './executable';
 import { noteCliLaunch } from '../cliLaunchCount';
+import { readServerVersion } from '../version';
 
 // Full conversation replies include tool output and can exceed 32 MiB.
 const MAX_PROVIDER_FRAME_CHARS = 128 * 1024 * 1024;
@@ -43,8 +44,8 @@ export class AppServerRpc {
     if (this.closed) throw new Error('Provider connection is closed');
     let env: NodeJS.ProcessEnv | undefined;
     if (process.platform === 'win32') {
-      const gitBashDir = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin');
-      if (existsSync(path.join(gitBashDir, 'bash.exe'))) {
+      const gitBashDir = path.win32.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin');
+      if (existsSync(path.win32.join(gitBashDir, 'bash.exe'))) {
         const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === 'path') || 'Path';
         env = { ...process.env, [pathKey]: `${gitBashDir};${process.env[pathKey] || ''}` };
       }
@@ -69,7 +70,7 @@ export class AppServerRpc {
     this.proc.stderr.resume();
     this.proc.on('error', () => this.fail(new Error('Cannot start Codex. Install its CLI or set ARGUS_CODEX_BIN on the server.')));
     this.proc.on('exit', () => this.fail(new Error('Provider process exited. Reopen the conversation before retrying.')));
-    await this.request('initialize', { clientInfo: { name: 'argus', version: '0.0.104' } });
+    await this.request('initialize', { clientInfo: { name: 'argus', version: readServerVersion() || '0.0.0' } });
     this.write({ method: 'initialized' });
   }
 
