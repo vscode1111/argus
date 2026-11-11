@@ -350,6 +350,24 @@ test('streamed text is not duplicated by the completed item; binding survives re
   assert.equal(selectionFor(state.sessionId, dir).providerId, 'codex');
 });
 
+test('consecutive message items preserve paragraphs without splitting streamed fragments', () => {
+  for (const streamed of [true, false]) {
+    const state = createSessionState(dir);
+    const events = []; state.broadcast = value => events.push(JSON.parse(value));
+    const runtime = new CodexSession(state, { dispose() {} });
+    runtime.threadId = 'delivery-thread'; runtime.turnId = 'delivery-turn'; runtime.busy = true;
+    try {
+      const params = { threadId: runtime.threadId, turnId: runtime.turnId };
+      for (const [id, parts] of [['first', ['Checking ', 'reserves.\n']], ['second', ['Plan ', 'saved.\n']]]) {
+        if (streamed) for (const delta of parts) runtime.receive('item/agentMessage/delta', { ...params, itemId: id, delta });
+        runtime.receive('item/completed', { ...params, item: { id, type: 'agentMessage', text: parts.join('') } });
+      }
+      const text = events.filter(event => event.type === 'text_chunk').map(event => event.text).join('');
+      assert.equal(text, 'Checking reserves.\n\n\nPlan saved.\n');
+    } finally { runtime.dispose(); }
+  }
+});
+
 test('background notices and stale turns do not extend the active turn watchdog', () => {
   const state = createSessionState(dir); state.broadcast = () => {};
   const runtime = new CodexSession(state, { dispose() {} });
