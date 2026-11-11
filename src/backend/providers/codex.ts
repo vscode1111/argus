@@ -211,6 +211,7 @@ export class CodexSession implements AgentSession {
   private startPending?: Promise<void>;
   private interruptSettled?: () => void;
   private deltas = new Set<string>();
+  private lastAgentMessageId = '';
   private interactions = new Map<string, { rpcId: string | number; method: string; params: JsonObject }>();
   private pendingInteractionIds: string[] = [];
   private pendingAsyncQuestion?: ProviderInteraction;
@@ -386,7 +387,7 @@ export class CodexSession implements AgentSession {
       return;
     }
     if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
-    this.busy = true; this.state.cliDone = false; this.deltas.clear();
+    this.busy = true; this.state.cliDone = false; this.deltas.clear(); this.lastAgentMessageId = '';
     this.activeSelection = { ...selection }; this.activeMode = input.mode;
     this.outputTokenBaseline = undefined;
     this.inputTokenBaseline = undefined;
@@ -525,6 +526,13 @@ export class CodexSession implements AgentSession {
     } });
   }
 
+  private emitAgentText(itemId: string, text: string): void {
+    if (!text) return;
+    const separator = this.lastAgentMessageId && this.lastAgentMessageId !== itemId ? '\n\n' : '';
+    this.lastAgentMessageId = itemId;
+    this.emit({ type: 'text_chunk', text: separator + text });
+  }
+
   private receive(method: string, params: JsonObject, requestId?: string | number): void {
     if (this.closed) return;
     this.state.sendLog?.('debug', `Provider event: ${method}`);
@@ -555,11 +563,12 @@ export class CodexSession implements AgentSession {
     else if (method === 'item/started' || method === 'item/completed') this.armIdleTimer();
     if (method === 'item/agentMessage/delta' || method === 'item/reasoning/summaryTextDelta') {
       this.deltas.add(`${method}:${string(params.itemId)}`);
-      this.emit({ type: method === 'item/agentMessage/delta' ? 'text_chunk' : 'thinking_chunk', text: string(params.delta) });
+      if (method === 'item/agentMessage/delta') this.emitAgentText(string(params.itemId), string(params.delta));
+      else this.emit({ type: 'thinking_chunk', text: string(params.delta) });
     } else if (method === 'item/started' || method === 'item/completed') {
       const item = object(params.item); const done = method === 'item/completed';
       if (item.type === 'agentMessage') {
-        if (done && !this.deltas.has(`item/agentMessage/delta:${string(item.id)}`)) this.emit({ type: 'text_chunk', text: string(item.text) });
+        if (done && !this.deltas.has(`item/agentMessage/delta:${string(item.id)}`)) this.emitAgentText(string(item.id), string(item.text));
         if (done) { const question = asyncQuestion(item); if (question) { this.pendingAsyncQuestion = question; this.showInteraction(); } }
       } else if (item.type === 'subAgentActivity') {
         if (done) { const call = tool(item); this.emit({ type: 'tool_start', call }); this.emit({ type: 'tool_end', call }); }

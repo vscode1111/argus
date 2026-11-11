@@ -2,6 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { startServer } from '../src/backend/index';
 
+// A stopped launcher can leave this process alive with closed output pipes.
+// Consume EPIPE so the error reporter cannot recursively write to a broken pipe.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EPIPE') throw error;
+  });
+}
+
 // Safety net: log but survive unexpected errors so a single bad WS send or
 // a transient rejection does not kill the shared dev/test server.
 process.on('uncaughtException', (err) => {

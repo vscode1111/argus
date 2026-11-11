@@ -384,12 +384,15 @@ test.describe('effort and thinking (integration)', () => {
 
   test('model search in the modal filters the list', { tag: ["@claude"] }, async ({ page }) => {
     const dialog = await openModelsTab(page);
-    await expect(dialog.locator('[class*="modelRow"]').first()).toBeVisible({ timeout: 10_000 });
+    const rows = dialog.locator('[class*="modelRow"]');
+    await expect(rows.filter({ hasText: /haiku/i }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(rows.filter({ hasText: /sonnet/i }).first()).toBeVisible();
+    const matchingNames = await rows.filter({ hasText: /haiku/i }).locator('[class*="modelName"]').allTextContents();
 
     await dialog.getByPlaceholder('Search models...').fill('haiku');
 
-    await expect(dialog.locator('[class*="modelRow"]').filter({ hasText: /haiku/i })).toBeVisible();
-    await expect(dialog.locator('[class*="modelRow"]').filter({ hasText: /sonnet/i })).toHaveCount(0);
+    await expect(rows.locator('[class*="modelName"]')).toHaveText(matchingNames);
+    await expect(rows.filter({ hasText: /sonnet/i })).toHaveCount(0);
   });
 
   test('selected model is forwarded to the CLI spawn log', { tag: ["@claude"] }, async ({ page }) => {
