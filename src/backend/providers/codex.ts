@@ -664,7 +664,7 @@ async function readHistoryPage(rpc: AppServerRpc, id: string, cursor?: unknown) 
 }
 
 export const codexProvider: AgentProvider = {
-  descriptor: { id: 'codex', label: 'Codex', thinkingToggle: false, efforts: [], inputKinds: ['text', 'image'] },
+  descriptor: { id: 'codex', label: 'Codex', thinkingToggle: false, hardLineBreaks: true, efforts: [], inputKinds: ['text', 'image'] },
   createSession: state => new CodexSession(state), models, account,
   async validate(selection) {
     const list = (await models()).models;

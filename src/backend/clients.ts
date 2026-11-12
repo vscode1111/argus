@@ -114,6 +114,17 @@ export function noteClientConnect(ws: WebSocket, req: IncomingMessage, opts: { b
   });
 }
 
+// True for a socket opened by a script rather than an Argus UI. Both UIs identify
+// themselves at the upgrade: the VS Code webview and every browser page send an Origin
+// header, and the browser hosts also pass `client=browser`. Node's built-in WebSocket
+// (what orchestration scripts and ad-hoc relays use) sends no Origin at all, so a send
+// from such a socket is an automatic request and must carry the 🤖 marker. A socket
+// with no recorded upgrade is left alone rather than guessed about.
+export function isAutomatedClient(ws: WebSocket): boolean {
+  const m = meta.get(ws);
+  return !!m && !m.origin && !m.browser;
+}
+
 // Every client socket this server is serving, with where it sits in the session
 // registry. Only OPEN sockets, the same filter the "Active connections" count uses -
 // the number and the list it opens must never disagree.

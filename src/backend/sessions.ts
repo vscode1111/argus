@@ -1,3 +1,4 @@
+import { hasAutomaticMarker } from './automaticMarker';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -132,7 +133,7 @@ function countMessageLines(content: unknown): number {
 // session) takes precedence over the AI-generated `ai-title`. All event types
 // may appear multiple times; the last of each title/prompt wins.
 function isDelegatedPrompt(content: unknown): boolean {
-  if (typeof content === 'string') return /^🤖(?:\s|$)|^[/$][^\s]+\s+🤖(?:\s|$)/u.test(content);
+  if (typeof content === 'string') return hasAutomaticMarker(content);
   if (!Array.isArray(content)) return false;
   return content.some(block => !!block && typeof block === 'object' &&
     (block.type === 'text' || block.type === 'input_text') && isDelegatedPrompt(block.text));

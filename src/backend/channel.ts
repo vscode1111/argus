@@ -560,11 +560,11 @@ function hasActiveTurn(entry: SessionEntry): boolean {
   return !!(entry.state.runtime?.active || entry.state.currentProc && !entry.state.cliDone);
 }
 
-function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
+function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket, blocks = entry.snapshot?.blocks, thinking = entry.snapshot?.thinking): void {
   if (!entry.snapshot || !hasActiveTurn(entry)) return;
   try { ws.send(JSON.stringify({ type: 'thinking_start', reused: true, startedAt: entry.snapshotStartedAt ?? undefined })); } catch { return; }
-  if (entry.snapshot.thinking) { try { ws.send(JSON.stringify({ type: 'thinking_chunk', text: entry.snapshot.thinking })); } catch { return; } }
-  for (const block of entry.snapshot.blocks) {
+  if (thinking) { try { ws.send(JSON.stringify({ type: 'thinking_chunk', text: thinking })); } catch { return; } }
+  for (const block of blocks ?? []) {
     try {
       if (block.type === 'text') {
         ws.send(JSON.stringify({ type: 'text_chunk', text: block.text ?? '' }));
@@ -581,6 +581,17 @@ function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket): void {
   if (entry.state.sessionId && entry.lastContextUsage?.sessionId === entry.state.sessionId) {
     try { ws.send(entry.lastContextUsage.frame); } catch { /* closing */ }
   }
+}
+
+function snapshotPage(entry: SessionEntry) {
+  if (!entry.snapshot || !hasActiveTurn(entry)) return;
+  const segments: ChannelMessage[] = entry.snapshot.blocks.map((block, index) => ({
+    id: `live-${entry.state.runtime?.activeTurnId ?? entry.key}:block:${index}`,
+    role: 'assistant', content: block.type === 'text' ? block.text ?? '' : '', blocks: [block],
+    ...(index === 0 && entry.snapshot?.thinking ? { thinking: entry.snapshot.thinking } : {}),
+  }));
+  const page = latestPage(segments);
+  return { earlier: segments.slice(0, page.before), blocks: entry.snapshot.blocks.slice(page.before) };
 }
 
 function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[], activeTurnId?: string, pagedActiveTurn = false, previousTurns: ReplayMessage[] = []): Array<ReplayMessage | ChannelMessage> {
@@ -621,12 +632,15 @@ function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessa
   const activeTurnId = entry.snapshot ? entry.state.runtime?.activeTurnId : undefined;
   const pagedActiveTurn = !!activeTurnId && source?.turnId === activeTurnId;
   const merged = stored ? mergeHistory(stored, entry.history, activeTurnId, pagedActiveTurn, source?.previousTurnMessages) : undefined;
-  const page = merged ? latestPage(merged) : undefined;
+  const snapshot = snapshotPage(entry);
+  const trimmed = !!snapshot?.earlier.length;
+  const page = trimmed ? { messages: [], before: 0 } : merged ? latestPage(merged) : undefined;
   const cached = pagedActiveTurn ? source?.previousTurnMessages ?? [] : stored ?? [];
-  rememberSessionReplay(ws, entry.state.sessionId, cached, source);
-  const before = replayPageBefore(ws, stored && page ? Math.min(page.before, displaySegments(cached).length) : 0);
+  const history = trimmed ? [...(merged ?? entry.history), ...snapshot.earlier] : cached;
+  rememberSessionReplay(ws, entry.state.sessionId, history, source);
+  const before = replayPageBefore(ws, trimmed ? displaySegments(history).length : stored && page ? Math.min(page.before, displaySegments(cached).length) : 0);
   try { ws.send(JSON.stringify({ type: 'sessionLoaded', id: entry.state.sessionId, messages: page?.messages ?? entry.history, before, hasMore: before > 0 })); } catch { return; }
-  replaySnapshotToClient(entry, ws);
+  replaySnapshotToClient(entry, ws, snapshot?.blocks, trimmed ? '' : entry.snapshot?.thinking);
   if (entry.snapshot && hasActiveTurn(entry)) {
     const outputTokens = entry.state.completedOutputTokens + Math.ceil(entry.state.liveOutputChars / 4);
     try { ws.send(JSON.stringify({ type: 'token_update', inputTokens: entry.state.liveInputTokens, outputTokens })); } catch { /* closing */ }

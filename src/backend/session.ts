@@ -22,7 +22,8 @@ import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
 import { type Channel, listActiveSessions, listOwnedProcs } from './channel';
 import { listCliProcesses, killCliProcess, cpuCoreCount, invalidateProcessSamples } from './processes';
-import { type ClientInfo, type CloseClientResult } from './clients';
+import { type ClientInfo, type CloseClientResult, isAutomatedClient } from './clients';
+import { withAutomaticMarker } from './automaticMarker';
 import { readAuth, setPassword, clearPassword, dropAllSessions, sessionCount, MIN_PASSWORD_LENGTH } from './auth';
 import { broadcastBgTasks } from './cliHandler';
 import { listWorkspaces, listAllSessions, listDir, sessionFilePath, readToolImage, codexSessionMeta, MAX_GLOBAL_SESSIONS } from './sessions';
@@ -293,6 +294,10 @@ export function attachClientHandlers(
       broadcastBgTasks(s);
       s.broadcast(JSON.stringify({ type: 'clear' }));
     } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
+      // A script's request is automatic whether or not it marked itself, so the marker
+      // is added here, at the one boundary every such send crosses, before the text is
+      // stored, echoed or dispatched. Manual sends from an Argus UI stay unchanged.
+      if (typeof msg.text === 'string' && msg.text.trim() && isAutomatedClient(ws)) msg = { ...msg, text: withAutomaticMarker(msg.text) };
       // A send from a client that navigated to another session belongs to THAT session.
       // handleSend only sees the entry state, so left in this entry the text would take
       // the mid-turn-inject branch and be written into the stdin of the turn the client

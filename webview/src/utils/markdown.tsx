@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useContext } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -6,6 +6,7 @@ import { withLinkedPaths, linkifyInlineCode, PATH_CH, PATH_SEG, PATH_FINAL } fro
 import { openExternal } from './url';
 import { copyTextToClipboard } from './clipboard';
 import { usePreviewNav } from '../contexts/PreviewNavContext';
+import { MarkdownBreaksContext } from '../contexts/MarkdownBreaksContext';
 
 // Escape backslashes in Windows file paths so the markdown parser preserves them.
 // Without this, `D:\_Projects` becomes `D:_Projects` (backslash consumed as escape).
@@ -150,10 +151,17 @@ function MarkdownLink({ href, children }: { href?: string; children: React.React
   );
 }
 
+// Hoisted so a re-render does not hand react-markdown a new plugin array.
+const SOFT_BREAK_PLUGINS = [remarkGfm];
+const HARD_BREAK_PLUGINS = [remarkGfm, remarkBreaks];
+
+// `breaks` defaults to the conversation's provider (MarkdownBreaksContext); an explicit
+// prop wins, as the file previewer passes for a document it renders.
 export function Markdown({ children, breaks }: { children: string; breaks?: boolean }) {
+  const contextBreaks = useContext(MarkdownBreaksContext);
   return (
     <ReactMarkdown
-      remarkPlugins={breaks ? [remarkGfm, remarkBreaks] : [remarkGfm]}
+      remarkPlugins={(breaks ?? contextBreaks) ? HARD_BREAK_PLUGINS : SOFT_BREAK_PLUGINS}
       components={{
         pre({ children }) {
           const text = extractText(children).replace(/\n$/, '');

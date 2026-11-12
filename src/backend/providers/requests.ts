@@ -5,6 +5,7 @@ import type { SessionState } from '../sessionState';
 import { provider, providers, runtime, persistSelection, selectionMessage, providerForSession } from './registry';
 import { defaultSelection, selectionFor, forgetSession } from './store';
 import { string } from './rpc';
+import { withAutomaticMarker } from '../automaticMarker';
 import { readConfig, writeConfig } from '../config';
 import type { ProviderSelection } from '../../shared/provider';
 import { deleteSessionStats, readSessionTaskKeys } from '../sessionStats';
@@ -46,13 +47,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
         if (typeof value !== 'string' || !value.trim() || value.length > (key === 'continuation' ? 65536 : 200))
           throw new Error(`Invalid ${key}`);
       }
-      let continuation = string(msg.continuation).trim();
-      if (!/^🤖(?:\s|$)|^[/$][^\s]+\s+🤖(?:\s|$)/u.test(continuation)) {
-        const command = continuation.match(/^([/$][^\s]+)(\s+|$)/u);
-        continuation = command
-          ? `${command[1]} 🤖 ${continuation.slice(command[0].length)}`.trimEnd()
-          : `🤖 ${continuation}`;
-      }
+      const continuation = withAutomaticMarker(string(msg.continuation).trim());
       const configuration = await current.queueConfiguration({
         operationId: string(msg.operationId), expectedTurnId: string(msg.expectedTurnId),
         selection: { ...state.selection, model: string(msg.model), effort: string(msg.effort) },

@@ -19,6 +19,10 @@ export interface ProviderDescriptor {
   id: string;
   label: string;
   thinkingToggle: boolean;
+  /** Render a single newline in this provider's replies as a line break. Codex writes
+   *  one statement per line with no blank line between them, which CommonMark folds
+   *  into one paragraph. Optional so an older daemon's descriptors still parse. */
+  hardLineBreaks?: boolean;
   efforts: string[];
   inputKinds: string[];
 }

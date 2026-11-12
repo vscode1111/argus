@@ -13,6 +13,8 @@ import { AutoFileViewer } from './components/AutoFileViewer';
 import { LoginScreen } from './components/LoginScreen';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { PreviewProvider } from './contexts/PreviewContext';
+import { MarkdownBreaksContext } from './contexts/MarkdownBreaksContext';
+import { useProvider } from './hooks/useProvider';
 import { postMessage, isVsCode } from './vscode';
 import { reducer, initialState, type AppAction } from './reducer';
 import { SessionSummary, ActiveSession } from './types';
@@ -86,6 +88,8 @@ function AppInner() {
   const [providerNotice, setProviderNotice] = React.useState<{ message: string; error: boolean } | null>(null);
   const providerRef = React.useRef(state.providerId);
   providerRef.current = state.providerId;
+  // The fallback covers the moment before the descriptor list arrives and an older daemon.
+  const hardLineBreaks = useProvider(state.providerId)?.hardLineBreaks ?? state.providerId === 'codex';
   const [accountUsageTab, setAccountUsageTab] = React.useState<'usage' | 'models' | null>(null);
   const [initialFile, setInitialFile] = React.useState<string | null>(null);
   // Spinner overlay shown while an initial load, session resume or workspace switch is in flight
@@ -667,7 +671,9 @@ function AppInner() {
         )}
         <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
           {topRightActions}
-          <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} historySessionId={state.historySessionId} historyBefore={state.historyBefore} historyRevision={state.historyRevision} onLoadEarlier={(id, before, revision, prefetch) => postMessage({ type: 'loadEarlier', id, before, revision, prefetch })} />
+          <MarkdownBreaksContext.Provider value={hardLineBreaks}>
+            <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} historySessionId={state.historySessionId} historyBefore={state.historyBefore} historyRevision={state.historyRevision} onLoadEarlier={(id, before, revision, prefetch) => postMessage({ type: 'loadEarlier', id, before, revision, prefetch })} />
+          </MarkdownBreaksContext.Provider>
           <InputArea providerId={state.providerId} isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
           {loadingSession && (
             <div className="sessionLoader" role="status" aria-live="polite" aria-busy={!loadTimedOut} aria-label="Loading session">
