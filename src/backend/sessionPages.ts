@@ -1,6 +1,7 @@
 import type WebSocket from 'ws';
 import type { ReplayMessage } from './sessions';
 import type { ProviderHistoryPage } from './providers/types';
+import type { ChannelMessage } from './channel';
 
 export const SESSION_PAGE_SIZE = 30;
 export const INITIAL_HISTORY_BATCHES = 5;
@@ -17,14 +18,14 @@ export interface HistoryPageSource {
 }
 interface ClientReplay {
   id: string;
-  segments: ReplayMessage[];
+  segments: Array<ReplayMessage | ChannelMessage>;
   offset: number;
   source?: HistoryPageSource;
   loading?: Promise<void>;
 }
 const clientReplays = new WeakMap<WebSocket, ClientReplay>();
 
-export function rememberSessionReplay(ws: WebSocket, id: string | undefined, messages: ReplayMessage[], source?: HistoryPageSource): void {
+export function rememberSessionReplay(ws: WebSocket, id: string | undefined, messages: Array<ReplayMessage | ChannelMessage>, source?: HistoryPageSource): void {
   clientReplays.delete(ws);
   if (id) {
     const segments = displaySegments(messages);
