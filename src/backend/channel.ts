@@ -625,6 +625,8 @@ function mergeHistory(stored: ReplayMessage[], recent: ChannelMessage[], activeT
 }
 
 function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessage[], source?: HistoryPageSource): void {
+  const replaying = !!entry.snapshot && hasActiveTurn(entry);
+  if (replaying) { try { ws.send(JSON.stringify({ type: 'replay_start' })); } catch { return; } }
   try { ws.send(JSON.stringify({ type: 'providerSelection', ...entry.state.selection })); } catch { return; }
   if (entry.snapshot && hasActiveTurn(entry) && source?.cursor !== undefined && source.turnId && (source.cursorTurnId ?? source.turnId) === entry.state.runtime?.activeTurnId) {
     source = { ...source, cursor: source.previousTurnCursor };
@@ -646,6 +648,7 @@ function replayToClient(entry: SessionEntry, ws: WebSocket, stored?: ReplayMessa
     try { ws.send(JSON.stringify({ type: 'token_update', inputTokens: entry.state.liveInputTokens, outputTokens })); } catch { /* closing */ }
   }
   if (entry.state.interaction) ws.send(JSON.stringify({ type: 'interaction', request: entry.state.interaction }));
+  if (replaying) ws.send(JSON.stringify({ type: 'replay_end' }));
 }
 
 // Pick the most recently active entry, or create a new one if none exist.
@@ -865,7 +868,12 @@ export function getOrCreateChannel(dir: string): Channel {
     },
     replaySnapshot(ws) {
       const entry = _cd.clientEntry.get(ws);
-      if (entry) { replaySnapshotToClient(entry, ws); if (entry.state.interaction) ws.send(JSON.stringify({ type: 'interaction', request: entry.state.interaction })); }
+      if (entry) {
+        ws.send(JSON.stringify({ type: 'replay_start' }));
+        replaySnapshotToClient(entry, ws);
+        if (entry.state.interaction) ws.send(JSON.stringify({ type: 'interaction', request: entry.state.interaction }));
+        ws.send(JSON.stringify({ type: 'replay_end' }));
+      }
     },
     replayHistory(ws, stored, source) {
       const entry = _cd.clientEntry.get(ws);

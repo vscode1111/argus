@@ -167,14 +167,23 @@ function AppInner() {
       'loginStart', 'loginUrl', 'loginSubmitting', 'loginResult', 'contextUsage', 'token_update', 'retry_status', 'retry_clean', 'ws_status', 'modelChanged', 'effortChanged', 'thinkingChanged',
       'bgTasks', 'bg_notice', 'auth_required',
     ]);
+    let replay: AppAction[] | null = null;
     function handleMessage(event: MessageEvent) {
       const data = event.data;
+      if (data?.type === 'replay_start') { replay = []; return; }
+      if (data?.type === 'replay_end') {
+        if (replay) dispatch({ type: 'replay', actions: replay });
+        replay = null;
+        return;
+      }
+      if (data?.type === 'ws_status' && !data.connected) replay = null;
       if (data?.type === 'providerNotice') setProviderNotice({ message: String(data.message || ''), error: data.error === true });
       if (data?.type === 'providerSelection') setProviderNotice(null);
       if (data?.type === 'sessionLoaded' && pendingSessionId.current && data.id !== pendingSessionId.current) return;
       if (data?.type === 'historyPage' && data.prefetch === true) return;
       if (data && typeof data.type === 'string' && VALID_TYPES.has(data.type)) {
-        dispatch(data as AppAction);
+        if (replay) replay.push(data as AppAction);
+        else dispatch(data as AppAction);
       }
     }
     window.addEventListener('message', handleMessage);
