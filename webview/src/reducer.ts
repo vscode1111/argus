@@ -43,6 +43,7 @@ export type AppState = {
 };
 
 export type AppAction =
+  | { type: 'replay'; actions: AppAction[] }
   | { type: 'providerSelection'; providerId: string; model: string; effort: string; thinking: boolean }
   | { type: 'interaction'; request: ProviderInteraction | null }
   | { type: 'message'; message: UIMessage }
@@ -107,6 +108,8 @@ function pendingReplayQuestion(messages: UIMessage[]): ProviderInteraction | nul
 
 export function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
+    case 'replay':
+      return action.actions.reduce(reducer, state);
     case 'message':
       // A message of the user's own supersedes a notice still waiting for a turn: the CLI
       // answers some notifications with an empty turn (the orphan replay on --resume), and

@@ -24,6 +24,8 @@ test('large active replies open at the tail, retain earlier blocks and continue 
     }
     frames.length = 0;
     channel.replayHistory(socket);
+    assert.equal(frames[0].type, 'replay_start');
+    assert.equal(frames.at(-1).type, 'replay_end');
     const chunks = frames.filter(frame => frame.type === 'text_chunk');
     assert(chunks.length <= 75, `Expected recent tail, received ${chunks.length} text chunks`);
     assert.equal(chunks.at(-1).text, 'Progress 799');
