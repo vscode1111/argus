@@ -1,4 +1,5 @@
 import type { spawn } from 'child_process';
+import { randomBytes } from 'crypto';
 import type { WatchdogState } from './watchdog';
 import type { RateLimitInfo } from './accountUsage';
 import type { AgentSession } from './providers/types';
@@ -7,6 +8,8 @@ import type { ProviderSelection, ProviderInteraction } from '../shared/provider'
 import { defaultSelection } from './providers/store';
 
 export interface SessionState {
+  readonly agentToken: string;
+  daemonPort?: number;
   selection: ProviderSelection;
   runtime?: AgentSession;
   interaction?: ProviderInteraction | null;
@@ -21,6 +24,15 @@ export interface SessionState {
   toolMap: Map<string, { name: string; input: unknown }>;
   answeredTools: Set<string>;
   pendingAskTools: Set<string>;
+  // AskUserQuestion answered in-process (see !notes/tasks/claude-worker-control/notes.md):
+  // the CLI runs with `--permission-prompt-tool stdio`, asks `can_use_tool` for the
+  // question and waits; the answer goes back as a control_response instead of killing the
+  // CLI and resuming. Without that flag `--print` drops AskUserQuestion from the tool list.
+  askViaStdio: boolean;
+  // tool_use_id -> request_id of the CLI's pending can_use_tool request.
+  askRequests: Map<string, string>;
+  // tool_use_id -> reply recorded before the CLI's request arrived.
+  askReplies: Map<string, Record<string, unknown>>;
   cliDone: boolean;
   // True while the turn in flight is one the CLI started on its own (a background-task
   // notification), false while it is the one the user asked for. handleResult needs the
@@ -66,6 +78,7 @@ export interface SessionState {
 
 export function createSessionState(workspaceDir: string): SessionState {
   const state: SessionState = {
+    agentToken: randomBytes(32).toString('hex'),
     selection: defaultSelection(),
     broadcast: undefined!,
     workspaceDir,
@@ -76,6 +89,9 @@ export function createSessionState(workspaceDir: string): SessionState {
     toolMap: new Map(),
     answeredTools: new Set(),
     pendingAskTools: new Set(),
+    askViaStdio: false,
+    askRequests: new Map(),
+    askReplies: new Map(),
     cliDone: false,
     autonomousTurn: false,
     stopping: false,

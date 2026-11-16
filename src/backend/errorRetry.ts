@@ -26,6 +26,7 @@ interface ErrorRetryDeps {
 }
 
 export interface ErrorRetryController {
+  readonly pending: boolean;
   broadcast: (message: string) => void;
   cancel: (finishTurn: boolean) => boolean;
   beginTurn: () => void;
@@ -76,5 +77,5 @@ export function createErrorRetry(deps: ErrorRetryDeps): ErrorRetryController {
     deps.broadcast(message);
   }
 
-  return { broadcast, cancel, beginTurn };
+  return { broadcast, cancel, beginTurn, get pending() { return timer !== undefined; } };
 }

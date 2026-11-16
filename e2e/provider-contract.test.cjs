@@ -457,6 +457,80 @@ test('an empty pattern list disables error retries and a duplicate terminal erro
   writeConfig(DEFAULT_CONFIG);
 });
 
+function claudeAskState() {
+  const state = createSessionState(dir);
+  state.selection = defaultSelection('claude');
+  state.sendLog = () => {};
+  state.resetStaleTimer = () => {};
+  state.startStaleTimer = () => {};
+  state.watchdog = { state: { lastEventTime: 0, active: true, autoRetryCount: 0, retrying: false, retryTimer: null }, interval: null };
+  const written = []; const events = [];
+  state.currentProc = { pid: 1, stdin: { writable: true, write: line => { written.push(JSON.parse(line)); return true; } } };
+  state.askViaStdio = true; state.cliDone = false;
+  state.broadcast = text => events.push(JSON.parse(text));
+  return { state, written, events };
+}
+const askBlock = { type: 'tool_use', id: 'toolu_ask', name: 'AskUserQuestion',
+  input: { questions: [{ question: 'Which color?', header: 'Color', multiSelect: false, options: [{ label: 'Red' }, { label: 'Blue' }] }] } };
+const askRequest = (requestId, toolName = 'AskUserQuestion', toolUseId = 'toolu_ask') => ({ type: 'control_request', request_id: requestId,
+  request: { subtype: 'can_use_tool', tool_name: toolName, tool_use_id: toolUseId, input: toolName === 'AskUserQuestion' ? askBlock.input : {} } });
+
+test('a Claude question waits in-process and its answer continues the same turn', () => {
+  const { handleToolAnswer } = require('../out/backend/providers/claudeExecution');
+  const { state, written, events } = claudeAskState();
+  handleCliEvent(state, { type: 'assistant', message: { content: [askBlock] } });
+  assert.equal(events.find(e => e.type === 'tool_start').call.id, 'toolu_ask');
+  assert.equal(state.cliDone, false, 'the turn stays live while the question waits');
+  assert.equal(state.suppressCliOutput, false);
+  assert.ok(state.currentProc, 'the CLI is not killed');
+  handleCliEvent(state, askRequest('req-1'));
+  assert.equal(written.length, 0, 'nothing is answered before the user answers');
+  handleToolAnswer(state, { type: 'toolAnswer', id: 'toolu_ask', answers: { 'Which color?': 'Blue' } });
+  assert.deepEqual(written[0], { type: 'control_response', response: { subtype: 'success', request_id: 'req-1',
+    response: { behavior: 'allow', updatedInput: { ...askBlock.input, answers: { 'Which color?': 'Blue' } } } } });
+  assert.equal(events.filter(e => e.type === 'tool_end').length, 1);
+  assert.equal(state.pendingFollowUp, undefined, 'no kill-and-resume follow-up is queued');
+  // The CLI echoes the answered tool, then the model keeps talking in the same turn.
+  handleCliEvent(state, { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_ask', content: 'answered' }] } });
+  handleCliEvent(state, { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'COLOR=Blue' } } });
+  assert.equal(events.filter(e => e.type === 'tool_end').length, 1, 'the echo is not shown twice');
+  assert.equal(events.filter(e => e.type === 'text_chunk').map(e => e.text).join(''), 'COLOR=Blue');
+});
+
+test('an early Claude answer waits for the request, and other permission requests are denied', () => {
+  const { handleToolAnswer } = require('../out/backend/providers/claudeExecution');
+  const { state, written } = claudeAskState();
+  handleCliEvent(state, { type: 'assistant', message: { content: [askBlock] } });
+  handleToolAnswer(state, { type: 'toolAnswer', id: 'toolu_ask', answers: {} });
+  assert.equal(written.length, 0);
+  handleCliEvent(state, askRequest('req-2'));
+  assert.equal(written[0].response.request_id, 'req-2');
+  assert.equal(written[0].response.response.behavior, 'deny', 'a dismissed question is declined, not answered');
+  handleCliEvent(state, askRequest('req-3', 'mcp__scub__write', 'toolu_other'));
+  assert.equal(written[1].response.request_id, 'req-3');
+  assert.equal(written[1].response.response.behavior, 'deny');
+});
+
+test('Stop and a typed message decline a waiting Claude question', () => {
+  const { handleStop, handleSend } = require('../out/backend/providers/claudeExecution');
+  const stopped = claudeAskState();
+  handleCliEvent(stopped.state, { type: 'assistant', message: { content: [askBlock] } });
+  handleCliEvent(stopped.state, askRequest('req-4'));
+  handleStop(stopped.state);
+  clearTimeout(stopped.state.stopKillTimer);
+  assert.equal(stopped.written[0].type, 'control_response');
+  assert.equal(stopped.written[0].response.response.behavior, 'deny');
+  assert.equal(stopped.written[1].request.subtype, 'interrupt', 'the deny precedes the interrupt');
+
+  const typed = claudeAskState();
+  handleCliEvent(typed.state, { type: 'assistant', message: { content: [askBlock] } });
+  handleCliEvent(typed.state, askRequest('req-5'));
+  handleSend(typed.state, { type: 'send', text: 'Use green instead' });
+  assert.equal(typed.written[0].response.response.behavior, 'deny');
+  assert.equal(typed.written[1].type, 'user', 'the message is written after the question is released');
+  assert.ok(typed.events.some(e => e.type === 'user_inject'));
+});
+
 test('a Claude terminal error uses the same retry rules', async () => {
   writeConfig({ ...DEFAULT_CONFIG, errorRetryMaxRetries: 1, errorRetryDelay: 1, errorRetryPatterns: 'scub-transient\\s+overload' });
   const state = createSessionState(dir);

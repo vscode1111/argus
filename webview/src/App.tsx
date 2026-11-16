@@ -5,6 +5,8 @@ import { InputArea } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
 import { SessionHistoryModal } from './components/SessionHistoryModal';
 import { OrchestratorGoalsModal } from './components/OrchestratorGoalsModal';
+import { AgentConnections } from './components/AgentConnections';
+import { useAgentGraph } from './hooks/useAgentGraph';
 import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
 import { UsageIndicator } from './components/UsageIndicator';
@@ -72,6 +74,7 @@ function fireNotification(title: string, body: string): void {
 
 function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const graph = useAgentGraph(state.wsConnected);
   const [initialSessionId] = React.useState(() => {
     const id = new URLSearchParams(window.location.search).get('session');
     return id && /^(?:codex:[A-Za-z0-9_-]{1,128}|[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})$/.test(id) ? id : null;
@@ -100,6 +103,8 @@ function AppInner() {
   const [loadSize, setLoadSize] = React.useState(0);
   const [loadTimedOut, setLoadTimedOut] = React.useState(false);
   const loadTimer = React.useRef<number | null>(null);
+  const focusAfterLoad = React.useRef(false);
+  const [inputFocusRequest, setInputFocusRequest] = React.useState(0);
   const [sessionTitle, setSessionTitle] = React.useState('');
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const sessionIdRef = React.useRef(sessionId);
@@ -187,6 +192,8 @@ function AppInner() {
       }
     }
     window.addEventListener('message', handleMessage);
+    const connection = window.argusConnectionState?.();
+    if (connection) dispatch({ type: 'ws_status', ...connection });
     // The shim's first connect attempt happens while this bundle is still evaluating, so
     // an `auth_required` raised then was dispatched to nobody. Read the state directly
     // once, now that the listener above is in place.
@@ -218,7 +225,9 @@ function AppInner() {
       // CI is green. Silencing that one too would suppress exactly the ping they were
       // waiting for. So the test is "another turn is coming", not "the user started this".
       const midChain = lastAssistant?.autonomous === true && (lastAssistant.bgTasksPending ?? 0) > 0;
-      if (lastAssistant && lastAssistant.outcome !== 'stopped' && !midChain) {
+      const graphPending = lastAssistant?.notificationOrigin === 'graph' && ((lastAssistant.pendingAgentChildren ?? 0) > 0
+        || (lastAssistant.unknownAgentChildren ?? 0) > 0 || lastAssistant.notificationBlocked === true);
+      if (lastAssistant && lastAssistant.outcome !== 'stopped' && !midChain && !graphPending) {
         if (soundOnComplete) playCompletionSound();
         if (notifyOnComplete) {
           const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
@@ -242,7 +251,7 @@ function AppInner() {
 
   const hasPendingAsk = !!state.streaming?.askPausedAt;
   useEffect(() => {
-    if (hasPendingAsk && !hadPendingAsk.current) {
+    if (hasPendingAsk && !hadPendingAsk.current && state.streaming?.notificationOrigin !== 'graph') {
       if (soundOnComplete) playCompletionSound();
       if (notifyOnComplete) {
         fireNotification(notifTitle(state.workspacePath), 'Waiting for your answer');
@@ -477,6 +486,7 @@ function AppInner() {
   // Show the overlay until the selected transcript or new workspace lands.
   // A slow transcript keeps the old conversation covered and offers a retry.
   function beginSessionLoad(size = 0) {
+    focusAfterLoad.current = true;
     setLoadingSession(true);
     setLoadTimedOut(false);
     setLoadSize(size);
@@ -488,6 +498,10 @@ function AppInner() {
   }
   function endSessionLoad() {
     setLoadingSession(false);
+    if (focusAfterLoad.current) {
+      focusAfterLoad.current = false;
+      setInputFocusRequest(value => value + 1);
+    }
     if (loadTimer.current) { window.clearTimeout(loadTimer.current); loadTimer.current = null; }
   }
 
@@ -667,7 +681,7 @@ function AppInner() {
       </div>}
       {state.interaction && <ProviderInteraction key={state.interaction.id} request={state.interaction} />}
       {historyOpen && <SessionHistoryModal currentPath={state.workspacePath} currentId={sessionId ?? undefined} activeIds={activeIds} onResumeWorkspaceSession={resumeWorkspaceSession} onClose={() => setHistoryOpen(false)} />}
-      {goalsOpen && <OrchestratorGoalsModal onOpenSession={resumeWorkspaceSession} onClose={() => setGoalsOpen(false)} />}
+      {goalsOpen && <OrchestratorGoalsModal graph={graph} onOpenSession={resumeWorkspaceSession} onClose={() => setGoalsOpen(false)} />}
       {activityOpen && <SessionActivityModal parentId={sessionId} activity={activity} onClose={() => setActivityOpen(false)} />}
       {accountUsageTab && <AccountUsageModal key={state.providerId} initialTab={accountUsageTab} providerId={state.providerId} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onClose={() => setAccountUsageTab(null)} />}
       {initialFile && <AutoFileViewer path={initialFile} onClose={() => setInitialFile(null)} />}
@@ -680,10 +694,11 @@ function AppInner() {
         )}
         <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
           {topRightActions}
+          <AgentConnections graph={graph} sessionId={loadingSession ? null : sessionId} onOpenSession={resumeWorkspaceSession} />
           <MarkdownBreaksContext.Provider value={hardLineBreaks}>
             <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} historySessionId={state.historySessionId} historyBefore={state.historyBefore} historyRevision={state.historyRevision} onLoadEarlier={(id, before, revision, prefetch) => postMessage({ type: 'loadEarlier', id, before, revision, prefetch })} />
           </MarkdownBreaksContext.Provider>
-          <InputArea providerId={state.providerId} isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} />
+          <InputArea providerId={state.providerId} isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} focusRequest={inputFocusRequest} />
           {loadingSession && (
             <div className="sessionLoader" role="status" aria-live="polite" aria-busy={!loadTimedOut} aria-label="Loading session">
               {loadTimedOut ? (

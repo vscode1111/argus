@@ -1,76 +1,49 @@
-import { useEffect, useRef, useState } from 'react';
-import { postMessage } from '../vscode';
+import type { GraphView } from '../hooks/useAgentGraph';
+import { agentStatus } from './AgentConnections';
 import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
 import styles from './OrchestratorGoalsModal.module.css';
 
-interface Worker {
-  key: string;
-  title: string;
-  status: string;
-  sessionId?: string;
-  workspace: string;
-  providerId?: string;
-  model?: string;
-}
-
-interface Goal {
-  company: string;
-  goal: string;
-  title: string;
-  status: string;
-  workers: Worker[];
-}
-
 interface Props {
+  graph: GraphView;
   onClose: () => void;
   onOpenSession: (workspace: string, sessionId: string) => void;
 }
-
-export function OrchestratorGoalsModal({ onClose, onOpenSession }: Props) {
-  const [goals, setGoals] = useState<Goal[] | null>(null);
-  const [waiting, setWaiting] = useState(true);
-  const [error, setError] = useState('');
-  const timeout = useRef<number | undefined>(undefined);
-  const refresh = () => {
-    setWaiting(true);
-    window.clearTimeout(timeout.current);
-    timeout.current = window.setTimeout(() => { setWaiting(false); setError('Goals are unavailable. Update or restart the Argus server.'); }, 4000);
-    postMessage({ type: 'getOrchestratorGoals' });
-  };
-  useEffect(() => {
-    const receive = (event: MessageEvent) => {
-      if (event.data?.type !== 'orchestratorGoals' || !Array.isArray(event.data.goals)) return;
-      window.clearTimeout(timeout.current);
-      setGoals(event.data.goals);
-      setWaiting(false);
-      setError('');
-    };
-    window.addEventListener('message', receive);
-    refresh();
-    const timer = window.setInterval(refresh, 5000);
-    return () => { window.removeEventListener('message', receive); window.clearInterval(timer); window.clearTimeout(timeout.current); };
-  }, []);
-
+export function OrchestratorGoalsModal({ graph, onClose, onOpenSession }: Props) {
+  const { snapshot, loading, error, refresh } = graph;
+  const goals = snapshot?.scopes.filter(scope => scope.data).map(scope => {
+    const data = scope.data!;
+    const workers = Object.entries(data.workers).map(([key, worker]) => ({ ...worker, key, node: snapshot.nodes.find(n => n.id === worker.sessionId) }));
+    const members = new Set(workers.map(w => w.sessionId));
+    const coordinators = snapshot.nodes.filter(n => n.role === 'coordinator' && (n.company === scope.company && n.goal === scope.goal
+      || snapshot.edges.some(e => e.kind !== 'peer' && e.from === n.id && members.has(e.to))));
+    return { ...scope, ...data.goal, workers, coordinators };
+  });
+  const open = (workspace: string, id: string) => { onOpenSession(workspace, id); onClose(); };
   return <Modal title="Company goals" ariaLabel="Company goals" onClose={onClose} width={640}
-    headerActions={<RefreshButton spinning={waiting} onClick={refresh} label="Refresh goals" title="Refresh goals" />}>
+    headerActions={<RefreshButton spinning={loading} onClick={refresh} label="Refresh goals" title="Refresh goals" />}>
     <div className={styles.body}>
       {error && <p role="alert">{error}</p>}
-      {goals === null && !error && <p role="status">Loading goals…</p>}
+      {!snapshot && !error && <p role="status">{loading ? 'Loading goals…' : 'Waiting for connection…'}</p>}
       {goals?.length === 0 && <p>No company goals yet. Start one with $orchestrate.</p>}
       {goals?.map(goal => <section key={`${goal.company}/${goal.goal}`} className={styles.goal} aria-label={`${goal.company}: ${goal.title}`}>
         <div className={styles.goalHeader}>
-          <div><strong>{goal.title}</strong><span className={styles.company}>{goal.company}</span></div>
+          <div><strong>{goal.title}</strong><span className={styles.company}>{goal.company} · {goal.profile}</span></div>
           <span className={styles.status}>{goal.status}</span>
         </div>
+        {goal.coordinators.map(coordinator => <button key={coordinator.id} type="button" className={styles.worker}
+          onClick={() => open(coordinator.workspace, coordinator.id)}>
+          <strong className={styles.workerName}>Coordinator · {coordinator.title || 'Untitled session'}</strong>
+          <span className={styles.status}>{agentStatus(coordinator)}</span>
+        </button>)}
+        {!goal.coordinators.length && <p className={styles.empty}>No coordinator assigned.</p>}
         {goal.workers.length === 0 && <p className={styles.empty}>No sessions assigned yet.</p>}
         {goal.workers.map(worker => <button key={worker.key} type="button" className={styles.worker}
-          disabled={!worker.sessionId}
-          title={worker.sessionId ? `Open ${worker.title}` : 'Session has not started yet'}
-          onClick={() => { if (worker.sessionId) { onOpenSession(worker.workspace, worker.sessionId); onClose(); } }}>
-          <span className={styles.workerName}>{worker.title}</span>
+          disabled={!worker.sessionId} title={worker.sessionId ? `Open ${worker.title}` : 'Session has not started yet'}
+          onClick={() => { if (worker.sessionId) open(worker.workspace, worker.sessionId); }}>
+          <span className={styles.workerName}>{worker.node?.title || worker.title || worker.key}</span>
           <span className={styles.details}>{[worker.providerId, worker.model].filter(Boolean).join(' · ')}</span>
-          <span className={styles.status}>{worker.status}</span>
+          <span className={styles.status}>{worker.sessionId ? agentStatus(worker.node) : 'Not started'}</span>
         </button>)}
       </section>)}
     </div>

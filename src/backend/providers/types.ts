@@ -4,12 +4,21 @@ import type { AccountInfo, RateLimitInfo } from '../accountUsage';
 import type { SessionState } from '../sessionState';
 
 export interface TurnInput {
+  expectedInteractionId?: string;
   type?: string;
   text?: string;
   images?: Array<{ data: string; mediaType: string; name?: string }>;
   mode?: string;
   _silent?: boolean;
   _askResume?: boolean;
+}
+
+export interface SendAdmission { automatic?: boolean; valid(): boolean; admitted(): void }
+export class AdmissionCancelled extends Error { constructor() { super('Automatic input is no longer current'); } }
+export function checkAdmission(admission?: SendAdmission, commit = false) {
+  if (!admission) return;
+  if (!admission.valid()) throw new AdmissionCancelled();
+  if (commit) admission.admitted();
 }
 
 export interface DeferredConfigurationRequest {
@@ -36,13 +45,14 @@ export interface SessionControl {
 export type AgentEvent =
   | { type: 'thinking_start' }
   | { type: 'text_chunk' | 'thinking_chunk'; text: string }
-  | { type: 'tool_start' | 'tool_end'; call: { id: string; name: string; input: Record<string, unknown>; result?: string; error?: boolean; kind?: string } }
+  | { type: 'tool_start' | 'tool_end'; call: { id: string; name: string; input: Record<string, unknown>; result?: string; error?: boolean; kind?: string; exitCode?: number | null; outcome?: string } }
   | { type: 'sessionId'; id: string }
   | { type: 'done'; interrupted?: boolean }
   | { type: 'error'; text: string; errorKind?: string }
   | { type: 'token_update'; inputTokens: number; outputTokens: number }
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number; contextWindow: number }
   | { type: 'interaction'; request: ProviderInteraction | null }
+  | { type: 'interaction_resolved'; id: string; reason: 'answered' | 'cancelled' | 'superseded' | 'provider-resolved' }
   | { type: 'user_inject'; text: string; images?: TurnInput['images'] };
 
 export interface AgentSession {
@@ -53,7 +63,7 @@ export interface AgentSession {
   getSessionControl?(): SessionControl;
   queueConfiguration?(request: DeferredConfigurationRequest, isCurrent: () => boolean): Promise<DeferredConfigurationStatus>;
   cancelConfiguration?(reason: string): void;
-  send(input: TurnInput): Promise<void>;
+  send(input: TurnInput, admission?: SendAdmission): Promise<void>;
   stop(): Promise<void>;
   respond(id: string, response: unknown): void;
   dispose(): void;

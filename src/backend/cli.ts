@@ -57,6 +57,18 @@ export function interruptProc(proc: ReturnType<typeof spawn>): boolean {
   }
 }
 
+// Answers a control_request the CLI sent on stdout (with `--permission-prompt-tool stdio`
+// a `can_use_tool` request waits for this before the tool runs).
+export function writeControlResponse(proc: ReturnType<typeof spawn> | undefined, requestId: string, response: Record<string, unknown>): boolean {
+  if (!proc?.stdin?.writable) return false;
+  try {
+    proc.stdin.write(JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } }) + '\n');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function killProc(proc: ReturnType<typeof spawn>) {
   if (!proc.pid) return;
   if (IS_WIN) {

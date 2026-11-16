@@ -48,7 +48,8 @@ export type ContentBlock =
   | { type: 'user_inject'; text: string; images?: ImageAttachment[] }
   | { type: 'bg_notice'; notice: TaskNotice };
 
-export type UIMessage = {
+export type NotificationFacts = { notificationOrigin?: 'graph' | null; pendingAgentChildren?: number; unknownAgentChildren?: number; notificationBlocked?: boolean };
+export type UIMessage = NotificationFacts & {
   id: string;
   role: 'user' | 'assistant' | 'error';
   content: string;
@@ -147,7 +148,7 @@ export type RetryStatus = {
   timedOut?: boolean;
 };
 
-export type StreamingState = {
+export type StreamingState = NotificationFacts & {
   thinking: string;
   blocks: ContentBlock[];
   startTime: number;

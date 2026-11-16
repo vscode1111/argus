@@ -1,4 +1,7 @@
 import type { WebSocket } from 'ws';
+import { notifyAgentGraph } from '../agentGraphLive';
+import { manualAgentInput } from '../agentDelivery';
+import { isUiClient } from '../clients';
 import type { Channel } from '../channel';
 import { broadcastToWorkspace, listActiveSessions } from '../channel';
 import type { SessionState } from '../sessionState';
@@ -19,7 +22,7 @@ function saveDefaultSelection(selection: ProviderSelection): void {
 const handled = new Set(['getProviders', 'getSessionControl', 'queueSessionConfiguration', 'switchProvider', 'configureSession', 'saveProviderDefault', 'switchModel', 'switchEffort', 'switchThinking',
   'getModels', 'getAccountUsage', 'getSkills', 'listSessions', 'renameSession', 'deleteSession', 'providerResponse']);
 
-export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg: Record<string, unknown>, init: (s: SessionState) => void): Promise<boolean> {
+export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg: Record<string, unknown>, init: (s: SessionState) => void, authorize = () => {}, admitted = () => {}): Promise<boolean> {
   const type = string(msg.type);
   let state = channel.getClientState(ws);
   const viewing = channel.getViewingSessionId(ws);
@@ -34,6 +37,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
     } else if (type === 'getSessionControl') {
       if (viewing) throw new Error('Return to the active conversation before inspecting its control state');
       reply({ type: 'sessionControl', sessionId: state.sessionId, selection: state.selection,
+        pendingInteraction: state.interaction,
         active: !!state.runtime?.active || !!state.currentProc && !state.cliDone,
         ...state.runtime?.getSessionControl?.(),
         capabilities: { configureAfterTurn: !!state.runtime?.queueConfiguration } });
@@ -52,7 +56,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
         operationId: string(msg.operationId), expectedTurnId: string(msg.expectedTurnId),
         selection: { ...state.selection, model: string(msg.model), effort: string(msg.effort) },
         continuation,
-      }, () => ws.readyState === 1 && channel.getClientState(ws) === state && !channel.getViewingSessionId(ws));
+      }, () => { try { authorize(); return ws.readyState === 1 && channel.getClientState(ws) === state && !channel.getViewingSessionId(ws); } catch { return false; } });
       reply({ type: 'sessionConfigurationQueued', configuration });
     } else if (type === 'configureSession') {
       if (viewing || state.runtime?.active || state.currentProc && !state.cliDone) throw new Error('Wait for the active turn before configuring this conversation');
@@ -71,6 +75,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
         || (msg.thinking !== undefined && typeof msg.thinking !== 'boolean')) throw new Error('Invalid session selection');
       if (next.thinking !== base.thinking && !target.descriptor.thinkingToggle) throw new Error('This provider does not support a thinking toggle');
       await target.validate(next);
+      authorize();
       if (channel.getClientState(ws) !== state || channel.getViewingSessionId(ws)) throw new Error('Conversation changed; try again');
       if (state.runtime?.active || state.currentProc && !state.cliDone) throw new Error('Wait for the active turn before configuring this conversation');
       state.runtime?.dispose(); state.runtime = undefined;
@@ -88,6 +93,8 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
     } else if (type === 'providerResponse') {
       if (viewing) throw new Error('Return to the active conversation before answering');
       runtime(state).respond(string(msg.id), msg.response);
+      admitted();
+      if (isUiClient(ws)) manualAgentInput(state);
       reply({ type: 'providerResponseAccepted' });
     } else if (type === 'saveProviderDefault') {
       saveDefaultSelection(selection);
@@ -103,6 +110,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       }
       if (!viewing) state.runtime?.cancelConfiguration?.('Session selection changed');
       await p.validate(next);
+      authorize();
       if (channel.getClientState(ws) !== state || (channel.getViewingSessionId(ws) || undefined) !== viewing) throw new Error('Conversation changed; try again');
       const detached = channel.detachToBrowsedSession(ws);
       if (detached) { state = detached; init(state); }
@@ -129,6 +137,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       let renamed = false;
       if (type !== 'listSessions') {
         const owner = providerForSession(id);
+        authorize();
         if (type === 'renameSession') {
           await owner.rename(id, state.workspaceDir, string(msg.title));
           renamed = true;
@@ -144,6 +153,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       const sessions = lists.flat().sort((a, b) => b.updatedAt - a.updatedAt);
       if (renamed) {
         const title = sessions.find(session => session.id === id)?.title;
+        notifyAgentGraph(undefined, { type: 'sessionRenamed', id, title });
         if (title) broadcastToWorkspace(state.workspaceDir, JSON.stringify({ type: 'sessionRenamed', id, title }));
       }
       const taskKeys = readSessionTaskKeys();

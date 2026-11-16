@@ -1,5 +1,7 @@
 import type { AgentProvider } from './types';
+import { checkAdmission } from './types';
 import { handleSend, handleStop, handleToolAnswer } from './claudeExecution';
+import { clearClaudeQuestions } from './claudeQuestions';
 import { killProc } from '../cli';
 import { readConfig, writeConfig } from '../config';
 import { fetchModels, fetchAccountInfo } from '../accountUsage';
@@ -13,10 +15,15 @@ export const claudeProvider: AgentProvider = {
   createSession: state => ({
     get active() { return !!state.currentProc && !state.cliDone; },
     get pid() { return state.currentProc?.pid; },
-    async send(input) { handleSend(state, input); },
+    async send(input, admission) {
+      const nativeAutonomous = state.autonomousTurn, wasActive = !!state.currentProc && !state.cliDone;
+      checkAdmission(admission, true); handleSend(state, input);
+      if (admission?.automatic && wasActive) state.autonomousTurn = nativeAutonomous;
+    },
     async stop() { handleStop(state); },
     respond(id, answers) { handleToolAnswer(state, { type: 'toolAnswer', id, answers }); },
     dispose() {
+      clearClaudeQuestions(state, 'superseded');
       const proc = state.currentProc;
       state.currentProc = undefined; state.currentProcKey = undefined;
       if (state.stopKillTimer) clearTimeout(state.stopKillTimer);

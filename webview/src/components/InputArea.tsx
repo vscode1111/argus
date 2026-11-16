@@ -101,12 +101,14 @@ interface Props {
   thinkingEnabled?: boolean;
   onSend?: () => void;
   onStop?: () => void;
+  focusRequest?: number;
 }
 
 
 
-export function InputArea({ providerId = 'claude', isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, wsCloseReason = null, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop }: Props) {
+export function InputArea({ providerId = 'claude', isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, wsCloseReason = null, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop, focusRequest = 0 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { textareaRef.current?.focus({ preventScroll: true }); }, [focusRequest]);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);

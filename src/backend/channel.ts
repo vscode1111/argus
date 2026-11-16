@@ -5,6 +5,9 @@ import { killProc } from './cli';
 import type { ReplayMessage } from './sessions';
 import { displaySegments, latestPage, rememberSessionReplay, replayPageBefore, type HistoryPageSource } from './sessionPages';
 import { noteRequestEvent } from './sessionStats';
+import { sessionJournal } from './sessionJournal';
+import { observeAgentGraph, notifyAgentGraph, onAgentGraphChange } from './agentGraphLive';
+import { deliveryMetadata, scheduledRetry } from './agentDelivery';
 
 const MAX_HISTORY = 200;
 
@@ -43,7 +46,7 @@ export interface ChannelMessage {
 // session via resumeSession) do not receive these. Control events (clear, modelChanged,
 // log, etc.) are NOT in this set and reach all clients regardless of browsing state.
 const SESSION_STREAM_EVENTS = new Set([
-  'providerSelection', 'interaction',
+  'providerSelection', 'interaction', 'interaction_resolved',
   'thinking_start', 'thinking_chunk', 'text_chunk', 'tool_start', 'tool_end',
   'done', 'error', 'message', 'user_inject', 'token_update',
   // 'sessionId' belongs to the live turn: a browsing client is viewing a different
@@ -56,6 +59,7 @@ const SESSION_STREAM_EVENTS = new Set([
 // One SessionEntry per running (or recently-ran) session within a workspace.
 // Clients connect to the most recently active entry; newSession creates a fresh one.
 interface SessionEntry {
+  dispatchOwners?: number;
   readonly key: string;
   // Panel that owns this entry (extension clients pass a stable per-panel id). A
   // reconnecting panel rejoins its own entry instead of the channel default, so two
@@ -77,6 +81,7 @@ interface SessionEntry {
 
 // Internal per-workspace-dir channel data.
 interface ChannelData {
+  daemonPort?: number;
   readonly dir: string;
   entries: Map<string, SessionEntry>;
   clientEntry: Map<WebSocket, SessionEntry>;
@@ -288,6 +293,7 @@ export function reapIdleCliProcs(idleMs: number, now: number = Date.now()): Reap
     for (const entry of cd.entries.values()) {
       const st = entry.state;
       // No process to reclaim, or one that is still working.
+      if (entry.dispatchOwners) continue;
       if (st.runtime && !st.currentProc) {
         const idle = now - entry.lastActivityAt;
         if (!st.runtime.active && idle >= idleMs) {
@@ -523,8 +529,11 @@ function createBroadcastForEntry(entry: SessionEntry): (msg: string) => void {
     let parsed: Record<string, unknown> | undefined;
     try { parsed = JSON.parse(msg) as Record<string, unknown>; } catch {}
     if (parsed) {
+      parsed = deliveryMetadata(entry.state, parsed); msg = JSON.stringify(parsed);
+      sessionJournal.observe(entry.state, entry.state.sessionId, parsed, entry.state.agentToken);
       noteRequestEvent(entry.state, parsed);
       applyMsg(entry, parsed);
+      observeAgentGraph(entry.state, parsed);
     }
     if (parsed?.type === 'contextUsage') entry.lastContextUsage = { sessionId: entry.state.sessionId, frame: msg };
     if (parsed?.type === 'clear') entry.lastContextUsage = null;
@@ -552,6 +561,7 @@ function createEntry(cd: ChannelData): SessionEntry {
     lastActivityAt: Date.now(),
   };
   entry.state.broadcast = createBroadcastForEntry(entry);
+  entry.state.daemonPort = cd.daemonPort;
   cd.entries.set(entry.key, entry);
   return entry;
 }
@@ -562,7 +572,7 @@ function hasActiveTurn(entry: SessionEntry): boolean {
 
 function replaySnapshotToClient(entry: SessionEntry, ws: WebSocket, blocks = entry.snapshot?.blocks, thinking = entry.snapshot?.thinking): void {
   if (!entry.snapshot || !hasActiveTurn(entry)) return;
-  try { ws.send(JSON.stringify({ type: 'thinking_start', reused: true, startedAt: entry.snapshotStartedAt ?? undefined })); } catch { return; }
+  try { ws.send(JSON.stringify(deliveryMetadata(entry.state, { type: 'thinking_start', reused: true, startedAt: entry.snapshotStartedAt ?? undefined }))); } catch { return; }
   if (thinking) { try { ws.send(JSON.stringify({ type: 'thinking_chunk', text: thinking })); } catch { return; } }
   for (const block of blocks ?? []) {
     try {
@@ -689,6 +699,7 @@ function joinEntry(cd: ChannelData, ws: WebSocket, target: SessionEntry, skipRep
 // and schedule eviction from the registry. The session proc is NOT killed - it runs to
 // natural completion. Broadcasts from the proc go to zero clients (no-op) until it exits.
 function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
+  if (entry.dispatchOwners) return;
   entry.state.errorRetry?.cancel(true);
   if (entry.state.watchdog?.state) {
     entry.state.watchdog.state.active = false;
@@ -696,7 +707,7 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
   }
   entry.state.resetStaleTimer?.();
   const t = setTimeout(() => {
-    if (entry.clients.size === 0) {
+    if (entry.clients.size === 0 && !entry.dispatchOwners) {
       // Remember what this panel was last on before the entry (and its sessionId)
       // disappears, so a reconnect long after the grace window still resumes instead of
       // silently starting a blank conversation. Synced rather than only-set-if-present:
@@ -709,6 +720,7 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
       }
       if (entry.state.runtime?.active || entry.state.currentProc && !entry.state.cliDone) { scheduleEntryCleanup(cd, entry); return; }
       cd.entries.delete(entry.key);
+      notifyAgentGraph();
       entry.state.runtime?.dispose(); entry.state.runtime = undefined;
       // Once evicted the entry is unreachable - no client can rejoin it - so its CLI
       // process would linger with nobody to receive its output. Reclaim it here, or
@@ -731,7 +743,47 @@ function scheduleEntryCleanup(cd: ChannelData, entry: SessionEntry): void {
   }
 }
 
-export function getOrCreateChannel(dir: string): Channel {
+export function findAgentState(token: unknown): SessionState | undefined {
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return;
+  for (const cd of registry.values()) {
+    for (const entry of cd.entries.values()) if (entry.state.agentToken === token) return entry.state;
+  }
+}
+
+export function listAgentStates(): SessionState[] {
+  return [...registry.values()].flatMap(channel => [...channel.entries.values()].map(entry => entry.state));
+}
+
+const dispatchListeners = new Set<() => void>();
+export function onDispatchOwnership(listener: () => void) { dispatchListeners.add(listener); return () => dispatchListeners.delete(listener); }
+export function hasDispatchOwnership() { return [...registry.values()].some(cd => [...cd.entries.values()].some(e => !!e.dispatchOwners)); }
+export function acquireSessionEntry(workspace: string, id: string, port: number, settled?: () => void) {
+  getOrCreateChannel(workspace, port);
+  const cd = registry.get(workspaceKey(workspace))!;
+  const existing = [...cd.entries.values()].find(e => e.state.sessionId === id);
+  const entry = existing ?? createEntry(cd);
+  if (!entry.state.sessionId) entry.state.sessionId = id;
+  entry.dispatchOwners = (entry.dispatchOwners ?? 0) + 1;
+  for (const listener of dispatchListeners) listener();
+  let released = false, waiting: (() => void) | undefined;
+  return { state: entry.state, created: !existing, release: (force = false) => {
+    if (released) return true;
+    if (force) { finish(); return true; }
+    const pending = hasActiveTurn(entry) || entry.state.interaction || entry.state.pendingBgTasks.size || scheduledRetry(entry.state);
+    if (pending) {
+      waiting ??= onAgentGraphChange(() => { if (!hasActiveTurn(entry) && !entry.state.interaction && !entry.state.pendingBgTasks.size && !scheduledRetry(entry.state)) finish(); });
+      return false;
+    }
+    finish(); return true;
+  } };
+  function finish() {
+    if (released) return; released = true; waiting?.(); entry.dispatchOwners!--; settled?.();
+    if (!entry.clients.size) scheduleEntryCleanup(cd, entry);
+    for (const listener of dispatchListeners) listener();
+  }
+}
+
+export function getOrCreateChannel(dir: string, daemonPort?: number): Channel {
   const key = workspaceKey(dir);
   let cd = registry.get(key);
   if (!cd) {
@@ -739,6 +791,10 @@ export function getOrCreateChannel(dir: string): Channel {
     registry.set(key, cd);
   }
   const _cd = cd;
+  if (daemonPort !== undefined) {
+    cd.daemonPort = daemonPort;
+    for (const entry of cd.entries.values()) entry.state.daemonPort = daemonPort;
+  }
 
   return {
     addClient(ws, fresh, sessionId, panelId) {
@@ -892,4 +948,5 @@ export function getOrCreateChannel(dir: string): Channel {
 // Exposed for tests to force-evict a channel without waiting for the grace period.
 export function destroyChannel(dir: string): void {
   registry.delete(workspaceKey(dir));
+  notifyAgentGraph();
 }

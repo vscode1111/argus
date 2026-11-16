@@ -1,0 +1,33 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { privateQuestionServer } = require('./fixtures/private-question-server.cjs');
+test('private selected server advertises graph and correlates initial graph snapshot', { timeout: 10000 }, async t => {
+  const server = await privateQuestionServer(); t.after(() => server.close()); const client = await server.connect();
+  client.send({ type: 'getServerInfo' }); const info = await client.wait(f => f.type === 'serverInfo');
+  assert.equal(info.capabilities?.agentGraph?.version, 1);
+  client.send({ type: 'getAgentGraph', requestId: 'initial', subscribe: true });
+  const graph = await client.wait(f => f.type === 'agentGraph' && f.requestId === 'initial');
+  assert.equal(graph.ok, true); assert.deepEqual(graph.snapshot.nodes, []); assert.equal(typeof graph.snapshot.revision.epoch, 'string');
+});
+test('private wire trusted assignment, normalized question projection and subscribed diffs survive reconnect', { timeout: 12000 }, async t => {
+  const server = await privateQuestionServer(); t.after(() => server.close());
+  const producer = await server.connect(), observer = await server.connect();
+  observer.send({ type: 'getAgentGraph', requestId: 'initial', subscribe: true }); const initial = await observer.wait(f => f.type === 'agentGraph' && f.requestId === 'initial');
+  producer.send({ type: 'send', text: 'Check inventory.' }); const pending = (await producer.wait(f => f.type === 'interaction' && f.request)).request;
+  const id = (await producer.wait(f => f.type === 'sessionId')).id;
+  const node = (id, role) => ({ id, providerId: 'claude', role, title: 'Inventory', company: 'inventory', goal: 'stock', workspace: server.dir, createdAt: 1, updatedAt: 1 });
+  observer.send({ type: 'linkAgents', requestId: 'link', parent: 'supervisor', child: id, kind: 'delegates', nodes: [node('supervisor', 'coordinator'), node(id, 'work')] });
+  assert.equal((await observer.wait(f => f.requestId === 'link')).ok, true);
+  const diff = await observer.wait(f => f.upsert?.nodes.some(n => n.id === id && n.status === 'needs-input'));
+  assert.deepEqual(diff.baseRevision, initial.snapshot.revision);
+  assert.equal(diff.upsert.nodes.find(n => n.id === 'supervisor').status, null);
+  observer.send({ type: 'linkAgents', requestId: 'deny', agentToken: 'invalid', parent: 'supervisor', child: id, kind: 'delegates' });
+  assert.equal((await observer.wait(f => f.requestId === 'deny')).error.code, 'graph_forbidden');
+  producer.send({ type: 'toolAnswer', id: pending.id, answers: { 'Choose features': 'Search' } }); await producer.wait(f => f.type === 'done');
+  await observer.wait(f => f.upsert?.nodes.some(n => n.id === id && n.status === 'idle'));
+  const reconnect = await server.connect(); reconnect.send({ type: 'getAgentGraph', requestId: 'rejoin', subscribe: true });
+  const joined = await reconnect.wait(f => f.requestId === 'rejoin'); assert.equal(joined.snapshot.nodes.find(n => n.id === id).pendingInteraction, null);
+  reconnect.send({ type: 'unlinkAgents', requestId: 'unlink', parent: 'supervisor', child: id, kind: 'delegates' }); await reconnect.wait(f => f.requestId === 'unlink');
+  const removed = await reconnect.wait(f => f.remove?.edges.length === 1); assert.deepEqual(removed.baseRevision, joined.snapshot.revision);
+  server.verifySpawn();
+});

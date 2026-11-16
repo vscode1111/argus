@@ -28,11 +28,12 @@ export interface ProviderDescriptor {
 }
 
 export interface ProviderInteraction {
+  sourceToolId?: string;
   id: string;
   title: string;
   detail?: string;
   kind: 'approval' | 'question';
   async?: boolean;
   options?: string[];
-  questions?: Array<{ id: string; question: string; options: string[] }>;
+  questions?: Array<{ id: string; question: string; options: string[]; optionDescriptions?: string[]; multiSelect?: boolean }>;
 }

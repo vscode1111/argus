@@ -124,6 +124,10 @@ export function isAutomatedClient(ws: WebSocket): boolean {
   const m = meta.get(ws);
   return !!m && !m.origin && !m.browser;
 }
+export function isUiClient(ws: WebSocket): boolean {
+  const m = meta.get(ws);
+  return !!m && (!!m.origin || m.browser);
+}
 
 // Every client socket this server is serving, with where it sits in the session
 // registry. Only OPEN sockets, the same filter the "Active connections" count uses -
