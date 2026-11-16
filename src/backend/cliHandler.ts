@@ -1,13 +1,14 @@
 import { saveSession, sessionRecord } from './providers/store';
 import * as fs from 'fs';
 import type { spawn } from 'child_process';
-import { plural, classifyError, API_ERROR_RE, killProc } from './cli';
+import { plural, classifyError, API_ERROR_RE, killProc, writeControlResponse } from './cli';
 import { parseRateLimitEvent } from './accountUsage';
 import { contextWindowFor } from './modelData';
 import { stringifyToolResult } from './toolResult';
 import { noticeFromSystemEvent, noticeLabel } from './taskNotification';
 import type { SessionState } from './sessionState';
 import { noteClaudeUsage } from './sessionStats';
+import { showClaudeQuestion, resolveClaudeQuestion, clearClaudeQuestions } from './providers/claudeQuestions';
 
 // The pending set is the only live inventory of background tasks anywhere in Argus, and
 // until now it was read once per turn, on `done`. A watch session runs for hours between
@@ -72,8 +73,48 @@ function removeBgTask(s: SessionState, id: string | undefined): void {
   broadcastBgTasks(s);
 }
 
+// With `--permission-prompt-tool stdio` the CLI asks before running a tool that is not in
+// --allowedTools and waits for the reply. AskUserQuestion is the only one meant to ask: its
+// request is held until the user answers (see handleToolAnswer). Anything else is denied,
+// which is what --print does on its own without the flag, so no tool gains permission.
+function handleControlRequest(s: SessionState, event: Record<string, unknown>): void {
+  const request = (event.request ?? {}) as Record<string, unknown>;
+  const requestId = typeof event.request_id === 'string' ? event.request_id : '';
+  if (request.subtype !== 'can_use_tool' || !requestId) return;
+  const toolName = String(request.tool_name ?? '');
+  const toolId = String(request.tool_use_id ?? '');
+  if (toolName !== 'AskUserQuestion' || !toolId || s.stopping) {
+    s.sendLog('info', `Denied ${toolName || 'tool'} permission request`);
+    writeControlResponse(s.currentProc, requestId, { behavior: 'deny', message: s.stopping ? 'The user stopped the turn.' : `${toolName} is not permitted in this session.` });
+    return;
+  }
+  const early = s.askReplies.get(toolId);
+  if (early) {
+    s.askReplies.delete(toolId);
+    writeControlResponse(s.currentProc, requestId, early);
+    return;
+  }
+  if (s.answeredTools.has(toolId) || !s.pendingAskTools.has(toolId) && s.toolMap.has(toolId)) {
+    writeControlResponse(s.currentProc, requestId, { behavior: 'deny', message: 'This question is no longer pending.' });
+    return;
+  }
+  if (!s.pendingAskTools.has(toolId) && !s.answeredTools.has(toolId)) {
+    // The question's assistant event was not seen (suppressed output): show it now so it
+    // can still be answered rather than leaving the CLI blocked out of sight.
+    s.toolMap.set(toolId, { name: toolName, input: request.input });
+    s.pendingAskTools.add(toolId);
+    s.broadcast(JSON.stringify({ type: 'tool_start', call: { id: toolId, name: toolName, input: request.input } }));
+  }
+  s.askRequests.set(toolId, requestId);
+  showClaudeQuestion(s);
+}
+
 export function handleCliEvent(s: SessionState, event: Record<string, unknown>): void {
   s.sendLog('debug', `event: ${event.type} ${JSON.stringify(event).slice(0, 120)}`);
+
+  // Before the stop guard: a request the CLI is blocked on must be answered (denied while
+  // stopping) or the interrupted turn never acknowledges.
+  if (event.type === 'control_request') { handleControlRequest(s, event); return; }
 
   // A stop interrupts the CLI instead of killing it, so the turn the user ended keeps
   // emitting for a few more milliseconds and signs off with an is_error `result`. None of
@@ -246,8 +287,14 @@ function handleAssistant(s: SessionState, event: Record<string, unknown>): void 
       s.sendLog('info', `tool_start: ${block.name} (${block.id})`);
       s.toolMap.set(block.id as string, { name: block.name as string, input: block.input });
       s.broadcast(JSON.stringify({ type: 'tool_start', call: { id: block.id, name: block.name, input: block.input } }));
-      if (block.name === 'AskUserQuestion') {
+      if (block.name === 'AskUserQuestion' && s.askViaStdio) {
+        // Answered in-process: the CLI blocks on its can_use_tool request, the turn stays
+        // live and the watchdog skips its ticks while the question is pending.
         s.pendingAskTools.add(block.id as string);
+        showClaudeQuestion(s);
+      } else if (block.name === 'AskUserQuestion') {
+        s.pendingAskTools.add(block.id as string);
+        showClaudeQuestion(s);
         s.suppressCliOutput = true;
         s.cliDone = true;
         s.watchdog.state.active = false;
@@ -280,16 +327,30 @@ function handleAssistant(s: SessionState, event: Record<string, unknown>): void 
 function suppressToolResult(s: SessionState, toolId: string): boolean {
   if (s.answeredTools.has(toolId)) {
     s.answeredTools.delete(toolId);
-    if (s.toolMap.get(toolId)?.name === 'AskUserQuestion') s.suppressCliOutput = true;
+    // The killed-CLI flow replays the turn on resume and must hide that replay; an
+    // in-process answer continues the same turn, so only the echo itself is dropped.
+    if (s.toolMap.get(toolId)?.name === 'AskUserQuestion' && !s.askViaStdio) s.suppressCliOutput = true;
     s.sendLog('info', `Suppressing CLI echo for ${toolId} (already answered)`);
     return true;
   }
   if (s.pendingAskTools.has(toolId)) {
-    s.suppressCliOutput = true;
+    if (s.askViaStdio) {
+      resolveClaudeQuestion(s, toolId, 'provider-resolved');
+      const tc = s.toolMap.get(toolId);
+      s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name, input: tc?.input, result: JSON.stringify({ cancelled: true }) } }));
+    }
+    if (!s.askViaStdio) s.suppressCliOutput = true;
     s.sendLog('info', `Suppressing CLI auto-result for AskUserQuestion ${toolId}`);
     return true;
   }
   return false;
+}
+
+function toolOutcome(event: Record<string, unknown>) {
+  const exitCode = typeof event.exit_code === 'number' && Number.isInteger(event.exit_code) ? event.exit_code : null;
+  const outcome = event.is_error === true || exitCode !== null && exitCode !== 0 ? 'failure'
+    : event.is_error === false || exitCode === 0 ? 'success' : 'unknown';
+  return { exitCode, outcome, error: outcome === 'failure' };
 }
 
 function handleToolResult(s: SessionState, event: Record<string, unknown>): void {
@@ -301,7 +362,7 @@ function handleToolResult(s: SessionState, event: Record<string, unknown>): void
   // and the webview's ToolCall treats `result` as a string (it calls .trim() on it).
   const result = stringifyToolResult(event.content);
   noteBackgroundLaunch(s, result);
-  s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result } }));
+  s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result, ...toolOutcome(event) } }));
 }
 
 function handleUserEvent(s: SessionState, event: Record<string, unknown>): void {
@@ -348,7 +409,7 @@ function handleUserEvent(s: SessionState, event: Record<string, unknown>): void 
       const content = stringifyToolResult(block.content);
       noteBackgroundLaunch(s, content);
       s.sendLog('debug', `tool_result ${toolId}: ${String(content).slice(0, 100)}`);
-      s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content } }));
+      s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? '', input: tc?.input ?? {}, result: content, ...toolOutcome(block) } }));
     } else if (block.type === 'text' && block.text && !synthetic) {
       s.broadcast(JSON.stringify({ type: 'user_inject', text: block.text }));
     }
@@ -454,6 +515,7 @@ export function attachProcHandlers(s: SessionState, proc: ReturnType<typeof spaw
     s.resetStaleTimer();
     s.currentProc = undefined;
     s.currentProcKey = undefined;
+    if (s.askViaStdio) clearClaudeQuestions(s, 'provider-resolved');
     if (s.watchdog.state.retrying) return;
     s.watchdog.state.active = false;
     if (code !== 0 && code !== null) {

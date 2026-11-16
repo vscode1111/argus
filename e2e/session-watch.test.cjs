@@ -1,0 +1,61 @@
+const { test, after } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
+const { EventEmitter } = require('node:events');
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'watch-contract-'));
+process.env.ARGUS_CONFIG = path.join(dir, 'settings.json');
+process.env.ARGUS_ENTRY_GRACE_MS = '20';
+after(() => fs.rmSync(dir, { recursive: true, force: true }));
+const { getOrCreateChannel, destroyChannel } = require('../out/backend/channel');
+const { attachClientHandlers } = require('../out/backend/session');
+const socket = () => { const ws = new EventEmitter(); ws.readyState = 1; ws.frames = []; ws.send = s => ws.frames.push(JSON.parse(s)); return ws; };
+test('separate observer sees UI/autonomous events and retained history without routing or runtime side effects', async t => {
+  const channel = getOrCreateChannel(dir), producer = socket(), observer = socket();
+  attachClientHandlers(producer, channel, '', { panelId: 'inventory-producer' });
+  attachClientHandlers(observer, channel, '', { panelId: 'inventory-observer' });
+  const state = channel.getClientState(producer), observing = channel.getClientState(observer);
+  state.sessionId = 'inventory-session';
+  t.after(() => { producer.emit('close'); observer.emit('close'); destroyChannel(dir); });
+  for (const frame of [{ type: 'thinking_start' }, { type: 'text_chunk', text: 'Inventory checked.' }, { type: 'done' }]) state.broadcast(JSON.stringify(frame));
+  const watch = async extra => {
+    const id = String(observer.frames.length);
+    observer.emit('message', Buffer.from(JSON.stringify({ type: 'watchSession', requestId: id, sessionId: state.sessionId, ...extra })));
+    const end = Date.now() + 300;
+    while (!observer.frames.some(f => f.requestId === id && f.type === 'sessionEvents') && Date.now() < end) await new Promise(r => setTimeout(r, 5));
+    const result = observer.frames.find(f => f.requestId === id && f.type === 'sessionEvents');
+    assert.ok(result, 'correlated observation reply'); return result;
+  };
+  const initial = await watch({});
+  assert.equal(initial.ok, true); assert.deepEqual(initial.events.map(e => e.kind), ['start', 'text', 'end']);
+  assert.equal(state.runtime, undefined); assert.equal(observing.sessionId, undefined);
+  producer.emit('close');
+  for (const frame of [{ type: 'thinking_start' }, { type: 'text_chunk', text: 'Background inventory.' }, { type: 'done' }]) state.broadcast(JSON.stringify(frame));
+  await new Promise(r => setTimeout(r, 50));
+  const retained = await watch({}); assert.deepEqual(retained.events.slice(0, 3), initial.events);
+  assert.equal((await watch({ since: initial.next })).events.length, 3, 'clientless producer events remain visible');
+  assert.equal((await watch({ since: retained.next })).events.length, 0);
+});
+test('correlated errors, overlapping requests, disconnect and backpressure release wait ownership', async () => {
+  const { watchSession } = require('../out/backend/sessionWatch');
+  const { sessionJournal } = require('../out/backend/sessionJournal');
+  const owner = {}, id = 'inventory-waits', observer = socket();
+  sessionJournal.observe(owner, id, { type: 'thinking_start' });
+  const cursor = sessionJournal.read(id).next;
+  const waiting = watchSession(observer, { requestId: 'wait', sessionId: id, since: cursor, wait: 1 });
+  await watchSession(observer, { requestId: 'overlap', sessionId: id, since: cursor, wait: 1 });
+  assert.equal(observer.frames[0].requestId, 'overlap'); assert.equal(observer.frames[0].error.code, 'busy');
+  sessionJournal.observe(owner, id, { type: 'tool_end', call: { id: 'check', error: true } });
+  await waiting; assert.equal(observer.frames[1].requestId, 'wait'); assert.equal(observer.frames[1].ok, true);
+  const disconnected = socket();
+  const closed = watchSession(disconnected, { requestId: 'closed', sessionId: id, since: sessionJournal.read(id).next, wait: 1 });
+  disconnected.readyState = 3; disconnected.emit('close'); await closed;
+  assert.equal(disconnected.frames.length, 0); assert.equal(sessionJournal.stats().waiters, 0);
+  for (const [extra, code] of [[{ since: [] }, 'invalid_request'], [{ wait: 31 }, 'invalid_request'], [{ since: { epoch: '', generation: '', seq: 0 } }, 'invalid_cursor'], [{ sessionId: 'unknown' }, 'unknown_session']]) {
+    const client = socket(); await watchSession(client, { requestId: 'invalid', sessionId: id, ...extra });
+    assert.equal(client.frames.length, 1); assert.equal(client.frames[0].requestId, 'invalid'); assert.equal(client.frames[0].error.code, code);
+  }
+  const slow = socket(); slow.bufferedAmount = 1024 * 1024 + 1;
+  let closeCode; slow.close = code => { closeCode = code; slow.readyState = 3; slow.emit('close'); };
+  await watchSession(slow, { requestId: 'slow', sessionId: id });
+  assert.equal(closeCode, 1009); assert.equal(slow.frames.length, 0); assert.equal(sessionJournal.stats().waiters, 0);
+});

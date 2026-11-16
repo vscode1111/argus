@@ -1,4 +1,9 @@
 import type { ProviderInteraction } from '../../src/shared/provider';
+import type { NotificationFacts } from './types';
+function notificationFacts(value: NotificationFacts): NotificationFacts {
+  return { notificationOrigin: value.notificationOrigin, pendingAgentChildren: value.pendingAgentChildren,
+    unknownAgentChildren: value.unknownAgentChildren, notificationBlocked: value.notificationBlocked };
+}
 import { UIMessage, StreamingState, ToolCallData, ContentBlock, LogLevel, LogEntry, LoginState, RetryStatus, TaskNotice, ImageAttachment } from './types';
 
 export type ContextUsage = { percent: number; inputTokens: number; outputTokens: number; contextWindow?: number };
@@ -47,16 +52,16 @@ export type AppAction =
   | { type: 'providerSelection'; providerId: string; model: string; effort: string; thinking: boolean }
   | { type: 'interaction'; request: ProviderInteraction | null }
   | { type: 'message'; message: UIMessage }
-  | { type: 'thinking_start'; reused?: boolean; startedAt?: number }
+  | ({ type: 'thinking_start'; reused?: boolean; startedAt?: number } & NotificationFacts)
   | { type: 'thinking_chunk'; text: string }
   | { type: 'text_chunk'; text: string }
-  | { type: 'tool_start'; call: ToolCallData }
+  | ({ type: 'tool_start'; call: ToolCallData } & NotificationFacts)
   | { type: 'tool_end'; call: ToolCallData }
-  | { type: 'done'; interrupted?: boolean; pendingBackgroundTasks?: number; backgroundTasksSince?: number; autonomous?: boolean }
+  | ({ type: 'done'; interrupted?: boolean; pendingBackgroundTasks?: number; backgroundTasksSince?: number; autonomous?: boolean } & NotificationFacts)
   | { type: 'bgTasks'; count: number }
   | { type: 'bg_notice'; notice: TaskNotice }
   | { type: 'stop' }
-  | { type: 'error'; text: string; errorKind?: string }
+  | ({ type: 'error'; text: string; errorKind?: string } & NotificationFacts)
   | { type: 'clear' }
   | { type: 'prefill'; text: string }
   | { type: 'workspaceInfo'; path: string; version?: string; model?: string; effort?: string; thinking?: boolean }
@@ -69,7 +74,7 @@ export type AppAction =
   | { type: 'contextUsage'; percent: number; inputTokens: number; outputTokens: number; contextWindow?: number }
   | { type: 'retry_status'; attempt: number; maxRetries: number; delayMs: number; autoRetry?: number; autoRetryMax?: number; errorRetry?: boolean; timedOut?: boolean }
   | { type: 'retry_clean' }
-  | { type: 'user_inject'; text: string; images?: ImageAttachment[] }
+  | ({ type: 'user_inject'; text: string; images?: ImageAttachment[] } & NotificationFacts)
   | { type: 'sessionLoaded'; id: string; messages: UIMessage[]; before?: number }
   | { type: 'historyPage'; id: string; messages: UIMessage[]; before: number; revision?: number; error?: string }
   | { type: 'modelChanged'; model: string }
@@ -125,7 +130,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         ...state,
         pendingNotice: null,
         isStreaming: true,
-        streaming: { thinking: '', blocks, startTime: prev ? prev.startTime : (action.startedAt ?? Date.now()), lastEventTime: Date.now(), logsAtStart: prev ? prev.logsAtStart : state.logs.length, reused: action.reused ?? false, stopped: false, retryStatus: prev ? prev.retryStatus : null, watchdogRetries: prev ? prev.watchdogRetries : 0 },
+        streaming: { ...notificationFacts(action), thinking: '', blocks, startTime: prev ? prev.startTime : (action.startedAt ?? Date.now()), lastEventTime: Date.now(), logsAtStart: prev ? prev.logsAtStart : state.logs.length, reused: action.reused ?? false, stopped: false, retryStatus: prev ? prev.retryStatus : null, watchdogRetries: prev ? prev.watchdogRetries : 0 },
       };
     }
 
@@ -157,7 +162,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
 
     case 'user_inject':
       if (!state.streaming) return state;
-      return { ...state, streaming: { ...state.streaming, blocks: [...state.streaming.blocks, { type: 'user_inject', text: action.text, images: action.images }], lastEventTime: Date.now() } };
+      return { ...state, streaming: { ...state.streaming, ...notificationFacts(action), blocks: [...state.streaming.blocks, { type: 'user_inject', text: action.text, images: action.images }], lastEventTime: Date.now() } };
 
     case 'tool_start':
       if (!state.streaming) return state;
@@ -165,6 +170,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         ...state,
         streaming: {
           ...state.streaming,
+          ...(action.notificationOrigin !== undefined ? notificationFacts(action) : {}),
           blocks: [...state.streaming.blocks, { type: 'tool', call: action.call }],
           lastEventTime: Date.now(),
           retryStatus: null,
@@ -237,6 +243,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         bgTasksPending: hasPendingBg ? action.pendingBackgroundTasks : undefined,
         bgTasksSince: hasPendingBg ? action.backgroundTasksSince : undefined,
         autonomous: action.autonomous || undefined,
+        ...notificationFacts(action),
         finalTokens: state.streaming.liveTokens,
       };
       const resolvedMessages = state.messages.map(m =>
@@ -280,12 +287,13 @@ export function reducer(state: AppState, action: AppAction): AppState {
           responseTime,
           finishedAt: Date.now(),
           outcome: 'error',
+          ...notificationFacts(action),
         });
       } else {
         const idx = existingMessages.findLastIndex(m => m.role === 'assistant');
         if (idx >= 0) {
           existingMessages = existingMessages.map((m, i) =>
-            i === idx ? { ...m, outcome: 'error' as const } : m
+            i === idx ? { ...m, ...notificationFacts(action), outcome: 'error' as const } : m
           );
         }
       }
@@ -509,7 +517,7 @@ export const initialState: AppState = {
   contextUsage: null,
   bgTasks: 0,
   pendingNotice: null,
-  wsConnected: true,
+  wsConnected: false,
   wsCloseReason: null,
   authRequired: false,
   currentModel: '',

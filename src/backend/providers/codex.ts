@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { checkAdmission, AdmissionCancelled, type SendAdmission } from './types';
 import type { AgentProvider, AgentSession, AgentEvent, TurnInput, DeferredConfigurationRequest, DeferredConfigurationStatus, SessionControl } from './types';
 import type { SessionState } from '../sessionState';
 import { codexSessionMeta, type ReplayMessage } from '../sessions';
@@ -109,7 +110,10 @@ function tool(item: JsonObject) {
     : type === 'fileChange' ? { changes: item.changes }
     : type === 'subAgentActivity' ? { agentThreadId: item.agentThreadId, agentPath: item.agentPath, activity: item.kind }
     : { ...object(item.arguments), detail: item.query || item.name || type };
-  return { id: string(item.id), name: string(item.tool) || type, kind, input,
+  const exitCode = typeof item.exitCode === 'number' && Number.isInteger(item.exitCode) ? item.exitCode : null;
+  const outcome = item.status === 'declined' ? 'cancelled' : item.status === 'failed' || exitCode !== null && exitCode !== 0 ? 'failure'
+    : item.status === 'completed' ? 'success' : 'unknown';
+  return { id: string(item.id), name: string(item.tool) || type, kind, input, exitCode, outcome,
     result: typeof item.aggregatedOutput === 'string' ? item.aggregatedOutput
       : item.result !== undefined ? toolResult(item.result) : type === 'fileChange' ? JSON.stringify(item.changes, null, 2) : type === 'subAgentActivity' ? string(item.kind) : string(item.status),
     error: item.status === 'failed' || item.status === 'declined' };
@@ -233,7 +237,7 @@ export class CodexSession implements AgentSession {
   get pid(): number | undefined { return this.rpc.pid; }
   get reconnectNeeded(): boolean { return this.closed; }
 
-  constructor(private readonly state: SessionState, private readonly rpc = new AppServerRpc(), private readonly validate = codexProvider.validate) {
+  constructor(private readonly state: SessionState, private readonly rpc = new AppServerRpc(undefined, undefined, state), private readonly validate = codexProvider.validate) {
     this.pendingAsyncQuestion = state.interaction?.async ? state.interaction : undefined;
     this.rpc.onMessage = (method, params, id) => this.receive(method, params, id);
     this.rpc.onFailure = error => { if (!this.closed) { if (this.busy) this.fail(error); else this.dispose(); } };
@@ -362,7 +366,7 @@ export class CodexSession implements AgentSession {
     if (!this.closed) this.state.broadcast(JSON.stringify(event));
   }
 
-  async send(input: TurnInput): Promise<void> {
+  async send(input: TurnInput, admission?: SendAdmission): Promise<void> {
     const continuation = this.configurationDispatch;
     this.configurationDispatch = undefined;
     if (continuation && continuation === this.pendingConfiguration && input.text === continuation.request.continuation
@@ -372,6 +376,7 @@ export class CodexSession implements AgentSession {
     if (this.closed) throw new Error('Reopen the conversation to reconnect the provider');
     if (this.stopping) await this.stopping;
     if (this.startPending) await this.startPending;
+    checkAdmission(admission);
     const content: JsonObject[] = [];
     if (input.text) content.push({ type: 'text', text: input.text });
     for (const image of input.images ?? []) {
@@ -381,12 +386,14 @@ export class CodexSession implements AgentSession {
     }
     if (this.busy) {
       if (!this.turnId || this.interactions.size) throw new Error('Answer the pending question or wait for the turn to start');
+      checkAdmission(admission, true);
+      const previousQuestion = this.state.interaction;
       await this.rpc.request('turn/steer', { threadId: this.threadId, expectedTurnId: this.turnId, input: content });
-      if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
+      if (previousQuestion?.async && this.state.interaction === previousQuestion) { this.clearAsyncQuestion('superseded'); this.showInteraction(); }
       this.emit({ type: 'user_inject', text: input.text || '', ...(input.images?.length ? { images: input.images } : {}) });
       return;
     }
-    if (this.state.interaction?.async) { this.pendingAsyncQuestion = undefined; this.showInteraction(); }
+    if (this.state.interaction?.async && input.expectedInteractionId === undefined) { this.clearAsyncQuestion('superseded'); this.showInteraction(); }
     this.busy = true; this.state.cliDone = false; this.deltas.clear(); this.lastAgentMessageId = '';
     this.activeSelection = { ...selection }; this.activeMode = input.mode;
     this.outputTokenBaseline = undefined;
@@ -395,18 +402,25 @@ export class CodexSession implements AgentSession {
     this.lastUsageOutputTotal = undefined;
     this.state.liveInputTokens = 0; this.state.completedOutputTokens = 0; this.state.liveOutputChars = 0;
     this.state.lastMessage = { text: input.text || '', images: input.images, mode: input.mode };
-    if (!input._silent) this.state.broadcast(JSON.stringify({ type: 'message', message: { id: randomUUID(), role: 'user', content: input.text || '', images: input.images } }));
-    this.emit({ type: 'thinking_start' });
+    if (!admission) this.announceInput(input);
     this.armIdleTimer();
-    this.startPending = this.startTurn(input, content, selection, this.startingConfiguration);
+    this.startPending = this.startTurn(input, content, selection, this.startingConfiguration, admission);
     try { await this.startPending; }
-    catch (error) { this.fail(error as Error); }
+    catch (error) {
+      if (error instanceof AdmissionCancelled) { this.busy = false; this.state.cliDone = true; this.activeSelection = undefined; if (this.idleTimer) clearTimeout(this.idleTimer); throw error; }
+      this.fail(error as Error);
+    }
     finally { this.startPending = undefined; }
   }
 
-  private async startTurn(input: TurnInput, content: JsonObject[], selection: ProviderSelection, configuration?: ConfigurationOperation): Promise<void> {
+  private announceInput(input: TurnInput) {
+    if (!input._silent) this.state.broadcast(JSON.stringify({ type: 'message', message: { id: randomUUID(), role: 'user', content: input.text || '', images: input.images } }));
+    this.emit({ type: 'thinking_start' });
+  }
+  private async startTurn(input: TurnInput, content: JsonObject[], selection: ProviderSelection, configuration?: ConfigurationOperation, admission?: SendAdmission): Promise<void> {
     await this.rpc.start();
     await this.validate(selection);
+    checkAdmission(admission);
     const fullAccess = input.mode === 'full-access';
     const approvalPolicy = fullAccess ? 'never' : 'on-request';
     const sandbox = fullAccess ? 'danger-full-access' : input.mode === 'plan' ? 'read-only' : 'workspace-write';
@@ -424,6 +438,7 @@ export class CodexSession implements AgentSession {
       }
     }
     if (!this.threadId) {
+      checkAdmission(admission);
       const existing = this.state.sessionId;
       if (existing && !sessionRecord(existing, this.state.workspaceDir)) throw new Error('Conversation does not belong to this workspace');
       const result = await this.rpc.request(existing ? 'thread/resume' : 'thread/start', {
@@ -447,6 +462,9 @@ export class CodexSession implements AgentSession {
     saveSession({ id: this.state.sessionId!, cwd: this.state.workspaceDir, selection: { ...this.state.selection },
       title: old?.title || (input.text || 'New conversation').slice(0, 100), updatedAt: Date.now() });
     if (configuration) configuration.submitted = true;
+    checkAdmission(admission, true);
+    if (input.expectedInteractionId !== undefined && this.state.interaction?.id === input.expectedInteractionId) { this.clearAsyncQuestion('superseded'); this.showInteraction(); }
+    if (admission) this.announceInput(input);
     const response = await this.rpc.request('turn/start', { threadId: this.threadId, input: content,
       ...(selection.model ? { model: selection.model } : {}), ...(selection.effort ? { effort: selection.effort } : {}),
       approvalPolicy, sandboxPolicy,
@@ -503,10 +521,16 @@ export class CodexSession implements AgentSession {
       result = { decision };
     }
     this.rpc.respond(pending.rpcId, result);
-    this.resolveInteraction(id);
+    this.resolveInteraction(id, 'answered');
   }
 
-  private resolveInteraction(id: string): void {
+  private clearAsyncQuestion(reason: 'superseded' | 'cancelled'): void {
+    if (this.pendingAsyncQuestion) this.emit({ type: 'interaction_resolved', id: this.pendingAsyncQuestion.id, reason });
+    this.pendingAsyncQuestion = undefined;
+  }
+
+  private resolveInteraction(id: string, reason: 'answered' | 'provider-resolved' = 'provider-resolved'): void {
+    this.emit({ type: 'interaction_resolved', id, reason });
     this.interactions.delete(id);
     this.pendingInteractionIds = this.pendingInteractionIds.filter(key => key !== id);
     this.showInteraction();
@@ -569,7 +593,10 @@ export class CodexSession implements AgentSession {
       const item = object(params.item); const done = method === 'item/completed';
       if (item.type === 'agentMessage') {
         if (done && !this.deltas.has(`item/agentMessage/delta:${string(item.id)}`)) this.emitAgentText(string(item.id), string(item.text));
-        if (done) { const question = asyncQuestion(item); if (question) { this.pendingAsyncQuestion = question; this.showInteraction(); } }
+        if (done) { const question = asyncQuestion(item); if (question) {
+          if (this.pendingAsyncQuestion && this.pendingAsyncQuestion.id !== question.id) this.clearAsyncQuestion('superseded');
+          this.pendingAsyncQuestion = question; this.showInteraction();
+        } }
       } else if (item.type === 'subAgentActivity') {
         if (done) { const call = tool(item); this.emit({ type: 'tool_start', call }); this.emit({ type: 'tool_end', call }); }
       } else if (!['userMessage', 'reasoning', 'contextCompaction'].includes(string(item.type))) {
@@ -625,6 +652,8 @@ export class CodexSession implements AgentSession {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.busy = false; this.state.cliDone = true; this.turnId = undefined;
     this.activeSelection = undefined; this.activeMode = undefined;
+    for (const id of this.interactions.keys()) this.emit({ type: 'interaction_resolved', id, reason: interrupted ? 'cancelled' : 'provider-resolved' });
+    if (interrupted) this.clearAsyncQuestion('cancelled');
     this.interactions.clear(); this.pendingInteractionIds = [];
     this.showInteraction();
     this.emit({ type: 'done', interrupted });
@@ -639,12 +668,15 @@ export class CodexSession implements AgentSession {
   }
 
   dispose(): void {
+    for (const id of this.interactions.keys()) this.emit({ type: 'interaction_resolved', id, reason: 'superseded' });
+    this.clearAsyncQuestion('superseded');
+    this.interactions.clear(); this.pendingInteractionIds = []; this.showInteraction();
     if (this.pendingConfiguration?.submitted) this.updateConfiguration(this.pendingConfiguration, 'cancelled', 'The provider session was closed');
     this.cancelConfiguration('The provider session was closed');
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.closed = true; this.busy = false; this.state.cliDone = true;
     this.turnId = undefined; this.activeSelection = undefined; this.activeMode = undefined;
-    this.interruptSettled?.(); this.interactions.clear(); this.rpc.dispose();
+    this.interruptSettled?.(); this.rpc.dispose();
   }
 }
 

@@ -1,5 +1,7 @@
 import { spawn } from 'child_process';
-import { IS_WIN, resolveClaudeBin, killProc, interruptProc, plural } from '../cli';
+import { agentEnvironment } from '../agentEnvironment';
+import { nativeQuestionAnswers, resolveClaudeQuestion, clearClaudeQuestions } from './claudeQuestions';
+import { IS_WIN, resolveClaudeBin, killProc, interruptProc, plural, writeControlResponse } from '../cli';
 import { readConfig } from '../config';
 import { noteUsageActivity } from '../usagePoller';
 import { attachProcHandlers, broadcastBgTasks } from '../cliHandler';
@@ -19,6 +21,10 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
 
   if (s.currentProc?.stdin?.writable && !s.cliDone && !msg._silent && !msg._askResume) {
     s.lastMessage = { text, images, mode: msg.mode };
+    // A question still open in this process blocks the CLI, so the message would never be
+    // read. Writing instead of choosing is an answer of its own: decline the question and
+    // let the model read the message next.
+    declinePendingAsks(s, 'The user wrote a message instead of choosing an option. Read it next and follow it.', 'superseded');
     const contentBlocks: Array<Record<string, unknown>> = [];
     if (images && images.length > 0) {
       for (const img of images) {
@@ -49,13 +55,20 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
 
   const isPlan = msg.mode === 'plan';
   const tools = isPlan ? ALLOWED_TOOLS.filter(t => !PLAN_BLOCKED_TOOLS.includes(t)) : ALLOWED_TOOLS;
+  // `--print` silently drops AskUserQuestion from the tool list (CLI 2.1.323, measured in
+  // !notes/tasks/claude-worker-control/scripts/probe-ask-stdio.js); routing permission
+  // prompts to stdio brings it back, and the question then waits in-process for a
+  // control_response. AskUserQuestion is left out of --allowedTools so it is the one tool
+  // that asks; every other can_use_tool request is denied, the CLI's own --print default.
+  const askViaStdio = tools.includes('AskUserQuestion');
   const baseArgs = [
     '--print', '--verbose',
     '--output-format', 'stream-json',
     '--input-format', 'stream-json',
     '--include-partial-messages',
     '--tools', tools.join(','),
-    '--allowedTools', tools.join(','),
+    '--allowedTools', (askViaStdio ? tools.filter(t => t !== 'AskUserQuestion') : tools).join(','),
+    ...(askViaStdio ? ['--permission-prompt-tool', 'stdio'] : []),
   ];
   // Derived from the config at spawn time (see getInfo): the latest switchModel /
   // switchEffort / switchThinking always wins, whichever channel or process it came from.
@@ -100,6 +113,8 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
   s.toolMap.clear();
   s.answeredTools.clear();
   s.pendingAskTools.clear();
+  s.askRequests.clear();
+  s.askReplies.clear();
   s.pendingFollowUp = undefined;
 
   // A stop that has not settled yet (the interrupted turn still owes its `result`) must not
@@ -126,7 +141,7 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
     // exhaustion -> "spawn UNKNOWN"). That must stay a per-turn error: uncaught it
     // kills the server process and every other client's connection with it.
     try {
-      proc = spawn(spawnCmd, args, { cwd: s.workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN, windowsHide: true });
+      proc = spawn(spawnCmd, args, { cwd: s.workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN, windowsHide: true, env: agentEnvironment(s) });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       s.currentProc = undefined;
@@ -142,6 +157,7 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
     s.currentProcKey = procKey;
     attachProcHandlers(s, proc);
   }
+  s.askViaStdio = askViaStdio;
 
   // Reaped when a *new* process is spawned, not on every send. An orphan is created by a
   // process dying (hard kill, kill-all, daemon respawn - see
@@ -182,13 +198,55 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
   proc.stdin!.write(stdinMsg + '\n');
 }
 
+// Sends the reply to a question asked through `can_use_tool`, now or as soon as the CLI's
+// request arrives (the tool_use event precedes it, so a quick answer can beat it).
+export function replyToAsk(s: SessionState, toolId: string, reply: Record<string, unknown>) {
+  const requestId = s.askRequests.get(toolId);
+  if (requestId) {
+    s.askRequests.delete(toolId);
+    writeControlResponse(s.currentProc, requestId, reply);
+  } else {
+    s.askReplies.set(toolId, reply);
+  }
+}
+
+// Declines every question still waiting in this process, marking each one cancelled in
+// the UI. Used by Stop and by a message typed instead of an answer.
+export function declinePendingAsks(s: SessionState, message: string, reason: 'cancelled' | 'superseded' = 'cancelled') {
+  if (!s.askViaStdio) return;
+  for (const toolId of s.pendingAskTools) {
+    const tc = s.toolMap.get(toolId);
+    s.answeredTools.add(toolId);
+    s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: JSON.stringify({ cancelled: true }) } }));
+    replyToAsk(s, toolId, { behavior: 'deny', message });
+  }
+  clearClaudeQuestions(s, reason, false);
+}
+
 export function handleToolAnswer(s: SessionState, msg: { type: string; id?: string; answers?: unknown; mode?: string }) {
   const answerId = msg.id ?? '';
-  const answers = msg.answers as Record<string, string> | undefined;
+  const answers = nativeQuestionAnswers(s, answerId, msg.answers);
   const content = JSON.stringify({ answers });
   const tc = s.toolMap.get(answerId);
 
-  s.pendingAskTools.delete(answerId);
+  // In-process question: the CLI is still waiting on its can_use_tool request, so the
+  // answer becomes that request's reply and the same turn carries on.
+  if (s.askViaStdio && s.pendingAskTools.has(answerId) && s.currentProc && !s.cliDone) {
+    s.answeredTools.add(answerId);
+    s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: answerId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: content } }));
+    s.sendLog('info', `Tool answer for ${answerId} (in-process): ${content.slice(0, 100)}`);
+    const input = (tc?.input && typeof tc.input === 'object' ? tc.input : {}) as Record<string, unknown>;
+    replyToAsk(s, answerId, answers && Object.keys(answers).length > 0
+      ? { behavior: 'allow', updatedInput: { ...input, answers } }
+      : { behavior: 'deny', message: 'The user dismissed the question without answering.' });
+    resolveClaudeQuestion(s, answerId, Object.keys(answers).length ? 'answered' : 'cancelled');
+    // The watchdog skipped its ticks while the question was open; the wait was the user's,
+    // not a stalled CLI, so the idle clock restarts here.
+    s.watchdog.state.lastEventTime = Date.now();
+    return;
+  }
+
+  resolveClaudeQuestion(s, answerId, Object.keys(answers).length ? 'answered' : 'cancelled');
   s.answeredTools.add(answerId);
 
   s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: answerId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: content } }));
@@ -230,11 +288,14 @@ export function handleStop(s: SessionState) {
     s.watchdog.state.retryTimer = null;
   }
   s.watchdog.state.retrying = false;
+  // A question waiting in-process blocks the CLI; decline it before the interrupt so the
+  // turn can end and acknowledge.
+  declinePendingAsks(s, 'The user stopped the turn.');
   for (const toolId of s.pendingAskTools) {
     const tc = s.toolMap.get(toolId);
     s.broadcast(JSON.stringify({ type: 'tool_end', call: { id: toolId, name: tc?.name ?? 'AskUserQuestion', input: tc?.input ?? {}, result: JSON.stringify({ cancelled: true }) } }));
   }
-  s.pendingAskTools.clear();
+  clearClaudeQuestions(s, 'cancelled', false);
   // Interrupt a live turn rather than killing the process. A killed CLI leaves its
   // transcript ending on a user message nobody answered, and the CLI repairs that on the
   // next `--resume` by splicing a synthetic "No response requested." assistant turn into

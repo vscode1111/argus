@@ -46,6 +46,7 @@ function AsyncQuestionDialog({ request }: { request: Interaction }) {
 export function ProviderInteraction({ request }: { request: Interaction }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const respond = (response: object) => postMessage({ type: 'providerResponse', id: request.id, response });
+  if (request.sourceToolId) return null;
   if (request.async) return <AsyncQuestionDialog request={request} />;
   return <section className={styles.row} aria-label="Provider request" aria-live="polite">
     <strong>{request.title}</strong>

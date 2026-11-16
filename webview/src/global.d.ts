@@ -4,6 +4,7 @@
 // mock e2e harness renders the app without that script.
 interface Window {
   argusReconnect?: () => void;
+  argusConnectionState?: () => { connected: boolean; closeReason?: 'peer' | 'idle' };
   /** Published by the browser host shims; absent in the VS Code webview, which is
    *  always a local peer and therefore never asked to log in. */
   argusLogin?: (user: string, password: string) => Promise<{ ok: boolean; status?: number; error?: string; retryAfterMs?: number }>;

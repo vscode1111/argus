@@ -5,6 +5,8 @@ import { killProc } from '../cli';
 import { resolveCodexBinary } from './executable';
 import { noteCliLaunch } from '../cliLaunchCount';
 import { readServerVersion } from '../version';
+import { agentEnvironment } from '../agentEnvironment';
+import type { SessionState } from '../sessionState';
 
 // Full conversation replies include tool output and can exceed 32 MiB.
 const MAX_PROVIDER_FRAME_CHARS = 128 * 1024 * 1024;
@@ -32,7 +34,8 @@ export class AppServerRpc {
   onFailure: (error: Error) => void = () => {};
   get pid(): number | undefined { return this.proc?.pid; }
 
-  constructor(private readonly binary = resolveCodexBinary(), private readonly args = ['app-server']) {}
+  constructor(private readonly binary = resolveCodexBinary(), private readonly args = ['app-server'],
+    private readonly agent?: Pick<SessionState, 'agentToken' | 'daemonPort'>) {}
 
   start(): Promise<void> {
     if (this.ready) return this.ready;
@@ -42,12 +45,12 @@ export class AppServerRpc {
 
   private async initialize(): Promise<void> {
     if (this.closed) throw new Error('Provider connection is closed');
-    let env: NodeJS.ProcessEnv | undefined;
+    const env = agentEnvironment(this.agent);
     if (process.platform === 'win32') {
       const gitBashDir = path.win32.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin');
       if (existsSync(path.win32.join(gitBashDir, 'bash.exe'))) {
         const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === 'path') || 'Path';
-        env = { ...process.env, [pathKey]: `${gitBashDir};${process.env[pathKey] || ''}` };
+        env[pathKey] = `${gitBashDir};${process.env[pathKey] || ''}`;
       }
     }
     this.proc = spawn(this.binary, this.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, shell: false, env });

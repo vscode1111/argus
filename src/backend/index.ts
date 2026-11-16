@@ -6,8 +6,8 @@ import { resolve, isAbsolute, join } from 'path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage, ServerResponse } from 'http';
 
-import { attachClientHandlers } from './session';
-import { getOrCreateChannel, reapIdleCliProcs, reapIdleClients } from './channel';
+import { attachClientHandlers, startGraphDelivery } from './session';
+import { getOrCreateChannel, reapIdleCliProcs, reapIdleClients, hasDispatchOwnership, onDispatchOwnership } from './channel';
 import { closeClient, isLocalAddress, listClients, normalizeAddress, noteClientConnect } from './clients';
 import { checkRateLimit, createSession, hasPassword, isValidSession, noteLoginFailure, noteLoginSuccess, verifyPassword } from './auth';
 import { findWorkspaceForSession } from './sessions';
@@ -334,16 +334,18 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
   // count based (not activity based): an open panel keeps its socket open, so a long
   // agent turn is never killed mid-task; closing the last panel starts the countdown.
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let stopDelivery: (() => void) | undefined;
+  const removeDispatchListener = onDispatchOwnership(() => { if (hasDispatchOwnership()) clearIdleTimer(); else scheduleIdleShutdown(); });
   function clearIdleTimer(): void {
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = undefined; }
   }
   function scheduleIdleShutdown(): void {
     if (options.idleTimeoutMs === undefined) return;
     clearIdleTimer();
-    if (clientCount() > 0) return;
+    if (clientCount() > 0 || hasDispatchOwnership()) return;
     idleTimer = setTimeout(() => {
       idleTimer = undefined;
-      if (clientCount() > 0) return; // a client reconnected in the meantime
+      if (clientCount() > 0 || hasDispatchOwnership()) return; // a client or owned turn appeared
       console.log('[argus-server] idle timeout reached, shutting down');
       shutdown();
     }, options.idleTimeoutMs);
@@ -354,6 +356,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
   // itself exits (the daemon passes onIdleShutdown = process.exit; the dev server
   // and the extension pass nothing and stay alive).
   function shutdown(): void {
+    stopDelivery?.(); removeDispatchListener();
     clearIdleTimer();
     clearInterval(pingTimer);
     wss.close();
@@ -436,7 +439,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       return;
     }
     const serverPort = req.socket.localPort ?? PORT;
-    const channel = getOrCreateChannel(workspaceDir);
+    const channel = getOrCreateChannel(workspaceDir, serverPort);
     const isBrowserClient = reqUrl.searchParams.get('client') === 'browser';
     // Extension panels pass a stable per-panel id so each panel gets its own session
     // entry (without it they all share the channel default and see each other's turns),
@@ -482,6 +485,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       httpServer.removeListener('error', reject);
       const addr = httpServer.address() as { port: number };
       const actualPort = addr.port;
+      stopDelivery = startGraphDelivery(MODEL, actualPort);
       console.log(`[argus-server] WebSocket agent ready at ws://localhost:${actualPort}/agent`);
       // Arm the idle timer at startup too, so a daemon that never gets a client still
       // exits (no-op unless idleTimeoutMs is set; the first connection clears it).
@@ -509,7 +513,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         }
       }, reapSweepMs());
       if (typeof reapTimer.unref === 'function') reapTimer.unref();
-      resolve({ httpServer, port: actualPort, nonce, close: () => { clearIdleTimer(); clearInterval(pingTimer); clearInterval(reapTimer); wss.close(); httpServer.close(); } });
+      resolve({ httpServer, port: actualPort, nonce, close: () => { stopDelivery?.(); removeDispatchListener(); clearIdleTimer(); clearInterval(pingTimer); clearInterval(reapTimer); wss.close(); httpServer.close(); } });
     });
   });
 }

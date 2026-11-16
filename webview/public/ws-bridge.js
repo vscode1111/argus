@@ -80,12 +80,33 @@
 
   window.createArgusBridge = function createArgusBridge(opts) {
     var DELAYS = [1000, 2000, 4000, 8000, 10000];
+    var HEALTH_INTERVAL = 10000, HEALTH_TIMEOUT = 10000;
     // stoppedReason is null for an ordinary drop the backoff loop is already retrying,
     // and 'peer' | 'idle' for the two closes above - kept separate from the dispatched
     // status so callers that only care "is this a close that needs a way back" can still
     // treat it as a boolean while reconnectIfIdle and the visibility listener need to
     // know which one it was.
     var ws, queue = [], ready = false, attempt = 0, reconnectTimer, stoppedReason = null;
+    var conversationId, workspaceRoute;
+    var healthTimer;
+
+    function watchHealth() {
+      clearTimeout(healthTimer);
+      healthTimer = setTimeout(function () {
+        if (!ready) return;
+        // This existing, inexpensive request is answered directly on this socket
+        // and does not refresh the session's idle clock or call a provider API.
+        ws.send(JSON.stringify({ type: 'getBgTasks' }));
+        healthTimer = setTimeout(function () {
+          if (!ready) return;
+          ready = false;
+          ws.onopen = ws.onclose = ws.onmessage = ws.onerror = null;
+          try { ws.close(); } catch (e) {}
+          setStatus(false);
+          scheduleReconnect();
+        }, HEALTH_TIMEOUT);
+      }, HEALTH_INTERVAL);
+    }
 
     function dispatch(data) {
       window.dispatchEvent(new MessageEvent('message', { data: data }));
@@ -111,28 +132,49 @@
     function connect() {
       if (stoppedReason === 'idle' && !isVisible()) return;
       ready = false;
+      clearTimeout(healthTimer);
+      dispatch({ type: 'ws_status', connected: false });
       if (ws) {
         ws.onopen = ws.onclose = ws.onmessage = ws.onerror = null;
         try { ws.close(); } catch (e) {}
       }
       var url = opts.nextUrl();
       if (!url) { setStatus(false); scheduleReconnect(); return; }
+      // Panel ownership is held in daemon memory. Carry the displayed conversation
+      // across reconnects so a restarted daemon cannot silently start a new thread.
+      var target = new URL(url);
+      var route = target.searchParams.get('dir') || '';
+      if (workspaceRoute !== undefined && workspaceRoute !== route) conversationId = undefined;
+      workspaceRoute = route;
+      if (conversationId) target.searchParams.set('session', conversationId);
+      else if (conversationId === null) target.searchParams.delete('session');
+      url = target.toString();
       ws = new WebSocket(url);
 
       ws.onopen = function () {
         ready = true;
         stoppedReason = null;
         attempt = 0;
+        watchHealth();
         setStatus(true);
+        // React is already mounted on a reconnect. Ask for missed history/live
+        // output before flushing any user input queued during the disconnect.
+        if (conversationId) ws.send(JSON.stringify({ type: 'webviewReady' }));
         queue.splice(0).forEach(function (m) { ws.send(JSON.stringify(m)); });
       };
       ws.onmessage = function (event) {
+        if (ready) watchHealth();
         var data = JSON.parse(event.data);
-        if (!opts.acceptMessage || opts.acceptMessage(data)) dispatch(data);
+        if (!opts.acceptMessage || opts.acceptMessage(data)) {
+          if ((data.type === 'sessionId' || data.type === 'sessionLoaded') && typeof data.id === 'string') conversationId = data.id;
+          else if (data.type === 'clear') conversationId = null;
+          dispatch(data);
+        }
       };
-      ws.onerror = function (e) { console.error('[argus-ws] error', e); };
+      ws.onerror = function (e) { ready = false; clearTimeout(healthTimer); dispatch({ type: 'ws_status', connected: false }); console.error('[argus-ws] error', e); };
       ws.onclose = function (ev) {
         ready = false;
+        clearTimeout(healthTimer);
         var code = ev && ev.code;
         if (code === CLOSED_BY_PEER || code === CLOSED_IDLE) {
           stoppedReason = code === CLOSED_IDLE ? 'idle' : 'peer';
@@ -147,6 +189,7 @@
     }
 
     function post(msg) {
+      if (msg && (msg.type === 'newSession' || msg.type === 'send' && typeof msg.text === 'string' && msg.text.trim() === '/clear')) conversationId = null;
       if (ready) ws.send(JSON.stringify(msg));
       else queue.push(msg);
     }
@@ -172,6 +215,7 @@
       if (!stoppedReason || stoppedReason === 'idle') reconnectNow();
     });
 
+    window.argusConnectionState = function () { return { connected: ready, closeReason: stoppedReason || undefined }; };
     connect();
     // The React app offers the way back (the connection dot turns into a Reconnect
     // button), and it is the same bridge in all three hosts, so it is published here

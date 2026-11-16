@@ -1,6 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { agentGraphService } from './agentGraphRequests';
+import { listAgentStates } from './channel';
+import { projectAgentState } from './agentGraphLive';
 
 export interface OrchestratorWorker {
   key: string;
@@ -35,7 +38,7 @@ function readSmallJson(file: string): Record<string, unknown> | undefined {
   } catch { return undefined; }
 }
 
-export function listOrchestratorGoals(): OrchestratorGoal[] {
+function legacyGoals(): OrchestratorGoal[] {
   const goals: OrchestratorGoal[] = [];
   let companies: fs.Dirent[];
   try { companies = fs.readdirSync(ROOT, { withFileTypes: true }); } catch { return goals; }
@@ -70,4 +73,14 @@ export function listOrchestratorGoals(): OrchestratorGoal[] {
     }
   }
   return goals.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100);
+}
+
+export function listOrchestratorGoals(): OrchestratorGoal[] {
+  const scopes = agentGraphService().store.snapshot().scopes, states = listAgentStates();
+  const owned = new Set(scopes.map(s => JSON.stringify([s.company, s.goal])));
+  const goals: OrchestratorGoal[] = scopes.flatMap(scope => scope.data ? [{ company: scope.company, goal: scope.goal,
+    title: scope.data.goal.title, status: scope.data.goal.status, updatedAt: scope.data.goal.updatedAt,
+    workers: Object.entries(scope.data.workers).map(([key, worker]) => ({ ...worker, key, sessionId: worker.sessionId ?? undefined,
+      status: projectAgentState(states.find(s => s.sessionId === worker.sessionId)).status ?? 'unknown', updatedAt: scope.data!.goal.updatedAt })) }] : []);
+  return [...goals, ...legacyGoals().filter(g => !owned.has(JSON.stringify([g.company, g.goal])))].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100);
 }

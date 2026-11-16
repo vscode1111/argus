@@ -1,9 +1,15 @@
 import { getCliLaunchCount, resetCliLaunchCount } from './providers/claudeExecution';
 import { runtime, providerForSession, restoreSelection, selectionMessage } from './providers/registry';
+import { agentIdentity } from './agentIdentity';
+import { handleAgentCommand, authorizeAgent, agentClaimAllowsConfiguration, cancelAgentClaim, agentCaller, disposeAgentCommands } from './agentCommands';
+import { watchSession } from './sessionWatch';
+import { agentGraphService, handleAgentGraphRequest } from './agentGraphRequests';
+import { notifyAgentGraph, onAgentGraphChange } from './agentGraphLive';
+import { AgentDelivery, installAgentDelivery, stopAgentDelivery, manualAgentInput } from './agentDelivery';
 import { selectionFor, records } from './providers/store';
 import { handleProviderRequest } from './providers/requests';
 import { abortPendingStop } from './providers/claudeExecution';
-import type { TurnInput } from './providers/types';
+import type { TurnInput, SendAdmission } from './providers/types';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { WebSocket } from 'ws';
@@ -20,9 +26,9 @@ import { createWatchdog } from './watchdog';
 import { createErrorRetry, parseErrorRetryPatterns } from './errorRetry';
 import { createLoginHandler } from './login';
 import { type SessionState } from './sessionState';
-import { type Channel, listActiveSessions, listOwnedProcs } from './channel';
+import { type Channel, listActiveSessions, listOwnedProcs, listAgentStates, acquireSessionEntry } from './channel';
 import { listCliProcesses, killCliProcess, cpuCoreCount, invalidateProcessSamples } from './processes';
-import { type ClientInfo, type CloseClientResult, isAutomatedClient } from './clients';
+import { type ClientInfo, type CloseClientResult, isAutomatedClient, isUiClient } from './clients';
 import { withAutomaticMarker } from './automaticMarker';
 import { readAuth, setPassword, clearPassword, dropAllSessions, sessionCount, MIN_PASSWORD_LENGTH } from './auth';
 import { broadcastBgTasks } from './cliHandler';
@@ -181,6 +187,22 @@ function initChannelSession(s: SessionState, model: string): void {
   s.watchdog = watchdog;
 }
 
+export function startGraphDelivery(model: string, port: number) {
+  const delivery = new AgentDelivery(agentGraphService().store, {
+    states: listAgentStates,
+    acquire: (node, settled) => {
+      const owned = acquireSessionEntry(node.workspace, node.id, port, settled);
+      if (owned.created) restoreSelection(owned.state, node.id);
+      if (!owned.state.sendLog) initChannelSession(owned.state, model);
+      return owned;
+    },
+    send: sendSession,
+  });
+  installAgentDelivery(delivery);
+  const remove = onAgentGraphChange((state, event) => { if (state && event) delivery.observe(state, event); else void delivery.flush(); });
+  return () => { remove(); disposeAgentCommands(); delivery.dispose(); installAgentDelivery(undefined); };
+}
+
 // Attaches per-client WebSocket handlers to a channel. The client is added to the
 // most recently active session entry (or a new one if the channel is fresh). When
 // the client sends newSession it moves to a brand-new isolated entry; the previous
@@ -202,6 +224,7 @@ export function attachClientHandlers(
   // the next send spawns with --resume (the transcript replays on webviewReady).
   // Guarded on an idle entry so a mid-turn resume pointer is never clobbered.
   if (hooks.sessionId && !liveAttach && !s0.currentProc) restoreSelection(s0, hooks.sessionId);
+  notifyAgentGraph(s0, { type: 'sessionAttached' });
 
   // login is per-client: loginUrl/loginResult only go to the requesting client's ws.
   const login = createLoginHandler(ws, s0.sendLog);
@@ -215,7 +238,7 @@ export function attachClientHandlers(
   });
 
   let mutations = Promise.resolve();
-  const ordered = new Set(['send', 'stop', 'newSession', 'resumeSession', 'refreshSession', 'switchProvider', 'configureSession', 'queueSessionConfiguration', 'switchModel', 'switchEffort', 'switchThinking', 'saveProviderDefault', 'providerResponse', 'toolAnswer']);
+  const ordered = new Set(['send', 'steer', 'retry', 'stop', 'forceError', 'newSession', 'resumeSession', 'refreshSession', 'reserveAgentTurn', 'releaseAgentTurn', 'linkAgents', 'updateAgentScope', 'switchProvider', 'configureSession', 'queueSessionConfiguration', 'switchModel', 'switchEffort', 'switchThinking', 'saveProviderDefault', 'providerResponse', 'toolAnswer']);
   ws.on('message', (data: Buffer) => {
     const handle = async () => {
     // Resolve the session state fresh on every message so that after moveToNewSession
@@ -224,6 +247,9 @@ export function attachClientHandlers(
 
     let msg: {
       type: string;
+      agentToken?: unknown;
+      expectedInteractionId?: string;
+      requestId?: unknown;
       text?: string;
       images?: Array<{ data: string; mediaType: string; name?: string }>;
       mode?: 'plan' | 'edit' | 'full-access';
@@ -242,11 +268,50 @@ export function attachClientHandlers(
       query?: string;
     };
     try { msg = JSON.parse(data.toString()); } catch {
-      s.sendLog('warn', `Malformed WS message: ${data.toString().slice(0, 200)}`);
+      s.sendLog('warn', 'Malformed WS message');
       return;
     }
 
-    if (await handleProviderRequest(ws, channel, msg, st => { if (!st.sendLog) initChannelSession(st, model); })) return;
+    if (msg.type === 'whoami') {
+      const identity = await agentIdentity(msg.agentToken);
+      if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'whoami', requestId: msg.requestId, ...identity }));
+      return;
+    }
+    if (msg.type === 'watchSession') { await watchSession(ws, msg); return; }
+    if (await handleAgentCommand(ws, channel, msg as unknown as Record<string, unknown>, agentGraphService().store, st => { if (!st.sendLog) initChannelSession(st, model); })) return;
+    const guarded = new Set(['send', 'steer', 'retry', 'stop', 'clear', 'forceError', 'toolAnswer', 'providerResponse', 'queueSessionConfiguration', 'configureSession', 'renameSession', 'deleteSession', 'switchModel', 'switchEffort', 'switchThinking', 'switchProvider']);
+    let controlledState = s;
+    const expectedTarget = channel.getViewingSessionId(ws) ?? s.sessionId;
+    const checkControl = () => {
+      if (msg.agentToken === undefined) return;
+      if (channel.getClientState(ws) !== controlledState) throw Error('agent_forbidden');
+      if (channel.getViewingSessionId(ws)) throw Error('agent_forbidden');
+      const target = channel.getViewingSessionId(ws) ?? channel.getClientState(ws).sessionId;
+      if (expectedTarget && target !== expectedTarget) throw Error('agent_forbidden');
+      if (msg.type === 'configureSession' && agentClaimAllowsConfiguration(ws, channel.getClientState(ws), msg.agentToken)) return;
+      if (msg.type === 'configureSession' && controlledState.interaction) throw Error('agent_forbidden');
+      const self = ['queueSessionConfiguration', 'renameSession'].includes(msg.type) && target === agentCaller(msg.agentToken).sessionId;
+      if (msg.type === 'queueSessionConfiguration' && !self) throw Error('agent_forbidden');
+      if (self && agentGraphService().store.snapshot().scopes.some(scope => Object.values(scope.data?.workers ?? {}).some(w => w.sessionId === target))) throw Error('agent_forbidden');
+      if (['renameSession', 'deleteSession'].includes(msg.type) && msg.id !== target) throw Error('agent_forbidden');
+      authorizeAgent(agentGraphService().store, msg.agentToken, channel.getClientState(ws), target, self);
+    };
+    if (msg.agentToken !== undefined) {
+      try {
+        if (guarded.has(msg.type)) checkControl();
+        if (['killAllCliProcesses', 'killCliProcess', 'restartDaemon', 'stopDaemon', 'updateSettings', 'saveProviderDefault'].includes(msg.type)) throw Error('agent_forbidden');
+      } catch { ws.send(JSON.stringify({ type: 'providerNotice', requestId: msg.requestId, code: 'agent_forbidden', error: true, message: 'Agent control denied' })); return; }
+    }
+    if (['newSession', 'resumeSession', 'switchProvider', 'clear'].includes(msg.type) || msg.type === 'send' && msg.text?.trim() === '/clear') cancelAgentClaim(ws);
+    const controlAdmission = msg.agentToken === undefined && msg.type !== 'steer' && msg.expectedInteractionId === undefined ? undefined : { valid: () => { try { checkControl();
+      if (msg.expectedInteractionId !== undefined && (typeof msg.expectedInteractionId !== 'string' || !controlledState.interaction?.async || controlledState.interaction.id !== msg.expectedInteractionId)) return false;
+      return msg.type !== 'steer' || !!(controlledState.runtime?.active || controlledState.currentProc && !controlledState.cliDone) && !controlledState.interaction && !controlledState.errorRetry?.pending && !controlledState.watchdog?.state.retrying; } catch { return false; } }, admitted: () => {
+      if (msg.agentToken === undefined) return;
+      const caller = agentCaller(msg.agentToken); const target = channel.getClientState(ws).sessionId;
+      if (target) agentGraphService().store.recordForward(caller.sessionId!, target, msg.type === 'send' ? 'Parent input' : 'Parent response');
+    } };
+    if (await handleAgentGraphRequest(ws, msg)) return;
+    if (await handleProviderRequest(ws, channel, msg, st => { if (!st.sendLog) initChannelSession(st, model); }, checkControl, () => controlAdmission?.admitted())) return;
 
     if (msg.type === 'webviewReady') {
       ws.send(JSON.stringify(selectionMessage(s)));
@@ -293,7 +358,7 @@ export function attachClientHandlers(
       s.pendingBgTasks.clear();
       broadcastBgTasks(s);
       s.broadcast(JSON.stringify({ type: 'clear' }));
-    } else if (msg.type === 'send' && (msg.text || msg.images?.length)) {
+    } else if ((msg.type === 'send' || msg.type === 'steer') && (msg.text || msg.images?.length)) {
       // A script's request is automatic whether or not it marked itself, so the marker
       // is added here, at the one boundary every such send crosses, before the text is
       // stored, echoed or dispatched. Manual sends from an Argus UI stay unchanged.
@@ -305,12 +370,13 @@ export function attachClientHandlers(
       // sender. Detaching first gives the client its own entry bound to what it is
       // viewing, so the send spawns a normal turn with --resume on that session.
       const detached = channel.detachToBrowsedSession(ws);
+      controlledState = detached ?? s;
       if (detached) {
         if (!detached.sendLog) initChannelSession(detached, model);
-        handleSend(detached, msg);
+        handleSend(detached, msg, isUiClient(ws), controlAdmission);
       } else {
         channel.setBrowsing(ws, false);
-        handleSend(s, msg);
+        handleSend(s, msg, isUiClient(ws), controlAdmission);
       }
     } else if (msg.type === 'getWorkspaceChanges') {
       const workspace = s.workspaceDir;
@@ -434,6 +500,7 @@ export function attachClientHandlers(
       const currentSessionId = channel.getViewingSessionId(ws) ?? s.sessionId;
       ws.send(JSON.stringify({
         type: 'serverInfo',
+        capabilities: { agentGraph: agentGraphService().capability() },
         port: hooks.getServerPort?.() ?? 0,
         cliLaunchCount: getCliLaunchCount(),
         sessionId: currentSessionId,
@@ -475,7 +542,7 @@ export function attachClientHandlers(
         s.sendLog('info', 'Retrying last message');
         s.broadcast(JSON.stringify({ type: 'retry_clean' }));
         beginRequest(s);
-        handleSend(s, { type: 'send', text: s.lastMessage.text, images: s.lastMessage.images, mode: s.lastMessage.mode, _silent: true });
+        handleSend(s, { type: 'send', text: s.lastMessage.text, images: s.lastMessage.images, mode: s.lastMessage.mode, _silent: true }, false, controlAdmission);
       }
     } else if (msg.type === 'forceError') {
       if (s.currentProc) killProc(s.currentProc);
@@ -486,6 +553,8 @@ export function attachClientHandlers(
       login.submitCode(msg.text);
     } else if (msg.type === 'toolAnswer') {
       runtime(s).respond(msg.id || '', (msg as { answers?: unknown }).answers);
+      controlAdmission?.admitted();
+      if (isUiClient(ws)) manualAgentInput(s);
     } else if (msg.type === 'readFilePreview' && msg.path) {
       const result = readFilePreview(msg.path, s.workspaceDir);
       ws.send(JSON.stringify({ type: 'filePreview', ...result }));
@@ -543,6 +612,7 @@ export function attachClientHandlers(
         ws.send(JSON.stringify({ type: 'usageInsights', error: (err as Error).message ?? String(err) }));
       });
     } else if (msg.type === 'stop') {
+      stopAgentDelivery(s);
       s.runtime?.cancelConfiguration?.('Conversation stopped');
       if (!s.errorRetry?.cancel(true)) await runtime(s).stop();
     } else if (msg.type === 'newSession') {
@@ -602,10 +672,7 @@ export function attachClientHandlers(
       // `activeSessions` pushes from notifyActiveSessions().
       ws.send(JSON.stringify({ type: 'activeSessions', sessions: listActiveSessions() }));
     } else if (msg.type === 'getOrchestratorGoals') {
-      const active = new Set(listActiveSessions().map(session => session.id));
-      const goals = listOrchestratorGoals().map(goal => ({ ...goal, workers: goal.workers.map(worker => ({ ...worker,
-        status: worker.sessionId && active.has(worker.sessionId) ? 'running' : worker.status === 'running' ? 'idle' : worker.status,
-      })) }));
+      const goals = listOrchestratorGoals();
       ws.send(JSON.stringify({ type: 'orchestratorGoals', goals }));
     } else if (msg.type === 'getBgTasks') {
       // Same shape: the count is pushed only when it changes, so a client that joined
@@ -655,13 +722,18 @@ export function attachClientHandlers(
       if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'providerNotice', error: true, message: error instanceof Error ? error.message : 'Request failed' }));
     });
     if (ordered.has(type)) mutations = settled;
+    if (ordered.has(type) || type === 'deleteSession') void settled.then(() => notifyAgentGraph());
   });
 }
 
-function handleSend(s: SessionState, msg: TurnInput): void {
+function handleSend(s: SessionState, msg: TurnInput, manual = false, admission?: SendAdmission): void {
+  void sendSession(s, msg, admission ?? (manual ? { valid: () => true, admitted: () => manualAgentInput(s) } : undefined)).catch(error => s.broadcast(JSON.stringify({ type: 'providerNotice', error: true, message: error instanceof Error ? error.message : 'Provider failed' })));
+}
+async function sendSession(s: SessionState, msg: TurnInput, admission?: SendAdmission): Promise<void> {
+  if (admission && !admission.valid()) throw Error('Input is no longer eligible for this session');
   if (!msg._silent) s.errorRetry?.cancel(true);
   s.errorRetry?.beginTurn();
-  void runtime(s).send(msg).catch(error => s.broadcast(JSON.stringify({ type: 'providerNotice', error: true, message: error instanceof Error ? error.message : 'Provider failed' })));
+  await runtime(s).send(msg, admission);
 }
 
 export async function handleResumeSession(s: SessionState, ws: WebSocket, channel: Channel, id: string) {
