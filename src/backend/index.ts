@@ -1,4 +1,4 @@
-import { sessionRecord } from './providers/store';
+import { sessionRecord, sameWorkspace, selectionFor } from './providers/store';
 import { createServer } from 'http';
 import { randomBytes } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
@@ -7,7 +7,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 import { attachClientHandlers, startGraphDelivery } from './session';
-import { getOrCreateChannel, reapIdleCliProcs, reapIdleClients, hasDispatchOwnership, onDispatchOwnership } from './channel';
+import { getOrCreateChannel, listAgentStates, reapIdleCliProcs, reapIdleClients, hasDispatchOwnership, onDispatchOwnership } from './channel';
 import { closeClient, isLocalAddress, listClients, normalizeAddress, noteClientConnect } from './clients';
 import { checkRateLimit, createSession, hasPassword, isValidSession, noteLoginFailure, noteLoginSuccess, verifyPassword } from './auth';
 import { findWorkspaceForSession } from './sessions';
@@ -421,8 +421,16 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     // resolves nowhere (malformed, unknown, or its workspace is gone) is dropped and
     // the connection proceeds on ?dir= alone.
     const rawSession = reqUrl.searchParams.get('session');
+    const strict = reqUrl.searchParams.get('purpose') === 'dashboard-target';
+    const providerId = reqUrl.searchParams.get('provider');
+    if (strict) {
+      const live = listAgentStates().find(s => s.sessionId === rawSession && sameWorkspace(s.workspaceDir, workspaceDir));
+      const storedWorkspace = rawSession && (rawSession.startsWith('codex:') ? sessionRecord(rawSession)?.cwd : findWorkspaceForSession(rawSession));
+      if (!rawSession || !providerId || !(live || storedWorkspace && sameWorkspace(storedWorkspace, workspaceDir))
+        || (live?.selection ?? selectionFor(rawSession, workspaceDir)).providerId !== providerId) { ws.close(4404, 'Target unavailable'); return; }
+    }
     let sessionId: string | undefined;
-    if (rawSession) {
+    if (rawSession && !strict) {
       const sessionWs = rawSession.startsWith('codex:') ? sessionRecord(rawSession)?.cwd : findWorkspaceForSession(rawSession);
       if (sessionWs) {
         sessionId = rawSession;
@@ -434,6 +442,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         console.log(`[argus-server] deep link ${rawSession.slice(0, 64)}: no workspace found, ignoring`);
       }
     }
+    if (strict && rawSession) sessionId = rawSession;
     if (!isAbsolute(workspaceDir) || !existsSync(workspaceDir)) {
       ws.close(4400, 'Invalid workspace directory');
       return;
@@ -448,7 +457,8 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     // The upgrade headers (Origin, User-Agent, peer address) are gone once this handler
     // returns, so what the connection list shows about a client is captured here.
     noteClientConnect(ws, req, { browser: isBrowserClient });
-    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getClients: () => listClients(wss.clients, ws), closeClient: (id) => closeClient(wss.clients, id, ws), onAuthChange: enforceAuth, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, onStopRequest: options.onIdleShutdown ? doStop : undefined, fresh: isBrowserClient, sessionId, panelId });
+    attachClientHandlers(ws, channel, MODEL, { onSettingsChange: enforceOrigins, getClientCount: clientCount, getClients: () => listClients(wss.clients, ws), closeClient: (id) => closeClient(wss.clients, id, ws), onAuthChange: enforceAuth, getServerPort: () => serverPort, onRestartRequest: options.onRespawn ? doRestart : undefined, onStopRequest: options.onIdleShutdown ? doStop : undefined, fresh: isBrowserClient, sessionId, panelId, strictTarget: strict ? { sessionId: sessionId!, workspace: workspaceDir, providerId: providerId! } : undefined });
+    if (strict && ws.readyState === 1) ws.send(JSON.stringify({ type: 'targetReady', sessionId, workspace: channel.getClientState(ws).workspaceDir, providerId }));
     broadcastClientCount();
   });
 

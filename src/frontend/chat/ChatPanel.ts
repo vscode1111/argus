@@ -32,7 +32,7 @@ export class ChatPanel {
   private spinInterval?: ReturnType<typeof setInterval>;
   private spinFrame = 0;
 
-  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, private readonly initialView: 'chat' | 'agents' = 'chat') {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.outputChannel = vscode.window.createOutputChannel('Argus');
@@ -62,10 +62,10 @@ export class ChatPanel {
     captureForegroundWindow();
   }
 
-  public static createNew(extensionUri: vscode.Uri): ChatPanel {
+  public static createNew(extensionUri: vscode.Uri, initialView: 'chat' | 'agents' = 'chat'): ChatPanel {
     const panel = vscode.window.createWebviewPanel(
       ChatPanel.viewType,
-      'Argus',
+      initialView === 'agents' ? 'Argus Agents' : 'Argus',
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,
@@ -74,7 +74,7 @@ export class ChatPanel {
       }
     );
     panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'argus-icon.svg');
-    const instance = new ChatPanel(panel, extensionUri);
+    const instance = new ChatPanel(panel, extensionUri, initialView);
     ChatPanel.panels.add(instance);
     ChatPanel.lastFocused = instance;
     return instance;
@@ -280,7 +280,8 @@ export class ChatPanel {
       .replace('{{wsBridgeUri}}', wsBridgeUri.toString())
       .replace('{{cspSource}}', webview.cspSource)
       .replace('{{wsUrl}}', wsUrl)
-      .replace('{{panelVisible}}', String(this.panel.visible));
+      .replace('{{panelVisible}}', String(this.panel.visible))
+      .replace('{{initialView}}', this.initialView);
     return html;
   }
 

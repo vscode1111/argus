@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.144",
+  "version": "0.0.145",
   "displayName": "Argus",
   "description": "AI coding assistant with Claude Code and Codex providers",
   "license": "UNLICENSED",
@@ -78,6 +78,10 @@
   },
   "contributes": {
     "commands": [
+      {
+        "command": "argus.openAgents",
+        "title": "Argus: Open Agent Dashboard"
+      },
       {
         "command": "argus.openChat",
         "title": "Argus: Open Chat",

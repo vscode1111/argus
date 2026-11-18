@@ -36,7 +36,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       reply({ type: 'providerSelection', ...selection });
     } else if (type === 'getSessionControl') {
       if (viewing) throw new Error('Return to the active conversation before inspecting its control state');
-      reply({ type: 'sessionControl', sessionId: state.sessionId, selection: state.selection,
+      reply({ type: 'sessionControl', sessionId: state.sessionId, workspace: state.workspaceDir, selection: state.selection,
         pendingInteraction: state.interaction,
         active: !!state.runtime?.active || !!state.currentProc && !state.cliDone,
         ...state.runtime?.getSessionControl?.(),
@@ -92,6 +92,7 @@ export async function handleProviderRequest(ws: WebSocket, channel: Channel, msg
       fresh.broadcast(JSON.stringify(selectionMessage(fresh)));
     } else if (type === 'providerResponse') {
       if (viewing) throw new Error('Return to the active conversation before answering');
+      authorize();
       runtime(state).respond(string(msg.id), msg.response);
       admitted();
       if (isUiClient(ws)) manualAgentInput(state);

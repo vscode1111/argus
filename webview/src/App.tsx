@@ -1,11 +1,12 @@
 import { ProviderInteraction } from './components/ProviderInteraction';
 import React, { useEffect, useReducer, useRef, useCallback } from 'react';
 import { MessageList, MessageListHandle } from './components/MessageList';
-import { InputArea } from './components/InputArea';
+import { InputArea, type InputDraft } from './components/InputArea';
 import { LogPanel } from './components/LogPanel';
 import { SessionHistoryModal } from './components/SessionHistoryModal';
 import { OrchestratorGoalsModal } from './components/OrchestratorGoalsModal';
 import { AgentConnections } from './components/AgentConnections';
+import { AgentDashboard } from './components/AgentDashboard';
 import { useAgentGraph } from './hooks/useAgentGraph';
 import { AccountUsageModal } from './components/AccountUsageModal';
 import { WorkspaceMenu } from './components/WorkspaceMenu';
@@ -75,6 +76,18 @@ function fireNotification(title: string, body: string): void {
 function AppInner() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const graph = useAgentGraph(state.wsConnected);
+  const composerDraft = useRef<InputDraft>({ text: '', images: [] });
+  const [agentsView, setAgentsView] = React.useState(() => ((window as Window & { argusInitialView?: string }).argusInitialView ?? new URLSearchParams(window.location.search).get('view')) === 'agents');
+  useEffect(() => {
+    const changed = () => setAgentsView(new URLSearchParams(window.location.search).get('view') === 'agents');
+    window.addEventListener('popstate', changed);
+    return () => window.removeEventListener('popstate', changed);
+  }, []);
+  function showAgents(visible: boolean) {
+    const url = new URL(window.location.href);
+    if (visible) url.searchParams.set('view', 'agents'); else url.searchParams.delete('view');
+    window.history.pushState(null, '', url.toString()); setAgentsView(visible);
+  }
   const [initialSessionId] = React.useState(() => {
     const id = new URLSearchParams(window.location.search).get('session');
     return id && /^(?:codex:[A-Za-z0-9_-]{1,128}|[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})$/.test(id) ? id : null;
@@ -580,6 +593,9 @@ function AppInner() {
         </>
       )}
       <div className="headerControls">
+      <button className="btn-icon" title="Agent dashboard" aria-label="Agent dashboard" onClick={() => showAgents(true)}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="5" r="3" /><rect x="2" y="16" width="6" height="6" /><rect x="16" y="16" width="6" height="6" /><path d="M12 8v4H5v4m7-4h7v4" /></svg>
+      </button>
       {showSessionBar && (
         <>
           <button
@@ -673,6 +689,16 @@ function AppInner() {
   // replaces the app rather than covering it.
   if (state.authRequired) return <LoginScreen />;
 
+  if (agentsView) {
+    const open = (workspace: string, id: string) => {
+      if (id !== sessionId) composerDraft.current = { ...composerDraft.current, text: '', images: [] };
+      showAgents(false); resumeWorkspaceSession(workspace, id);
+    };
+    return <div className="app"><AgentDashboard graph={graph} onBack={() => showAgents(false)} onGoals={() => setGoalsOpen(true)} onOpenSession={open} />
+      {goalsOpen && <OrchestratorGoalsModal graph={graph} onOpenSession={open} onClose={() => setGoalsOpen(false)} />}
+    </div>;
+  }
+
   return (
     <div className="app">
       {providerNotice?.message && <div className={[noticeStyles.notice, providerNotice.error ? noticeStyles.error : ''].filter(Boolean).join(' ')} role="status">
@@ -698,7 +724,7 @@ function AppInner() {
           <MarkdownBreaksContext.Provider value={hardLineBreaks}>
             <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} historySessionId={state.historySessionId} historyBefore={state.historyBefore} historyRevision={state.historyRevision} onLoadEarlier={(id, before, revision, prefetch) => postMessage({ type: 'loadEarlier', id, before, revision, prefetch })} />
           </MarkdownBreaksContext.Provider>
-          <InputArea providerId={state.providerId} isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} focusRequest={inputFocusRequest} />
+          <InputArea draft={composerDraft} providerId={state.providerId} isStreaming={state.isStreaming} prefill={state.prefill} workspacePath={state.workspacePath} version={state.version} contextUsage={state.contextUsage} bgTasks={state.bgTasks} wsConnected={state.wsConnected} wsCloseReason={state.wsCloseReason} currentModel={state.currentModel} currentEffort={state.currentEffort} thinkingEnabled={state.thinkingEnabled} onSend={scrollToBottom} onStop={() => dispatch({ type: 'stop' })} focusRequest={inputFocusRequest} />
           {loadingSession && (
             <div className="sessionLoader" role="status" aria-live="polite" aria-busy={!loadTimedOut} aria-label="Loading session">
               {loadTimedOut ? (

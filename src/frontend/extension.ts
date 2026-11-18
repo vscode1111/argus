@@ -274,6 +274,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('argus.openChat', () => {
       ChatPanel.createNew(context.extensionUri);
     }),
+    vscode.commands.registerCommand('argus.openAgents', () => {
+      ChatPanel.createNew(context.extensionUri, 'agents');
+    }),
 
     vscode.commands.registerCommand('argus.newSession', () => {
       const panel = ChatPanel.focusOrCreate(context.extensionUri);

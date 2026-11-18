@@ -48,10 +48,12 @@ test('a send right after a manual stop starts a real turn instead of being swall
     ws.on('error', (err) => rej(new Error(`WS connect failed: ${err.message}`)));
   });
 
-  const state = { textChunks: 0, started: false, done: false, injected: false, logs: [] as string[] };
+  const state = { textChunks: 0, text: '', started: false, done: false, injected: false, logs: [] as string[] };
   ws.on('message', (m) => {
     const e = JSON.parse(m.toString());
-    if (e.type === 'text_chunk') state.textChunks++;
+    // The previous turn can still deliver text while stop/send is in transit.
+    // Only the next thinking_start establishes which turn owns the output.
+    if (e.type === 'text_chunk' && state.started) { state.textChunks++; state.text += e.text; }
     else if (e.type === 'log') state.logs.push(String(e.text));
     else if (e.type === 'user_inject') state.injected = true;
     else if (e.type === 'thinking_start') state.started = true;
@@ -72,15 +74,16 @@ test('a send right after a manual stop starts a real turn instead of being swall
     expect(await until(() => state.textChunks > 0, 60_000), 'first turn should start streaming').toBe(true);
 
     // Stop and send again in the same tick - the window the bug lived in.
-    state.started = false; state.done = false; state.textChunks = 0; state.injected = false; state.logs = [];
+    state.started = false; state.done = false; state.textChunks = 0; state.text = ''; state.injected = false; state.logs = [];
     ws.send(JSON.stringify({ type: 'stop' }));
     ws.send(JSON.stringify({ type: 'send', text: 'Reply with exactly: PROBE-OK' }));
 
-    // It must be a fresh spawn, not an inject into (or reuse of) the killed process.
+    // It must be an independent turn, not an inject into the stopped turn.
     expect(await until(() => state.textChunks > 0, 60_000), 'second turn should produce output').toBe(true);
     expect(state.injected, 'the message must not be swallowed as a mid-turn inject').toBe(false);
     expect(state.started, 'the second turn must start independently').toBe(true);
     expect(await until(() => state.done, 60_000), 'second turn should finish normally').toBe(true);
+    expect(state.text.trim(), 'the output must belong to the second request').toBe('PROBE-OK');
   } finally {
     ws.close();
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* gone */ }

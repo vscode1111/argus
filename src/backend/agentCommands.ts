@@ -1,25 +1,42 @@
 import type { WebSocket } from 'ws';
 import type { Channel } from './channel';
-import { findAgentState, acquireSessionEntry } from './channel';
+import { findAgentState, listAgentStates, acquireSessionEntry } from './channel';
 import type { SessionState } from './sessionState';
 import type { AgentGraph, GraphNode } from './agentGraph';
 import { name, scopeDocument, worker, integer, type WorkerBinding } from './agentGraphValidation';
 import { onAgentGraphChange } from './agentGraphLive';
 import { sameWorkspace } from './providers/store';
 
-interface Reservation { ws: WebSocket; state: SessionState; caller?: SessionState; token?: unknown; company: string; goal: string; key: string; fresh: boolean; registered: boolean; binding?: WorkerBinding; revision?: number; off?: () => void; close(): void }
+interface Reservation { ws: WebSocket; state: SessionState; releaseOwner?: () => void; caller?: SessionState; token?: unknown; company: string; goal: string; key: string; fresh: boolean; registered: boolean; binding?: WorkerBinding; revision?: number; off?: () => void; close(): void }
 const reservations = new Map<string, Reservation>();
 const bySocket = new WeakMap<WebSocket, Reservation>();
-const commandOwners = new Map<SessionState, ReturnType<typeof acquireSessionEntry>>();
-function ownWorker(state: SessionState) {
-  if (!state.sessionId || commandOwners.has(state)) return;
-  const owned = acquireSessionEntry(state.workspaceDir, state.sessionId, state.daemonPort ?? 0, () => commandOwners.delete(state));
-  commandOwners.set(state, owned);
+interface CommandOwner { lease: ReturnType<typeof acquireSessionEntry>; borrowers: Map<object, () => void> }
+const commandOwners = new Map<SessionState, CommandOwner>();
+let disposing = false;
+export function borrowSessionEntry(state: SessionState, borrower: object): () => void {
+  if (disposing || !state.sessionId || !listAgentStates().includes(state)) throw Error('graph_target_mismatch');
+  let record = commandOwners.get(state);
+  if (record?.borrowers.has(borrower)) return record.borrowers.get(borrower)!;
+  if (!record?.lease.retain()) {
+    const next: CommandOwner = { lease: acquireSessionEntry(state.workspaceDir, state.sessionId, state.daemonPort ?? 0, () => {
+      if (commandOwners.get(state) === next && !next.borrowers.size) commandOwners.delete(state);
+    }, state), borrowers: new Map() };
+    record = next; commandOwners.set(state, record);
+  }
+  const owned = record; let released = false;
+  const release = () => { if (released) return; released = true; owned.borrowers.delete(borrower); if (!owned.borrowers.size) owned.lease.release(); };
+  owned.borrowers.set(borrower, release); return release;
+}
+function ownWorker(r: Reservation) {
+  r.releaseOwner ??= borrowSessionEntry(r.state, r);
 }
 export function disposeAgentCommands() {
-  for (const r of [...reservations.values()]) r.close();
-  for (const owned of commandOwners.values()) owned.release(true);
-  commandOwners.clear();
+  disposing = true;
+  try {
+    for (const r of [...reservations.values()]) r.close();
+    for (const owned of commandOwners.values()) { owned.borrowers.clear(); owned.lease.release(true); }
+    commandOwners.clear();
+  } finally { disposing = false; }
 }
 const keyOf = (company: string, goal: string, key: string) => JSON.stringify([company, goal, key]);
 export function agentCaller(token: unknown): SessionState {
@@ -94,10 +111,10 @@ export async function handleAgentCommand(ws: WebSocket, channel: Channel, msg: R
       }
       const r: Reservation = { ws, state, caller, token: msg.agentToken, company, goal, key, fresh, binding: fresh ? worker(msg.worker) : undefined, registered: false, close() {
         if (reservations.get(id) !== r) return; reservations.delete(id); bySocket.delete(ws); r.off?.(); ws.removeListener('close', r.close);
-        commandOwners.get(r.state)?.release();
+        r.releaseOwner?.();
       } };
       reservations.set(id, r); bySocket.set(ws, r); ws.once('close', r.close);
-      if (!fresh) { ownWorker(state); watchSettlement(r, channel); }
+      if (!fresh) { ownWorker(r); watchSettlement(r, channel); }
       reply({ ok: true, sessionId: state.sessionId ?? null }); return true;
     }
     const r = bySocket.get(ws);
@@ -122,7 +139,7 @@ export async function handleAgentCommand(ws: WebSocket, channel: Channel, msg: R
         const parent: GraphNode = previous ?? { id: parentId, providerId: r.caller?.selection.providerId ?? String(msg.parentProviderId), role: 'coordinator', title: '', company, goal, workspace: r.caller?.workspaceDir ?? state.workspaceDir, createdAt: now, updatedAt: now };
         const child: GraphNode = { id: state.sessionId, providerId: binding.providerId, role: binding.role, title: binding.title, company, goal, workspace: binding.workspace, createdAt: now, updatedAt: now };
         const bound = store.bindWorker(company, goal, key, parent, child, r.revision!);
-        ownWorker(state);
+        ownWorker(r);
         store.recordForward(parent.id, child.id, 'Parent input');
         r.off?.(); watchSettlement(r, channel);
         if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'agentRegistration', ok: true, key, sessionId: state.sessionId, scope: bound }));

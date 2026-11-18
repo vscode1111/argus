@@ -40,7 +40,7 @@ export function useAgentGraph(connected: boolean): GraphView {
         current = value;
       } else {
         if (pending) return;
-        if (message.ok === false) { current = null; setView({ snapshot: null, loading: false, error: 'Linked sessions are unavailable. Try again.' }); return; }
+        if (message.ok === false) { if (message.error?.code === 'graph_refresh_failed' && current) { request(); return; } current = null; setView({ snapshot: null, loading: false, error: 'Linked sessions are unavailable. Try again.' }); return; }
         if (!current) return;
         const { baseRevision: base, revision } = message;
         if (revision?.epoch === current.revision.epoch && revision.seq <= current.revision.seq) return;

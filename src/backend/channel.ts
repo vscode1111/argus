@@ -757,7 +757,8 @@ export function listAgentStates(): SessionState[] {
 const dispatchListeners = new Set<() => void>();
 export function onDispatchOwnership(listener: () => void) { dispatchListeners.add(listener); return () => dispatchListeners.delete(listener); }
 export function hasDispatchOwnership() { return [...registry.values()].some(cd => [...cd.entries.values()].some(e => !!e.dispatchOwners)); }
-export function acquireSessionEntry(workspace: string, id: string, port: number, settled?: () => void) {
+export function acquireSessionEntry(workspace: string, id: string, port: number, settled?: () => void, expected?: SessionState) {
+  if (expected && ![...(registry.get(workspaceKey(workspace))?.entries.values() ?? [])].some(e => e.state === expected && e.state.sessionId === id)) throw Error('graph_target_mismatch');
   getOrCreateChannel(workspace, port);
   const cd = registry.get(workspaceKey(workspace))!;
   const existing = [...cd.entries.values()].find(e => e.state.sessionId === id);
@@ -765,19 +766,22 @@ export function acquireSessionEntry(workspace: string, id: string, port: number,
   if (!entry.state.sessionId) entry.state.sessionId = id;
   entry.dispatchOwners = (entry.dispatchOwners ?? 0) + 1;
   for (const listener of dispatchListeners) listener();
-  let released = false, waiting: (() => void) | undefined;
-  return { state: entry.state, created: !existing, release: (force = false) => {
+  let released = false, generation = 0, waiting: (() => void) | undefined;
+  return { state: entry.state, created: !existing, retain: () => {
+    if (released) return false;
+    generation++; waiting?.(); waiting = undefined; return true;
+  }, release: (force = false) => {
     if (released) return true;
     if (force) { finish(); return true; }
     const pending = hasActiveTurn(entry) || entry.state.interaction || entry.state.pendingBgTasks.size || scheduledRetry(entry.state);
     if (pending) {
-      waiting ??= onAgentGraphChange(() => { if (!hasActiveTurn(entry) && !entry.state.interaction && !entry.state.pendingBgTasks.size && !scheduledRetry(entry.state)) finish(); });
+      if (!waiting) { const current = generation; waiting = onAgentGraphChange(() => { if (current === generation && !hasActiveTurn(entry) && !entry.state.interaction && !entry.state.pendingBgTasks.size && !scheduledRetry(entry.state)) finish(); }); }
       return false;
     }
     finish(); return true;
   } };
   function finish() {
-    if (released) return; released = true; waiting?.(); entry.dispatchOwners!--; settled?.();
+    if (released) return; released = true; generation++; waiting?.(); waiting = undefined; entry.dispatchOwners!--; settled?.();
     if (!entry.clients.size) scheduleEntryCleanup(cd, entry);
     for (const listener of dispatchListeners) listener();
   }

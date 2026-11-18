@@ -1,0 +1,46 @@
+.diagram { min-width: 0; }
+.toolbar, .legend, .collapse { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+.toolbar output { min-width: 4em; }
+.help { margin: 8px 0; }
+.canvas { display: block; width: 100%; height: clamp(360px, 60vh, 620px); background: var(--assistant-bg); border: 1px solid var(--border); touch-action: none; cursor: grab; }
+.canvas:active { cursor: grabbing; }
+.canvas:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
+.canvas path[role="button"] { cursor: pointer; }
+.canvas path[role="button"]:focus-visible { outline: 2px solid var(--vscode-focusBorder); stroke-width: 4; }
+.edge, .review, .peer { fill: none; stroke: var(--fg); stroke-width: 2; }
+.review { stroke-dasharray: 9 5; }
+.peer { stroke-dasharray: 2 6; }
+.arrow { fill: var(--fg); }
+.company { fill: var(--fg); font-size: 16px; font-weight: 600; }
+.node { cursor: pointer; }
+.node ellipse, .node polygon, .node rect { fill: var(--bg); stroke: var(--fg); stroke-width: 2; }
+.node text { fill: var(--fg); font-size: 14px; pointer-events: none; }
+.role { font-weight: 700; font-size: 12px; }
+.node:focus-visible ellipse, .node:focus-visible polygon, .node:focus-visible rect { stroke: var(--vscode-focusBorder); stroke-width: 5; }
+.selected ellipse, .selected polygon, .selected rect { stroke: var(--vscode-focusBorder); stroke-width: 4; }
+.legend { padding: 12px; border: 1px solid var(--border); }
+.legend span { margin-right: 12px; }
+.collapse button { text-align: left; overflow-wrap: anywhere; }
+.diagram { --forward-traffic: color-mix(in srgb, var(--fg) 75%, var(--mention-fg)); --reverse-traffic: color-mix(in srgb, var(--fg) 75%, var(--error-fg)); }
+.meta { font-size: 10px; }
+.forward { color: var(--forward-traffic); }
+.reverse { color: var(--reverse-traffic); }
+.traffic { fill: none; stroke: currentColor; stroke-width: 4; stroke-dasharray: 7 4; transition: opacity 1s linear; }
+.flow { animation: travel .8s linear infinite; }
+.traffic[data-waiting="true"] { stroke-width: 5; }
+.waitLabel { fill: currentColor; font-size: 12px; paint-order: stroke; stroke: var(--assistant-bg); stroke-width: 4; pointer-events: none; }
+.exchanges { margin: 12px 0; overflow-wrap: anywhere; }
+.exchanges details { border: 1px solid var(--border); padding: 8px; }
+.exchanges summary { cursor: pointer; }
+.exchanges p { margin: 8px 0; }
+.running ellipse, .running polygon, .running rect { stroke: var(--forward-traffic); animation: working 1.5s ease-in-out infinite; }
+.needs-input ellipse, .needs-input polygon, .needs-input rect { stroke-width: 5; stroke-dasharray: 5 2; }
+.error ellipse, .error polygon, .error rect { stroke: var(--reverse-traffic); stroke-width: 4; }
+.stopped ellipse, .stopped polygon, .stopped rect { stroke: var(--stopped-fg); stroke-dasharray: 3 3; }
+.unknown ellipse, .unknown polygon, .unknown rect { stroke-dasharray: 1 4; }
+@keyframes travel { to { stroke-dashoffset: -22; } }
+@keyframes working { 50% { stroke-width: 4; } }
+@media (prefers-reduced-motion: reduce) {
+  .flow, .running ellipse, .running polygon, .running rect { animation: none; }
+  .traffic { transition: none; }
+}

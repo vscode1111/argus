@@ -10,6 +10,7 @@
   --assistant-bg: var(--vscode-sideBar-background);
   --tool-bg: var(--vscode-textCodeBlock-background);
   --error-fg: var(--vscode-errorForeground);
+  --stopped-fg: var(--vscode-charts-blue);
   --connection-online: #22c55e;
   --thinking-fg: var(--vscode-descriptionForeground);
   --diff-added: #85e89d;

@@ -1,12 +1,12 @@
 import { getCliLaunchCount, resetCliLaunchCount } from './providers/claudeExecution';
 import { runtime, providerForSession, restoreSelection, selectionMessage } from './providers/registry';
 import { agentIdentity } from './agentIdentity';
-import { handleAgentCommand, authorizeAgent, agentClaimAllowsConfiguration, cancelAgentClaim, agentCaller, disposeAgentCommands } from './agentCommands';
+import { handleAgentCommand, authorizeAgent, agentClaimAllowsConfiguration, cancelAgentClaim, agentCaller, disposeAgentCommands, borrowSessionEntry } from './agentCommands';
 import { watchSession } from './sessionWatch';
 import { agentGraphService, handleAgentGraphRequest } from './agentGraphRequests';
 import { notifyAgentGraph, onAgentGraphChange } from './agentGraphLive';
 import { AgentDelivery, installAgentDelivery, stopAgentDelivery, manualAgentInput } from './agentDelivery';
-import { selectionFor, records } from './providers/store';
+import { selectionFor, records, sameWorkspace } from './providers/store';
 import { handleProviderRequest } from './providers/requests';
 import { abortPendingStop } from './providers/claudeExecution';
 import type { TurnInput, SendAdmission } from './providers/types';
@@ -82,6 +82,7 @@ export function buildAskFollowUp(rawQuestions: unknown, answers: Record<string, 
 }
 
 export interface ConnectionHooks {
+  strictTarget?: { sessionId: string; workspace: string; providerId: string };
   onSettingsChange?: () => void;
   getClientCount?: () => number;
   /** One row per connection the count above describes - see clients.ts. */
@@ -224,6 +225,14 @@ export function attachClientHandlers(
   // the next send spawns with --resume (the transcript replays on webviewReady).
   // Guarded on an idle entry so a mid-turn resume pointer is never clobbered.
   if (hooks.sessionId && !liveAttach && !s0.currentProc) restoreSelection(s0, hooks.sessionId);
+  let releaseTarget: (() => void) | undefined;
+  if (hooks.strictTarget) {
+    const target = hooks.strictTarget;
+    if (s0.sessionId !== target.sessionId || !sameWorkspace(s0.workspaceDir, target.workspace) || s0.selection.providerId !== target.providerId) {
+      channel.removeClient(ws); ws.close(4404, 'Target unavailable'); return;
+    }
+    try { releaseTarget = borrowSessionEntry(s0, ws); } catch { channel.removeClient(ws); ws.close(4404, 'Target unavailable'); return; }
+  }
   notifyAgentGraph(s0, { type: 'sessionAttached' });
 
   // login is per-client: loginUrl/loginResult only go to the requesting client's ws.
@@ -235,6 +244,7 @@ export function attachClientHandlers(
     // The entry's CLI proc is NOT killed here; it runs to natural completion so other
     // clients watching the same entry are unaffected.
     channel.removeClient(ws);
+    releaseTarget?.();
   });
 
   let mutations = Promise.resolve();
@@ -249,6 +259,8 @@ export function attachClientHandlers(
       type: string;
       agentToken?: unknown;
       expectedInteractionId?: string;
+      expectedSessionId?: string;
+      expectedWorkspace?: string;
       requestId?: unknown;
       text?: string;
       images?: Array<{ data: string; mediaType: string; name?: string }>;
@@ -283,6 +295,13 @@ export function attachClientHandlers(
     let controlledState = s;
     const expectedTarget = channel.getViewingSessionId(ws) ?? s.sessionId;
     const checkControl = () => {
+      if (hooks.strictTarget || msg.expectedSessionId !== undefined || msg.expectedWorkspace !== undefined) {
+        const target = hooks.strictTarget;
+        if (ws.readyState !== 1 || channel.getClientState(ws) !== controlledState || channel.getViewingSessionId(ws)
+          || typeof msg.expectedSessionId !== 'string' || !msg.expectedSessionId || typeof msg.expectedWorkspace !== 'string' || !msg.expectedWorkspace
+          || controlledState.sessionId !== msg.expectedSessionId || !sameWorkspace(controlledState.workspaceDir, msg.expectedWorkspace)
+          || target && (target.sessionId !== controlledState.sessionId || !sameWorkspace(target.workspace, controlledState.workspaceDir) || target.providerId !== controlledState.selection.providerId)) throw Error('graph_target_mismatch');
+      }
       if (msg.agentToken === undefined) return;
       if (channel.getClientState(ws) !== controlledState) throw Error('agent_forbidden');
       if (channel.getViewingSessionId(ws)) throw Error('agent_forbidden');
@@ -296,14 +315,14 @@ export function attachClientHandlers(
       if (['renameSession', 'deleteSession'].includes(msg.type) && msg.id !== target) throw Error('agent_forbidden');
       authorizeAgent(agentGraphService().store, msg.agentToken, channel.getClientState(ws), target, self);
     };
-    if (msg.agentToken !== undefined) {
+    if (msg.agentToken !== undefined || hooks.strictTarget || msg.expectedSessionId !== undefined || msg.expectedWorkspace !== undefined) {
       try {
         if (guarded.has(msg.type)) checkControl();
         if (['killAllCliProcesses', 'killCliProcess', 'restartDaemon', 'stopDaemon', 'updateSettings', 'saveProviderDefault'].includes(msg.type)) throw Error('agent_forbidden');
       } catch { ws.send(JSON.stringify({ type: 'providerNotice', requestId: msg.requestId, code: 'agent_forbidden', error: true, message: 'Agent control denied' })); return; }
     }
     if (['newSession', 'resumeSession', 'switchProvider', 'clear'].includes(msg.type) || msg.type === 'send' && msg.text?.trim() === '/clear') cancelAgentClaim(ws);
-    const controlAdmission = msg.agentToken === undefined && msg.type !== 'steer' && msg.expectedInteractionId === undefined ? undefined : { valid: () => { try { checkControl();
+    const controlAdmission = msg.agentToken === undefined && !hooks.strictTarget && msg.expectedSessionId === undefined && msg.expectedWorkspace === undefined && msg.type !== 'steer' && msg.expectedInteractionId === undefined ? undefined : { valid: () => { try { checkControl();
       if (msg.expectedInteractionId !== undefined && (typeof msg.expectedInteractionId !== 'string' || !controlledState.interaction?.async || controlledState.interaction.id !== msg.expectedInteractionId)) return false;
       return msg.type !== 'steer' || !!(controlledState.runtime?.active || controlledState.currentProc && !controlledState.cliDone) && !controlledState.interaction && !controlledState.errorRetry?.pending && !controlledState.watchdog?.state.retrying; } catch { return false; } }, admitted: () => {
       if (msg.agentToken === undefined) return;
@@ -312,6 +331,10 @@ export function attachClientHandlers(
     } };
     if (await handleAgentGraphRequest(ws, msg)) return;
     if (await handleProviderRequest(ws, channel, msg, st => { if (!st.sendLog) initChannelSession(st, model); }, checkControl, () => controlAdmission?.admitted())) return;
+    if (guarded.has(msg.type)) {
+      try { checkControl(); }
+      catch { ws.send(JSON.stringify({ type: 'providerNotice', requestId: msg.requestId, code: 'agent_forbidden', error: true, message: 'Agent control denied' })); return; }
+    }
 
     if (msg.type === 'webviewReady') {
       ws.send(JSON.stringify(selectionMessage(s)));
@@ -727,7 +750,9 @@ export function attachClientHandlers(
 }
 
 function handleSend(s: SessionState, msg: TurnInput, manual = false, admission?: SendAdmission): void {
-  void sendSession(s, msg, admission ?? (manual ? { valid: () => true, admitted: () => manualAgentInput(s) } : undefined)).catch(error => s.broadcast(JSON.stringify({ type: 'providerNotice', error: true, message: error instanceof Error ? error.message : 'Provider failed' })));
+  const inputAdmission = manual ? { ...admission, valid: () => admission?.valid() ?? true,
+    admitted: () => { admission?.admitted(); manualAgentInput(s); } } : admission;
+  void sendSession(s, msg, inputAdmission).catch(error => s.broadcast(JSON.stringify({ type: 'providerNotice', error: true, message: error instanceof Error ? error.message : 'Provider failed' })));
 }
 async function sendSession(s: SessionState, msg: TurnInput, admission?: SendAdmission): Promise<void> {
   if (admission && !admission.valid()) throw Error('Input is no longer eligible for this session');
