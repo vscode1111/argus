@@ -8,6 +8,7 @@ import { shellCommand } from '../utils/shellCommand';
 import { usePreview, type PreviewRequest } from '../contexts/PreviewContext';
 import { ShellIcon } from './ShellIcon';
 import styles from './ToolCall.module.css';
+import { QuestionForm } from './QuestionForm';
 
 // The CLI can deliver AskUserQuestion's `questions` as a JSON string rather than the
 // declared array, so every reader has to parse it - a throw here unmounts the whole React
@@ -97,8 +98,6 @@ export function ToolCall({ call, sessionDone }: Props) {
   const limit = name === 'Bash' ? 600 : 200;
   const preview = result ? result.slice(0, limit) + (result.length > limit ? '...' : '') : undefined;
   const previewer = usePreview();
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string | string[]>>({});
-  const [otherText, setOtherText] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState(0);
   // True when the row shows two summaries: Bash's own description, then the command it ran.
   const bashDesc = name === 'Bash' && !!bashCommand && rawSummary !== bashCommand;
@@ -195,177 +194,24 @@ export function ToolCall({ call, sessionDone }: Props) {
     const questions = parseAskQuestions(input.questions) as AskQuestion[];
 
     const isPending = !result;
+    if (isPending) return <QuestionForm questions={questions.map((q,index) => ({...q,id:String(index),options:q.options.map(o=>o.label),optionDescriptions:q.options.map(o=>o.description ?? '')}))} onCancel={() => postMessage({type:'toolAnswer',id:call.id,answers:{}})} onSubmit={answers => {
+      const formatted: Record<string,string> = {};
+      questions.forEach((q,index) => { const value=answers[String(index)]; formatted[q.question]=Array.isArray(value)?value.join(', '):value; });
+      postMessage({type:'toolAnswer',id:call.id,answers:formatted});
+    }} />;
 
-    let answeredMap: Record<string, string> = {};
-    let isCancelled = false;
-    if (result) {
-      try {
-        const parsed = JSON.parse(result);
-        if (parsed.cancelled) isCancelled = true;
-        if (parsed.answers) answeredMap = parsed.answers;
-      } catch { /* not JSON */ }
-    }
-
-    const allAnswered = questions.every(q => {
-      const val = selectedAnswers[q.question];
-      if (q.multiSelect) {
-        if (!Array.isArray(val) || val.length === 0) return false;
-        if (val.includes('Other') && !otherText[q.question]?.trim()) return false;
-        return true;
-      }
-      if (typeof val !== 'string' || val.length === 0) return false;
-      if (val === 'Other' && !otherText[q.question]?.trim()) return false;
-      return true;
-    });
-
-    function handleOptionClick(questionText: string, optionLabel: string, multiSelect?: boolean) {
-      if (multiSelect) {
-        setSelectedAnswers(prev => {
-          const current = (prev[questionText] as string[]) || [];
-          const next = current.includes(optionLabel)
-            ? current.filter(l => l !== optionLabel)
-            : [...current, optionLabel];
-          return { ...prev, [questionText]: next };
-        });
-      } else {
-        setSelectedAnswers(prev => ({ ...prev, [questionText]: optionLabel }));
-      }
-    }
-
-    function handleSubmit() {
-      const formatted: Record<string, string> = {};
-      for (const q of questions) {
-        const val = selectedAnswers[q.question];
-        const other = otherText[q.question]?.trim() || '';
-        if (q.multiSelect && Array.isArray(val)) {
-          const resolved = val.map(v => v === 'Other' ? other : v);
-          formatted[q.question] = resolved.join(', ');
-        } else if (typeof val === 'string') {
-          formatted[q.question] = val === 'Other' ? other : val;
-        }
-      }
-      postMessage({ type: 'toolAnswer', id: call.id, answers: formatted });
-    }
-
-    function handleCancel() {
-      postMessage({ type: 'toolAnswer', id: call.id, answers: {} });
-    }
-
-    const rawQ = questions[activeTab] || questions[0];
-    // Auto-inject "Other" option if not already present
-    const q = rawQ && !rawQ.options.some(o => o.label === 'Other')
-      ? { ...rawQ, options: [...rawQ.options, { label: 'Other' }] }
-      : rawQ;
-    const selectedVal = isPending
-      ? selectedAnswers[q?.question]
-      : answeredMap[q?.question] || answeredMap[q?.header];
-
-    // "Other" option support
-    const knownLabels = q?.options.filter(o => o.label !== 'Other').map(o => o.label) ?? [];
-    const isOtherActive = isPending
-      ? (q?.multiSelect
-          ? Array.isArray(selectedVal) && selectedVal.includes('Other')
-          : selectedVal === 'Other')
-      : (q?.multiSelect
-          ? typeof selectedVal === 'string' && selectedVal.split(', ').some(v => !knownLabels.includes(v))
-          : typeof selectedVal === 'string' && selectedVal !== '' && !knownLabels.includes(selectedVal));
-    const completedOtherValue = !isPending && isOtherActive && typeof selectedVal === 'string'
-      ? (q?.multiSelect
-          ? selectedVal.split(', ').filter(v => !knownLabels.includes(v)).join(', ')
-          : selectedVal)
-      : '';
-
-    return (
-      <div className={styles.askDialog}>
-        {/* Tab bar */}
-        <div className={styles.askTabBar}>
-          {questions.map((tab, i) => (
-            <button
-              key={i}
-              className={[styles.askTab, activeTab === i && styles.askTabActive].filter(Boolean).join(' ')}
-              onClick={() => setActiveTab(i)}
-            >
-              {tab.header}
-            </button>
-          ))}
-          {isPending && (
-            <button className={styles.askCloseBtn} onClick={handleCancel} aria-label="Cancel">✕</button>
-          )}
-        </div>
-
-        {/* Active tab content */}
-        {q && (
-          <div className={styles.askTabContent}>
-            <div className={styles.questionText}>{q.question}</div>
-            <div className={styles.questionOptions}>
-              {q.options.map((opt, j) => {
-                const isMulti = q.multiSelect;
-                const isOther = opt.label === 'Other';
-                const isSelected = isOther
-                  ? isOtherActive
-                  : isMulti
-                    ? (Array.isArray(selectedVal)
-                        ? selectedVal.includes(opt.label)
-                        : typeof selectedVal === 'string' && selectedVal.split(', ').includes(opt.label))
-                    : selectedVal === opt.label;
-                return (
-                  <div
-                    key={j}
-                    className={[
-                      styles.questionOption,
-                      isSelected && styles.questionOptionSelected,
-                      isPending && styles.questionOptionClickable,
-                    ].filter(Boolean).join(' ')}
-                    onClick={isPending ? () => handleOptionClick(q.question, opt.label, isMulti) : undefined}
-                  >
-                    {isMulti ? (
-                      <span className={[styles.questionCheckbox, isSelected && styles.questionCheckboxChecked].filter(Boolean).join(' ')} aria-hidden="true" />
-                    ) : (
-                      <span className={[styles.questionOptionDot, isSelected && styles.questionOptionDotSelected].filter(Boolean).join(' ')} aria-hidden="true" />
-                    )}
-                    <div>
-                      <div className={styles.questionOptionLabel}>{opt.label}</div>
-                      {opt.description && <div className={styles.questionOptionDesc}>{opt.description}</div>}
-                      {isOther && !isPending && isSelected && completedOtherValue && (
-                        <div className={styles.questionOptionDesc}>{completedOtherValue}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {isPending && isOtherActive && (
-              <div className={styles.otherInputWrap}>
-                <input
-                  className={styles.otherInput}
-                  placeholder="Type your answer..."
-                  value={otherText[q.question] || ''}
-                  onChange={e => setOtherText(prev => ({ ...prev, [q.question]: e.target.value }))}
-                  onClick={e => e.stopPropagation()}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        {isPending && (
-          <div className={styles.askFooter}>
-            <button className={styles.askSubmitBtn} onClick={handleSubmit} disabled={!allAnswered}>
-              Submit answers
-            </button>
-          </div>
-        )}
-        {isCancelled && (
-          <div className={styles.askCancelled}>Session ended</div>
-        )}
-        {!isPending && !isCancelled && Object.keys(answeredMap).length > 0 && (
-          <div className={styles.askResultSummary}>
-            User has answered your questions: {Object.entries(answeredMap).map(([q, a]) => `"${q}"="${a}"`).join(', ')}
-          </div>
-        )}
-      </div>
-    );
+    let answeredMap: Record<string, string> = {}, isCancelled = false;
+    try { const parsed = JSON.parse(result || '{}'); answeredMap = parsed.answers ?? {}; isCancelled = !!parsed.cancelled; } catch { /* Non-JSON native output remains available in the tool result. */ }
+    const q = questions[activeTab] ?? questions[0], rawAnswer: unknown = answeredMap[q?.question] || answeredMap[q?.header];
+    const value = Array.isArray(rawAnswer) ? rawAnswer.map(String).join(', ') : typeof rawAnswer === 'string' ? rawAnswer : '';
+    const selected = q?.multiSelect ? value.split(', ') : [value];
+    const custom = selected.filter(v => !q?.options.some(o => o.label === v)).join(', ');
+    return <div className={styles.askDialog}>
+      <div className={styles.askTabBar}>{questions.map((tab,index)=><button key={index} type="button" className={[styles.askTab,activeTab===index&&styles.askTabActive].filter(Boolean).join(' ')} onClick={()=>setActiveTab(index)}>{tab.header}</button>)}</div>
+      {q&&<div className={styles.askTabContent}><div className={styles.questionText}>{q.question}</div><div className={styles.questionOptions}>{[...q.options.filter(o=>o.label!=='Other'),{label:'Other'}].map(option=><div key={option.label} className={[styles.questionOption,(selected.includes(option.label)||option.label==='Other'&&!!custom)&&styles.questionOptionSelected].filter(Boolean).join(' ')}><div><div className={styles.questionOptionLabel}>{option.label}</div>{option.description&&<div className={styles.questionOptionDesc}>{option.description}</div>}{option.label==='Other'&&custom&&<div className={styles.questionOptionDesc}>{custom}</div>}</div></div>)}</div></div>}
+      {isCancelled&&<div className={styles.askCancelled}>Session ended</div>}
+      {!isCancelled&&Object.keys(answeredMap).length>0&&<div className={styles.askResultSummary}>User has answered your questions: {Object.entries(answeredMap).map(([q,a])=>`"${q}"="${a}"`).join(', ')}</div>}
+    </div>;
   }
 
   if (name === 'TodoWrite') {

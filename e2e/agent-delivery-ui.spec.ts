@@ -5,6 +5,10 @@ import { createHash } from 'node:crypto';
 const { privateQuestionServer } = require('./fixtures/private-question-server.cjs');
 test('private checkout bundle renders delivered live and Session History inputs violet', async ({ page }) => {
   const server = await privateQuestionServer({ providerPreload: path.join(__dirname, 'fixtures/delivery-spawn.cjs') });
+  const loadedIds: string[] = [];
+  page.on('websocket', socket => socket.on('framereceived', frame => {
+    try { const message = JSON.parse(String(frame.payload)); if (message.type === 'sessionLoaded') loadedIds.push(message.id); } catch {}
+  }));
   try {
     const url = `http://127.0.0.1:${server.info.port}`;
     const served = Buffer.from(await (await fetch(url + '/webview.js')).arrayBuffer());
@@ -16,6 +20,7 @@ test('private checkout bundle renders delivered live and Session History inputs 
     parent.send({ type: 'linkAgents', requestId: 'link', parent: id, child: childId, kind: 'delegates', nodes: [node(id), node(childId)] }); await parent.wait((f: any) => f.requestId === 'link');
     await page.goto(url + '/?dir=' + encodeURIComponent(server.dir) + '&session=' + encodeURIComponent(id));
     await expect(page.getByPlaceholder('Ask Argus')).toBeVisible();
+    await expect.poll(() => loadedIds.includes(id)).toBe(true);
     child.send({ type: 'send', text: 'Finish inventory' }); await parent.wait((f: any) => f.type === 'message' && f.message.content.startsWith('🤖'), 6000);
     const automatic = page.locator('div[class*="userMsg"]').filter({ hasText: '🤖' }).first(); await expect(automatic).toBeVisible();
     const violet = await automatic.evaluate(el => getComputedStyle(el).backgroundColor);
@@ -23,8 +28,10 @@ test('private checkout bundle renders delivered live and Session History inputs 
     expect(await manual.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(violet);
     await page.getByRole('button', { name: 'Session history', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Session History' }); await expect(dialog).toBeVisible();
+    const loadedBefore = loadedIds.filter(loaded => loaded === id).length;
     await dialog.locator(`[data-session-id="${id}"]`).click(); await expect(dialog).toHaveCount(0);
-    await expect(automatic).toBeVisible(); expect(await automatic.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(violet);
+    await expect.poll(() => loadedIds.filter(loaded => loaded === id).length).toBeGreaterThan(loadedBefore);
+    await expect(automatic).toBeVisible(); await expect(automatic).toHaveCSS('background-color', violet);
     server.verifySpawn();
   } finally { await server.close(); }
 });

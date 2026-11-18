@@ -1,0 +1,8 @@
+.form { width: 100%; min-width: 0; max-width: 100%; color: var(--fg); background: var(--assistant-bg); }
+.form fieldset { min-width: 0; margin: 0; border: 1px solid var(--border); padding: 8px; }
+.form legend, .form label span { color: var(--fg); }
+.form label { color: var(--fg); background: var(--input-bg); border: 1px solid var(--border); overflow-wrap: anywhere; }
+.form label > span > span { display: block; opacity: 1; }
+.form input[type="radio"], .form input[type="checkbox"] { flex-shrink: 0; margin-top: 3px; accent-color: var(--vscode-button-background); }
+.form input[type="text"], .form input:not([type]) { width: 100%; min-width: 0; }
+.form button:focus-visible, .form input:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }

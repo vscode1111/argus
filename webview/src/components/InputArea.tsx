@@ -86,7 +86,10 @@ function renderHighlight(value: string): React.ReactNode[] {
   return out;
 }
 
+export interface InputDraft { text: string; images: ImageAttachment[]; appliedPrefill?: string }
+
 interface Props {
+  draft?: React.MutableRefObject<InputDraft>;
   providerId?: string;
   isStreaming: boolean;
   prefill: string;
@@ -106,7 +109,7 @@ interface Props {
 
 
 
-export function InputArea({ providerId = 'claude', isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, wsCloseReason = null, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop, focusRequest = 0 }: Props) {
+export function InputArea({ draft, providerId = 'claude', isStreaming, prefill, workspacePath, version, contextUsage, bgTasks = 0, wsConnected = true, wsCloseReason = null, currentModel = '', currentEffort = 'high', thinkingEnabled = true, onSend, onStop, focusRequest = 0 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { textareaRef.current?.focus({ preventScroll: true }); }, [focusRequest]);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -115,7 +118,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
   const [history, setHistory] = useState<string[]>([]);
   const [historyPosition, setHistoryPosition] = useState(-1);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [images, setImages] = useState<ImageAttachment[]>(() => draft?.current.images ?? []);
   const [pasteError, setPasteError] = useState<string | null>(null);
   const pasteErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -142,7 +145,8 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [runtimeDefaultModel, setRuntimeDefaultModel] = useState('');
   const effortLevels = fetchedModels?.find(m => m.id === (currentModel || runtimeDefaultModel))?.efforts ?? provider?.efforts ?? [];
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => draft?.current.text ?? '');
+  useLayoutEffect(() => { if (draft) draft.current = { ...draft.current, text, images }; }, [draft, text, images]);
   const highlightRef = useRef<HTMLDivElement>(null);
   const historyIndex = useRef(-1);
   const savedDraft = useRef('');
@@ -248,7 +252,9 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
   }
 
   useEffect(() => {
-    if (prefill && textareaRef.current) {
+    const appliedPrefill = draft?.current.appliedPrefill;
+    if (draft) draft.current.appliedPrefill = prefill;
+    if (prefill && textareaRef.current && prefill !== appliedPrefill) {
       const text = prefill.split('\x00')[0];
       const existing = textareaRef.current.value;
       textareaRef.current.value = (existing ? existing.trimEnd() + '\n' + text : text) + '\n';
@@ -257,7 +263,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
       textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
       adjustHeight();
     }
-  }, [prefill]);
+  }, [prefill, draft]);
 
   function send() {
     const el = textareaRef.current;
@@ -900,6 +906,7 @@ export function InputArea({ providerId = 'claude', isStreaming, prefill, workspa
           </div>
           <textarea
             ref={textareaRef}
+            defaultValue={draft?.current.text}
             className={styles.textarea}
             placeholder={PLACEHOLDER_TEXT}
             rows={images.length > 0 ? TEXTAREA_ROWS_WITH_IMAGES : TEXTAREA_ROWS_DEFAULT}

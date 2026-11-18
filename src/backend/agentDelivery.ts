@@ -7,7 +7,7 @@ import { sameWorkspace } from './providers/store';
 
 interface Dependencies {
   states(): SessionState[];
-  acquire(node: GraphNode, settled?: () => void): { state: SessionState; release(force?: boolean): boolean | void };
+  acquire(node: GraphNode, settled?: () => void): { state: SessionState; retain?(): boolean; release(force?: boolean): boolean | void };
   send(state: SessionState, input: TurnInput, admission: SendAdmission): Promise<void>;
   now?(): number;
 }
@@ -164,7 +164,8 @@ export class AgentDelivery {
     selected = selected.filter(item => item.edge.to === selected[0].edge.to);
     this.busy.add(parent); let owned: ReturnType<Dependencies['acquire']> | undefined;
     try {
-      owned = live && this.owners.get(live) || this.deps.acquire(node, () => {
+      const cached = live && this.owners.get(live);
+      owned = cached && (!cached.retain || cached.retain()) ? cached : this.deps.acquire(node, () => {
         if (owned && this.owners.get(owned.state) === owned) this.owners.delete(owned.state);
       }); const state = owned.state; this.owners.set(state, owned);
       const wasActive = !!(state.runtime?.active || state.currentProc && !state.cliDone);
