@@ -720,6 +720,12 @@ export const codexProvider: AgentProvider = {
     return records().filter(r => r.selection.providerId === 'codex' && sameWorkspace(r.cwd, cwd))
       .map(r => ({ id: r.id, title: r.title, lastPrompt: '', updatedAt: r.updatedAt, ...codexSessionMeta(r.id), providerId: 'codex' }));
   },
+  async listTitles(cwd, ids) {
+    return ids.flatMap(id => {
+      const record = sessionRecord(id, cwd);
+      return record?.selection.providerId === 'codex' ? [{ id, title: record.title }] : [];
+    });
+  },
   async load(id, cwd) {
     if (!sessionRecord(id, cwd)) throw new Error('Conversation does not belong to this workspace');
     return withRpc(async rpc => replayThread(object((await rpc.request('thread/read', { threadId: nativeId(id), includeTurns: true })).thread)));

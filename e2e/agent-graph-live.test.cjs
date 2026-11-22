@@ -35,6 +35,18 @@ test('S2-I4 watchdog timedOut remains error through done while scheduled retry r
   observeAgentGraph(state, { type: 'thinking_start' }); observeAgentGraph(state, { type: 'retry_status', autoRetry: 1, timedOut: false });
   assert.equal(projectAgentState(state).status, 'running');
 });
+test('graph title lookup requests only the sessions visible in the requested scope', async t => {
+  const store = new AgentGraph(path.join(dir, 'scoped-titles.sqlite'));
+  store.putNodes([node('visible'), { ...node('outside'), company: 'shipping' }]);
+  const service = new AgentGraphService(store, () => [], async (_providerId, _workspace, ids) => {
+    assert.deepEqual(ids, ['visible']);
+    return [{ id: 'visible', title: 'Stock count' }];
+  });
+  t.after(() => service.dispose());
+  const ws = socket();
+  await service.get(ws, 'scoped', { company: 'inventory' }, false);
+  assert.equal(ws.frames[0].snapshot.nodes[0].title, 'Stock count');
+});
 test('S2-I4 actual exhausted watchdog producer projects error without changing its frames', () => {
   const { readConfig, writeConfig } = require('../out/backend/config'); const { createWatchdog } = require('../out/backend/watchdog');
   const previous = readConfig(), interval = global.setInterval; let tick; const state = createSessionState(dir), frames = [];

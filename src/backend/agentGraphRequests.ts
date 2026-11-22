@@ -20,18 +20,18 @@ export class AgentGraphService {
   private subscriptions = new Map<WebSocket, { filter: Filter; snapshot?: Snapshot }>();
   private closeHandlers = new Map<WebSocket, () => void>();
   private unsubscribe: (() => void)[];
-  private titles = new Map<string, string>();
+  private titles = new Map<string, { title: string }>();
   private knownIds = new Set<string>();
   private refreshing?: Promise<Snapshot>;
   constructor(readonly store: AgentGraph, private states = listAgentStates,
-    private readTitles = async (providerId: string, workspace: string) => provider(providerId).list(workspace)) {
+    private readTitles = (providerId: string, workspace: string, ids: readonly string[]) => provider(providerId).listTitles(workspace, ids)) {
     this.stored = store.snapshot();
     this.unsubscribe = [store.onChange(() => { this.stored = store.snapshot(); this.schedule(); }), onAgentGraphChange((state, event) => {
       if (state?.sessionId && (event?.type === 'done' || event?.type === 'error' || event?.type === 'interaction' && event.request)
         && this.stored.edges.some(e => e.to === state.sessionId && e.forward?.awaitingReply)) store.resolveForward(state.sessionId);
       if (event?.type === 'sessionRenamed' && typeof event.id === 'string') {
         if (!this.knownIds.has(event.id)) return;
-        if (typeof event.title === 'string') this.titles.set(event.id, event.title.slice(0, 200)); else this.titles.delete(event.id);
+        if (typeof event.title === 'string') this.titles.set(event.id, { title: event.title.slice(0, 200) }); else this.titles.delete(event.id);
       }
       if (state?.sessionId && (event?.type === 'sessionId' || event?.type === 'sessionAttached')) this.titles.delete(state.sessionId);
       this.schedule();
@@ -40,16 +40,29 @@ export class AgentGraphService {
   capability() { return { version: 1, storeId: this.stored.storeId, orchestration: 1 }; }
   private async refreshTitles(nodes: GraphNode[], force = false) {
     const needed = nodes.filter(node => force || !this.titles.has(node.id));
-    const known = new Set(needed.map(node => node.id));
-    const groups = new Map<string, { providerId: string; workspace: string }>();
+    const requested = new Map<string, { title: string }>();
+    const groups = new Map<string, { providerId: string; workspace: string; ids: string[] }>();
     for (const node of needed) {
-      this.titles.set(node.id, node.title);
-      groups.set(JSON.stringify([node.providerId, node.workspace]), { providerId: node.providerId, workspace: node.workspace });
+      const entry = { title: this.titles.get(node.id)?.title ?? node.title };
+      this.titles.set(node.id, entry);
+      requested.set(node.id, entry);
+      const key = JSON.stringify([node.providerId, node.workspace]);
+      let group = groups.get(key);
+      if (!group) {
+        group = { providerId: node.providerId, workspace: node.workspace, ids: [] };
+        groups.set(key, group);
+      }
+      group.ids.push(node.id);
     }
     const queue = [...groups.values()];
     await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
       for (let group = queue.shift(); group; group = queue.shift()) {
-        try { for (const session of await this.readTitles(group.providerId, group.workspace)) if (known.has(session.id)) this.titles.set(session.id, session.title.slice(0, 200)); }
+        try {
+          for (const session of await this.readTitles(group.providerId, group.workspace, group.ids)) {
+            const entry = requested.get(session.id);
+            if (entry && this.titles.get(session.id) === entry) entry.title = session.title.slice(0, 200);
+          }
+        }
         catch { /* Stored metadata is a fallback, never a reason to start execution. */ }
       }
     }));
@@ -59,7 +72,7 @@ export class AgentGraphService {
     const stored = this.stored; const states = this.states();
     const ids = new Set(stored.nodes.map(n => n.id)); for (const id of this.titles.keys()) if (!ids.has(id)) this.titles.delete(id);
     this.knownIds = ids;
-    const nodes = stored.nodes.map(node => ({ ...node, title: this.titles.get(node.id) ?? node.title, ...projectAgentState(states.find(s => s.sessionId === node.id)) }));
+    const nodes = stored.nodes.map(node => ({ ...node, title: this.titles.get(node.id)?.title ?? node.title, ...projectAgentState(states.find(s => s.sessionId === node.id)) }));
     const value = { ...stored, nodes };
     const signature = JSON.stringify(value); if (Buffer.byteLength(signature) > 4 * 1024 * 1024) throw Error('graph_snapshot_limit');
     if (signature !== this.signature) { this.signature = signature; this.seq++; }

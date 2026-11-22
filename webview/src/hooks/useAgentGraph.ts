@@ -6,6 +6,7 @@ import type { AgentGraphService } from '../../../src/backend/agentGraphRequests'
 export type GraphSnapshot = ReturnType<AgentGraphService['filter']>;
 export type GraphNode = GraphSnapshot['nodes'][number];
 export interface GraphView { snapshot: GraphSnapshot | null; loading: boolean; error: string; refresh(): void }
+let requestSequence = 0;
 export function useAgentGraph(connected: boolean): GraphView {
   const [view, setView] = useState<Omit<GraphView, 'refresh'>>({ snapshot: null, loading: true, error: '' });
   const refreshRef = useRef(() => {});
@@ -16,7 +17,7 @@ export function useAgentGraph(connected: boolean): GraphView {
     if (!connected) return;
     const request = () => {
       if (!online) return;
-      current = null; pending = crypto.randomUUID();
+      current = null; pending = `graph-${++requestSequence}`;
       setView({ snapshot: null, loading: true, error: '' }); window.clearTimeout(timeout);
       timeout = window.setTimeout(() => { pending = ''; setView({ snapshot: null, loading: false, error: 'Linked sessions are unavailable. Try again.' }); }, 5000);
       postMessage({ type: 'getAgentGraph', requestId: pending, subscribe: true });

@@ -8,7 +8,7 @@ import { fetchModels, fetchAccountInfo } from '../accountUsage';
 import { requestUsageRefresh } from '../usagePoller';
 import { describeModel } from '../modelData';
 import { getSkills } from '../skills';
-import { listSessions, loadSession, renameSession, deleteSession } from '../sessions';
+import { listSessions, readSessionTitles, loadSession, renameSession, deleteSession } from '../sessions';
 
 export const claudeProvider: AgentProvider = {
   descriptor: { id: 'claude', label: 'Claude Code', thinkingToggle: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'], inputKinds: ['text', 'image', 'pdf'] },
@@ -42,6 +42,7 @@ export const claudeProvider: AgentProvider = {
   },
   async skills(cwd) { return getSkills(cwd); },
   async list(cwd) { return listSessions(cwd).map(s => ({ ...s, providerId: 'claude' })); },
+  listTitles: readSessionTitles,
   async load(id, cwd) { return loadSession(id, cwd); },
   async rename(id, cwd, title) { if (!renameSession(id, cwd, title)) throw new Error('Cannot rename conversation'); },
   async remove(id, cwd) { deleteSession(id, cwd); },

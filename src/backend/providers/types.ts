@@ -83,6 +83,7 @@ export interface AgentProvider {
   account(): Promise<{ account: AccountInfo; rateLimits: RateLimitInfo[]; usageError?: string }>;
   skills(cwd: string): Promise<Array<{ name: string; scope: string; kind?: string; description?: string; path?: string }>>;
   list(cwd: string): Promise<SessionSummary[]>;
+  listTitles(cwd: string, ids: readonly string[]): Promise<Pick<SessionSummary, 'id' | 'title'>[]>;
   load(id: string, cwd: string): Promise<ReplayMessage[]>;
   loadPage?(id: string, cwd: string, cursor?: unknown): Promise<ProviderHistoryPage>;
   withHistoryReader?<T>(id: string, cwd: string, action: (read: (cursor?: unknown) => Promise<ProviderHistoryPage>) => Promise<T>): Promise<T>;

@@ -140,26 +140,45 @@ function isDelegatedPrompt(content: unknown): boolean {
 }
 
 function readSessionMeta(file: string): { title: string; lastPrompt: string; lines: number; delegated: boolean } {
+  let content: string;
+  try { content = fs.readFileSync(file, 'utf8'); } catch { content = ''; }
+  return parseSessionMeta(content);
+}
+
+function parseSessionMeta(content: string, titlesOnly = false) {
   let aiTitle = '';
   let customTitle = '';
   let lastPrompt = '';
   let lines = 0;
   let delegated = false;
-  let content: string;
-  try { content = fs.readFileSync(file, 'utf8'); } catch { return { title: '', lastPrompt, lines, delegated }; }
   for (const line of content.split(/\r?\n/)) {
     if (!line) continue;
+    if (titlesOnly && !/"(?:customTitle|aiTitle|lastPrompt)"/.test(line)) continue;
     let o: { type?: string; aiTitle?: unknown; customTitle?: unknown; lastPrompt?: unknown; message?: { content?: unknown } };
     try { o = JSON.parse(line); } catch { continue; }
     if (o.type === 'custom-title' && typeof o.customTitle === 'string') customTitle = o.customTitle;
     else if (o.type === 'ai-title' && typeof o.aiTitle === 'string') aiTitle = o.aiTitle;
     else if (o.type === 'last-prompt' && typeof o.lastPrompt === 'string') lastPrompt = o.lastPrompt;
-    else if ((o.type === 'user' || o.type === 'assistant') && o.message) {
+    else if (!titlesOnly && (o.type === 'user' || o.type === 'assistant') && o.message) {
       lines += countMessageLines(o.message.content);
       if (o.type === 'user' && isDelegatedPrompt(o.message.content)) delegated = true;
     }
   }
   return { title: customTitle || aiTitle, lastPrompt, lines, delegated };
+}
+
+export async function readSessionTitles(workspaceDir: string, ids: readonly string[]) {
+  const dir = resolveProjectDir(workspaceDir);
+  const titles: { id: string; title: string }[] = [];
+  if (!dir) return titles;
+  for (const id of ids) {
+    if (!UUID_RE.test(id)) continue;
+    let content: string;
+    try { content = await fs.promises.readFile(path.join(dir, `${id}.jsonl`), 'utf8'); } catch { continue; }
+    const { title, lastPrompt } = parseSessionMeta(content, true);
+    if (content) titles.push({ id, title: title || lastPrompt || 'Untitled' });
+  }
+  return titles;
 }
 
 // Absolute path of the transcript file backing a session, for display in the
