@@ -126,7 +126,10 @@ export class AgentGraph {
       const binding = scope?.data?.workers[key];
       if (!binding || binding.sessionId || graph.nodes.some(n => n.id === child.id)) throw Error('graph_assignment_conflict');
       if (binding.providerId !== child.providerId || binding.role !== child.role || workspaceIdentity(binding.workspace) !== workspaceIdentity(child.workspace)) throw Error('graph_assignment_conflict');
-      this.nodes(graph, [parent, child]); this.edge(graph, parent.id, child.id, child.role === 'review' ? 'reviews' : 'delegates');
+      // Validate the parent's identity without passing server-owned stop state as node input.
+      const { userStopped: _userStopped, ...parentIdentity } = parent;
+      this.nodes(graph, [parentIdentity, child]);
+      this.edge(graph, parent.id, child.id, child.role === 'review' ? 'reviews' : 'delegates');
       const data = { ...scope!.data!, workers: { ...scope!.data!.workers, [key]: { ...binding, sessionId: child.id } } };
       return this.scope(graph, company, goal, data, expected);
     });

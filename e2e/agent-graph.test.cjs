@@ -55,6 +55,31 @@ test('graph persists canonical peers, multiple parents, union DAG and transactio
   assert.throws(() => graph.putNodes([node('d'), { ...node('a'), role: 'review' }]), /conflict/);
   assert.equal(graph.snapshot().nodes.some(n => n.id === 'd'), false);
 });
+for (const stopped of [true, false]) {
+  test(`worker registration preserves the parent's stored userStopped=${stopped}`, t => {
+    const { graph } = fixture(t);
+    const parent = { ...node('supervisor', 'coordinator'), goal: 'previous-stock' };
+    const child = node('inventory-worker');
+    graph.putNodes([parent]);
+    graph.setUserStopped(parent.id, true);
+    graph.setUserStopped(parent.id, stopped);
+
+    const scope = graph.updateScope(child.company, child.goal, document(), 0);
+    const storedParent = graph.snapshot().nodes.find(entry => entry.id === parent.id);
+    assert.equal(storedParent.userStopped, stopped);
+    assert.throws(() => graph.putNodes([storedParent]), /invalid_graph_field/);
+    assert.throws(() => graph.bindWorker(child.company, child.goal, 'work',
+      { ...storedParent, goal: child.goal }, child, scope.revision), /graph_node_conflict/);
+
+    const bound = graph.bindWorker(child.company, child.goal, 'work', storedParent, child, scope.revision);
+    assert.equal(bound.revision, scope.revision + 1);
+    assert.equal(bound.data.workers.work.sessionId, child.id);
+    const saved = graph.snapshot();
+    assert.deepEqual(saved.nodes.find(entry => entry.id === parent.id), storedParent);
+    assert.deepEqual(saved.edges.map(({ from, to, kind }) => ({ from, to, kind })),
+      [{ from: parent.id, to: child.id, kind: 'delegates' }]);
+  });
+}
 test('scope metadata roundtrip, CAS, profile/review/worker invariants and durable deletion authority', t => {
   const { graph, file, AgentGraph } = fixture(t), data = document();
   const saved = graph.updateScope('inventory', 'stock', data, 0); assert.equal(saved.revision, 1);

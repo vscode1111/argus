@@ -143,7 +143,15 @@ export async function handleAgentCommand(ws: WebSocket, channel: Channel, msg: R
         store.recordForward(parent.id, child.id, 'Parent input');
         r.off?.(); watchSettlement(r, channel);
         if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'agentRegistration', ok: true, key, sessionId: state.sessionId, scope: bound }));
-      } catch { r.close(); state.runtime?.dispose(); if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'agentRegistration', ok: false, error: { code: 'graph_assignment_failed', message: 'Cannot register worker' } })); }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        const reason = /^(?:graph_|invalid_graph_)[a-z_]{1,64}$/.test(message) || message === 'agent_forbidden'
+          ? message : 'unexpected_error';
+        console.warn('[argus] Worker registration failed (%s/%s/%s): %s', company, goal, key, reason);
+        r.close();
+        state.runtime?.dispose();
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'agentRegistration', ok: false, error: { code: 'graph_assignment_failed', message: 'Cannot register worker' } }));
+      }
     });
     reply({ ok: true, pending: true, scope: saved });
   } catch (error) { reply({ ok: false, error: { code: error instanceof Error ? error.message : 'graph_command_failed', message: 'Cannot apply controller command' } }); }
