@@ -1,10 +1,7 @@
 import React from 'react';
 import { StreamingState } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
-import { ToolCall } from './ToolCall';
-import { UserInjectBlock } from './UserInjectBlock';
-import { BackgroundNoticeBlock } from './BackgroundNoticeBlock';
-import { Markdown } from '../utils/markdown';
+import { AssistantBlocks } from './AssistantBlocks';
 import { StreamingTimer } from './StreamingTimer';
 import { WorkingIndicator } from './WorkingIndicator';
 import { useSettings } from '../contexts/SettingsContext';
@@ -25,11 +22,6 @@ export function StreamingMessage({ streaming, logCount }: Props) {
   const threshold = reused ? 2 : 1;
   const showWorking = isEmpty && newLogs > threshold;
 
-  // Hide text blocks after a pending AskUserQuestion so the AI appears to wait
-  const firstPendingAskIdx = blocks.findIndex(
-    b => b.type === 'tool' && b.call.name === 'AskUserQuestion' && !b.call.result
-  );
-
   return (
     <div className={[
       msg.message,
@@ -39,17 +31,7 @@ export function StreamingMessage({ streaming, logCount }: Props) {
     ].filter(Boolean).join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
       {showWorking && !streaming.retryStatus && <WorkingIndicator logCount={logCount} />}
-      {blocks.map((block, i) => {
-        if (firstPendingAskIdx >= 0 && i > firstPendingAskIdx && block.type === 'text') {
-          return null;
-        }
-        if (block.type === 'tool') return <ToolCall key={block.call.id} call={block.call} />;
-        if (block.type === 'user_inject') return <UserInjectBlock key={`inject-${i}`} text={block.text} images={block.images} />;
-        if (block.type === 'bg_notice') return <BackgroundNoticeBlock key={`notice-${i}`} notice={block.notice} />;
-        return <div key={`text-${i}`} className={msg.messageContent}>
-          <Markdown>{block.text}</Markdown>
-        </div>;
-      })}
+      <AssistantBlocks blocks={blocks} />
       {streaming.retryStatus && <WorkingIndicator logCount={logCount} retryStatus={streaming.retryStatus} />}
       {showTimer && <StreamingTimer startTime={startTime} lastEventTime={lastEventTime} hideIdle={!!streaming.askPausedAt} liveTokens={liveTokens} />}
     </div>

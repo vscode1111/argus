@@ -341,6 +341,33 @@
   cursor: default;
 }
 
+.routeControls {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.routeControls .restartBtn {
+  margin-top: 0;
+}
+
+.routeSelect {
+  min-width: 0;
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.routeSelect:focus-visible,
+.routeControls .restartBtn:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
 .settingUnit {
   font-size: 0.82em;
   color: var(--thinking-fg);

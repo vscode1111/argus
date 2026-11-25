@@ -16,6 +16,8 @@ import type { WebSocket } from 'ws';
 
 import { killProc, killAllCliProcesses, plural, classifyError, API_ERROR_RE } from './cli';
 import { readConfig, writeConfig, DEFAULT_CONFIG, type ArgusConfig } from './config';
+import { checkProviderVpn, isProviderVpnMode, listProviderVpnProfiles } from './providerVpn';
+import { providerVpnSetting } from '../shared/providerVpn';
 import { readFilePreview } from './filePreview';
 import { grantMedia } from './media';
 // No fetchUsage here on purpose: usagePoller.ts is the only caller of the usage API,
@@ -441,7 +443,7 @@ export function attachClientHandlers(
         }
       }
     } else if (msg.type === 'getSettings') {
-      ws.send(JSON.stringify({ type: 'settings', settings: readConfig() }));
+      ws.send(JSON.stringify({ type: 'settings', settings: readConfig(true) }));
     } else if (msg.type === 'restartDaemon') {
       hooks.onRestartRequest?.();
     } else if (msg.type === 'stopDaemon') {
@@ -534,9 +536,24 @@ export function attachClientHandlers(
         // another install - which silently lacks whatever the panel expects.
         serverVersion: readServerVersion(),
       }));
+    } else if (msg.type === 'getProviderVpnProfiles') {
+      ws.send(JSON.stringify({ type: 'providerVpnProfiles', profiles: listProviderVpnProfiles() }));
+    } else if (msg.type === 'checkProviderVpn') {
+      if (!isUiClient(ws)) return;
+      const { provider, requestId } = msg as { provider?: string; requestId?: string };
+      if ((provider !== 'claude' && provider !== 'codex') || typeof requestId !== 'string' || requestId.length > 64) return;
+      void checkProviderVpn(provider).then(result => {
+        if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'providerVpnCheck', requestId, result }));
+      });
     } else if (msg.type === 'updateSettings') {
       const patch = (msg as { settings?: Partial<ArgusConfig> }).settings;
       if (patch) {
+        for (const key of Object.values(providerVpnSetting)) {
+          if (key in patch && !isProviderVpnMode(patch[key])) {
+            ws.send(JSON.stringify({ type: 'providerNotice', error: true, message: 'Invalid provider VPN mode.' }));
+            return;
+          }
+        }
         if ('errorRetryPatterns' in patch) {
           const validation = parseErrorRetryPatterns(patch.errorRetryPatterns);
           if (validation.error) {
@@ -548,8 +565,12 @@ export function attachClientHandlers(
         for (const [k, v] of Object.entries(patch)) {
           if (k in DEFAULT_CONFIG && k !== 'providerDefaults' && k !== 'defaultProvider') (filtered as Record<string, unknown>)[k] = v;
         }
-        const config = { ...readConfig(), ...filtered };
-        writeConfig(config);
+        const config = { ...readConfig(true), ...filtered };
+        if (!writeConfig(config)) {
+          ws.send(JSON.stringify({ type: 'settings', settings: readConfig(true) }));
+          ws.send(JSON.stringify({ type: 'providerNotice', error: true, message: 'Could not save settings.' }));
+          return;
+        }
         ws.send(JSON.stringify({ type: 'settings', settings: config }));
         hooks.onSettingsChange?.();
       }
@@ -720,7 +741,10 @@ export function attachClientHandlers(
         });
       }
     } else if (msg.type === 'listDir') {
-      ws.send(JSON.stringify({ type: 'dirList', ...listDir(typeof msg.path === 'string' ? msg.path : undefined) }));
+      // Async: listing the drive roots must not hold the event loop (see listDrives).
+      listDir(typeof msg.path === 'string' ? msg.path : undefined)
+        .catch(() => listDir())
+        .then(listing => { try { ws.send(JSON.stringify({ type: 'dirList', ...listing })); } catch {} });
     } else if (msg.type === 'searchFiles') {
       // Per-client (ws.send, not broadcast): one person's "@" typing is not an event for
       // every panel on the channel. Scoped to this entry's workspace, so a relative

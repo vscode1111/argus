@@ -69,7 +69,7 @@ export function readAgentImport(options: ImportOptions): Candidate {
     } else {
       const key = name(item.data.key);
       if (item.file !== key + '.json') throw Error('graph_import_key_conflict');
-      const clean = pick(item.data, ['role', 'providerId', 'workspace', 'title', 'profile', 'model', 'effort', 'sessionId']);
+      const clean = pick(item.data, ['role', 'providerId', 'workspace', 'title', 'profile', 'model', 'effort', 'sessionId', 'mode']);
       clean.sessionId ??= null; if (clean.providerId === undefined && typeof clean.sessionId === 'string') clean.providerId = providerForSession(clean.sessionId).descriptor.id;
       const binding = worker(clean);
       if (workers[key] && JSON.stringify(workers[key]) !== JSON.stringify(binding)) throw Error('graph_import_conflict'); workers[key] = binding;

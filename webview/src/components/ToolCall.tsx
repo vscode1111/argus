@@ -62,6 +62,16 @@ function toolSummary(name: string, input: Record<string, unknown>): string {
 interface Props {
   call: ToolCallData;
   sessionDone?: boolean;
+  count?: number;
+}
+
+const detailedTools = new Set(['Read', 'Write', 'Edit', 'Bash', 'Agent', 'AskUserQuestion', 'TodoWrite']);
+
+export function isNameOnlyTool(call: ToolCallData, showOutput: boolean): boolean {
+  if (call.error || (call.kind && call.kind !== 'generic') || detailedTools.has(call.name)) return false;
+  if (call.result && (showOutput || call.name === 'Glob' || call.name === 'Grep')) return false;
+  const summary = toolSummary(call.name, call.input);
+  return !summary || summary === call.name;
 }
 
 function FileChangeIcon() {
@@ -73,7 +83,7 @@ function FileChangeIcon() {
   );
 }
 
-export function ToolCall({ call, sessionDone }: Props) {
+export function ToolCall({ call, sessionDone, count = 1 }: Props) {
   const { verboseTools, showOutput } = useSettings();
   const { input, result, error } = call;
   const name = call.kind === 'command' ? 'Bash' : call.name;
@@ -273,6 +283,7 @@ export function ToolCall({ call, sessionDone }: Props) {
             ) : (
               <span className={[styles.toolName, name === 'js' && styles.toolNameJs, pending && styles.toolNamePending].filter(Boolean).join(' ')}>{name}</span>
             )}
+            {count > 1 && <span className={styles.toolRepeatCount}>×{count}</span>}
             {fileChanges.length > 0 && (
               fileChanges.length === 1 ? (
                 fileChanges[0].status === 'delete' ? (

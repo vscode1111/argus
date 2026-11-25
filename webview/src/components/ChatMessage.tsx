@@ -1,10 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { UIMessage, ErrorKind, LoginState } from '../types';
 import { ThinkingBlock } from './ThinkingBlock';
-import { ToolCall } from './ToolCall';
-import { UserInjectBlock } from './UserInjectBlock';
+import { AssistantBlocks } from './AssistantBlocks';
 import { BackgroundTasksNote } from './BackgroundTasksNote';
-import { BackgroundNoticeBlock } from './BackgroundNoticeBlock';
 import { Markdown } from '../utils/markdown';
 import { linkifyWithMentions } from '../utils/filePath';
 import { formatDuration, formatTime } from '../utils/time';
@@ -149,11 +147,6 @@ export const ChatMessage = React.memo(function ChatMessage({ message, login, com
     return <UserMessage message={message} />;
   }
 
-  // Hide text blocks after a pending AskUserQuestion so the AI appears to wait
-  const firstPendingAskIdx = blocks?.findIndex(
-    b => b.type === 'tool' && b.call.name === 'AskUserQuestion' && !b.call.result
-  ) ?? -1;
-
   const hasWatchdog = !!message.watchdogRetries;
   const isWatchdogTimeout = message.outcome === 'error' && hasWatchdog;
   const sessionDone = message.outcome != null && message.outcome !== 'background_waiting' && message.outcome !== 'background_done';
@@ -161,17 +154,7 @@ export const ChatMessage = React.memo(function ChatMessage({ message, login, com
   return (
     <div className={[msg.message, msg.assistant, compact ? msg.segmentContinuation : ''].filter(Boolean).join(' ')}>
       {thinking && <ThinkingBlock text={thinking} />}
-      {blocks ? blocks.map((block, i) => {
-        if (firstPendingAskIdx >= 0 && i > firstPendingAskIdx && block.type === 'text') {
-          return null;
-        }
-        if (block.type === 'tool') return <ToolCall key={block.call.id} call={block.call} sessionDone={sessionDone} />;
-        if (block.type === 'user_inject') return <UserInjectBlock key={`inject-${i}`} text={block.text} images={block.images} />;
-        if (block.type === 'bg_notice') return <BackgroundNoticeBlock key={`notice-${i}`} notice={block.notice} />;
-        return <div key={`text-${i}`} className={msg.messageContent}>
-          <Markdown>{block.text}</Markdown>
-        </div>;
-      }) : content && (
+      {blocks ? <AssistantBlocks blocks={blocks} sessionDone={sessionDone} /> : content && (
         <div className={msg.messageContent}>
           <Markdown>{content}</Markdown>
         </div>

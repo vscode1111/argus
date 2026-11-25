@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import type { WebSocket } from 'ws';
 import { resolveClaudeBin, IS_WIN, killProc, URL_PATTERNS } from './cli';
+import { vpnMode } from './providerVpn';
 
 export interface LoginHandler {
   start: (workspaceDir: string) => void;
@@ -15,6 +16,10 @@ export function createLoginHandler(ws: WebSocket, sendLog: (level: 'debug' | 'in
   let exitCode: number | null = null;
 
   function start(workspaceDir: string) {
+    if (vpnMode('claude') !== 'normal') {
+      ws.send(JSON.stringify({ type: 'loginResult', success: false, message: 'Browser sign-in is unavailable on a protected route. Use an existing signed-in account.' }));
+      return;
+    }
     if (proc) killProc(proc);
     sendLog('info', 'Starting claude login');
     const loginBin = resolveClaudeBin();

@@ -9,6 +9,7 @@ import { copyTextToClipboard } from '../utils/clipboard';
 import { CliProcessesModal } from './CliProcessesModal';
 import { ClientsModal } from './ClientsModal';
 import { PasswordInput } from './shared/PasswordInput';
+import { ProviderVpnSettings } from './ProviderVpnSettings';
 import styles from './SettingsModal.module.css';
 
 interface ToggleProps {
@@ -289,7 +290,7 @@ interface Props {
   version: string;
 }
 
-type Tab = 'general' | 'watchdog' | 'network' | 'info';
+type Tab = 'general' | 'watchdog' | 'network' | 'vpn' | 'info';
 
 export function SettingsModal({ onClose, workspacePath, version }: Props) {
   const { verboseTools, showTimer, showOutput, showLogs, soundOnComplete, notifyOnComplete, watchdogEnabled, watchdogTimeout, watchdogAutoRetries, watchdogRetryDelay, watchdogDelayFactor, errorRetryMaxRetries, errorRetryDelay, errorRetryPatterns, cliIdleTimeoutSec, connectionIdleTimeoutSec, allowNetworkAccess, allowedOrigins, setVerboseTools, setShowTimer, setShowOutput, setShowLogs, setSoundOnComplete, setNotifyOnComplete, setWatchdogEnabled, setWatchdogTimeout, setWatchdogAutoRetries, setWatchdogRetryDelay, setWatchdogDelayFactor, setErrorRetryMaxRetries, setErrorRetryDelay, setErrorRetryPatterns, setCliIdleTimeoutSec, setConnectionIdleTimeoutSec, setAllowNetworkAccess, setAllowedOrigins, daemonPort, setDaemonPort, daemonIdleMs, setDaemonIdleMs } = useSettings();
@@ -514,6 +515,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
           <button className={[styles.tab, tab === 'general' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('general')}>General</button>
           <button className={[styles.tab, tab === 'watchdog' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('watchdog')}>Watchdog</button>
           <button className={[styles.tab, tab === 'network' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('network')}>Network</button>
+          <button className={[styles.tab, tab === 'vpn' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('vpn')}>VPN</button>
           <button className={[styles.tab, tab === 'info' ? styles.tabActive : ''].filter(Boolean).join(' ')} onClick={() => setTab('info')}>Info</button>
         </div>
         {tab === 'general' && (
@@ -612,6 +614,7 @@ export function SettingsModal({ onClose, workspacePath, version }: Props) {
             </label>
           </div>
         )}
+        {tab === 'vpn' && <ProviderVpnSettings />}
         {tab === 'network' && (
           <div className={styles.tabContent}>
             <label className={styles.settingRow} htmlFor="toggle-network">

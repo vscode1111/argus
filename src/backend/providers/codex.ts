@@ -10,6 +10,7 @@ import type { ProviderInteraction, ProviderModel, ProviderSelection } from '../.
 import { readConfig } from '../config';
 import { noteCodexUsage } from '../sessionStats';
 import { readHistoryItems } from './codexHistory';
+import { vpnMode } from '../providerVpn';
 
 function nativeId(id: string): string {
   if (!/^codex:[a-zA-Z0-9_-]{1,128}$/.test(id)) throw new Error('Invalid conversation id');
@@ -237,8 +238,12 @@ export class CodexSession implements AgentSession {
   get pid(): number | undefined { return this.rpc.pid; }
   get reconnectNeeded(): boolean { return this.closed; }
 
-  constructor(private readonly state: SessionState, private readonly rpc = new AppServerRpc(undefined, undefined, state), private readonly validate = codexProvider.validate) {
+  constructor(private readonly state: SessionState, private rpc = new AppServerRpc(undefined, undefined, state), private readonly validate = codexProvider.validate) {
     this.pendingAsyncQuestion = state.interaction?.async ? state.interaction : undefined;
+    this.bindRpc();
+  }
+
+  private bindRpc(): void {
     this.rpc.onMessage = (method, params, id) => this.receive(method, params, id);
     this.rpc.onFailure = error => { if (!this.closed) { if (this.busy) this.fail(error); else this.dispose(); } };
   }
@@ -385,6 +390,9 @@ export class CodexSession implements AgentSession {
       else throw new Error('This provider accepts text and images. Convert this attachment to text before sending.');
     }
     if (this.busy) {
+      if (this.rpc.launchMode !== undefined && this.rpc.launchMode !== vpnMode('codex')) {
+        throw new Error('Codex VPN mode changed. Wait for the current turn to finish, then send again.');
+      }
       if (!this.turnId || this.interactions.size) throw new Error('Answer the pending question or wait for the turn to start');
       checkAdmission(admission, true);
       const previousQuestion = this.state.interaction;
@@ -392,6 +400,12 @@ export class CodexSession implements AgentSession {
       if (previousQuestion?.async && this.state.interaction === previousQuestion) { this.clearAsyncQuestion('superseded'); this.showInteraction(); }
       this.emit({ type: 'user_inject', text: input.text || '', ...(input.images?.length ? { images: input.images } : {}) });
       return;
+    }
+    if (this.rpc.launchMode !== undefined && this.rpc.launchMode !== vpnMode('codex')) {
+      this.rpc.dispose(true);
+      this.rpc = new AppServerRpc(undefined, undefined, this.state);
+      this.bindRpc();
+      this.threadId = undefined;
     }
     if (this.state.interaction?.async && input.expectedInteractionId === undefined) { this.clearAsyncQuestion('superseded'); this.showInteraction(); }
     this.busy = true; this.state.cliDone = false; this.deltas.clear(); this.lastAgentMessageId = '';
@@ -463,6 +477,9 @@ export class CodexSession implements AgentSession {
       title: old?.title || (input.text || 'New conversation').slice(0, 100), updatedAt: Date.now() });
     if (configuration) configuration.submitted = true;
     checkAdmission(admission, true);
+    if (this.rpc.launchMode !== undefined && this.rpc.launchMode !== vpnMode('codex')) {
+      throw new Error('Codex VPN mode changed while starting the turn. Retry with the new mode.');
+    }
     if (input.expectedInteractionId !== undefined && this.state.interaction?.id === input.expectedInteractionId) { this.clearAsyncQuestion('superseded'); this.showInteraction(); }
     if (admission) this.announceInput(input);
     const response = await this.rpc.request('turn/start', { threadId: this.threadId, input: content,

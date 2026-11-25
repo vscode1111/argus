@@ -1,7 +1,9 @@
-import React, { useEffect, useLayoutEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useImperativeHandle, useMemo, forwardRef } from 'react';
 import { UIMessage, StreamingState, LoginState } from '../types';
 import { ChatMessage } from './ChatMessage';
 import { StreamingMessage } from './StreamingMessage';
+import { isNameOnlyTool } from './ToolCall';
+import { useSettings } from '../contexts/SettingsContext';
 import styles from './MessageList.module.css';
 
 export interface MessageListHandle {
@@ -24,7 +26,39 @@ const HISTORY_THRESHOLD = 100;
 const PREFETCH_PAGES = 5;
 const segmentOrigin = (id: string) => /^(.*):block:\d+$/.exec(id)?.[1];
 
+function groupToolSegments(messages: UIMessage[], showOutput: boolean): UIMessage[] {
+  const grouped: UIMessage[] = [];
+  for (let index = 0; index < messages.length; index++) {
+    const first = messages[index];
+    const origin = first.role === 'assistant' && segmentOrigin(first.id);
+    const block = first.blocks?.[0];
+    if (!origin || first.blocks?.length !== 1 || block?.type !== 'tool' || !isNameOnlyTool(block.call, showOutput)) {
+      grouped.push(first);
+      continue;
+    }
+    const blocks = [block];
+    let last = first;
+    while (index + 1 < messages.length && !last.outcome && !last.interaction) {
+      const next = messages[index + 1];
+      const nextBlock = next.blocks?.[0];
+      if (next.role !== 'assistant' || segmentOrigin(next.id) !== origin || next.thinking ||
+          next.blocks?.length !== 1 || nextBlock?.type !== 'tool' || nextBlock.call.name !== block.call.name ||
+          !isNameOnlyTool(nextBlock.call, showOutput)) break;
+      blocks.push(nextBlock);
+      last = next;
+      index++;
+    }
+    grouped.push(last === first ? first : { ...last, id: first.id, thinking: first.thinking, blocks });
+  }
+  return grouped;
+}
+
 export const MessageList = forwardRef<MessageListHandle, Props>(function MessageList({ messages, streaming, login, logCount, historySessionId, historyBefore, historyRevision, onLoadEarlier }, ref) {
+  const { showOutput, verboseTools } = useSettings();
+  const displayMessages = useMemo(
+    () => verboseTools ? messages : groupToolSegments(messages, showOutput),
+    [messages, showOutput, verboseTools]
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const userScrolledUp = useRef(false);
@@ -190,10 +224,10 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
             Load earlier messages
           </button>
         )}
-        {messages.map((msg, index) => (
+          {displayMessages.map((msg, index) => (
           <ChatMessage key={msg.id} message={msg}
-            compact={msg.role === 'assistant' && index > 0 && messages[index - 1].role === 'assistant' && !!segmentOrigin(msg.id)
-              && segmentOrigin(msg.id) === segmentOrigin(messages[index - 1].id)}
+              compact={msg.role === 'assistant' && index > 0 && displayMessages[index - 1].role === 'assistant' && !!segmentOrigin(msg.id)
+                && segmentOrigin(msg.id) === segmentOrigin(displayMessages[index - 1].id)}
             login={msg.role === 'error' && msg.errorKind === 'auth' ? login : undefined} />
         ))}
         {streaming && <StreamingMessage streaming={streaming} logCount={logCount} />}

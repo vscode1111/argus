@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { readConfig, writeConfig, type ArgusConfig } from './config';
 import { fetchModels, type ModelInfo } from './accountUsage';
+import { vpnMode } from './providerVpn';
 
 // Model metadata upkeep: family-based descriptions (mirroring the CLI's own
 // substring classifier, so new snapshots of known families never render blank),
@@ -190,6 +191,8 @@ export function extractFamilyDescriptions(log: Log): Record<string, string> {
 // from the assistant event. Spawned in the temp dir so it never loads a real
 // project's CLAUDE.md or memory.
 export function detectDefaultModel(log: Log): Promise<string | null> {
+  // The optional discovery turn must not start a normal-route provider.
+  if (vpnMode('claude') !== 'normal') return Promise.resolve(null);
   return new Promise((resolve) => {
     const bin = resolveClaudeLauncher();
     const args = ['--print', '--output-format', 'stream-json', '--verbose', '--effort', 'low', 'say: ok'];

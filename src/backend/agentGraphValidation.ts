@@ -59,13 +59,14 @@ export function configuration(value: unknown): Record<string, unknown> {
   return result;
 }
 export interface ScopeDocument { version: 1; goal: { title: string; status: string; profile: string; profileRevision: number; createdAt: number; updatedAt: number }; reviewCycles: { deliverable: string; count: number }[]; coordinatorConfiguration?: Record<string, unknown>; workers: Record<string, WorkerBinding> }
-export interface WorkerBinding { role: typeof roles[number]; providerId: string; workspace: string; title: string; profile: string; model: string; effort: string; sessionId: string | null }
+export interface WorkerBinding { role: typeof roles[number]; providerId: string; workspace: string; title: string; profile: string; model: string; effort: string; sessionId: string | null; mode?: 'full-access' | 'edit' | 'plan' }
 export function worker(value: unknown): WorkerBinding {
-  const v = record(value); fields(v, ['role', 'providerId', 'workspace', 'title', 'profile', 'model', 'effort', 'sessionId']);
+  const v = record(value); fields(v, ['role', 'providerId', 'workspace', 'title', 'profile', 'model', 'effort', 'sessionId', 'mode']);
   const providerId = bounded(v.providerId, 40); provider(providerId); const id = v.sessionId === null ? null : sessionId(v.sessionId);
   if (id && providerForSession(id).descriptor.id !== providerId) throw Error('invalid_graph_provider');
   return { role: choice(v.role, roles), providerId, workspace: workspace(v.workspace), title: bounded(v.title, 200, true),
-    profile: choice(v.profile, ['normal', 'important']), model: bounded(v.model, 200, true), effort: bounded(v.effort, 40, true), sessionId: id };
+    profile: choice(v.profile, ['normal', 'important']), model: bounded(v.model, 200, true), effort: bounded(v.effort, 40, true), sessionId: id,
+    ...(v.mode === undefined ? {} : { mode: choice(v.mode, ['full-access', 'edit', 'plan'] as const) }) };
 }
 export function scopeDocument(value: unknown): ScopeDocument {
   const v = record(value); fields(v, ['version', 'goal', 'reviewCycles', 'coordinatorConfiguration', 'workers']);

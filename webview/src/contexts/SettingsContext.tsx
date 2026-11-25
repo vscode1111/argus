@@ -3,6 +3,8 @@ import { postMessage, isVsCode } from '../vscode';
 import type { ArgusSettings } from '../types';
 
 const DEFAULTS: ArgusSettings = {
+  claudeVpnMode: 'normal',
+  codexVpnMode: 'normal',
   verboseTools: false,
   showTimer: true,
   showOutput: false,

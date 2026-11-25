@@ -9,6 +9,31 @@ function fixture(t) {
 const node = (id, role = 'work') => ({ id, providerId: 'claude', role, workspace: 'D:/inventory', company: 'inventory', goal: 'stock', title: id, createdAt: 1, updatedAt: 1 });
 const document = () => ({ version: 1, goal: { title: 'Inventory', status: 'done', profile: 'normal', profileRevision: 1, createdAt: 1, updatedAt: 1 },
   reviewCycles: [{ deliverable: 'report', count: 3 }], workers: { work: { role: 'work', providerId: 'claude', workspace: 'D:/inventory', title: 'Inventory worker', profile: 'normal', model: '', effort: '', sessionId: null } } });
+
+test('worker sandbox mode validates, binds and round-trips with legacy compatibility', t => {
+  const { graph, file, AgentGraph } = fixture(t);
+  const { worker } = require('../out/backend/agentGraphValidation');
+  assert.deepEqual(worker(document().workers.work), document().workers.work);
+  for (const mode of ['edit', 'plan', 'full-access']) {
+    const data = document(); data.workers.work.mode = mode;
+    const scope = graph.updateScope('inventory', mode, data, 0);
+    const bound = graph.bindWorker('inventory', mode, 'work', { ...node('parent-' + mode, 'coordinator'), goal: mode }, { ...node('child-' + mode), goal: mode }, scope.revision);
+    assert.equal(bound.data.workers.work.mode, mode);
+    assert.equal(new AgentGraph(file).readScope('inventory', mode).data.workers.work.mode, mode);
+  }
+  for (const mode of ['unsafe', '', null, 1]) assert.throws(() => worker({ ...document().workers.work, mode }), /invalid_graph_choice/);
+});
+
+test('snapshot import keeps worker sandbox mode', t => {
+  const { graph, dir } = fixture(t); const { readAgentImport, commitAgentImport } = require('../out/backend/agentGraphImport');
+  const root = path.join(dir, 'source'); fs.mkdirSync(root);
+  fs.writeFileSync(path.join(root, 'stock.goal.json'), JSON.stringify({ company: 'inventory', goal: 'stock', ...document().goal }));
+  fs.writeFileSync(path.join(root, 'work.json'), JSON.stringify({ company: 'inventory', goal: 'stock', key: 'work', ...document().workers.work, mode: 'plan' }));
+  const candidate = readAgentImport({ root, company: 'inventory', goal: 'stock' });
+  assert.equal(candidate.data.workers.work.mode, 'plan');
+  commitAgentImport(graph, candidate, () => false);
+  assert.equal(graph.readScope('inventory', 'stock').data.workers.work.mode, 'plan');
+});
 test('S2-I1 actual checkpoint locks reject live/unreadable flat and nested sources and are rechecked', t => {
   const { graph, dir } = fixture(t); const { readAgentImport, commitAgentImport } = require('../out/backend/agentGraphImport');
   for (const nested of [false, true]) {

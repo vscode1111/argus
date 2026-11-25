@@ -28,6 +28,12 @@
   flex-shrink: 0;
 }
 
+.toolRepeatCount {
+  color: var(--thinking-fg);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
 .fileChangeIcon {
   display: inline-flex;
   align-items: center;

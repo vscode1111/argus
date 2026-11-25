@@ -7,6 +7,8 @@ import { noteCliLaunch } from '../cliLaunchCount';
 import { readServerVersion } from '../version';
 import { agentEnvironment } from '../agentEnvironment';
 import type { SessionState } from '../sessionState';
+import { providerCommand, providerNetworkEnvironment, vpnMode } from '../providerVpn';
+import type { ProviderVpnMode } from '../../shared/providerVpn';
 
 // Full conversation replies include tool output and can exceed 32 MiB.
 const MAX_PROVIDER_FRAME_CHARS = 128 * 1024 * 1024;
@@ -33,6 +35,7 @@ export class AppServerRpc {
   onMessage: (method: string, params: JsonObject, id?: string | number) => void = () => {};
   onFailure: (error: Error) => void = () => {};
   get pid(): number | undefined { return this.proc?.pid; }
+  launchMode?: ProviderVpnMode;
 
   constructor(private readonly binary = resolveCodexBinary(), private readonly args = ['app-server'],
     private readonly agent?: Pick<SessionState, 'agentToken' | 'daemonPort'>) {}
@@ -53,7 +56,9 @@ export class AppServerRpc {
         env[pathKey] = `${gitBashDir};${process.env[pathKey] || ''}`;
       }
     }
-    this.proc = spawn(this.binary, this.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, shell: false, env });
+    const mode = this.launchMode = vpnMode('codex');
+    const command = providerCommand('codex', mode, this.binary, this.args);
+    this.proc = spawn(command.binary, command.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, shell: command.shell, env: providerNetworkEnvironment(mode, env) });
     if (this.proc.pid) noteCliLaunch('codex');
     this.proc.stdout.setEncoding('utf8');
     this.proc.stdout.on('data', (chunk: string) => {
@@ -71,14 +76,17 @@ export class AppServerRpc {
     });
     // Never relay raw stderr: runtimes may include private configuration in diagnostics.
     this.proc.stderr.resume();
-    this.proc.on('error', () => this.fail(new Error('Cannot start Codex. Install its CLI or set ARGUS_CODEX_BIN on the server.')));
-    this.proc.on('exit', () => this.fail(new Error('Provider process exited. Reopen the conversation before retrying.')));
+    this.proc.on('error', () => this.fail(new Error(mode !== 'normal' ? 'Cannot start Codex through the protected route launcher.' : 'Cannot start Codex. Install its CLI or set ARGUS_CODEX_BIN on the server.')));
+    this.proc.on('exit', () => this.fail(new Error(mode !== 'normal' ? 'The protected Codex process exited. Check the selected route and retry.' : 'Provider process exited. Reopen the conversation before retrying.')));
     await this.request('initialize', { clientInfo: { name: 'argus', version: readServerVersion() || '0.0.0' } });
     this.write({ method: 'initialized' });
   }
 
   request(method: string, params: JsonObject = {}): Promise<JsonObject> {
     if (this.closed) return Promise.reject(new Error('Provider connection is closed'));
+    if ((method.startsWith('account/') || method === 'model/list') && this.launchMode !== vpnMode('codex')) {
+      return Promise.reject(new Error('Codex VPN mode changed. Retry the provider request.'));
+    }
     const id = ++this.nextId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ARGUS_DIR, LEGACY_ARGUS_DIR, migrateLegacyFile } from './paths';
+import type { ProviderVpnMode } from '../shared/providerVpn';
 
 export const CONFIG_PATH = process.env.ARGUS_CONFIG || path.join(ARGUS_DIR, 'config.json');
 
@@ -9,6 +10,8 @@ function migrateConfig(): void {
 }
 
 export interface ArgusConfig {
+  claudeVpnMode: ProviderVpnMode;
+  codexVpnMode: ProviderVpnMode;
   defaultProvider: string;
   providerDefaults: Record<string, { providerId: string; model: string; effort: string; thinking: boolean }>;
   verboseTools: boolean;
@@ -83,6 +86,8 @@ export interface ArgusConfig {
 }
 
 export const DEFAULT_CONFIG: ArgusConfig = {
+  claudeVpnMode: 'normal',
+  codexVpnMode: 'normal',
   defaultProvider: 'codex',
   providerDefaults: {},
   verboseTools: false,
@@ -124,13 +129,15 @@ export const DEFAULT_CONFIG: ArgusConfig = {
 let cachedConfig: ArgusConfig | null = null;
 let cachedMtime = 0;
 
-export function readConfig(): ArgusConfig {
+export function readConfig(failClosedForVpn = false): ArgusConfig {
   try {
     migrateConfig();
     const mtime = fs.statSync(CONFIG_PATH).mtimeMs;
-    if (cachedConfig && mtime === cachedMtime) return cachedConfig;
+    if (!failClosedForVpn && cachedConfig && mtime === cachedMtime) return cachedConfig;
     const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
-    const { codexCapacityRetries, codexCapacityRetryDelay, ...stored } = JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid settings file');
+    const { codexCapacityRetries, codexCapacityRetryDelay, ...stored } = parsed;
     const config = { ...DEFAULT_CONFIG, ...stored,
       errorRetryMaxRetries: stored.errorRetryMaxRetries ?? codexCapacityRetries ?? DEFAULT_CONFIG.errorRetryMaxRetries,
       errorRetryDelay: stored.errorRetryDelay ?? codexCapacityRetryDelay ?? DEFAULT_CONFIG.errorRetryDelay,
@@ -138,19 +145,24 @@ export function readConfig(): ArgusConfig {
     cachedConfig = config;
     cachedMtime = mtime;
     return config;
-  } catch {
+  } catch (error) {
+    if (failClosedForVpn && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      return { ...(cachedConfig || DEFAULT_CONFIG), claudeVpnMode: 'unavailable', codexVpnMode: 'unavailable' };
+    }
     if (cachedConfig) return cachedConfig;
     return { ...DEFAULT_CONFIG };
   }
 }
 
-export function writeConfig(config: ArgusConfig): void {
+export function writeConfig(config: ArgusConfig): boolean {
   try {
     migrateConfig();
     fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true, mode: 0o700 });
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
     cachedConfig = config;
+    return true;
   } catch (err) {
     console.error(`[argus] Failed to write config to ${CONFIG_PATH}:`, (err as Error).message);
+    return false;
   }
 }

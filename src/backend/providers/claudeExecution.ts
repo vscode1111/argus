@@ -7,6 +7,7 @@ import { noteUsageActivity } from '../usagePoller';
 import { attachProcHandlers, broadcastBgTasks } from '../cliHandler';
 import type { SessionState } from '../sessionState';
 import { noteCliLaunch } from '../cliLaunchCount';
+import { providerCommand, providerNetworkEnvironment, vpnMode } from '../providerVpn';
 export { getCliLaunchCount, resetCliLaunchCount } from '../cliLaunchCount';
 const ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
 const PLAN_BLOCKED_TOOLS = ['Write', 'Edit', 'AskUserQuestion'];
@@ -18,8 +19,13 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
   // Any send spends tokens, including a mid-turn inject and a silent retry, so it is
   // what keeps the usage poller awake (and wakes it after a paused hour).
   noteUsageActivity();
+  const route = vpnMode('claude');
 
   if (s.currentProc?.stdin?.writable && !s.cliDone && !msg._silent && !msg._askResume) {
+    if ((s.currentProcKey?.startsWith('tbilisi:') ? 'tbilisi' : 'normal') !== route) {
+      s.broadcast(JSON.stringify({ type: 'error', text: 'Claude VPN mode changed. Wait for the current turn to finish, then send again.' }));
+      return;
+    }
     s.lastMessage = { text, images, mode: msg.mode };
     // A question still open in this process blocks the CLI, so the message would never be
     // read. Writing instead of choosing is an answer of its own: decline the question and
@@ -86,7 +92,7 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
   } else if (msg.mode === 'full-access') {
     baseArgs.push('--permission-mode', 'bypassPermissions');
   }
-  const procKey = baseArgs.join(' ');
+  const procKey = route + ':' + baseArgs.join(' ');
   const args = [...baseArgs];
   if (s.sessionId && (!s.currentProc || s.currentProcKey !== procKey)) {
     args.push('--resume', s.sessionId);
@@ -135,13 +141,13 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
       killProc(s.currentProc);
     }
     const claudeBin = resolveClaudeBin();
-    const spawnCmd = IS_WIN && /\s/.test(claudeBin) ? `"${claudeBin}"` : claudeBin;
     s.sendLog('info', `Spawning claude: ${args.join(' ')}`);
     // spawn() throws synchronously when the OS refuses a new process (e.g. resource
     // exhaustion -> "spawn UNKNOWN"). That must stay a per-turn error: uncaught it
     // kills the server process and every other client's connection with it.
     try {
-      proc = spawn(spawnCmd, args, { cwd: s.workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: IS_WIN, windowsHide: true, env: agentEnvironment(s) });
+      const command = providerCommand('claude', route, claudeBin, args, IS_WIN);
+      proc = spawn(command.binary, command.args, { cwd: s.workspaceDir, stdio: ['pipe', 'pipe', 'pipe'], shell: command.shell, windowsHide: true, env: providerNetworkEnvironment(route, agentEnvironment(s)) });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       s.currentProc = undefined;

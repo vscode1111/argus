@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import * as vscode from 'vscode';
 import { getInlineDebounceMs, getInlineModel } from '../utils/config';
 import { resolveClaudeBin, IS_WIN } from '../../backend/cli';
+import { providerCommand, providerNetworkEnvironment, vpnMode } from '../../backend/providerVpn';
 
 const PREFIX_LINES = 40;
 const SUFFIX_LINES = 10;
@@ -55,17 +56,18 @@ export class InlineSuggestProvider implements vscode.InlineCompletionItemProvide
       `Complete the code at the cursor (between prefix and suffix):`;
 
     return new Promise((resolve) => {
-      const claudeBin = resolveClaudeBin();
-      const spawnCmd = IS_WIN && /\s/.test(claudeBin) ? `"${claudeBin}"` : claudeBin;
-      const proc = spawn(spawnCmd, ['--print', '--output-format', 'text', '--model', getInlineModel()], {
+      const mode = vpnMode('claude');
+      const command = providerCommand('claude', mode, resolveClaudeBin(), ['--print', '--output-format', 'text', '--model', getInlineModel()], IS_WIN);
+      const proc = spawn(command.binary, command.args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: IS_WIN,
+        shell: command.shell,
+        env: providerNetworkEnvironment(mode, process.env),
       });
 
       token.onCancellationRequested(() => { proc.kill(); resolve(null); });
 
-      proc.stdin.write(prompt);
-      proc.stdin.end();
+      proc.stdin.on('error', () => resolve(null));
+      proc.stdin.end(prompt);
 
       let output = '';
       proc.stdout.on('data', (data: Buffer) => { output += data.toString(); });

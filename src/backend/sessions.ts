@@ -431,16 +431,23 @@ export interface DirListing {
 // root to switch drives.
 const DRIVES_ROOT = '';
 
-function listDrives(): DirEntry[] {
-  if (process.platform === 'win32') {
-    const out: DirEntry[] = [];
-    for (let c = 65; c <= 90; c++) {
-      const root = `${String.fromCharCode(c)}:\\`;
-      try { if (fs.existsSync(root)) out.push({ name: root, path: root }); } catch {}
-    }
-    return out;
-  }
-  return [{ name: '/', path: '/' }];
+// Probing a drive root can block for seconds: the first access to a persistent
+// network mapping whose server is unreachable makes Windows try to reconnect it
+// (measured 6.8s on a disconnected \\server\share before answering "missing").
+// A synchronous existsSync there froze the event loop serving every client, so
+// roots are probed concurrently and asynchronously, and one that has not answered
+// within DRIVE_PROBE_TIMEOUT_MS is left out - it is unusable for browsing anyway.
+export const DRIVE_PROBE_TIMEOUT_MS = 1500;
+
+async function listDrives(): Promise<DirEntry[]> {
+  if (process.platform !== 'win32') return [{ name: '/', path: '/' }];
+  const roots: string[] = [];
+  for (let c = 65; c <= 90; c++) roots.push(`${String.fromCharCode(c)}:\\`);
+  const present = await Promise.all(roots.map(root => new Promise<boolean>(resolve => {
+    const timer = setTimeout(() => resolve(false), DRIVE_PROBE_TIMEOUT_MS);
+    fs.promises.access(root).then(() => true, () => false).then(ok => { clearTimeout(timer); resolve(ok); });
+  })));
+  return roots.filter((_, i) => present[i]).map(root => ({ name: root, path: root }));
 }
 
 // Resolve a path to the nearest existing directory by walking up its ancestors.
@@ -470,9 +477,9 @@ function parentOf(p: string): string | null {
 // ('') yields the drive list. Directory-only, sorted case-insensitively; tolerates
 // unreadable entries (permissions, removed media) by returning an empty list that
 // is still navigable upward.
-export function listDir(target?: string): DirListing {
+export async function listDir(target?: string): Promise<DirListing> {
   if (target === DRIVES_ROOT) {
-    return { path: DRIVES_ROOT, parent: null, entries: listDrives() };
+    return { path: DRIVES_ROOT, parent: null, entries: await listDrives() };
   }
   const requested = target && target.length ? path.resolve(target) : os.homedir();
   const dir = nearestExistingDir(requested);

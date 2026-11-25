@@ -163,6 +163,8 @@ export type StreamingState = NotificationFacts & {
 };
 
 export type ArgusSettings = {
+  claudeVpnMode: import('../../src/shared/providerVpn').ProviderVpnMode;
+  codexVpnMode: import('../../src/shared/providerVpn').ProviderVpnMode;
   verboseTools: boolean;
   showTimer: boolean;
   showOutput: boolean;

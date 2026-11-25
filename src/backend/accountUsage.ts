@@ -3,6 +3,14 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { resolveClaudeBin, IS_WIN } from './cli';
+import { providerCommand, providerNetworkEnvironment, vpnHttpGet, vpnMode } from './providerVpn';
+import type { ProviderVpnMode } from '../shared/providerVpn';
+
+async function anthropicGet(mode: ProviderVpnMode, url: string, headers: Record<string, string>): Promise<Response> {
+  if (mode === 'normal') return fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
+  const { status, body } = await vpnHttpGet('claude', mode, url, headers);
+  return new Response(status === 204 || status === 205 || status === 304 ? null : body, { status });
+}
 
 export interface AccountInfo {
   loggedIn: boolean;
@@ -125,21 +133,19 @@ export interface UsageResult {
 
 // Cache the last good usage result so re-opening the panel does not hammer the
 // usage endpoint (which rate-limits aggressively).
-let usageCache: { data: RateLimitInfo[]; ts: number } | null = null;
+let usageCache: { data: RateLimitInfo[]; ts: number; mode: ProviderVpnMode } | null = null;
 const USAGE_TTL_MS = 60_000;
 
 // Fetch live usage windows from the Anthropic OAuth usage endpoint.
 // On failure (missing/expired token, rate limit, offline) returns empty windows
 // plus an `error` reason so the caller can fall back and surface the cause.
 export async function fetchUsage(force = false): Promise<UsageResult> {
-  if (!force && usageCache && Date.now() - usageCache.ts < USAGE_TTL_MS) return { windows: usageCache.data };
+  const mode = vpnMode('claude');
+  if (!force && usageCache?.mode === mode && Date.now() - usageCache.ts < USAGE_TTL_MS) return { windows: usageCache.data };
   const token = readOAuthToken();
   if (!token) return { windows: [], error: 'not signed in (no OAuth token)' };
   try {
-    const res = await fetch(USAGE_URL, {
-      headers: { Authorization: `Bearer ${token}`, 'anthropic-beta': OAUTH_BETA },
-      signal: AbortSignal.timeout(10_000),
-    });
+    const res = await anthropicGet(mode, USAGE_URL, { Authorization: `Bearer ${token}`, 'anthropic-beta': OAUTH_BETA });
     if (!res.ok) {
       const reason =
         res.status === 429 ? 'rate limited' :
@@ -150,10 +156,10 @@ export async function fetchUsage(force = false): Promise<UsageResult> {
     }
     const data = await res.json() as Record<string, unknown>;
     const parsed = parseUsageResponse(data);
-    if (parsed.length > 0) usageCache = { data: parsed, ts: Date.now() };
+    if (parsed.length > 0) usageCache = { data: parsed, ts: Date.now(), mode };
     return { windows: parsed };
   } catch (e) {
-    const error = e instanceof Error && e.name === 'TimeoutError' ? 'request timed out' : 'network error';
+    const error = mode !== 'normal' ? 'Protected usage request failed' : e instanceof Error && e.name === 'TimeoutError' ? 'request timed out' : 'network error';
     return { windows: [], error };
   }
 }
@@ -172,21 +178,19 @@ export interface ModelsResult {
   error?: string;
 }
 
-let modelsCache: { data: ModelInfo[]; ts: number } | null = null;
+let modelsCache: { data: ModelInfo[]; ts: number; mode: ProviderVpnMode } | null = null;
 const MODELS_TTL_MS = 5 * 60_000;
 
 export async function fetchModels(): Promise<ModelsResult> {
-  if (modelsCache && Date.now() - modelsCache.ts < MODELS_TTL_MS) return { models: modelsCache.data };
+  const mode = vpnMode('claude');
+  if (modelsCache?.mode === mode && Date.now() - modelsCache.ts < MODELS_TTL_MS) return { models: modelsCache.data };
   const token = readOAuthToken();
   if (!token) return { models: [], error: 'not signed in (no OAuth token)' };
   try {
-    const res = await fetch('https://api.anthropic.com/v1/models', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': OAUTH_BETA,
-      },
-      signal: AbortSignal.timeout(10_000),
+    const res = await anthropicGet(mode, 'https://api.anthropic.com/v1/models', {
+      Authorization: `Bearer ${token}`,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': OAUTH_BETA,
     });
     if (!res.ok) {
       const reason =
@@ -201,10 +205,10 @@ export async function fetchModels(): Promise<ModelsResult> {
       displayName: m.display_name ?? m.id,
       ...(typeof m.max_input_tokens === 'number' && m.max_input_tokens > 0 ? { contextWindow: m.max_input_tokens } : {}),
     }));
-    modelsCache = { data: models, ts: Date.now() };
+    modelsCache = { data: models, ts: Date.now(), mode };
     return { models };
   } catch (e) {
-    const error = e instanceof Error && e.name === 'TimeoutError' ? 'request timed out' : 'network error';
+    const error = mode !== 'normal' ? 'Protected model request failed' : e instanceof Error && e.name === 'TimeoutError' ? 'request timed out' : 'network error';
     return { models: [], error };
   }
 }
@@ -222,7 +226,10 @@ export function fetchAccountInfo(): Promise<AccountInfo> {
     // up under load, which is why a full e2e run found it and single runs never did.
     try {
       const bin = resolveClaudeBin();
-      execFile(bin, ['auth', 'status', '--json'], { timeout: 10_000, shell: IS_WIN, windowsHide: true }, (err, stdout) => {
+      const mode = vpnMode('claude');
+      const command = providerCommand('claude', mode, bin, ['auth', 'status', '--json'], IS_WIN);
+      const env = providerNetworkEnvironment(mode, process.env);
+      execFile(mode === 'normal' ? bin : command.binary, command.args, { timeout: 10_000, shell: command.shell, windowsHide: true, env }, (err, stdout) => {
         if (err) {
           resolve({ loggedIn: false });
           return;

@@ -39,4 +39,8 @@ for (const provider of registry.providers()) {
   provider.withHistoryReader = async (id, _cwd, action) => action(async () => ({ messages: histories.get(id) ?? [] }));
   provider.list = async cwd => [...histories].filter(([id]) => workspaces.get(id) === cwd && (id.startsWith('codex:') ? 'codex' : 'claude') === provider.descriptor.id)
     .map(([id]) => ({ id, title: 'Synthetic inventory', providerId: provider.descriptor.id, updatedAt: 1 }));
+  // The agent graph resolves node titles through listTitles, not list; without this the
+  // real transcript reader finds nothing for these fake sessions and the graph falls back
+  // to stored node titles, so the synthetic native title would never be exercised.
+  provider.listTitles = async (cwd, ids) => (await provider.list(cwd)).filter(s => ids.includes(s.id)).map(({ id, title }) => ({ id, title }));
 }

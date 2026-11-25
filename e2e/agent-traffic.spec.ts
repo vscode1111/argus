@@ -44,7 +44,8 @@ test('all status strokes contrast and actual subcurves point in opposing directi
  await emit(page,{type:'agentGraph',baseRevision:{epoch:'inventory',seq:1},revision:{epoch:'inventory',seq:2},upsert:{nodes:states.map((status,i)=>({...node(`state-${i}`,`Warehouse status ${i}`),status})),edges:[],scopes:[]},remove:{nodes:[],edges:[],scopes:[]}});
  const evidence:any[]=[];
  for(const theme of ['dark','light']){
-  if(theme==='light')await page.evaluate(()=>{document.documentElement.style.setProperty('--vscode-editor-background','#ffffff');document.documentElement.style.setProperty('--vscode-editor-foreground','#24292d');document.documentElement.style.setProperty('--vscode-sideBar-background','#f1f3f5');});
+  if(theme==='light')await page.evaluate(()=>{document.documentElement.style.setProperty('--vscode-editor-background','#ffffff');document.documentElement.style.setProperty('--vscode-editor-foreground','#24292d');document.documentElement.style.setProperty('--vscode-sideBar-background','#f1f3f5');document.documentElement.style.setProperty('--vscode-charts-blue','#1A5CFF');});
+  // The light switch must replace every theme colour a status stroke reads directly: the stopped stroke is --vscode-charts-blue, and the dark theme's #57A3F8 on a white fill is a pairing VS Code never produces (2026 Light uses #1A5CFF).
   await page.emulateMedia({reducedMotion:'reduce'});
   for(let i=0;i<states.length;i++){
    const n=page.locator(`[data-node-id="state-${i}"]`);await expect(n).toHaveAttribute('data-status',states[i]??'unknown');
