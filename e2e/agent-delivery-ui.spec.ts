@@ -23,6 +23,8 @@ test('private checkout bundle renders delivered live and Session History inputs 
     await expect.poll(() => loadedIds.includes(id)).toBe(true);
     child.send({ type: 'send', text: 'Finish inventory' }); await parent.wait((f: any) => f.type === 'message' && f.message.content.startsWith('🤖'), 6000);
     const automatic = page.locator('div[class*="userMsg"]').filter({ hasText: '🤖' }).first(); await expect(automatic).toBeVisible();
+    const notice = automatic.locator('div[class*="messageContent"]');
+    await expect(notice).toHaveText(`🤖 turn ended. Details: watch --session ${childId}`);
     const violet = await automatic.evaluate(el => getComputedStyle(el).backgroundColor);
     const manual = page.locator('div[class*="userMsg"]').filter({ hasText: 'Prepare inventory' }).first(); await expect(manual).toBeVisible();
     expect(await manual.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(violet);
@@ -32,6 +34,7 @@ test('private checkout bundle renders delivered live and Session History inputs 
     await dialog.locator(`[data-session-id="${id}"]`).click(); await expect(dialog).toHaveCount(0);
     await expect.poll(() => loadedIds.filter(loaded => loaded === id).length).toBeGreaterThan(loadedBefore);
     await expect(automatic).toBeVisible(); await expect(automatic).toHaveCSS('background-color', violet);
+    await expect(notice).toHaveText(`🤖 turn ended. Details: watch --session ${childId}`);
     server.verifySpawn();
   } finally { await server.close(); }
 });

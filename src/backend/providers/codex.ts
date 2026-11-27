@@ -562,6 +562,11 @@ export class CodexSession implements AgentSession {
       kind: method === 'item/tool/requestUserInput' ? 'question' : 'approval',
       title: method === 'item/tool/requestUserInput' ? 'Your input is needed' : 'Approve this operation?',
       detail: [string(params.reason), string(params.command), string(params.cwd)].filter(Boolean).join('\n'),
+      ...(method === 'item/commandExecution/requestApproval' ? { operation: {
+        kind: 'command' as const,
+        ...(typeof params.command === 'string' ? { command: params.command } : {}),
+        ...(typeof params.cwd === 'string' ? { cwd: params.cwd } : {}),
+      } } : method === 'item/fileChange/requestApproval' ? { operation: { kind: 'fileChange' as const } } : {}),
       options: array(params.availableDecisions).length ? array(params.availableDecisions).filter(v => v === 'accept' || v === 'decline').map(string) : ['accept', 'decline'],
       questions: array(params.questions).map(v => { const q = object(v); return { id: string(q.id), question: string(q.question), options: array(q.options).map(o => string(object(o).label)) }; }),
     } });

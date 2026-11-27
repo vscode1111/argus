@@ -1,5 +1,6 @@
 .panel { flex-shrink: 0; border-bottom: 1px solid var(--border); padding: 6px 12px; font-size: 12px; max-height: 28vh; overflow: auto; }
 .parents { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.error { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .children summary { cursor: pointer; padding: 3px 0; font-weight: 600; }
 .list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 4px; }
 .session { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; color: var(--fg); background: var(--tool-bg); text-align: left; min-width: 0; cursor: pointer; }
@@ -8,3 +9,4 @@
 .title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .status { font-size: 11px; }
 .detail { width: 100%; overflow-wrap: anywhere; opacity: 0.85; }
+.caption { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }

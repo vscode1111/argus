@@ -106,6 +106,10 @@ specs for the browser workflow.
   This also works from terminals that do not inherit the desktop app's PATH.
 - VS Code 1.85 or newer.
 
+## Webview controls
+
+Style buttons and selects explicitly with the VS Code theme tokens. Use the shared [action button styles](webview/src/components/shared/actionButton.module.css) for ordinary primary and secondary actions, and use scoped component styles for specialized controls. Check contrast, hover, keyboard focus, and disabled states where applicable in the VS Code panel and browser hosts. Include controls that only appear during loading, errors, or retries.
+
 ## Provider integration tests
 
 Run `npm run test:e2e:integration -- --retries=0` for the full integration project.

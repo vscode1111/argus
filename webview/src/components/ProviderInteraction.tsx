@@ -3,6 +3,7 @@ import type { ProviderInteraction as Interaction } from '../../../src/shared/pro
 import { postMessage } from '../vscode';
 import { savedMode } from '../utils/permissionMode';
 import styles from './ProviderSelector.module.css';
+import action from './shared/actionButton.module.css';
 
 function AsyncQuestionDialog({ request }: { request: Interaction }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -38,7 +39,7 @@ function AsyncQuestionDialog({ request }: { request: Interaction }) {
         {(answers[q.id] === 'other' || q.options.length === 0) && <input className={styles.customAnswer} aria-label={`Answer to ${q.question}`} value={custom[q.id] ?? ''}
           onChange={event => { setCustom(previous => ({ ...previous, [q.id]: event.target.value })); if (!q.options.length) setAnswers(previous => ({ ...previous, [q.id]: 'other' })); }} />}
       </fieldset>)}
-      <button type="submit" disabled={!complete || submitted}>Submit answers</button>
+      <button className={`${action.button} ${action.primary} ${styles.questionSubmit}`} type="submit" disabled={!complete || submitted}>Submit answers</button>
     </form>
   </dialog>;
 }
@@ -56,7 +57,7 @@ export function ProviderInteraction({ request }: { request: Interaction }) {
         <input required value={answers[q.id] || ''} list={`answers-${q.id}`} onChange={e => setAnswers(previous => ({ ...previous, [q.id]: e.target.value }))} />
         <datalist id={`answers-${q.id}`}>{q.options.map(option => <option key={option} value={option} />)}</datalist>
       </label>)}
-      <button type="submit">Submit answers</button>
+      <button className={`${action.button} ${action.primary}`} type="submit">Submit answers</button>
     </form> : <div className={styles.approvalActions}>
       {(request.options || ['accept', 'decline']).map(decision => <button key={decision} className={[styles.approvalButton, decision === 'accept' ? styles.approvalAccept : styles.approvalDecline].join(' ')} type="button" onClick={() => respond({ decision })}>{decision === 'accept' ? 'Allow once' : 'Decline'}</button>)}
     </div>}

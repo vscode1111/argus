@@ -1,0 +1,36 @@
+.button {
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.secondary {
+  color: var(--vscode-button-secondaryForeground, var(--fg));
+  background: var(--vscode-button-secondaryBackground, var(--input-bg));
+  border-color: var(--border);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground, var(--tool-bg));
+}

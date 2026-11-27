@@ -26,5 +26,4 @@
 .questionOption:has(input:checked) { border-color: var(--vscode-focusBorder); background: var(--vscode-list-activeSelectionBackground); }
 .questionOption input { accent-color: var(--vscode-focusBorder); }
 .customAnswer { width: 100%; box-sizing: border-box; padding: 8px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, #555); border-radius: 4px; font: inherit; }
-.questionDialog button { align-self: flex-end; padding: 7px 14px; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; border-radius: 4px; cursor: pointer; }
-.questionDialog button:disabled { opacity: .5; cursor: default; }
+.questionSubmit { align-self: flex-end; }

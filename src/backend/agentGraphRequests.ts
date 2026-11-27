@@ -17,7 +17,7 @@ export class AgentGraphService {
   private epoch = randomUUID(); private seq = 0; private signature = '';
   private timer?: NodeJS.Timeout;
   private publishing = false; private dirty = false; private closed = false;
-  private subscriptions = new Map<WebSocket, { filter: Filter; snapshot?: Snapshot }>();
+  private subscriptions = new Map<WebSocket, { filter: Filter; snapshot?: Snapshot; refreshTitles?: boolean }>();
   private closeHandlers = new Map<WebSocket, () => void>();
   private unsubscribe: (() => void)[];
   private titles = new Map<string, { title: string }>();
@@ -38,8 +38,8 @@ export class AgentGraphService {
     })];
   }
   capability() { return { version: 1, storeId: this.stored.storeId, orchestration: 1 }; }
-  private async refreshTitles(nodes: GraphNode[], force = false) {
-    const needed = nodes.filter(node => force || !this.titles.has(node.id));
+  private async refreshTitles(nodes: GraphNode[], force?: ReadonlySet<string>) {
+    const needed = nodes.filter(node => force?.has(node.id) || !this.titles.has(node.id));
     const requested = new Map<string, { title: string }>();
     const groups = new Map<string, { providerId: string; workspace: string; ids: string[] }>();
     for (const node of needed) {
@@ -96,19 +96,21 @@ export class AgentGraphService {
   async get(ws: WebSocket, requestId: string, filter: Filter, subscribe: boolean, observedId?: string): Promise<void> {
     if (subscribe && !this.subscriptions.has(ws) && this.subscriptions.size >= subscribersLimit) throw Error('graph_busy');
     let subscription = this.subscriptions.get(ws);
-    const initialSubscription = subscribe && !subscription;
     if (subscribe) {
       if (!subscription) {
-        subscription = { filter }; this.subscriptions.set(ws, subscription);
+        subscription = { filter, refreshTitles: true }; this.subscriptions.set(ws, subscription);
         const close = () => { this.subscriptions.delete(ws); this.closeHandlers.delete(ws); };
         this.closeHandlers.set(ws, close); ws.once('close', close);
       }
       subscription.filter = filter; subscription.snapshot = undefined;
     } else this.detach(ws);
     try {
-      const relevant = this.filter(await this.refresh(), filter);
-      await this.refreshTitles(relevant.nodes, initialSubscription);
-      const snapshot = this.filter(await this.refresh(), filter);
+      // A subscriber can render stored titles immediately and receive native titles in a diff.
+      let snapshot = this.filter(await this.refresh(), filter);
+      if (!subscribe) {
+        await this.refreshTitles(snapshot.nodes);
+        snapshot = this.filter(await this.refresh(), filter);
+      }
       const state = observedId ? this.states().find(s => s.sessionId === observedId) : undefined;
       const observation = observedId ? { sessionId: observedId, ...projectAgentState(state),
         ...(state ? { providerId: state.selection.providerId, workspace: state.workspaceDir } : {}) } : undefined;
@@ -128,8 +130,15 @@ export class AgentGraphService {
   }
   private async publish() {
     const base = await this.refresh(); const visible = new Map<string, GraphNode>();
-    for (const sub of this.subscriptions.values()) for (const node of this.filter(base, sub.filter).nodes) visible.set(node.id, node);
-    await this.refreshTitles([...visible.values()]);
+    const refreshTitles = new Set<string>();
+    for (const sub of this.subscriptions.values()) {
+      for (const node of this.filter(base, sub.filter).nodes) {
+        visible.set(node.id, node);
+        if (sub.refreshTitles) refreshTitles.add(node.id);
+      }
+      sub.refreshTitles = false;
+    }
+    await this.refreshTitles([...visible.values()], refreshTitles);
     const current = await this.refresh();
     for (const [ws, sub] of this.subscriptions) {
       const before = sub.snapshot; if (!before) continue;

@@ -177,7 +177,7 @@ export class AgentDelivery {
       const child = selected[0].edge.to;
       const facts = [selected.some(i => i.report.question) && 'question pending', selected.some(i => i.report.error) && 'error',
         selected.some(i => i.report.end) && 'turn ended', selected.some(i => i.report.milestone) && 'tool failure'].filter(Boolean);
-      const text = withAutomaticMarker(`${child}: ${facts.join(', ')}. Details: watch --session ${child}`.slice(0, 1500));
+      const text = withAutomaticMarker(`${facts.join(', ')}. Details: watch --session ${child}`.slice(0, 1500));
       for (const { edge } of selected) this.lastAttempt.set(edge.id, this.now());
       await this.deps.send(state, { type: 'send', text, mode: state.lastMessage?.mode }, { automatic: true, valid, admitted: () => {
         admitted = true; if (!wasActive || state.autonomousTurn) origins.set(state, true);

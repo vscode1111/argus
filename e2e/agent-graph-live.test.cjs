@@ -18,7 +18,8 @@ test('S2-I3 filtered unrelated events and status reads do not list native histor
     await service.get(ws, 'initial', { company: 'other' }, true); await delay(60); const before = calls;
     for (let i = 0; i < 4; i++) { observeAgentGraph(unrelated, { type: 'text_chunk', text: 'Inventory update' }); await delay(40); }
     assert.equal(calls, before); assert.equal(before, 0, 'an empty filtered snapshot needs no native titles'); assert.equal(ws.frames.length, 1);
-    const matching = socket(); await service.get(matching, 'matching', {}, true); const loaded = calls;
+    const matching = socket(); await service.get(matching, 'matching', {}, true); await delay(70); const loaded = calls;
+    assert.equal(loaded, 1, 'initial title enrichment runs once');
     for (let i = 0; i < 3; i++) { await service.get(socket(), 'status', {}, false); notifyAgentGraph(); await delay(40); }
     assert.equal(calls, loaded, 'cached status/live refreshes must stay memory-only');
     store.putNodes([node('new-worker')]); await delay(70); assert.equal(calls, loaded + 1, 'relevant new registration refreshes missing titles once');
@@ -28,6 +29,36 @@ test('S2-I3 filtered unrelated events and status reads do not list native histor
     assert.equal(calls, loaded + 2, 'reuse the native rename accessor result');
     assert.equal(matching.frames.at(-1).upsert.nodes.find(n => n.id === 'cold').title, 'Updated title');
   } finally { service.dispose(); }
+});
+test('a blocked title lookup does not delay the subscribed graph snapshot', async () => {
+  const store = new AgentGraph(path.join(dir, 'blocked-title.sqlite'));
+  store.putNodes([node('warehouse')]);
+  let releaseTitle, signalLookup, lookupTimeout;
+  const title = new Promise(resolve => { releaseTitle = resolve; });
+  const lookupStarted = new Promise((resolve, reject) => {
+    signalLookup = resolve;
+    lookupTimeout = setTimeout(() => reject(new Error('title enrichment did not start')), 1000);
+  });
+  const service = new AgentGraphService(store, () => [], () => {
+    signalLookup();
+    return title;
+  });
+  const ws = socket();
+  const request = service.get(ws, 'initial', {}, true);
+  try {
+    await lookupStarted;
+    assert.equal(ws.frames[0]?.snapshot.nodes[0].title, 'warehouse', 'snapshot must arrive while title lookup is blocked');
+    releaseTitle([{ id: 'warehouse', title: 'Warehouse count' }]);
+    await request;
+    await delay(50);
+    assert.equal(ws.frames[1]?.upsert.nodes[0].title, 'Warehouse count');
+    assert.deepEqual(ws.frames[1].baseRevision, ws.frames[0].snapshot.revision);
+  } finally {
+    clearTimeout(lookupTimeout);
+    releaseTitle([]);
+    await request;
+    service.dispose();
+  }
 });
 test('S2-I4 watchdog timedOut remains error through done while scheduled retry remains running', () => {
   const state = createSessionState(dir); observeAgentGraph(state, { type: 'retry_status', attempt: 0, maxRetries: 0, autoRetry: 0, autoRetryMax: 0, timedOut: true });
@@ -104,11 +135,14 @@ test('initial snapshots, coalesced diffs, selection/title/removal and reconnect 
   const state = createSessionState(dir); state.sessionId = 'child'; state.selection.providerId = 'claude'; let states = [state], title = 'Fresh title';
   const service = new AgentGraphService(store, () => states, async () => [{ id: 'child', title }]); t.after(() => service.dispose());
   const ws = socket(); await service.get(ws, 'initial', {}, true); const initial = ws.frames[0].snapshot;
-  assert.equal(initial.nodes.find(n => n.id === 'child').title, title); notifyAgentGraph(); await delay(60); assert.equal(ws.frames.length, 1);
+  await delay(70); const titles = ws.frames[1];
+  assert.deepEqual(titles.baseRevision, initial.revision);
+  assert.equal(titles.upsert.nodes.find(n => n.id === 'child').title, title);
+  notifyAgentGraph(); await delay(60); assert.equal(ws.frames.length, 2);
   state.interaction = { id: 'question', kind: 'question', title: 'Choose', questions: [] }; observeAgentGraph(state, { type: 'interaction', request: state.interaction }); state.selection.model = 'inventory-model'; title = 'Renamed'; notifyAgentGraph(state, { type: 'sessionRenamed', id: 'child' });
-  await delay(80); const diff = ws.frames[1]; assert.deepEqual(diff.baseRevision, initial.revision); assert.equal(diff.upsert.nodes[0].status, 'needs-input'); assert.equal(diff.upsert.nodes[0].selected.model, 'inventory-model'); assert.equal(diff.upsert.nodes[0].title, title);
-  states = []; notifyAgentGraph(); await delay(80); assert.equal(ws.frames[2].upsert.nodes[0].live, false);
-  const reconnect = socket(); await service.get(reconnect, 'reconnect', {}, true); assert.deepEqual(reconnect.frames[0].snapshot.revision, ws.frames[2].revision);
+  await delay(80); const diff = ws.frames[2]; assert.deepEqual(diff.baseRevision, titles.revision); assert.equal(diff.upsert.nodes[0].status, 'needs-input'); assert.equal(diff.upsert.nodes[0].selected.model, 'inventory-model'); assert.equal(diff.upsert.nodes[0].title, title);
+  states = []; notifyAgentGraph(); await delay(80); assert.equal(ws.frames[3].upsert.nodes[0].live, false);
+  const reconnect = socket(); await service.get(reconnect, 'reconnect', {}, true); assert.deepEqual(reconnect.frames[0].snapshot.revision, ws.frames[3].revision);
   const filtered = socket(); await service.get(filtered, 'filtered', { company: 'other' }, false); assert.deepEqual(filtered.frames[0].snapshot.nodes, []); ws.emit('close'); reconnect.emit('close');
 });
 test('token callers cannot adopt, forge parent, mutate another edge or use invalid/pending identity', async t => {

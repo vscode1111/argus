@@ -26,6 +26,7 @@ import { type RateLimitInfo } from './utils/usage';
 import { fmtLineCount } from './utils/text';
 import { sessionActivity } from './utils/sessionActivity';
 import noticeStyles from './components/ProviderNotice.module.css';
+import action from './components/shared/actionButton.module.css';
 
 function playCompletionSound(): void {
   try {
@@ -730,7 +731,7 @@ function AppInner() {
               {loadTimedOut ? (
                 <>
                   <div className="sessionLoaderText">The selected conversation has not loaded.</div>
-                  <button type="button" onClick={() => {
+                  <button className={`${action.button} ${action.secondary}`} type="button" onClick={() => {
                     if (!pendingSessionId.current) return;
                     const id = pendingSessionId.current;
                     beginSessionLoad(loadSize);

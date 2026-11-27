@@ -28,6 +28,7 @@ export interface ProviderDescriptor {
 }
 
 export interface ProviderInteraction {
+  operation?: { kind: 'command' | 'fileChange'; command?: string; cwd?: string };
   sourceToolId?: string;
   id: string;
   title: string;

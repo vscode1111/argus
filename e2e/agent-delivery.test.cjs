@@ -202,6 +202,15 @@ test('S4-I3 resolution during awaited admission cancels stale text and retains o
   }
 });
 
+test('question notice identifies the source session once', async t => {
+  const { states, d, sends } = delivery(t);
+  states[1].interaction = { id: 'choice', kind: 'question' };
+  d.observe(states[1], { type: 'interaction', request: states[1].interaction });
+  await d.flush();
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0].text, '🤖 question pending. Details: watch --session child');
+});
+
 test('S4-I4 independent parallel subscriptions union facts in both edge orders', async t => {
   for (const reverse of [false, true]) {
     const { graph, states, d, sends } = delivery(t); graph.unlink('parent', 'child', 'delegates');

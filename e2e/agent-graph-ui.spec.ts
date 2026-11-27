@@ -13,6 +13,36 @@ test('linked sessions follow the viewed identity and preserve multiple parents a
   await expect.poll(async () => (await requests(page)).filter(m => m.type === 'resumeSession').at(-1)?.id).toBe('parent');
   await expect(agents).toBeHidden();
 });
+test('long question captions show two lines with an ellipsis', async ({ page }) => {
+  const question = 'Which inventory changes should be included in the next warehouse report? '.repeat(6).trim();
+  const value = snapshot();
+  Object.assign(value.nodes[0], { pendingInteraction: { title: 'Inventory review', questions: [{ question }] } });
+  Object.assign(value.nodes[2], { pendingInteraction: { title: 'Inventory review', questions: [{ question }] } });
+  await setup(page);
+  await sync(page, value);
+  const panel = page.getByRole('region', { name: 'Linked sessions' });
+  for (const id of ['parent', 'child']) {
+    await emit(page, { type: 'sessionLoaded', id, messages: [] });
+    const caption = panel.getByText(question, { exact: true });
+    for (const width of [320, 768, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      const layout = await caption.evaluate(element => {
+        const sample = element.cloneNode() as HTMLElement;
+        sample.textContent = 'A';
+        element.after(sample);
+        const line = sample.getBoundingClientRect().height;
+        sample.remove();
+        return {
+          lines: element.getBoundingClientRect().height / line,
+          clamp: getComputedStyle(element).webkitLineClamp,
+          clipped: element.scrollHeight > element.clientHeight,
+        };
+      });
+      expect(layout).toEqual({ lines: 2, clamp: '2', clipped: true });
+      await expect(panel.getByText('Last: Turn finished').first()).toBeVisible();
+    }
+  }
+});
 test('company goals use graph pushes with coordinator heading and no five-second polling', async ({ page }) => {
   await setup(page); await sync(page); await page.getByRole('button', { name: 'Company goals' }).click();
   const dialog = page.getByRole('dialog', { name: 'Company goals' });

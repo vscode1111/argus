@@ -43,11 +43,14 @@ for (const outcome of ['failed', 'timeout'] as const) test(`a ${outcome} recover
   else await page.clock.fastForward(5100);
   const panel = page.getByRole('region', { name: 'Linked sessions' });
   await expect(panel.getByRole('alert')).toContainText('unavailable');
+  const retry = panel.getByRole('button', { name: 'Retry linked sessions' });
+  await expect(retry).toHaveCSS('border-radius', '4px');
+  await expect(retry).toHaveCSS('cursor', 'pointer');
   for (let i = 0; i < 3; i++) await emit(page, failure);
   await page.clock.fastForward(10000); expect(await graphQueries(page)).toHaveLength(2);
   await emit(page, { type: 'agentGraph', requestId: recovery.requestId, ok: true, snapshot: snapshot() });
   await expect(panel.getByRole('button', { name: /Stock worker/ })).toHaveCount(0);
-  await panel.getByRole('button', { name: 'Retry linked sessions' }).click();
+  await retry.click();
   expect(await graphQueries(page)).toHaveLength(3); await sync(page);
   await expect(panel.getByRole('button', { name: /Stock worker/ })).toBeVisible();
 });

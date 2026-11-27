@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.147",
+  "version": "0.0.148",
   "displayName": "Argus",
   "description": "AI coding assistant with Claude Code and Codex providers",
   "license": "UNLICENSED",
