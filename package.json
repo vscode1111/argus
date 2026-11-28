@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.0.149",
+  "version": "0.0.150",
   "displayName": "Argus",
   "description": "AI coding assistant with Claude Code and Codex providers",
   "license": "UNLICENSED",
@@ -187,6 +187,17 @@
           "type": "boolean",
           "default": true,
           "description": "Run bash commands in VS Code integrated terminal (visible)"
+        },
+        "argus.restartOnUpdate": {
+          "type": "string",
+          "enum": ["auto", "prompt", "off"],
+          "enumDescriptions": [
+            "Restart extensions automatically after a cancellable 10-second countdown",
+            "Ask before restarting extensions",
+            "Never restart; use the Extensions view's Restart Extensions button yourself"
+          ],
+          "default": "auto",
+          "description": "When a newer Argus is installed and its daemon is serving, restart this window's extensions to load it. A restart also restarts the window's other extensions."
         }
       }
     },

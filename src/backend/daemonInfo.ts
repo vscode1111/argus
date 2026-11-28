@@ -11,7 +11,8 @@ export const DAEMON_FILE = process.env.ARGUS_DAEMON_FILE
   || path.join(ARGUS_DIR, 'daemon.json');
 const LEGACY_DAEMON_FILE = path.join(LEGACY_ARGUS_DIR, 'argus-daemon.json');
 
-function discoveryFile(): string {
+/** Path the registration is read from right now (current file, else the legacy one). */
+export function discoveryFile(): string {
   return fs.existsSync(DAEMON_FILE) || process.env.ARGUS_DAEMON_FILE ? DAEMON_FILE : LEGACY_DAEMON_FILE;
 }
 

@@ -7,7 +7,8 @@ import { ArgusCodeLensProvider } from './providers/CodeLensProvider';
 import { InlineSuggestProvider } from './providers/InlineSuggestProvider';
 import { getSelection } from './utils/workspace';
 import { isInlineCompletionsEnabled, isCodeLensEnabled } from './utils/config';
-import { readDaemonInfo, clearDaemonInfo, isProcessAlive, isDaemonUp, type DaemonInfo } from '../backend/daemonInfo';
+import { readDaemonInfo, clearDaemonInfo, isProcessAlive, isDaemonUp, discoveryFile, type DaemonInfo } from '../backend/daemonInfo';
+import { decideUpdateRestart } from './updateRestart';
 
 let extensionId = 'local.argus';
 
@@ -213,6 +214,110 @@ export async function restartDaemon(extensionPath: string): Promise<void> {
   }
 }
 
+// Self-restart after an update. Installing a VSIX leaves every open window on the old
+// extension host ("Restart Required") until its extensions restart, and VS Code offers
+// no CLI hook to do that from outside. Each window therefore watches the daemon
+// registration: when a newer daemon is serving and that version is installed next to
+// this one, it restarts its own extension host (see updateRestart.ts for the guards).
+// A restart also restarts the window's other extensions, so `auto` shows a cancellable
+// countdown first; `prompt` asks; `off` leaves it to the user.
+const UPDATE_ATTEMPTS_KEY = 'argus.updateRestartAttempts';
+// Wait after the registration changes so the target-first handover finishes (the old
+// daemon is still being stopped for a few seconds after the new one registers).
+const UPDATE_SETTLE_MS = 8000;
+const UPDATE_INITIAL_CHECK_MS = 15000;
+const UPDATE_COUNTDOWN_S = 10;
+let updateCheckRunning = false;
+
+// One attempt per window per target. Keyed by workspace because globalState is shared
+// by every window: a single key would let the first window's restart suppress the rest.
+function windowKey(): string {
+  return vscode.workspace.workspaceFile?.toString()
+    ?? vscode.workspace.workspaceFolders?.[0]?.uri.toString()
+    ?? 'no-folder';
+}
+
+async function confirmUpdateRestart(mode: string, own: string, target: string): Promise<boolean> {
+  const what = `Argus ${target} is installed and serving; this window still runs ${own}.`;
+  if (mode === 'prompt') {
+    const choice = await vscode.window.showInformationMessage(
+      `${what} Restart extensions to load it? This also restarts the window's other extensions.`,
+      'Restart Extensions', 'Later');
+    return choice === 'Restart Extensions';
+  }
+  return vscode.window.withProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: 'Argus update',
+    cancellable: true,
+  }, async (progress, token) => {
+    for (let left = UPDATE_COUNTDOWN_S; left > 0; left--) {
+      if (token.isCancellationRequested) return false;
+      progress.report({ message: `${what} Restarting extensions in ${left}s (this also restarts other extensions in this window).` });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    return !token.isCancellationRequested;
+  });
+}
+
+async function checkForUpdateRestart(context: vscode.ExtensionContext): Promise<void> {
+  if (updateCheckRunning) return;
+  const mode = vscode.workspace.getConfiguration('argus').get<string>('restartOnUpdate', 'auto');
+  if (mode === 'off') return;
+  updateCheckRunning = true;
+  try {
+    const own = String(context.extension.packageJSON.version ?? '');
+    const attempts = context.globalState.get<Record<string, string>>(UPDATE_ATTEMPTS_KEY, {});
+    const key = windowKey();
+    const decision = decideUpdateRestart({
+      extensionId: context.extension.id,
+      ownVersion: own,
+      extensionPath: context.extensionPath,
+      daemonVersion: readDaemon()?.version,
+      development: context.extensionMode !== vscode.ExtensionMode.Production,
+      attemptedTarget: attempts[key],
+    });
+    if (!decision.restart) return;
+    // Recorded before asking, so a cancelled countdown is not shown again on every
+    // registration change; the manual button below still offers the restart.
+    await context.globalState.update(UPDATE_ATTEMPTS_KEY, { ...attempts, [key]: decision.target });
+    if (!await confirmUpdateRestart(mode, own, decision.target)) {
+      logDaemon(`update restart to ${decision.target} declined (running ${own})`);
+      if (mode === 'auto') {
+        void vscode.window.showInformationMessage(
+          `Argus ${decision.target} is installed; this window still runs ${own}.`, 'Restart Extensions')
+          .then((choice) => {
+            if (choice) void vscode.commands.executeCommand('workbench.action.restartExtensionHost');
+          });
+      }
+      return;
+    }
+    logDaemon(`restarting extension host to load Argus ${decision.target} (running ${own})`);
+    await vscode.commands.executeCommand('workbench.action.restartExtensionHost');
+  } catch (err) {
+    logDaemon(`update restart check failed: ${err}`);
+  } finally {
+    updateCheckRunning = false;
+  }
+}
+
+function watchForUpdates(context: vscode.ExtensionContext): void {
+  if (context.extensionMode !== vscode.ExtensionMode.Production) return;
+  const file = discoveryFile();
+  let pending: NodeJS.Timeout | undefined;
+  const schedule = (delay: number) => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => { pending = undefined; void checkForUpdateRestart(context); }, delay);
+  };
+  // watchFile polls, so it also notices a file that is deleted and written again by
+  // the next daemon, which fs.watch handles unreliably on Windows.
+  const listener = (curr: fs.Stats, prev: fs.Stats) => {
+    if (curr.mtimeMs !== prev.mtimeMs) schedule(UPDATE_SETTLE_MS);
+  };
+  fs.watchFile(file, { interval: 5000, persistent: false }, listener);
+  schedule(UPDATE_INITIAL_CHECK_MS);
+  context.subscriptions.push({ dispose: () => { fs.unwatchFile(file, listener); if (pending) clearTimeout(pending); } });
+}
+
 /** Extension id (publisher.name), used to build the `vscode://` toast click-to-focus URI. */
 export function getExtensionId(): string {
   return extensionId;
@@ -226,6 +331,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // window (a background process can't switch virtual desktops). The vscode://<id>/
   // focus URI handler is a secondary path for the installed stable instance.
   registerFocusProtocol(context.extensionUri);
+  watchForUpdates(context);
   context.subscriptions.push(
     vscode.window.registerUriHandler({
       handleUri: (uri) => {

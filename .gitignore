@@ -23,5 +23,6 @@ e2e/argus-provider-sessions.json
 e2e/argus-stats.e2e.jsonl
 e2e/argus-stats.e2e.sqlite*
 e2e/remote-access.sqlite*
+e2e/agent-graph.sqlite*
 /!notes/
 /AGENTS.md
