@@ -74,6 +74,7 @@ function serverInfo(ws) {
     ws.send(JSON.stringify({ type: 'getServerInfo' }));
   });
 }
+const health = async (port) => (await (await fetch(`http://127.0.0.1:${port}/health`)).json()).https;
 const localNonce = async () => (await fetch(`http://127.0.0.1:${HTTP_PORT}/nonce`)).text();
 async function waitFor(check, timeoutMs = 8000) {
   const end = Date.now() + timeoutMs;
@@ -171,6 +172,7 @@ test('HTTPS serves the app with a certificate the CA verifies, and only to clien
   assert.notEqual(plain, 200);
   // And the HTTP port is untouched for local panels.
   assert.equal((await fetch(`http://127.0.0.1:${HTTP_PORT}/nonce`)).status, 200);
+  assert.deepEqual(await health(HTTP_PORT), { state: 'ready', port: TLS_PORT });
 });
 
 test('a remote client over HTTPS goes through the same login gate', { skip: SKIP }, async (t) => {
@@ -232,9 +234,124 @@ test('HTTPS waits for a busy port (daemon handoff) and HTTP is never held up by 
     // HTTP is up immediately, before the TLS port is free.
     assert.equal((await fetch('http://127.0.0.1:3195/nonce')).status, 200);
     assert.equal((await request(`https://127.0.0.1:${port}/`)).status, 0);
+    const waiting = await health(3195);
+    assert.equal(waiting.state, 'starting');
+    assert.match(waiting.error, /EADDRINUSE/);
     await new Promise((r) => blocker.close(r));
     assert.ok(await waitFor(async () => (await request(`https://127.0.0.1:${port}/`)).status === 200), 'HTTPS took the port once released');
+    assert.deepEqual(await health(3195), { state: 'ready', port });
   } finally {
     second.close();
+  }
+});
+
+// ---- HTTPS status on /health --------------------------------------------------------
+// The daemon runs with its output discarded, so a failed HTTPS listener used to be
+// invisible: on 2026-11-28 a live daemon came up without HTTPS and nothing said why.
+
+test('a TLS port held past the fast retries is waited out, and /health says why', { skip: SKIP }, async () => {
+  // The 2026-11-28 failure: a move to a new HTTP port left the old daemon holding the TLS
+  // port for ~7 s, longer than the 5 s of fast retries, and HTTPS stayed down for good.
+  const port = 3197;
+  const blocker = net.createServer((s) => s.destroy()).listen(port);
+  await new Promise((r) => blocker.once('listening', r));
+  const s = await startServer({ port: 3198, tls: { port, cert: certs.cert, key: certs.key } });
+  try {
+    await new Promise((r) => setTimeout(r, 7000));   // past the fast window
+    const waiting = await health(3198);
+    assert.equal(waiting.state, 'starting');
+    assert.equal(waiting.port, port);
+    assert.match(waiting.error, /EADDRINUSE/);
+    assert.equal((await fetch('http://127.0.0.1:3198/nonce')).status, 200);   // HTTP unaffected
+    await new Promise((r) => blocker.close(r));
+    assert.ok(await waitFor(async () => (await health(3198)).state === 'ready', 8000), 'HTTPS took the port once released');
+    assert.deepEqual(await health(3198), { state: 'ready', port });
+    assert.equal((await request(`https://127.0.0.1:${port}/`)).status, 200);
+  } finally {
+    s.close();
+    if (blocker.listening) await new Promise((r) => blocker.close(r));
+  }
+});
+
+test('close() stops a pending HTTPS wait, so a closed server never takes the port later', { skip: SKIP }, async () => {
+  const port = 3203;
+  const blocker = net.createServer((s) => s.destroy()).listen(port);
+  await new Promise((r) => blocker.once('listening', r));
+  const s = await startServer({ port: 3204, tls: { port, cert: certs.cert, key: certs.key } });
+  await waitFor(async () => (await health(3204)).state === 'starting');
+  s.close();
+  await new Promise((r) => blocker.close(r));
+  await new Promise((r) => setTimeout(r, 3000));    // longer than a slow retry
+  const probe = net.createServer().listen(port);    // free again: nothing grabbed it
+  const bound = await new Promise((r) => { probe.once('listening', () => r(true)); probe.once('error', () => r(false)); });
+  if (bound) await new Promise((r) => probe.close(r));
+  assert.equal(bound, true);
+});
+
+// A port Windows reserved (WinNAT blocks for Hyper-V/WSL) answers EACCES, and no amount
+// of waiting frees it, so this is the one case reported as failed.
+function reservedPort() {
+  if (process.platform !== 'win32') return undefined;
+  try {
+    const out = require('node:child_process').execFileSync('netsh', ['interface', 'ipv4', 'show', 'excludedportrange', 'protocol=tcp'], { encoding: 'latin1' });
+    // Rows marked * are administered exclusions, which a listener can still bind; the
+    // WinNAT blocks are the unmarked rows, and those answer EACCES.
+    const m = out.match(/^\s*(\d+)\s+(\d+)\s*$/m);
+    return m ? Number(m[1]) : undefined;
+  } catch { return undefined; }
+}
+
+test('a port Windows reserved is reported as failed with EACCES, not waited on', { skip: SKIP }, async (t) => {
+  const port = reservedPort();
+  if (!port) return t.skip('no Windows excluded port range on this machine');
+  const s = await startServer({ port: 3205, tls: { port, cert: certs.cert, key: certs.key } });
+  try {
+    assert.ok(await waitFor(async () => (await health(3205)).state === 'failed', 5000), 'reported failed');
+    const h = await health(3205);
+    assert.equal(h.port, port);
+    assert.match(h.error, /EACCES/);
+  } finally {
+    s.close();
+  }
+});
+
+test('/health says off when HTTPS is not configured, and failed with the load problem', { skip: SKIP }, async () => {
+  const off = await startServer({ port: 3199 });
+  const broken = await startServer({ port: 3200, tlsProblem: 'tlsKeyCommand failed (exit 3): vault: key not found' });
+  try {
+    assert.deepEqual(await health(3199), { state: 'off' });
+    assert.deepEqual(await health(3200), { state: 'failed', error: 'tlsKeyCommand failed (exit 3): vault: key not found' });
+  } finally {
+    off.close();
+    broken.close();
+  }
+});
+
+test('a real daemon with a broken key command reports why on /health, with its output discarded', { skip: SKIP }, async () => {
+  // The decisive case: the daemon is spawned exactly as the update helper spawns it
+  // (stdio ignored), so /health is the only place the reason can surface.
+  const dir = fs.mkdtempSync(path.join(root, 'daemon-'));
+  const cfg = path.join(dir, 'config.json');
+  fs.writeFileSync(cfg, JSON.stringify({
+    tlsPort: 3202, tlsCertFile: certs.certFile, tlsKeyCommand: keyCommand(certs.keyFile, 3),
+  }));
+  const { spawn } = require('node:child_process');
+  const child = spawn(process.execPath, [path.resolve(__dirname, '..', 'out', 'backend', 'daemon.js')], {
+    stdio: 'ignore', windowsHide: true,
+    env: {
+      ...process.env, ARGUS_CONFIG: cfg, ARGUS_DAEMON_PORT: '3201', ARGUS_DAEMON_FILE: path.join(dir, 'daemon.json'),
+      ARGUS_MODEL_REFRESH: '0', ARGUS_USAGE_POLL: '0', ARGUS_AUTH_FILE: path.join(dir, 'auth.json'),
+      ARGUS_ACCESS_LOG_DB: path.join(dir, 'access.sqlite'), ARGUS_DAEMON_FORCE_START: '',
+    },
+  });
+  try {
+    let h;
+    assert.ok(await waitFor(async () => { try { h = await health(3201); return true; } catch { return false; } }, 15000), 'daemon answered /health');
+    assert.equal(h.state, 'failed');
+    assert.match(h.error, /exit 3/);
+    assert.match(h.error, /vault: key not found/);
+    assert.ok(!h.error.includes('PRIVATE KEY'), 'key material leaked into /health');
+  } finally {
+    child.kill();
   }
 });

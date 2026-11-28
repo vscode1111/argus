@@ -166,6 +166,14 @@ function respawn(): void {
   child.unref();
 }
 
+// TLS settings plus, when they fail to load, the reason - kept for /health, since this
+// process usually runs with its output discarded.
+function tlsOptions(): { tls?: ReturnType<typeof loadTlsSettings>; tlsProblem?: string } {
+  const problems: string[] = [];
+  const tls = loadTlsSettings((msg) => { problems.push(msg); console.log(`[argus-daemon] ${msg}`); });
+  return tls ? { tls } : problems.length ? { tlsProblem: problems.join('; ') } : {};
+}
+
 // Bind, retrying on EADDRINUSE for a short window so a force-start replacement can
 // wait for the outgoing daemon to release the (possibly same) port.
 async function listen(attempt = 0): Promise<void> {
@@ -177,7 +185,7 @@ async function listen(attempt = 0): Promise<void> {
       onIdleShutdown: () => { cleanup(); process.exit(0); },
       onRespawn: respawn,
       // Read on each launch, so a renewed certificate applies on the next restart.
-      tls: loadTlsSettings((msg) => console.log(`[argus-daemon] ${msg}`)),
+      ...tlsOptions(),
     });
     registration = {
       port: server.port,

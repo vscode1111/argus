@@ -139,7 +139,7 @@ function isDelegatedPrompt(content: unknown): boolean {
     (block.type === 'text' || block.type === 'input_text') && isDelegatedPrompt(block.text));
 }
 
-function readSessionMeta(file: string): { title: string; lastPrompt: string; lines: number; delegated: boolean } {
+function readSessionMeta(file: string): { title: string; firstPrompt: string; lastPrompt: string; lines: number; delegated: boolean } {
   let content: string;
   try { content = fs.readFileSync(file, 'utf8'); } catch { content = ''; }
   return parseSessionMeta(content);
@@ -149,6 +149,11 @@ function parseSessionMeta(content: string, titlesOnly = false) {
   let aiTitle = '';
   let customTitle = '';
   let lastPrompt = '';
+  // The name a session falls back to without a title record. The CLI Argus spawns
+  // (sdk-cli) never writes an ai-title, so this is what nearly every session shows; it
+  // is the FIRST prompt because the last one changed the name with every message. Only
+  // a custom-title (rename-self, /orchestrate) renames the session.
+  let firstPrompt = '';
   let lines = 0;
   let delegated = false;
   for (const line of content.split(/\r?\n/)) {
@@ -158,13 +163,13 @@ function parseSessionMeta(content: string, titlesOnly = false) {
     try { o = JSON.parse(line); } catch { continue; }
     if (o.type === 'custom-title' && typeof o.customTitle === 'string') customTitle = o.customTitle;
     else if (o.type === 'ai-title' && typeof o.aiTitle === 'string') aiTitle = o.aiTitle;
-    else if (o.type === 'last-prompt' && typeof o.lastPrompt === 'string') lastPrompt = o.lastPrompt;
+    else if (o.type === 'last-prompt' && typeof o.lastPrompt === 'string') { lastPrompt = o.lastPrompt; firstPrompt ||= o.lastPrompt; }
     else if (!titlesOnly && (o.type === 'user' || o.type === 'assistant') && o.message) {
       lines += countMessageLines(o.message.content);
       if (o.type === 'user' && isDelegatedPrompt(o.message.content)) delegated = true;
     }
   }
-  return { title: customTitle || aiTitle, lastPrompt, lines, delegated };
+  return { title: customTitle || aiTitle, firstPrompt, lastPrompt, lines, delegated };
 }
 
 export async function readSessionTitles(workspaceDir: string, ids: readonly string[]) {
@@ -175,8 +180,8 @@ export async function readSessionTitles(workspaceDir: string, ids: readonly stri
     if (!UUID_RE.test(id)) continue;
     let content: string;
     try { content = await fs.promises.readFile(path.join(dir, `${id}.jsonl`), 'utf8'); } catch { continue; }
-    const { title, lastPrompt } = parseSessionMeta(content, true);
-    if (content) titles.push({ id, title: title || lastPrompt || 'Untitled' });
+    const { title, firstPrompt } = parseSessionMeta(content, true);
+    if (content) titles.push({ id, title: title || firstPrompt || 'Untitled' });
   }
   return titles;
 }
@@ -301,7 +306,7 @@ export function listSessions(workspaceDir: string): SessionSummary[] {
     const meta = readSessionMeta(full);
     out.push({
       id,
-      title: meta.title || meta.lastPrompt || 'Untitled',
+      title: meta.title || meta.firstPrompt || 'Untitled',
       lastPrompt: meta.lastPrompt,
       delegated: meta.delegated,
       updatedAt: stat.mtimeMs,
@@ -403,7 +408,7 @@ export async function listAllSessions(includedIds: ReadonlySet<string> = new Set
     const meta = readSessionMeta(c.full);
     out.push({
       id: c.id,
-      title: meta.title || meta.lastPrompt || 'Untitled',
+      title: meta.title || meta.firstPrompt || 'Untitled',
       lastPrompt: meta.lastPrompt,
       delegated: meta.delegated,
       updatedAt: c.mtime,

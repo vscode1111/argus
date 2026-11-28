@@ -22,7 +22,7 @@ export function handleSend(s: SessionState, msg: { type?: string; text?: string;
   const route = vpnMode('claude');
 
   if (s.currentProc?.stdin?.writable && !s.cliDone && !msg._silent && !msg._askResume) {
-    if ((s.currentProcKey?.startsWith('tbilisi:') ? 'tbilisi' : 'normal') !== route) {
+    if ((s.currentProcKey?.startsWith('dedicated:') ? 'dedicated' : 'normal') !== route) {
       s.broadcast(JSON.stringify({ type: 'error', text: 'Claude VPN mode changed. Wait for the current turn to finish, then send again.' }));
       return;
     }

@@ -10,4 +10,8 @@ if not exist "out\backend\daemon.js" (
   exit /b 1
 )
 wscript.exe "%~dp0..\scripts\daemon.vbs"
-echo [argus] daemon launch requested (windowless). It self-exits when idle.
+rem A second launch exits at once when a daemon is already up, so report what is
+rem actually running and where to open it rather than just "launch requested".
+node "%~dp0..\scripts\daemon-status.js" --wait 10
+echo.
+pause

@@ -130,19 +130,19 @@ test.describe('network access (integration)', () => {
     const originsInput = page.getByLabel('Allowed origins');
     await originsInput.fill('scub-tunnel.test');
     await originsInput.press('Enter');
-    await expectOrigin('http://10.1.2.3', nonce, 'open');
+    await expectOrigin('http://10.1.2.3', nonce, 'open'); // leak-check: allow (private-range origin is the point of this test)
     await expectOrigin('http://scub-tunnel.test', nonce, 'open');
 
     // Flip the switch off: every non-local origin is now rejected, but localhost
     // (the local machine / this very page) is never locked out.
     await setNetworkAccess(page, nonce, false);
-    await expectOrigin('http://10.1.2.3', nonce, 403);
+    await expectOrigin('http://10.1.2.3', nonce, 403); // leak-check: allow (private-range origin is the point of this test)
     await expectOrigin('http://scub-tunnel.test', nonce, 403);
     await expectOrigin('http://localhost:5173', nonce, 'open');
 
     // Flip it back on and the LAN origin is allowed again.
     await setNetworkAccess(page, nonce, true);
-    await expectOrigin('http://10.1.2.3', nonce, 'open');
+    await expectOrigin('http://10.1.2.3', nonce, 'open'); // leak-check: allow (private-range origin is the point of this test)
   });
 
   test('turning Network access off disconnects a live non-local client at once', { tag: ["@shared"] }, async ({ page }) => {
@@ -154,7 +154,7 @@ test.describe('network access (integration)', () => {
     await setNetworkAccess(page, nonce, true);
 
     // Open a live connection from a private-LAN origin and keep it open.
-    const ws = new WebSocket('ws://localhost:3001/agent?nonce=' + nonce, { origin: 'http://10.9.9.9' });
+    const ws = new WebSocket('ws://localhost:3001/agent?nonce=' + nonce, { origin: 'http://10.9.9.9' }); // leak-check: allow (private-range origin is the point of this test)
     const closeCode = new Promise<number>((resolve) => ws.on('close', (code) => resolve(code)));
     await new Promise<void>((resolve, reject) => {
       ws.on('open', () => resolve());

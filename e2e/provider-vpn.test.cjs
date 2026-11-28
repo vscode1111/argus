@@ -6,7 +6,7 @@ const { after, test } = require('node:test');
 
 const dir = mkdtempSync(join(tmpdir(), 'argus-route-test-'));
 process.env.ARGUS_CONFIG = join(dir, 'settings.json');
-delete process.env.ARGUS_TBILISI_LAUNCHER;
+delete process.env.ARGUS_DEDICATED_LAUNCHER;
 delete process.env.ARGUS_VPN_PROFILES;
 const { readConfig, writeConfig } = require('../out/backend/config');
 const { checkProviderVpn, isProviderVpnMode, listProviderVpnProfiles, providerCommand, providerNetworkEnvironment, vpnMode } = require('../out/backend/providerVpn');
@@ -18,22 +18,22 @@ after(() => rmSync(dir, { recursive: true, force: true }));
 test('provider modes are independent and persist, with normal as the legacy default', () => {
   assert.equal(vpnMode('claude'), 'normal');
   assert.equal(vpnMode('codex'), 'normal');
-  writeConfig({ ...readConfig(), claudeVpnMode: 'tbilisi' });
-  assert.equal(vpnMode('claude'), 'tbilisi');
+  writeConfig({ ...readConfig(), claudeVpnMode: 'dedicated' });
+  assert.equal(vpnMode('claude'), 'dedicated');
   assert.equal(vpnMode('codex'), 'normal');
-  writeConfig({ ...readConfig(), claudeVpnMode: 'normal', codexVpnMode: 'tbilisi' });
+  writeConfig({ ...readConfig(), claudeVpnMode: 'normal', codexVpnMode: 'dedicated' });
   assert.equal(vpnMode('claude'), 'normal');
-  assert.equal(vpnMode('codex'), 'tbilisi');
+  assert.equal(vpnMode('codex'), 'dedicated');
   writeConfig({ ...readConfig(), codexVpnMode: 'normal' });
   assert.equal(vpnMode('codex'), 'normal');
 });
 
 test('protected commands do not fall back when the trusted launcher is missing', async () => {
-  writeConfig({ ...readConfig(), claudeVpnMode: 'tbilisi', codexVpnMode: 'tbilisi' });
+  writeConfig({ ...readConfig(), claudeVpnMode: 'dedicated', codexVpnMode: 'dedicated' });
   for (const provider of ['claude', 'codex']) {
     assert.throws(() => providerCommand(provider, vpnMode(provider), 'example', ['status']), /isolation launcher is unavailable/);
     const result = await checkProviderVpn(provider);
-    assert.equal(result.mode, 'tbilisi');
+    assert.equal(result.mode, 'dedicated');
     assert.equal(result.exitIp, undefined);
     assert.equal(result.apiStatus, undefined);
     assert.match(result.error, /isolation launcher is unavailable/);
@@ -60,11 +60,11 @@ test('protected commands do not fall back when the trusted launcher is missing',
 test('protected launch requires a dedicated proxy and replaces inherited bypass rules', () => {
   const normal = { HTTPS_PROXY: 'http://127.0.0.1:8080' };
   assert.equal(providerNetworkEnvironment('normal', normal), normal);
-  assert.throws(() => providerNetworkEnvironment('tbilisi', normal), /dedicated HTTP proxy/);
+  assert.throws(() => providerNetworkEnvironment('dedicated', normal), /dedicated HTTP proxy/);
   const localProxy = 'http://127.0.0.1:8484';
-  const env = providerNetworkEnvironment('tbilisi', {
+  const env = providerNetworkEnvironment('dedicated', {
     ...normal, https_proxy: normal.HTTPS_PROXY, no_proxy: '*',
-    ARGUS_TBILISI_PROXY: localProxy, ARGUS_DAEMON_PORT: '3017',
+    ARGUS_DEDICATED_PROXY: localProxy, ARGUS_DAEMON_PORT: '3017',
   });
   assert.equal(env.HTTPS_PROXY, localProxy);
   assert.equal(env.https_proxy, undefined);
@@ -95,7 +95,7 @@ test('configured profile IDs select their respective launchers and proxies and c
     assert.equal(vpnMode('claude'), 'paris');
     assert.equal(vpnMode('codex'), 'london');
     assert.equal(isProviderVpnMode('paris'), true);
-    assert.equal(isProviderVpnMode('tbilisi'), false);
+    assert.equal(isProviderVpnMode('dedicated'), false);
     assert.equal(providerCommand('claude', 'paris', 'example', []).binary, process.execPath);
     for (const profile of profiles) {
       assert.equal(providerNetworkEnvironment(profile.id, process.env).HTTPS_PROXY, profile.proxy);
@@ -148,4 +148,16 @@ test('route check compares the observed IP against the selected profile allowlis
   } finally {
     delete process.env.ARGUS_VPN_PROFILES;
   }
+});
+
+test('the default route takes its expected exit addresses from the environment, never from code', () => {
+  // The repository is public: a hardcoded exit address named a server in the owner's VPN
+  // chain. With nothing configured the list is empty, so the route check fails closed.
+  const { exitIpsFrom } = require('../out/backend/providerVpn');
+  assert.deepEqual(exitIpsFrom(undefined), []);
+  assert.deepEqual(exitIpsFrom(''), []);
+  assert.deepEqual(exitIpsFrom(' 192.0.2.10 , not-an-ip, 198.51.100.7,::1 '), ['192.0.2.10', '198.51.100.7']);
+  const source = require('node:fs').readFileSync(require.resolve('../out/backend/providerVpn'), 'utf8');
+  const literals = (source.match(/['"](\d{1,3}\.){3}\d{1,3}['"]/g) || []);
+  assert.deepEqual(literals, [], 'no IPv4 literal may appear in the compiled route module');
 });

@@ -54,6 +54,17 @@ export interface StartServerOptions {
   // Optional HTTPS listener (see tls.ts). Same handlers as the HTTP port, so auth,
   // sessions and the access log behave identically; only the transport differs.
   tls?: { port: number; cert: string; key: string };
+  // Why HTTPS is off although it was configured (the TLS settings failed to load).
+  // Reported on /health: the daemon runs with its output discarded, so a log line
+  // alone is invisible.
+  tlsProblem?: string;
+}
+
+/** HTTPS listener state as reported on /health. */
+export interface HttpsStatus {
+  state: 'off' | 'starting' | 'ready' | 'failed';
+  port?: number;
+  error?: string;
 }
 
 // Build a matcher for `http(s)://<host>(:port)` from a comma-separated host list.
@@ -73,10 +84,16 @@ export interface ArgusServer {
   close: () => void;
 }
 
-// How long a replacement daemon keeps retrying the HTTPS port while the outgoing one
-// releases it (mirrors the daemon's own EADDRINUSE retry for the HTTP port).
-const TLS_LISTEN_RETRIES = 25;
-const TLS_LISTEN_RETRY_MS = 200;
+// A busy HTTPS port is waited out, never given up on. The port is busy exactly while
+// another daemon still holds it - a handover - and that daemon can outlive any fixed
+// window: on 2026-11-28 a move to a new HTTP port left the old daemon holding the TLS
+// port for ~7 s while the replacement's 5 s of retries expired, and HTTPS stayed down
+// for that daemon's whole life. Fast retries first (a same-port handover releases within
+// a second), then a slower poll. Any other error (EACCES on a port Windows reserved) is
+// final: waiting cannot fix it.
+const TLS_RETRY_FAST_MS = 200;
+const TLS_RETRY_FAST_COUNT = 25;
+const TLS_RETRY_SLOW_MS = 2000;
 
 export function startServer(options: StartServerOptions = {}): Promise<ArgusServer> {
   const PORT = options.port ?? 3001;
@@ -127,7 +144,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       const addr = req.socket.remoteAddress ?? '';
       const local = addr === '::1' || addr === '127.0.0.1' || addr === '::ffff:127.0.0.1';
       res.writeHead(local ? 200 : 403, { 'Content-Type': 'application/json' });
-      res.end(local ? JSON.stringify({ configPath: CONFIG_PATH, pid: process.pid }) : '');
+      res.end(local ? JSON.stringify({ configPath: CONFIG_PATH, pid: process.pid, https: httpsStatus }) : '');
       return;
     }
     // Media playback. The token is the capability - it carries the path, so this route
@@ -381,7 +398,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     clearInterval(pingTimer);
     wss.close();
     httpServer.close();
-    httpsServer?.close();
+    stopHttps();
     options.onIdleShutdown?.();
   }
 
@@ -524,7 +541,18 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
   // HTTPS shares every handler with the HTTP server by re-emitting its events there, so
   // the two transports cannot drift apart in what they allow.
   let httpsServer: ReturnType<typeof createHttpsServer> | undefined;
+  let httpsStatus: HttpsStatus = options.tls
+    ? { state: 'starting', port: options.tls.port }
+    : options.tlsProblem ? { state: 'failed', error: options.tlsProblem } : { state: 'off' };
+  let httpsRetry: ReturnType<typeof setTimeout> | undefined;
+  let httpsClosed = false;
+  function stopHttps(): void {
+    httpsClosed = true;
+    if (httpsRetry) clearTimeout(httpsRetry);
+    httpsServer?.close();
+  }
   function startHttps(tls: NonNullable<StartServerOptions['tls']>, attempt = 0): void {
+    if (httpsClosed) return;
     const server = createHttpsServer({ cert: tls.cert, key: tls.key, minVersion: 'TLSv1.2' },
       (req, res) => httpServer.emit('request', req, res));
     server.on('upgrade', (req, socket, head) => httpServer.emit('upgrade', req, socket, head));
@@ -532,15 +560,22 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     // routine and must not surface as an unhandled error.
     server.on('tlsClientError', () => { /* dropped */ });
     server.once('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'EADDRINUSE' && attempt < TLS_LISTEN_RETRIES) {
-        setTimeout(() => startHttps(tls, attempt + 1), TLS_LISTEN_RETRY_MS);
+      if (err.code === 'EADDRINUSE') {
+        // Still 'starting', with the reason, so /health says what it is waiting for.
+        httpsStatus = { state: 'starting', port: tls.port, error: err.message };
+        if (attempt === TLS_RETRY_FAST_COUNT) console.log(`[argus-server] HTTPS port ${tls.port} busy; waiting for it to be released`);
+        httpsRetry = setTimeout(() => startHttps(tls, attempt + 1),
+          attempt < TLS_RETRY_FAST_COUNT ? TLS_RETRY_FAST_MS : TLS_RETRY_SLOW_MS);
         return;
       }
       // HTTPS is an extra for remote access; local panels keep working over HTTP.
+      httpsStatus = { state: 'failed', port: tls.port, error: err.message };
       console.log(`[argus-server] HTTPS listener on port ${tls.port} failed: ${err.message}`);
     });
     server.listen(tls.port, () => {
+      if (httpsClosed) { server.close(); return; }
       httpsServer = server;
+      httpsStatus = { state: 'ready', port: tls.port };
       console.log(`[argus-server] HTTPS ready at https://localhost:${tls.port}/`);
     });
   }
@@ -580,7 +615,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         }
       }, reapSweepMs());
       if (typeof reapTimer.unref === 'function') reapTimer.unref();
-      resolve({ httpServer, port: actualPort, nonce, close: () => { stopDelivery?.(); removeDispatchListener(); clearIdleTimer(); clearInterval(pingTimer); clearInterval(reapTimer); wss.close(); httpServer.close(); httpsServer?.close(); } });
+      resolve({ httpServer, port: actualPort, nonce, close: () => { stopDelivery?.(); removeDispatchListener(); clearIdleTimer(); clearInterval(pingTimer); clearInterval(reapTimer); wss.close(); httpServer.close(); stopHttps(); } });
     });
   });
 }

@@ -5,7 +5,12 @@ import * as path from 'path';
 import { readConfig } from './config';
 import { providerVpnSetting, type ProviderVpnCheck, type ProviderVpnMode, type ProviderVpnProfile, type VpnProvider } from '../shared/providerVpn';
 
-const TBILISI_EXIT = '198.51.100.230';
+// The expected exit address comes from the environment, never from this file: the
+// repository is public, and a hardcoded address names a server in the owner's VPN chain.
+// Without one, the route check fails closed (no exit can match an empty list).
+export function exitIpsFrom(value: string | undefined): string[] {
+  return String(value ?? '').split(',').map((s) => s.trim()).filter((ip) => isIP(ip) === 4);
+}
 const PROFILE_ID = /^[a-z][a-z0-9-]{0,39}$/;
 
 interface RouteProfile extends ProviderVpnProfile {
@@ -16,9 +21,9 @@ interface RouteProfile extends ProviderVpnProfile {
 
 function routeProfiles(env: NodeJS.ProcessEnv): Map<string, RouteProfile> {
   if (env.ARGUS_VPN_PROFILES === undefined) {
-    return new Map([['tbilisi', {
-      id: 'tbilisi', label: 'Tbilisi only', launcher: env.ARGUS_TBILISI_LAUNCHER,
-      proxy: env.ARGUS_TBILISI_PROXY, exitIps: [TBILISI_EXIT],
+    return new Map([['dedicated', {
+      id: 'dedicated', label: 'Dedicated exit only', launcher: env.ARGUS_DEDICATED_LAUNCHER,
+      proxy: env.ARGUS_DEDICATED_PROXY, exitIps: exitIpsFrom(env.ARGUS_DEDICATED_EXIT_IPS),
     }]]);
   }
   const profiles = new Map<string, RouteProfile>();
@@ -156,7 +161,8 @@ async function probeProviderVpn(provider: VpnProvider, mode: ProviderVpnMode): P
   if (isIP(ip)) {
     result.exitIp = ip;
     const profile = routeProfiles(process.env).get(mode);
-    if (profile && !profile.exitIps.includes(ip)) result.error = `Unexpected exit IP for ${profile.label}.`;
+    if (profile && !profile.exitIps.length) result.error = `No expected exit IP is configured for ${profile.label}.`;
+    else if (profile && !profile.exitIps.includes(ip)) result.error = `Unexpected exit IP for ${profile.label}.`;
   } else {
     result.error = exit.status === 'rejected' ? String((exit.reason as Error).message) : 'Exit IP probe failed.';
   }

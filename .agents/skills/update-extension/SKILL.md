@@ -49,6 +49,7 @@ The detached controller must continue through verification even when its caller 
 
 - The discovery registration reports the target version and a live PID.
 - GET /health reports that PID and the intended personal config path.
+- When the personal config sets `tlsPort`, GET /health reports `https.state` `ready` on that port; `failed` carries the reason (the daemon runs with its output discarded, so this field is the only place a broken key command or a busy TLS port shows up).
 - The process command line points at the selected installed daemon.
 - The helper log's `env:` line for this attempt lists the caller-scoped variables that were stripped, and a fresh Claude turn through the new daemon does not fail authentication.
 - HTTP serves webview.js, webview.css and ws-bridge.js successfully, their bytes match the installed files, and their cache headers permit revalidation.
