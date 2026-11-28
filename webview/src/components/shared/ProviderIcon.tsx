@@ -7,9 +7,10 @@ interface Props {
   active?: boolean;
   size?: number;
   className?: string;
+  title?: string;
 }
 
-export function ProviderIcon({ providerId, label = false, active = false, size = 16, className }: Props) {
+export function ProviderIcon({ providerId, label = false, active = false, size = 16, className, title }: Props) {
   if (providerId === 'codex') {
     return <span
       className={[styles.icon, styles.openai, className].filter(Boolean).join(' ')}
@@ -18,7 +19,7 @@ export function ProviderIcon({ providerId, label = false, active = false, size =
       role={label ? 'img' : undefined}
       aria-label={label ? active ? 'Codex, working now' : 'Codex' : undefined}
       aria-hidden={label ? undefined : true}
-      title={active ? 'Working now' : undefined}
+      title={title ?? (active ? 'Working now' : undefined)}
     />;
   }
   if (providerId === 'claude') {
@@ -29,7 +30,7 @@ export function ProviderIcon({ providerId, label = false, active = false, size =
       src={claudeIcon}
       alt={label ? active ? 'Claude, working now' : 'Claude' : ''}
       aria-hidden={label ? undefined : true}
-      title={active ? 'Working now' : undefined}
+      title={title ?? (active ? 'Working now' : undefined)}
     />;
   }
   return null;

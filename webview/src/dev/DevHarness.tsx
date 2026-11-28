@@ -882,7 +882,7 @@ export function DevHarness() {
     return () => window.removeEventListener('devharness-toggle', handler);
   }, []);
 
-  useEscapeKey(close);
+  useEscapeKey(close, { enabled: visible });
 
   // Run a mock action but keep the modal open. There's no backdrop, so the
   // chat behind stays visible and usable; drag the modal aside to watch results.

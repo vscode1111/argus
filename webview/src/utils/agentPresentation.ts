@@ -1,5 +1,8 @@
 import type { GraphNode, GraphSnapshot } from '../hooks/useAgentGraph';
-import { agentStatus } from '../components/AgentConnections';
+export const agentStatus = (node?: GraphNode) => node?.status ? ({ 'needs-input': 'Needs input', running: 'Running', idle: 'Idle', error: 'Error', stopped: 'Stopped' }[node.status] || node.status) : 'Unknown';
+export const statusIcon = (node: GraphNode) => ({
+  running: '●', 'needs-input': '?', error: '!', stopped: '■', idle: '○', unknown: '◇',
+})[node.status ?? 'unknown'];
 export const RECENT_MS = 12000;
 export const compactText = (text: string, limit = 18) => text.length > limit ? text.slice(0, limit - 1) + '…' : text;
 export function ageText(time: number | null | undefined, now: number) {
@@ -15,8 +18,7 @@ export function settingsText(node: GraphNode) {
   return `${selection?.model || 'Model unknown'} · ${selection?.effort || 'Effort unknown'}`;
 }
 export function statusText(node: GraphNode) {
-  const symbol = { running: '●', 'needs-input': '?', error: '!', stopped: '■', idle: '○' }[node.status ?? 'idle'];
-  return `${node.status ? symbol : '◇'} ${agentStatus(node)}`;
+  return `${statusIcon(node)} ${agentStatus(node)}`;
 }
 export function roleText(role: GraphNode['role']) { return ({super:'◎ Super',coordinator:'⬡ Coordinator',review:'✓ Review',work:'▣ Work',other:'◇ Other'})[role]; }
 export function exchangeState(edge: GraphSnapshot['edges'][number], direction: 'forward' | 'reverse', now: number) {

@@ -1,5 +1,5 @@
 import type { GraphView } from '../hooks/useAgentGraph';
-import { agentStatus } from './AgentConnections';
+import { agentStatus } from '../utils/agentPresentation';
 import { Modal } from './shared/Modal';
 import { RefreshButton } from './shared/RefreshButton';
 import styles from './OrchestratorGoalsModal.module.css';

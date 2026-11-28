@@ -560,12 +560,14 @@ function AppInner() {
   const logPanel = <LogPanel logs={state.logs} onClear={() => dispatch({ type: 'clearLogs' })} onClose={() => setShowLogs(false)} />;
 
   const workspaceName = basename(state.workspacePath);
+  const [agentToggleHost, setAgentToggleHost] = React.useState<HTMLDivElement | null>(null);
 
   const topRightActions = (
     <div className={showSessionBar ? 'topRightActions topRightActionsFull' : 'topRightActions'}>
       {showSessionBar && (
         <>
           <div className="headerLeft">
+            <div ref={setAgentToggleHost} />
             {editingName ? (
             <input
               className="sessionName sessionNameInput"
@@ -594,11 +596,11 @@ function AppInner() {
         </>
       )}
       <div className="headerControls">
+      {showSessionBar && (
+        <>
       <button className="btn-icon" title="Agent dashboard" aria-label="Agent dashboard" onClick={() => showAgents(true)}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="5" r="3" /><rect x="2" y="16" width="6" height="6" /><rect x="16" y="16" width="6" height="6" /><path d="M12 8v4H5v4m7-4h7v4" /></svg>
       </button>
-      {showSessionBar && (
-        <>
           <button
             className="btn-icon"
             title="New chat"
@@ -721,7 +723,7 @@ function AppInner() {
         )}
         <div className={showSessionBar ? 'chatPane sessionBarExpanded' : 'chatPane'}>
           {topRightActions}
-          <AgentConnections graph={graph} sessionId={loadingSession ? null : sessionId} onOpenSession={resumeWorkspaceSession} />
+          <AgentConnections graph={graph} sessionId={loadingSession ? null : sessionId} visible={showSessionBar} toggleHost={agentToggleHost} onOpenSession={resumeWorkspaceSession} />
           <MarkdownBreaksContext.Provider value={hardLineBreaks}>
             <MessageList ref={messageListRef} messages={state.messages} streaming={state.streaming} login={state.login} logCount={state.logs.length} historySessionId={state.historySessionId} historyBefore={state.historyBefore} historyRevision={state.historyRevision} onLoadEarlier={(id, before, revision, prefetch) => postMessage({ type: 'loadEarlier', id, before, revision, prefetch })} />
           </MarkdownBreaksContext.Provider>

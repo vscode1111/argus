@@ -254,7 +254,7 @@ export function ToolCall({ call, sessionDone, count = 1 }: Props) {
 
   return (
     <>
-      <div className={[styles.toolCall, error && styles.error].filter(Boolean).join(' ')}>
+      <div className={[styles.toolCall, shell && !verboseTools && styles.compactCommand, error && styles.error].filter(Boolean).join(' ')}>
         {verboseTools ? (
           <pre className={styles.toolInput}>
             {firstFileDiff ? (

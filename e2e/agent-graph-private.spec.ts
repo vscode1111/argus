@@ -31,14 +31,14 @@ test('private graph pushes project real registry questions and navigate linked l
       });
     });
     await page.goto(base + '/?' + new URLSearchParams({ dir: server.dir, session: parentId }));
-    const panel = page.getByRole('region', { name: 'Linked sessions' }); await expect(panel).toContainText('Running');
+    const panel = page.getByRole('region', { name: 'Linked sessions' }); await expect(panel.getByRole('img', { name: 'Running' })).toBeVisible();
     child.send({ type: 'steer', text: 'Choose inventory' });
     await child.wait(f => f.type === 'interaction' && f.request);
-    await expect(panel).toContainText('Needs input');
+    await expect(panel.getByRole('img', { name: 'Needs input' })).toBeVisible();
     await panel.getByRole('button').click(); await expect(page).toHaveURL(new RegExp('session=' + childId));
     await expect(panel).toContainText('Parents');
     await panel.getByRole('button').click(); await expect(page).toHaveURL(new RegExp('session=' + parentId));
-    await expect(panel).toContainText('Needs input');
+    await expect(panel.getByRole('img', { name: 'Needs input' })).toBeVisible();
     await page.getByRole('button', { name: 'Company goals' }).click();
     const goals = page.getByRole('dialog', { name: 'Company goals' }); await expect(goals).toContainText('Coordinator'); await expect(goals).toContainText('Inventory delivery');
     parent.send({ type: 'getAgentScope', requestId: 'read-scope', company: 'inventory', goal: 'stock' });
@@ -47,7 +47,7 @@ test('private graph pushes project real registry questions and navigate linked l
     expect((await parent.wait(f => f.requestId === 'update-scope')).ok).toBe(true);
     await expect(goals).toContainText('Inventory revision'); await goals.getByRole('button', { name: 'Close', exact: true }).click();
     const beforeReconnect = subscriptions; await page.evaluate(() => window.argusReconnect?.());
-    await expect.poll(() => subscriptions).toBeGreaterThan(beforeReconnect); await expect(panel).toContainText('Needs input');
+    await expect.poll(() => subscriptions).toBeGreaterThan(beforeReconnect); await expect(panel.getByRole('img', { name: 'Needs input' })).toBeVisible();
     parent.send({ type: 'unlinkAgents', requestId: 'unlink', parent: parentId, child: childId, kind: 'delegates' });
     expect((await parent.wait(f => f.requestId === 'unlink')).ok).toBe(true); await expect(panel).toContainText('No children assigned');
     expect(targets.every(target => new URL(target).port === String(server.info.port))).toBe(true);

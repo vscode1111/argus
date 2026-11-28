@@ -86,7 +86,7 @@
        before the deferred React entry, which calls acquireVsCodeApi() on mount. -->
   <script src="/ws-bridge.js"></script>
   <script>
-    // Dev-mode shim: connect to the Vite-hosted agent backend on :3001, refreshing
+    // Dev-mode shim: connect to the selected Argus backend, refreshing
     // the nonce via XHR before each connect (it rotates on server restart). Only the
     // URL resolution and mock-suppression are dev-specific; reconnect/queue live in
     // ws-bridge.js (createArgusBridge).
@@ -105,11 +105,17 @@
       var MOCK_SUPPRESSED = { getProviders: 1, switchProvider: 1, saveProviderDefault: 1, providerResponse: 1, getSkills: 1, listSessions: 1, listAllSessions: 1, deleteSession: 1, resumeSession: 1, refreshSession: 1, loadEarlier: 1, getActiveSessions: 1, getAgentGraph: 1, getOrchestratorGoals: 1, getAuthStatus: 1, getModels: 1, getUsageInsights: 1, getUsageLimits: 1, readToolImage: 1, getBgTasks: 1, listCliProcesses: 1, killCliProcess: 1, killAllCliProcesses: 1, getSessionActivity: 1, getSessionStats: 1, getSubagentThread: 1, getWorkspaceChanges: 1, listClients: 1, closeClient: 1, mediaUrl: 1 };
       // Derive host from the page so a LAN device reaches the dev machine, not its own localhost.
       var host = window.location.hostname || 'localhost';
+      var requestedPort = params.get('backendPort') || '';
+      var useBackendPort = !mock && (host === 'localhost' || host === '127.0.0.1')
+        && /^[1-9]\d{0,4}$/.test(requestedPort) && Number(requestedPort) <= 65535;
+      var daemonPort = document.querySelector('meta[name="argus-backend-port"]')?.content;
+      var backendHost = host + ':' + (useBackendPort ? requestedPort : (!mock && daemonPort) || '3001');
 
       function updateUrl() {
         var p = new URLSearchParams();
         if (dir) p.set('dir', dir);
         if (session) p.set('session', session);
+        if (useBackendPort) p.set('backendPort', requestedPort);
         if (new URLSearchParams(window.location.search).get('view') === 'agents') p.set('view', 'agents');
         var hash = p.toString();
         if (window.location.search.slice(1) !== hash) {
@@ -118,7 +124,7 @@
         }
       }
       window.addEventListener('popstate', updateUrl);
-      var auth = window.createArgusAuth('http://' + host + ':3001');
+      var auth = window.createArgusAuth('http://' + backendHost);
       // Returns false when there is nothing to connect with. A 401 means this peer is
       // remote and not logged in; a thrown request means the server is simply down,
       // which must NOT be reported as an auth problem.
@@ -126,7 +132,7 @@
         try {
           var xhr = new XMLHttpRequest();
           var t = auth.token();
-          xhr.open('GET', 'http://' + host + ':3001/nonce' + (t ? '?auth=' + encodeURIComponent(t) : ''), false);
+          xhr.open('GET', 'http://' + backendHost + '/nonce' + (t ? '?auth=' + encodeURIComponent(t) : ''), false);
           xhr.send();
           if (xhr.status === 200 && xhr.responseText) { nonce = xhr.responseText; auth.setRequired(false); return true; }
           if (xhr.status === 401) { auth.setRequired(true); return false; }
@@ -141,7 +147,7 @@
         if (session) p.set('session', session);
         if (auth.token()) p.set('auth', auth.token());
         p.set('client', 'browser');
-        return 'ws://' + host + ':3001/agent?' + p.toString();
+        return 'ws://' + backendHost + '/agent?' + p.toString();
       }
 
       var bridge = window.createArgusBridge({

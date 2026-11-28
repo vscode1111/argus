@@ -54,6 +54,10 @@ specs for the browser workflow.
 
 ## Commands
 
+Run `yarn dev:daemon` and open `http://localhost:5174` to share live sessions
+and agent statuses with the running Argus daemon from VS Code. Run `yarn dev`
+and open `http://localhost:5173` to use the separate development backend.
+
 | Command | Shortcut | Description |
 |---------|----------|-------------|
 | Argus: Open Chat | `Ctrl+Shift+A` | Open a new chat panel |
@@ -108,7 +112,7 @@ specs for the browser workflow.
 
 ## Webview controls
 
-Style buttons and selects explicitly with the VS Code theme tokens. Use the shared [action button styles](webview/src/components/shared/actionButton.module.css) for ordinary primary and secondary actions, and use scoped component styles for specialized controls. Check contrast, hover, keyboard focus, and disabled states where applicable in the VS Code panel and browser hosts. Include controls that only appear during loading, errors, or retries.
+Style buttons and selects explicitly with the VS Code theme tokens. Use the shared action button styles in `webview/src/components/shared/actionButton.module.css` for ordinary primary and secondary actions, and use scoped component styles for specialized controls. Check contrast, hover, keyboard focus, and disabled states where applicable in the VS Code panel and browser hosts. Include controls that only appear during loading, errors, or retries.
 
 ## Provider integration tests
 

@@ -688,6 +688,7 @@ export function InputArea({ draft, providerId = 'claude', isStreaming, prefill, 
         return;
       }
       if (e.key === 'Escape') {
+        e.preventDefault();
         setSlashQuery(null);
         return;
       }

@@ -2,10 +2,9 @@ import { useEffect, useId, useMemo } from 'react';
 import type { GraphNode, GraphSnapshot } from '../hooks/useAgentGraph';
 import { type AgentLayout, BODY, COORDINATOR, connector, hiddenDescendantCounts } from '../utils/agentLayout';
 import { useDiagramNavigation } from '../hooks/useDiagramNavigation';
-import { agentStatus } from './AgentConnections';
 import styles from './AgentDiagram.module.css';
 import { ProviderIcon } from './shared/ProviderIcon';
-import { ageText, eventTime, settingsText, statusText, roleText, compactText } from '../utils/agentPresentation';
+import { agentStatus, ageText, eventTime, settingsText, statusText, roleText, compactText } from '../utils/agentPresentation';
 import { AgentTraffic, exchangeLabel } from './AgentTraffic';
 
 interface Props {

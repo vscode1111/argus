@@ -1,5 +1,6 @@
 import { sessionRecord, sameWorkspace, selectionFor } from './providers/store';
 import { createServer } from 'http';
+import { createServer as createHttpsServer } from 'https';
 import { randomBytes } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { resolve, isAbsolute, join } from 'path';
@@ -9,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { attachClientHandlers, startGraphDelivery } from './session';
 import { getOrCreateChannel, listAgentStates, reapIdleCliProcs, reapIdleClients, hasDispatchOwnership, onDispatchOwnership } from './channel';
 import { closeClient, isLocalAddress, listClients, normalizeAddress, noteClientConnect } from './clients';
+import { logAccess, type AccessEvent } from './accessLog';
 import { checkRateLimit, createSession, hasPassword, isValidSession, noteLoginFailure, noteLoginSuccess, verifyPassword } from './auth';
 import { findWorkspaceForSession } from './sessions';
 import { lookupGrant, serveMedia } from './media';
@@ -49,6 +51,9 @@ export interface StartServerOptions {
   // port. Its presence is what enables the "restart daemon" request (the dev server
   // does not pass it, so a restart request there is a no-op).
   onRespawn?: () => void;
+  // Optional HTTPS listener (see tls.ts). Same handlers as the HTTP port, so auth,
+  // sessions and the access log behave identically; only the transport differs.
+  tls?: { port: number; cert: string; key: string };
 }
 
 // Build a matcher for `http(s)://<host>(:port)` from a comma-separated host list.
@@ -67,6 +72,11 @@ export interface ArgusServer {
   nonce: string;
   close: () => void;
 }
+
+// How long a replacement daemon keeps retrying the HTTPS port while the outgoing one
+// releases it (mirrors the daemon's own EADDRINUSE retry for the HTTP port).
+const TLS_LISTEN_RETRIES = 25;
+const TLS_LISTEN_RETRY_MS = 200;
 
 export function startServer(options: StartServerOptions = {}): Promise<ArgusServer> {
   const PORT = options.port ?? 3001;
@@ -99,6 +109,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       // The nonce is what a client needs to open a WebSocket, so for a remote peer this
       // is the gate. Local peers are exempt and unchanged.
       if (!local && !isValidSession(query.get('auth'))) {
+        logAccess({ event: 'nonce_refused', req, detail: query.get('auth') ? 'unknown or expired session' : 'no session' });
         res.writeHead(401, { 'Content-Type': 'text/plain', ...corsHeaders(req) });
         res.end('authentication required');
         return;
@@ -211,6 +222,10 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     if (req.method !== 'POST') { res.writeHead(405, cors); res.end(); return; }
 
     const address = normalizeAddress(req.socket.remoteAddress ?? '');
+    // Every remote attempt is audited, failures included; local peers never need to log in.
+    const audit = (event: AccessEvent, user?: string, detail?: string) => {
+      if (!isLocalAddress(address)) logAccess({ event, req, user, detail });
+    };
     const json = (status: number, payload: object) => {
       res.writeHead(status, { 'Content-Type': 'application/json', ...cors });
       res.end(JSON.stringify(payload));
@@ -218,6 +233,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
 
     const limit = checkRateLimit(address);
     if (!limit.allowed) {
+      audit('login_locked', undefined, `retry after ${Math.ceil(limit.retryAfterMs / 1000)}s`);
       json(429, { ok: false, error: 'too many attempts', retryAfterMs: limit.retryAfterMs });
       return;
     }
@@ -225,32 +241,36 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     // site cannot silently submit this form; the token is returned in the body rather
     // than set as a cookie, so it could not read the answer either.
     if (!String(req.headers['content-type'] ?? '').includes('application/json')) {
+      audit('login_bad_request', undefined, 'expected application/json');
       json(415, { ok: false, error: 'expected application/json' });
       return;
     }
 
     readBody(req).then((body) => {
       let creds: { user?: string; password?: string } = {};
-      try { creds = JSON.parse(body || '{}'); } catch { json(400, { ok: false, error: 'malformed request' }); return; }
+      try { creds = JSON.parse(body || '{}'); } catch { audit('login_bad_request', undefined, 'malformed body'); json(400, { ok: false, error: 'malformed request' }); return; }
 
       if (!hasPassword()) {
         // Distinct from a wrong password on purpose: "nobody can get in until you set
         // one" is a configuration state, not a failed attempt, and must not be counted
         // against the rate limiter.
+        audit('login_unconfigured', creds.user);
         json(403, { ok: false, error: 'remote access is not configured on this server' });
         return;
       }
       if (!verifyPassword(creds.user ?? '', creds.password ?? '')) {
         const rec = noteLoginFailure(address);
+        audit('login_failed', creds.user, `${rec.fails} failed in a row`);
         console.log(`[argus-server] remote login failed from ${address} (${rec.fails} failed)`);
         json(401, { ok: false, error: 'invalid credentials' });
         return;
       }
       noteLoginSuccess(address);
       const token = createSession(address);
+      audit('login_ok', creds.user);
       console.log(`[argus-server] remote login succeeded from ${address}`);
       json(200, { ok: true, token });
-    }).catch(() => json(413, { ok: false, error: 'request too large' }));
+    }).catch(() => { audit('login_bad_request', undefined, 'request too large'); json(413, { ok: false, error: 'request too large' }); });
   }
 
   const wss = new WebSocketServer({ noServer: true });
@@ -361,6 +381,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     clearInterval(pingTimer);
     wss.close();
     httpServer.close();
+    httpsServer?.close();
     options.onIdleShutdown?.();
   }
 
@@ -411,6 +432,11 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     clearIdleTimer();
     ws.on('pong', () => { wsAlive.set(ws, true); });
     ws.on('close', () => { broadcastClientCount(); scheduleIdleShutdown(); });
+    if (!isLocalAddress(req.socket.remoteAddress ?? '')) {
+      const openedAt = Date.now();
+      logAccess({ event: 'ws_open', req, detail: new URL(req.url ?? '/', 'http://localhost').searchParams.get('dir') ?? undefined });
+      ws.on('close', (code) => logAccess({ event: 'ws_close', req, detail: `code ${code}, ${Math.round((Date.now() - openedAt) / 1000)}s` }));
+    }
     const reqUrl = new URL(req.url ?? '/', 'http://localhost');
     const rawDir = reqUrl.searchParams.get('dir') || process.cwd();
     let workspaceDir = resolve(rawDir);
@@ -447,7 +473,12 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       ws.close(4400, 'Invalid workspace directory');
       return;
     }
-    const serverPort = req.socket.localPort ?? PORT;
+    // A connection that arrived over HTTPS reports the TLS port as its local port, but
+    // channels and spawned agents must keep using the one daemon port, or a remote
+    // client would land in a separate channel from the local panels.
+    const serverPort = (req.socket as { encrypted?: boolean }).encrypted
+      ? (httpServer.address() as { port: number }).port
+      : req.socket.localPort ?? PORT;
     const channel = getOrCreateChannel(workspaceDir, serverPort);
     const isBrowserClient = reqUrl.searchParams.get('client') === 'browser';
     // Extension panels pass a stable per-panel id so each panel gets its own session
@@ -475,6 +506,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     // and because the nonce is only obtainable with a token in the first place.
     if (!isLocalAddress(req.socket.remoteAddress ?? '') && !isValidSession(reqUrl.searchParams.get('auth'))) {
       console.log(`[argus-server] refused unauthenticated remote client ${normalizeAddress(req.socket.remoteAddress ?? '')}`);
+      logAccess({ event: 'ws_refused', req, detail: reqUrl.searchParams.get('auth') ? 'unknown or expired session' : 'no session' });
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
@@ -489,6 +521,30 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
     });
   });
 
+  // HTTPS shares every handler with the HTTP server by re-emitting its events there, so
+  // the two transports cannot drift apart in what they allow.
+  let httpsServer: ReturnType<typeof createHttpsServer> | undefined;
+  function startHttps(tls: NonNullable<StartServerOptions['tls']>, attempt = 0): void {
+    const server = createHttpsServer({ cert: tls.cert, key: tls.key, minVersion: 'TLSv1.2' },
+      (req, res) => httpServer.emit('request', req, res));
+    server.on('upgrade', (req, socket, head) => httpServer.emit('upgrade', req, socket, head));
+    // A failed handshake (a scanner, a client that does not trust the certificate) is
+    // routine and must not surface as an unhandled error.
+    server.on('tlsClientError', () => { /* dropped */ });
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE' && attempt < TLS_LISTEN_RETRIES) {
+        setTimeout(() => startHttps(tls, attempt + 1), TLS_LISTEN_RETRY_MS);
+        return;
+      }
+      // HTTPS is an extra for remote access; local panels keep working over HTTP.
+      console.log(`[argus-server] HTTPS listener on port ${tls.port} failed: ${err.message}`);
+    });
+    server.listen(tls.port, () => {
+      httpsServer = server;
+      console.log(`[argus-server] HTTPS ready at https://localhost:${tls.port}/`);
+    });
+  }
+
   return new Promise<ArgusServer>((resolve, reject) => {
     httpServer.once('error', reject); // e.g. EADDRINUSE - let the caller retry/handle
     httpServer.listen(PORT, () => {
@@ -497,6 +553,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
       const actualPort = addr.port;
       stopDelivery = startGraphDelivery(MODEL, actualPort);
       console.log(`[argus-server] WebSocket agent ready at ws://localhost:${actualPort}/agent`);
+      if (options.tls) startHttps(options.tls);
       // Arm the idle timer at startup too, so a daemon that never gets a client still
       // exits (no-op unless idleTimeoutMs is set; the first connection clears it).
       scheduleIdleShutdown();
@@ -523,7 +580,7 @@ export function startServer(options: StartServerOptions = {}): Promise<ArgusServ
         }
       }, reapSweepMs());
       if (typeof reapTimer.unref === 'function') reapTimer.unref();
-      resolve({ httpServer, port: actualPort, nonce, close: () => { stopDelivery?.(); removeDispatchListener(); clearIdleTimer(); clearInterval(pingTimer); clearInterval(reapTimer); wss.close(); httpServer.close(); } });
+      resolve({ httpServer, port: actualPort, nonce, close: () => { stopDelivery?.(); removeDispatchListener(); clearIdleTimer(); clearInterval(pingTimer); clearInterval(reapTimer); wss.close(); httpServer.close(); httpsServer?.close(); } });
     });
   });
 }

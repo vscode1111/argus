@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { startServer } from './index';
 import { broadcastToAllChannels } from './channel';
 import { readConfig } from './config';
+import { loadTlsSettings } from './tls';
 import { scheduleModelDataRefresh } from './modelData';
 import { readServerVersion } from './version';
 import {
@@ -175,6 +176,8 @@ async function listen(attempt = 0): Promise<void> {
       idleTimeoutMs: IDLE_TIMEOUT_MS,
       onIdleShutdown: () => { cleanup(); process.exit(0); },
       onRespawn: respawn,
+      // Read on each launch, so a renewed certificate applies on the next restart.
+      tls: loadTlsSettings((msg) => console.log(`[argus-daemon] ${msg}`)),
     });
     registration = {
       port: server.port,
